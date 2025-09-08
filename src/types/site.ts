@@ -1,17 +1,13 @@
 import z from "zod";
 
-const domainRedirectSchema = z.object({
+const enabledSchema = z.object({
   enabled: z.boolean(),
 });
 
 const additionalDomainSchema = z.object({
   domain: z.string(),
-  redirect: domainRedirectSchema,
+  redirect: enabledSchema,
   created_at: z.string(),
-});
-
-const pageCacheSchema = z.object({
-  enabled: z.boolean(),
 });
 
 const httpsSchema = z.object({
@@ -28,38 +24,29 @@ const nginxSchema = z.object({
 
 const databaseSchema = z.object({
   id: z.number(),
-  user_id: z.number().nullable().optional(),
-  table_prefix: z.string().nullable().optional(),
+  user_id: z.number().nullish(),
+  table_prefix: z.string().nullish(),
 });
 
 const storageProviderSchema = z.object({
-  id: z.number().nullable().optional(),
-  region: z.string().nullable().optional(),
-  bucket: z.string().nullable().optional(),
+  id: z.number().nullish(),
+  region: z.string().nullish(),
+  bucket: z.string().nullish(),
 });
 
 const backupsSchema = z.object({
   files: z.boolean(),
   database: z.boolean(),
-  paths_to_exclude: z.string().nullable().optional(),
-  is_backups_retention_period_enabled: z.boolean().nullable().optional(),
-  retention_period: z.number().nullable().optional(),
-  next_run_time: z.string().nullable().optional(),
-  storage_provider: storageProviderSchema.nullable().optional(),
-});
-
-const gitSchema = z.object({
-  enabled: z.boolean(),
-  repo: z.string().nullable().optional(),
-  branch: z.string().nullable().optional(),
-  deploy_script: z.string().nullable().optional(),
-  push_enabled: z.boolean().nullable().optional(),
-  deployment_url: z.string().nullable().optional(),
+  paths_to_exclude: z.string().nullish(),
+  is_backups_retention_period_enabled: z.boolean().nullish(),
+  retention_period: z.number().nullish(),
+  next_run_time: z.string().nullish(),
+  storage_provider: storageProviderSchema.nullish(),
 });
 
 const basicAuthSchema = z.object({
   enabled: z.boolean(),
-  username: z.string().nullable().optional(),
+  username: z.string().nullish(),
 });
 
 export const siteSchema = z.object({
@@ -72,7 +59,7 @@ export const siteSchema = z.object({
   php_version: z.string().default(""),
   public_folder: z.string().default(""),
   is_wordpress: z.boolean(),
-  page_cache: pageCacheSchema,
+  page_cache: enabledSchema,
   https: httpsSchema,
   nginx: nginxSchema,
   database: databaseSchema,
@@ -80,7 +67,6 @@ export const siteSchema = z.object({
   wp_core_update: z.boolean(),
   wp_theme_updates: z.number().default(0),
   wp_plugin_updates: z.number().default(0),
-  git: gitSchema,
   basic_auth: basicAuthSchema,
   created_at: z.string(),
   status: z.string(),

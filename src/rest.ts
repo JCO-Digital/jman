@@ -26,15 +26,27 @@ export async function makeRequest(
   return await response.json();
 }
 
-export function getServers() {
-  makeRequest("servers").then((payload) => {
-    payload.data
-      .map((data: unknown) => serverSchema.parse(data))
-      .forEach((server: Server) => {
-        console.log(server);
-      });
-    console.log(payload.pagination);
-  });
+export async function getServers() {
+  let endpoint: string = join(API_BASE_URL, "servers");
+  const servers: Server[] = [];
+  try {
+    do {
+      const payload = await makeRequest(endpoint);
+      payload.data
+        .map((data: unknown) => serverSchema.parse(data))
+        .forEach((server: Server) => {
+          servers.push(server);
+        });
+      if (payload?.pagination?.next) {
+        endpoint = payload.pagination.next;
+      } else {
+        endpoint = "";
+      }
+    } while (endpoint);
+  } catch (e) {
+    console.error(e);
+  }
+  return servers;
 }
 
 export async function getSites(): Promise<Site[]> {
@@ -43,11 +55,10 @@ export async function getSites(): Promise<Site[]> {
   try {
     do {
       const payload = await makeRequest(endpoint);
-      payload.data
-        .map((data: unknown) => siteSchema.parse(data))
-        .forEach((site: Site) => {
-          sites.push(site);
-        });
+      payload.data.forEach((site: unknown) => {
+        console.log(site);
+        //sites.push(site);
+      });
       if (payload?.pagination?.next) {
         endpoint = payload.pagination.next;
       } else {
