@@ -7,7 +7,9 @@ import { getServers, getSites } from "./rest";
 export const config = readConfigFile();
 
 function main() {
-  getSites();
+  getSites().then((sites) => {
+    console.log(sites);
+  });
   //getCachedServers();
   console.log("Hello, World!");
 }

@@ -1,18 +1,4 @@
-import { z } from "zod";
-
-export const runtimeSchema = z.object({
-  configDir: z.string(),
-  cacheDir: z.string(),
-  dataDir: z.string(),
-});
-
-export type jRuntime = z.infer<typeof runtimeSchema>;
-
-export const configSchema = z.object({
-  token: z.string().default(""),
-});
-
-export type jConfig = z.infer<typeof configSchema>;
+import z from "zod";
 
 export const diskSpaceSchema = z.object({
   total: z.number().default(0),
@@ -21,7 +7,7 @@ export const diskSpaceSchema = z.object({
   updated_at: z.string().default(""),
 });
 
-export type jDiskSpace = z.infer<typeof diskSpaceSchema>;
+export type DiskSpace = z.infer<typeof diskSpaceSchema>;
 
 export const databaseSchema = z.object({
   server: z.string().default(""),
@@ -29,7 +15,7 @@ export const databaseSchema = z.object({
   port: z.coerce.number().default(0),
 });
 
-export type jDatabase = z.infer<typeof databaseSchema>;
+export type Database = z.infer<typeof databaseSchema>;
 
 export const serverSchema = z.object({
   id: z.number().default(0),
@@ -56,13 +42,4 @@ export const serverSchema = z.object({
   status: z.string().default(""),
 });
 
-export type jServer = z.infer<typeof serverSchema>;
-
-export const paginationSchema = z.object({
-  previous: z.string().default("").nullable(),
-  next: z.string().default("").nullable(),
-  per_page: z.number().default(0),
-  count: z.number().default(0),
-});
-
-export type jPagination = z.infer<typeof paginationSchema>;
+export type Server = z.infer<typeof serverSchema>;

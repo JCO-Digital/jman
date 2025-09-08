@@ -5,8 +5,6 @@
   "main": "src/main.ts",
   "scripts": {
     "test": "eslint ./src && prettier ./src --check",
-    "build": "esbuild src/main.ts --bundle --minify --platform=node --outfile=bin/jman",
-    "watch": "esbuild src/main.ts --bundle --watch  --minify --sourcemap --platform=node --outfile=bin/jman",
     "format": "prettier ./src --write",
     "preversion": "pnpm test",
     "version": "conventional-changelog -p angular -i CHANGELOG.md -s && git add CHANGELOG.md",

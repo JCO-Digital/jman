@@ -2,14 +2,14 @@
 
 build: clean install bin/jman
 
-bin/jman: src/main.ts
-	pnpm run build
+dist/jman: src/main.ts
+	pnpm esbuild src/main.ts --bundle --minify --platform=node --outfile=dist/jman
 
 dev: clean install
-	pnpm run watch
+	pnpm esbuild src/main.ts --bundle --watch  --sourcemap --platform=node --outfile=dist/jman
 
 install:
 	pnpm i
 
 clean:
-	rm -rf bin
+	rm -rf dist
