@@ -1,6 +1,6 @@
 .PHONY: build dev install clean
 
-build: clean install bin/jman
+build: clean install dist/jman
 
 dist/jman: src/main.ts
 	pnpm esbuild src/main.ts --bundle --minify --platform=node --outfile=dist/jman
