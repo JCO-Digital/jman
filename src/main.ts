@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
-import { getCachedSites } from "./cache";
+import { parser, runCmd } from "./cmdParse";
 import { readConfigFile } from "./config";
 
 export const config = readConfigFile();
 
 async function main() {
-  console.log(getCachedSites());
-  console.log("Hello, World!");
+  const cmd = parser(process.argv);
+  console.error(cmd);
+  runCmd(cmd);
 }
 
 main();

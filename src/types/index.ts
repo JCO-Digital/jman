@@ -4,6 +4,8 @@ export const runtimeSchema = z.object({
   configDir: z.string(),
   cacheDir: z.string(),
   dataDir: z.string(),
+  nodePath: z.string().default(""),
+  scriptPath: z.string().default(""),
 });
 
 export type jRuntime = z.infer<typeof runtimeSchema>;
@@ -13,6 +15,13 @@ export const configSchema = z.object({
 });
 
 export type jConfig = z.infer<typeof configSchema>;
+
+export const cmdSchema = z.object({
+  cmd: z.string().default(""),
+  target: z.array(z.string()).default([]),
+});
+
+export type jCmd = z.infer<typeof cmdSchema>;
 
 export type SpinupReply = {
   data: Array<object>;

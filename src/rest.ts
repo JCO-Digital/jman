@@ -15,7 +15,7 @@ export async function makeRequest(
   endpoint: string,
   method: RequestMethod = RequestMethod.GET,
 ): Promise<SpinupReply> {
-  console.debug(`Making a ${method} request to ${endpoint}`);
+  console.error(`Making a ${method} request to ${endpoint}`);
   const response = await fetch(endpoint, {
     method,
     headers: {
@@ -55,16 +55,17 @@ export async function getSites(): Promise<Site[]> {
   try {
     do {
       const payload = await makeRequest(endpoint);
-      payload.data.forEach((site: unknown) => {
-        console.log(site);
-        //sites.push(site);
-      });
+      payload.data
+        .map((data: unknown) => siteSchema.parse(data))
+        .forEach((site: Site) => {
+          sites.push(site);
+        });
       if (payload?.pagination?.next) {
         endpoint = payload.pagination.next;
       } else {
         endpoint = "";
       }
-    } while (endpoint && false);
+    } while (endpoint);
   } catch (e) {
     console.error(e);
   }
