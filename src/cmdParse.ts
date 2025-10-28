@@ -28,32 +28,32 @@ export function parser(args: string[]): jCmd {
 export function runCmd(data: jCmd) {
   switch (data.cmd) {
     case "":
-      console.log("No command provided.");
+      console.error("No command provided.");
       break;
     case "fetch":
       if (data.target.length === 0) {
-        console.log("No target provided for fetch command.");
-        console.log("Specify: servers, sites or all.");
+        console.error("No target provided for fetch command.");
+        console.error("Specify: servers, sites or all.");
       }
       if (data.target.includes("all") || data.target.includes("servers")) {
         refreshCachedServers().then((servers) => {
-          console.log("Refreshed servers:", servers.length);
+          console.error("Refreshed servers:", servers.length);
         });
       }
       if (data.target.includes("all") || data.target.includes("sites")) {
         refreshCachedSites().then((sites) => {
-          console.log("Refreshed sites:", sites.length);
+          console.error("Refreshed sites:", sites.length);
         });
       }
       break;
     case "list":
-      console.log("Test");
+      console.error("Not implemented");
       break;
     case "alias":
       createAliases();
       break;
     default:
-      console.log("Unknown command.");
+      console.error("Unknown command.");
   }
 }
 
