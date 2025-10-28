@@ -17,7 +17,6 @@ export function readJSONCache(filename: string, defaultValue: object = []) {
 
 export function writeJSONCache(filename: string, data: object) {
   const filePath = getJSONFilename(filename);
-  console.log(filePath);
   try {
     writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
   } catch (error) {
