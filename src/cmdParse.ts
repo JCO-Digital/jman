@@ -1,9 +1,4 @@
-import {
-  getCachedServers,
-  getCachedSites,
-  refreshCachedServers,
-  refreshCachedSites,
-} from "./cache";
+import { refreshCachedServers, refreshCachedSites } from "./cache";
 import { runtimeData } from "./config";
 import { cmdSchema, type jCmd } from "./types";
 import { Site } from "./types/site";
@@ -63,8 +58,8 @@ export function runCmd(data: jCmd) {
 }
 
 async function createAliases() {
-  const servers = await getCachedServers();
-  const sites = await getCachedSites();
+  const servers = await refreshCachedServers();
+  const sites = await refreshCachedSites();
   const serverMap = {};
   const serverList = {};
   const data = {};
