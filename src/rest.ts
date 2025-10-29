@@ -1,5 +1,5 @@
 import { join } from "path";
-import { API_BASE_URL, RequestMethod } from "./constants";
+import { API_BASE_URL, API_MAINWP_URL, RequestMethod } from "./constants";
 import { config } from "./main";
 import { Server, serverSchema } from "./types/server";
 import { Site, siteSchema } from "./types/site";
@@ -70,4 +70,10 @@ export async function getSites(): Promise<Site[]> {
     console.error(e);
   }
   return sites;
+}
+
+export async function addMainwpSite(url, adminUser, adminPasswd) {
+  const endpoint =
+    join(API_MAINWP_URL, "sites/add") +
+    `?url=${url}&admin=${adminUser}&adminpassword=${adminPasswd}`;
 }
