@@ -4,7 +4,7 @@ import { cmdSchema, type jCmd } from "./types";
 import { Site } from "./types/site";
 import { Server } from "./types/server";
 import { stringify } from "yaml";
-import { join } from "path";
+import { runWP } from "./wp-cli";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
@@ -49,6 +49,9 @@ export function runCmd(data: jCmd) {
     case "list":
       console.error("Not implemented");
       break;
+    case "wp":
+      runWP();
+      break;
     case "alias":
       createAliases();
       break;
@@ -76,7 +79,7 @@ async function createAliases() {
     const server = serverMap[site.server_id];
     data[`@${site.domain}`] = {
       ssh: `${site.site_user}@${server.hostname}`,
-      path: join("/sites", site.domain, "files"),
+      path: "files",
     };
     serverList[server.alias].push(`@${site.domain}`);
   });

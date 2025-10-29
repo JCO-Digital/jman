@@ -73,3 +73,14 @@ export const siteSchema = z.object({
 });
 
 export type Site = z.infer<typeof siteSchema>;
+
+export const cliSiteSchema = z.object({
+  id: z.number(),
+  site: z.string(),
+  serverId: z.number(),
+  serverName: z.string(),
+  ssh: z.string(),
+  path: z.string(),
+});
+
+export type CliSite = z.infer<typeof cliSiteSchema>;
