@@ -17,7 +17,7 @@ export function runWP(
 
   return new Promise((resolve, reject) => {
     exec(
-      `wp --ssh=${ssh} --path=${path} ${command}`,
+      `wp --ssh=${ssh} --path=${path} --skip-plugins --skip-themes ${command}`,
       options,
       (error, stdout, stderr) => {
         if (error) {
