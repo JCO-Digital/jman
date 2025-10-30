@@ -11,6 +11,9 @@ importers:
       '@folder/xdg':
         specifier: ^4.0.1
         version: 4.0.1
+      '@topcli/prompts':
+        specifier: ^2.4.1
+        version: 2.4.1
       semver:
         specifier: ^7.7.3
         version: 7.7.3
@@ -310,6 +313,10 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@topcli/prompts@2.4.1':
+    resolution: {integrity: sha512-os7UmxmMrXK/CFean6yA21gvXlVe/xKmgo1sygplT1HNDg88tHbwGfr70DZ4HOK3qNPj4dzRIwsLmcp8677aNw==}
+    engines: {node: ^20.12.0 || >=21.7.0}
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
@@ -1155,6 +1162,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.19.1
+
+  '@topcli/prompts@2.4.1': {}
 
   '@types/estree@1.0.8': {}
 

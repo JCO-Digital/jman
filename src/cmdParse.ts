@@ -5,6 +5,7 @@ import { Site } from "./types/site";
 import { Server } from "./types/server";
 import { stringify } from "yaml";
 import { runWP } from "./wp-cli";
+import { promptSearch, searchSites } from "./search";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
@@ -50,17 +51,36 @@ export function runCmd(data: jCmd) {
       console.error("Not implemented");
       break;
     case "wp":
-      runWP();
+      runWPCmd(data.target.shift() ?? "", data.target.join(" "));
+      break;
+    case "search":
+      searchSites(data.target.shift() ?? "").then((sites) => {
+        console.log("Search results:");
+        sites.forEach((site) => {
+          console.log(`${site.name} (${site.serverName})`);
+        });
+      });
       break;
     case "alias":
-      createAliases();
+      createAliases(data.target.shift() ?? "");
       break;
     default:
       console.error("Unknown command.");
   }
 }
 
-async function createAliases() {
+async function runWPCmd(search: string, command: string) {
+  const searchResults = await promptSearch(search);
+  for (const result of searchResults) {
+    console.log(
+      `Running command '${command}' on ${result.name} (${result.serverName})`,
+    );
+    const ret = await runWP(result.ssh, result.path, command);
+    console.log(ret.output);
+  }
+}
+
+async function createAliases(search: string = "") {
   const servers = await refreshCachedServers();
   const sites = await refreshCachedSites();
   const serverMap = {};
