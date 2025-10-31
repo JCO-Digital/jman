@@ -81,35 +81,61 @@ async function runWPCmd(search: string, command: string) {
 }
 
 async function createAliases(search: string = "") {
-  const servers = await refreshCachedServers();
-  const sites = await refreshCachedSites();
   const serverMap = {};
-  const serverList = {};
   const data = {};
 
-  servers.forEach((server: Server) => {
-    // Get name as string before first dot.
-    const serverAlias = "@" + server.name.split(".")[0];
+  if (search.length > 0) {
+    const siteList: string[] = [];
+    const group = "@" + search;
+    const sites = await searchSites(search);
+    for (const site of sites) {
+      const alias = `@${site.name}`;
+      data[alias] = {
+        ssh: site.ssh,
+        path: site.path,
+      };
+      siteList.push(alias);
+    }
+    data[group] = siteList;
+  } else {
+    const serverList = {};
+    const servers = await refreshCachedServers();
+    const sites = await refreshCachedSites();
+    servers.forEach((server: Server) => {
+      // Get name as string before first dot.
+      const serverAlias = "@" + server.name.split(".")[0];
 
-    serverMap[server.id] = { alias: serverAlias, hostname: server.name };
-    serverList[serverAlias] = [];
-  });
+      serverMap[server.id] = { alias: serverAlias, hostname: server.name };
+      serverList[serverAlias] = [];
+    });
 
-  sites.forEach((site: Site) => {
-    const server = serverMap[site.server_id];
-    data[`@${site.domain}`] = {
-      ssh: `${site.site_user}@${server.hostname}`,
-      path: "files",
-    };
-    serverList[server.alias].push(`@${site.domain}`);
-  });
+    sites.forEach((site: Site) => {
+      const server = serverMap[site.server_id];
+      data[`@${site.domain}`] = createSiteAlias(
+        site.site_user,
+        server.hostname,
+      );
+      serverList[server.alias].push(`@${site.domain}`);
+    });
 
-  // Merge serverList to end of data
-  Object.keys(serverList).forEach((key) => {
-    data[key] = serverList[key];
-  });
+    // Merge serverList to end of data
+    Object.keys(serverList).forEach((key) => {
+      data[key] = serverList[key];
+    });
+  }
 
   console.error("Creating aliases...");
 
   console.log(stringify(data));
+}
+
+function createSiteAlias(
+  userName: string,
+  serverName: string,
+  path: string = "files",
+) {
+  return {
+    ssh: `${userName}@${serverName}`,
+    path,
+  };
 }
