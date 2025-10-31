@@ -1,3 +1,7 @@
+# [1.0.0](https://github.com/JCO-Digital/jman/compare/v0.1.3...v1.0.0) (2025-10-31)
+
+
+
 ## [0.1.3](https://github.com/JCO-Digital/jman/compare/v0.1.2...v0.1.3) (2025-10-28)
 
 
