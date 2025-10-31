@@ -1,6 +1,11 @@
 import { exec } from "child_process";
 import { runtimeData } from "./config";
 
+export type RunWPArgs = {
+  ssh: string;
+  path: string;
+};
+
 type RunWPReturn = {
   output: string;
   error: string;
@@ -21,7 +26,6 @@ export function runWP(
       options,
       (error, stdout, stderr) => {
         if (error) {
-          console.error(`exec error: ${error}`);
           reject(error);
           return;
         }
@@ -29,4 +33,32 @@ export function runWP(
       },
     );
   });
+}
+
+export async function addUser(
+  ssh: string,
+  path: string,
+  username: string,
+  email: string,
+  role: string,
+): Promise<string> {
+  const ret = await runWP(
+    ssh,
+    path,
+    `user create ${username} ${email} --role=${role}`,
+  );
+  const password = ret.output.match(/Password: (.+)/);
+  if (password?.length) {
+    return password[1];
+  }
+  return "";
+}
+
+export async function addPlugin(
+  ssh: string,
+  path: string,
+  plugin: string,
+): Promise<boolean> {
+  const ret = await runWP(ssh, path, `plugin install ${plugin} --activate`);
+  return ret.output.includes("Success:");
 }

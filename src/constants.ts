@@ -1,6 +1,5 @@
 export const PACKAGE_NAME = "jman";
 export const API_BASE_URL = "https://api.spinupwp.app/v1";
-export const API_MAINWP_URL = "https://mainwp.jcore.fi/wp-json/mainwp/v2";
 export enum RequestMethod {
   GET = "GET",
   POST = "POST",

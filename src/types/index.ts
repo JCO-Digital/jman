@@ -11,7 +11,9 @@ export const runtimeSchema = z.object({
 export type jRuntime = z.infer<typeof runtimeSchema>;
 
 export const configSchema = z.object({
-  token: z.string().default(""),
+  urlMainwp: z.string().default("https://mainwp.jcore.fi/wp-json/mainwp/v2"),
+  tokenSpinup: z.string().default(""),
+  tokenMainwp: z.string().default(""),
 });
 
 export type jConfig = z.infer<typeof configSchema>;
