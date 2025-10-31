@@ -4,8 +4,9 @@ import { cmdSchema, type jCmd } from "./types";
 import { Site } from "./types/site";
 import { Server } from "./types/server";
 import { stringify } from "yaml";
-import { runWP } from "./wp-cli";
+import { addPlugin, addUser, runWP } from "./wp-cli";
 import { promptSearch, searchSites } from "./search";
+import { addMainwpSite } from "./rest";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
@@ -51,7 +52,14 @@ export function runCmd(data: jCmd) {
       console.error("Not implemented");
       break;
     case "wp":
-      runWPCmd(data.target.shift() ?? "", data.target.join(" "));
+      try {
+        runWPCmd(data.target.shift() ?? "", data.target.join(" "));
+      } catch (error) {
+        console.error("Error running WP command:", error);
+      }
+      break;
+    case "mainwp":
+      mainWPInstall(data.target.shift() ?? "");
       break;
     case "search":
       searchSites(data.target.shift() ?? "").then((sites) => {
@@ -138,4 +146,37 @@ function createSiteAlias(
     ssh: `${userName}@${serverName}`,
     path,
   };
+}
+
+async function mainWPInstall(search: string) {
+  const searchResults = await promptSearch(search);
+  for (const site of searchResults) {
+    console.log(`Installing MainWP for ${site.name}`);
+    try {
+      console.log("Installing MainWP user");
+      const password = await addUser(
+        site.ssh,
+        site.path,
+        "mainwp",
+        "mainwp@jco.fi",
+        "administrator",
+      );
+
+      console.log("Installing MainWP Child Plugin");
+      if (!(await addPlugin(site.ssh, site.path, "mainwp-child"))) {
+        console.log("MainWP Child Plugin failed to install.");
+        continue;
+      }
+
+      console.log("Adding site to MainWP");
+      await addMainwpSite(`https://${site.name}`, "mainwp", password);
+    } catch (error) {
+      if (error.toString().includes("username is already registered")) {
+        console.log(`MainWP user already exists for ${site.name}`);
+      } else {
+        console.error(`Error installing MainWP for ${site.name}`);
+      }
+      continue;
+    }
+  }
 }

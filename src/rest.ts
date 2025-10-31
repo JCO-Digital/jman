@@ -14,13 +14,14 @@ import { SpinupReply } from "./types";
 export async function makeRequest(
   endpoint: string,
   method: RequestMethod = RequestMethod.GET,
+  token: string = config.tokenSpinup,
 ): Promise<SpinupReply> {
   console.error(`Making a ${method} request to ${endpoint}`);
   const response = await fetch(endpoint, {
     method,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${config.token}`,
+      Authorization: `Bearer ${token}`,
     },
   });
   return await response.json();
@@ -72,8 +73,22 @@ export async function getSites(): Promise<Site[]> {
   return sites;
 }
 
-export async function addMainwpSite(url, adminUser, adminPasswd) {
+export async function addMainwpSite(url, admin, adminpassword) {
   const endpoint =
-    join(API_MAINWP_URL, "sites/add") +
-    `?url=${url}&admin=${adminUser}&adminpassword=${adminPasswd}`;
+    join(config.urlMainwp, "sites/add") +
+    `?url=${encodeURIComponent(url)}&admin=${encodeURIComponent(admin)}&adminpassword=${encodeURIComponent(adminpassword)}`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.tokenMainwp}`,
+    },
+  });
+  const data = await response.json();
+  if (data.success) {
+    console.log(`MainWP site added successfully for ${url}`);
+  } else {
+    console.error(`Failed to add MainWP site for ${url}: ${data.error}`);
+  }
 }
