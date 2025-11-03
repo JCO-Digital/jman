@@ -56,13 +56,13 @@ export function promptSearch(query: string): Promise<CliSite[]> {
       sites.forEach((site) => {
         console.log(`${site.name} (${site.serverName})`);
       });
-      confirm("Do you want to continue?", { initial: true })
-        .then(() => {
+      confirm("Do you want to continue?", { initial: true }).then((reply) => {
+        if (reply) {
           resolve(sites);
-        })
-        .catch(() => {
-          reject("User cancelled");
-        });
+        } else {
+          resolve([]);
+        }
+      });
     });
   });
 }
