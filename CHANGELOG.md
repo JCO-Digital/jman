@@ -1,3 +1,17 @@
+# [1.1.0](https://github.com/JCO-Digital/jman/compare/v1.0.0...v1.1.0) (2025-11-03)
+
+
+### Bug Fixes
+
+* Handle user cancellation in promptSearch without throwing ([897bade](https://github.com/JCO-Digital/jman/commit/897bade91a62101d2b0be376c538838df73ccb67))
+
+
+### Features
+
+* Add inactive command to list sites without active MainWP ([f0a764d](https://github.com/JCO-Digital/jman/commit/f0a764da87bcfb13868ff902ed4695b60ec6dc4e))
+
+
+
 # [1.0.0](https://github.com/JCO-Digital/jman/compare/v0.1.3...v1.0.0) (2025-10-31)
 
 
