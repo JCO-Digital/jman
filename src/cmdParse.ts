@@ -4,7 +4,7 @@ import { cmdSchema, type jCmd } from "./types";
 import { Site } from "./types/site";
 import { Server } from "./types/server";
 import { stringify } from "yaml";
-import { addPlugin, addUser, runWP } from "./wp-cli";
+import { addPlugin, addUser, isActiveMainwp, runWP } from "./wp-cli";
 import { promptSearch, searchSites } from "./search";
 import { addMainwpSite } from "./rest";
 
@@ -71,6 +71,9 @@ export function runCmd(data: jCmd) {
       break;
     case "alias":
       createAliases(data.target.shift() ?? "");
+      break;
+    case "inactive":
+      listInactiveSites(data.target.shift() ?? "");
       break;
     default:
       console.error("Unknown command.");
@@ -151,6 +154,11 @@ function createSiteAlias(
 async function mainWPInstall(search: string) {
   const searchResults = await promptSearch(search);
   for (const site of searchResults) {
+    const active = await isActiveMainwp(site.ssh, site.path);
+    if (active) {
+      console.log(`MainWP is already active for ${site.name}`);
+      continue;
+    }
     console.log(`Installing MainWP for ${site.name}`);
     try {
       console.log("Installing MainWP user");
@@ -177,6 +185,25 @@ async function mainWPInstall(search: string) {
         console.error(`Error installing MainWP for ${site.name}`);
       }
       continue;
+    }
+  }
+}
+async function listInactiveSites(search: string) {
+  const inactive: string[] = [];
+  for (const site of await promptSearch(search)) {
+    console.log(`\nChecking ${site.name} (${site.serverName})`);
+    if (await isActiveMainwp(site.ssh, site.path)) {
+      console.log(`Already active`);
+    } else {
+      console.log("Not active, or connection error.");
+      inactive.push(`${site.name} (${site.serverName})`);
+    }
+  }
+
+  if (inactive.length > 0) {
+    console.log(`\nInactive sites:`);
+    for (const site of inactive) {
+      console.log(site);
     }
   }
 }

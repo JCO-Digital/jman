@@ -62,3 +62,18 @@ export async function addPlugin(
   const ret = await runWP(ssh, path, `plugin install ${plugin} --activate`);
   return ret.output.includes("Success:");
 }
+
+export async function isActiveMainwp(
+  ssh: string,
+  path: string,
+): Promise<boolean> {
+  try {
+    await runWP(ssh, path, `plugin is-active mainwp-child`);
+    return true;
+  } catch (error) {
+    if (error.toString().includes("not found")) {
+      console.error(`Can't connect to ${ssh}`);
+    }
+  }
+  return false;
+}
