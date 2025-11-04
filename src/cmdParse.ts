@@ -9,7 +9,13 @@ import { cmdSchema, type jCmd } from "./types";
 import { Site } from "./types/site";
 import { Server } from "./types/server";
 import { stringify } from "yaml";
-import { addPlugin, addUser, isActiveMainwp, runWP } from "./wp-cli";
+import {
+  addPlugin,
+  addUser,
+  isActiveMainwp,
+  resetUserPassword,
+  runWP,
+} from "./wp-cli";
 import { promptSearch, searchSites } from "./search";
 import { addMainwpSite } from "./rest";
 
@@ -92,19 +98,11 @@ const commands = {
   },
   wp: {
     description: "Run a command on wp-cli.",
-    command: (data: jCmd) => {
-      try {
-        runWPCmd(data.target, data.args.join(" "));
-      } catch (error) {
-        console.error("Error running WP command:", error);
-      }
-    },
+    command: runWPCmd,
   },
   mainwp: {
     description: "Install MainWP on sites.",
-    command: (data: jCmd) => {
-      mainWPInstall(data.target);
-    },
+    command: mainWPInstall,
   },
   search: {
     description: "Search for a term in sites.",
@@ -131,14 +129,22 @@ const commands = {
   },
 };
 
-async function runWPCmd(search: string, command: string) {
-  const searchResults = await promptSearch(search);
+async function runWPCmd(data: jCmd) {
+  const searchResults = await promptSearch(data.target);
+  const command = data.args.join(" ");
   for (const result of searchResults) {
     console.log(
       `Running command '${command}' on ${result.name} (${result.serverName})`,
     );
-    const ret = await runWP(result.ssh, result.path, command);
-    console.log(ret.output);
+    try {
+      const ret = await runWP(result.ssh, result.path, command);
+      console.log(ret.output);
+    } catch (error) {
+      console.error(
+        `Error running command '${command}' on ${result.name}:`,
+        error,
+      );
+    }
   }
 }
 
@@ -202,8 +208,8 @@ function createSiteAlias(
   };
 }
 
-async function mainWPInstall(search: string) {
-  const searchResults = await promptSearch(search);
+async function mainWPInstall(data: jCmd) {
+  const searchResults = await promptSearch(data.target);
   for (const site of searchResults) {
     const active = await isActiveMainwp(site.ssh, site.path);
     if (active) {
@@ -211,16 +217,29 @@ async function mainWPInstall(search: string) {
       continue;
     }
     console.log(`Installing MainWP for ${site.name}`);
+    let password = "";
     try {
       console.log("Installing MainWP user");
-      const password = await addUser(
+      password = await addUser(
         site.ssh,
         site.path,
         "mainwp",
         "mainwp@jco.fi",
         "administrator",
       );
+    } catch (_) {
+      console.error(
+        `MainWP user already exists for ${site.name}, resetting password.`,
+      );
+      try {
+        password = await resetUserPassword(site.ssh, site.path, "mainwp");
+      } catch (_) {
+        console.error(`Failed to reset password for ${site.name}`);
+        continue;
+      }
+    }
 
+    try {
       console.log("Installing MainWP Child Plugin");
       if (!(await addPlugin(site.ssh, site.path, "mainwp-child"))) {
         console.log("MainWP Child Plugin failed to install.");
@@ -229,12 +248,8 @@ async function mainWPInstall(search: string) {
 
       console.log("Adding site to MainWP");
       await addMainwpSite(`https://${site.name}`, "mainwp", password);
-    } catch (error) {
-      if (error.toString().includes("username is already registered")) {
-        console.log(`MainWP user already exists for ${site.name}`);
-      } else {
-        console.error(`Error installing MainWP for ${site.name}`);
-      }
+    } catch (_) {
+      console.error(`Error installing MainWP for ${site.name}`);
       continue;
     }
   }
