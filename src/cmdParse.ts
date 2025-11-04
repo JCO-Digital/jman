@@ -1,4 +1,9 @@
-import { refreshCachedServers, refreshCachedSites } from "./cache";
+import {
+  getCachedServers,
+  getCachedSites,
+  refreshCachedServers,
+  refreshCachedSites,
+} from "./cache";
 import { runtimeData } from "./config";
 import { cmdSchema, type jCmd } from "./types";
 import { Site } from "./types/site";
@@ -19,66 +24,112 @@ export function parser(args: string[]): jCmd {
   if (args.length > 0) {
     cmdData.cmd = args.shift() ?? "";
   }
-  // Get remaining args as target.
+  // Get Target from next arg.
   if (args.length > 0) {
-    cmdData.target = args;
+    cmdData.target = args.shift() ?? "";
+  }
+  // Append remaining args.
+  if (args.length > 0) {
+    cmdData.args = args;
   }
 
   return cmdData;
 }
 
 export function runCmd(data: jCmd) {
-  switch (data.cmd) {
-    case "":
-      console.error("No command provided.");
-      break;
-    case "fetch":
-      if (data.target.length === 0) {
+  const currentCmd = commands[data.cmd];
+  if (currentCmd) {
+    currentCmd.command(data);
+  } else {
+    if (data.cmd !== "") {
+      console.error(`Command '${data.cmd}' not found\n`);
+    }
+    console.error("Available commands:");
+    for (const cmd in commands) {
+      console.error(`${cmd}: ${commands[cmd].description}`);
+    }
+  }
+}
+
+const commands = {
+  fetch: {
+    description: "Fetch data from SpinupWP.",
+    command: (data: jCmd) => {
+      if (data.target === "") {
         console.error("No target provided for fetch command.");
         console.error("Specify: servers, sites or all.");
       }
-      if (data.target.includes("all") || data.target.includes("servers")) {
+      if (data.target === "all" || data.target === "servers") {
         refreshCachedServers().then((servers) => {
           console.error("Refreshed servers:", servers.length);
         });
       }
-      if (data.target.includes("all") || data.target.includes("sites")) {
+      if (data.target === "all" || data.target === "sites") {
         refreshCachedSites().then((sites) => {
           console.error("Refreshed sites:", sites.length);
         });
       }
-      break;
-    case "list":
-      console.error("Not implemented");
-      break;
-    case "wp":
+    },
+  },
+  list: {
+    description: "List data from SpinupWP. (not fully implemented)",
+    command: (data: jCmd) => {
+      if (data.target === "") {
+        console.error("No target provided for list command.");
+        console.error("Specify: servers, sites or all.");
+      }
+      if (data.target === "all" || data.target === "servers") {
+        getCachedServers().then((servers) => {
+          console.error("Cached servers:", servers.length);
+        });
+      }
+      if (data.target === "all" || data.target === "sites") {
+        getCachedSites().then((sites) => {
+          console.error("Cached sites:", sites.length);
+        });
+      }
+    },
+  },
+  wp: {
+    description: "Run a command on wp-cli.",
+    command: (data: jCmd) => {
       try {
-        runWPCmd(data.target.shift() ?? "", data.target.join(" "));
+        runWPCmd(data.target, data.args.join(" "));
       } catch (error) {
         console.error("Error running WP command:", error);
       }
-      break;
-    case "mainwp":
-      mainWPInstall(data.target.shift() ?? "");
-      break;
-    case "search":
-      searchSites(data.target.shift() ?? "").then((sites) => {
+    },
+  },
+  mainwp: {
+    description: "Install MainWP on sites.",
+    command: (data: jCmd) => {
+      mainWPInstall(data.target);
+    },
+  },
+  search: {
+    description: "Search for a term in sites.",
+    command: (data: jCmd) => {
+      searchSites(data.target).then((sites) => {
         console.log("Search results:");
         sites.forEach((site) => {
           console.log(`${site.name} (${site.serverName})`);
         });
       });
-      break;
-    case "alias":
-      createAliases(data.target.shift() ?? "");
-      break;
-    case "inactive":
-      listInactiveSites(data.target.shift() ?? "");
-      break;
-    default:
-      console.error("Unknown command.");
-  }
-}
+    },
+  },
+  alias: {
+    description: "Create alias file for all sites, or a custom collection.",
+    command: (data: jCmd) => {
+      createAliases(data.target);
+    },
+  },
+  inactive: {
+    description: "List inactive sites.",
+    command: (data: jCmd) => {
+      listInactiveSites(data.target);
+    },
+  },
+};
 
 async function runWPCmd(search: string, command: string) {
   const searchResults = await promptSearch(search);
