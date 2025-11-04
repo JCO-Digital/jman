@@ -20,7 +20,8 @@ export type jConfig = z.infer<typeof configSchema>;
 
 export const cmdSchema = z.object({
   cmd: z.string().default(""),
-  target: z.array(z.string()).default([]),
+  target: z.string().default(""),
+  args: z.array(z.string()).default([]),
 });
 
 export type jCmd = z.infer<typeof cmdSchema>;
