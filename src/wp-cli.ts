@@ -54,6 +54,19 @@ export async function addUser(
   return "";
 }
 
+export async function resetUserPassword(
+  ssh: string,
+  path: string,
+  username: string,
+): Promise<string> {
+  const ret = await runWP(
+    ssh,
+    path,
+    `user reset-password ${username} --porcelain`,
+  );
+  return ret.output;
+}
+
 export async function addPlugin(
   ssh: string,
   path: string,
