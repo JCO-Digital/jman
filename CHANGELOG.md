@@ -1,3 +1,13 @@
+# [1.2.0](https://github.com/JCO-Digital/jman/compare/v1.1.1...v1.2.0) (2025-11-06)
+
+
+### Features
+
+* file mods command ([7ec9b80](https://github.com/JCO-Digital/jman/commit/7ec9b80e2c87077ba61700064200cff4a3046df7))
+* MainWP user password reset and refactor command handlers ([c7b93e3](https://github.com/JCO-Digital/jman/commit/c7b93e3b78d9debb0b80b6d2b7e111d7d542427f))
+
+
+
 ## [1.1.1](https://github.com/JCO-Digital/jman/compare/v1.1.0...v1.1.1) (2025-11-04)
 
 
