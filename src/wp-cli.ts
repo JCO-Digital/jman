@@ -90,3 +90,22 @@ export async function isActiveMainwp(
   }
   return false;
 }
+
+export async function setDisallowFileMods(
+  ssh: string,
+  path: string,
+  value = true,
+) {
+  try {
+    const valueString = value ? "true" : "false";
+    await runWP(
+      ssh,
+      path,
+      `config set --raw DISALLOW_FILE_MODS ${valueString}`,
+    );
+  } catch (error) {
+    if (error.toString().includes("not found")) {
+      console.error(`Can't connect to ${ssh}`);
+    }
+  }
+}

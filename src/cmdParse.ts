@@ -14,6 +14,7 @@ import {
   addUser,
   isActiveMainwp,
   resetUserPassword,
+  setDisallowFileMods,
   runWP,
 } from "./wp-cli";
 import { promptSearch, searchSites } from "./search";
@@ -125,6 +126,34 @@ const commands = {
     description: "List inactive sites.",
     command: (data: jCmd) => {
       listInactiveSites(data.target);
+    },
+  },
+  mods: {
+    description: "Set disallow file mods.",
+    command: async (data: jCmd) => {
+      for (const site of await promptSearch(data.target)) {
+        setDisallowFileMods(site.ssh, site.path);
+      }
+    },
+  },
+  admin: {
+    description: "Create admin user.",
+    command: async (data: jCmd) => {
+      if (data.args.length < 2) {
+        console.error("Please provide a username and email.");
+        return;
+      }
+      for (const site of await promptSearch(data.target)) {
+        console.log(
+          await addUser(
+            site.ssh,
+            site.path,
+            data.args[0],
+            data.args[1],
+            "administrator",
+          ),
+        );
+      }
     },
   },
 };
