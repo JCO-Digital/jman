@@ -19,6 +19,9 @@ import {
 } from "./wp-cli";
 import { promptSearch, searchSites } from "./search";
 import { addMainwpSite } from "./rest";
+import { REPO_PATH } from "./constants";
+import { join } from "path";
+import { console } from "inspector";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
@@ -61,21 +64,13 @@ export function runCmd(data: jCmd) {
 const commands = {
   fetch: {
     description: "Fetch data from SpinupWP.",
-    command: (data: jCmd) => {
-      if (data.target === "") {
-        console.error("No target provided for fetch command.");
-        console.error("Specify: servers, sites or all.");
-      }
-      if (data.target === "all" || data.target === "servers") {
-        refreshCachedServers().then((servers) => {
-          console.error("Refreshed servers:", servers.length);
-        });
-      }
-      if (data.target === "all" || data.target === "sites") {
-        refreshCachedSites().then((sites) => {
-          console.error("Refreshed sites:", sites.length);
-        });
-      }
+    command: () => {
+      refreshCachedServers().then((servers) => {
+        console.log("Refreshed servers:", servers.length);
+      });
+      refreshCachedSites().then((sites) => {
+        console.log("Refreshed sites:", sites.length);
+      });
     },
   },
   list: {
@@ -135,6 +130,10 @@ const commands = {
         setDisallowFileMods(site.ssh, site.path);
       }
     },
+  },
+  plugin: {
+    description: "Install a plugin.",
+    command: installPlugin,
   },
   admin: {
     description: "Create admin user.",
@@ -283,6 +282,15 @@ async function mainWPInstall(data: jCmd) {
     }
   }
 }
+
+/**
+ * Lists inactive sites based on the provided search string.
+ * For each site matching the search, checks if MainWP is active.
+ * If not active or there is a connection error, adds the site to the inactive list.
+ * At the end, prints all inactive sites found.
+ *
+ * @param search - The search string to filter sites.
+ */
 async function listInactiveSites(search: string) {
   const inactive: string[] = [];
   for (const site of await promptSearch(search)) {
@@ -301,4 +309,28 @@ async function listInactiveSites(search: string) {
       console.log(site);
     }
   }
+}
+
+async function installPlugin(data: jCmd) {
+  const plugin = getPluginName(data.args[0]);
+  for (const site of await promptSearch(data.target)) {
+    console.log(`\nInstalling ${plugin} on ${site.name} (${site.serverName})`);
+    if (await addPlugin(site.ssh, site.path, plugin, false)) {
+      console.log(`${plugin} installed successfully.`);
+    } else {
+      console.error(`${plugin} failed to install.`);
+    }
+  }
+}
+
+function getPluginName(plugin: string): string {
+  const repo = plugin.match(
+    /(https:\/\/repo\.jco\.fi)\/satispress\/([^/]+)\/(\d+\.\d+\.\d+)/,
+  );
+  if (repo) {
+    const fileName = join(REPO_PATH, repo[2], repo[2] + "-" + repo[3] + ".zip");
+    return repo[1] + fileName;
+  }
+
+  return plugin;
 }

@@ -71,8 +71,13 @@ export async function addPlugin(
   ssh: string,
   path: string,
   plugin: string,
+  activate = true,
 ): Promise<boolean> {
-  const ret = await runWP(ssh, path, `plugin install ${plugin} --activate`);
+  const ret = await runWP(
+    ssh,
+    path,
+    `plugin install ${plugin} ${activate ? "--activate" : ""}`,
+  );
   return ret.output.includes("Success:");
 }
 
