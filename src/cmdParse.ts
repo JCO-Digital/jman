@@ -6,21 +6,17 @@ import {
 } from "./cache";
 import { runtimeData } from "./config";
 import { cmdSchema, type jCmd } from "./types";
-import { Site } from "./types/site";
-import { Server } from "./types/server";
-import { stringify } from "yaml";
+import { setDisallowFileMods } from "./wp-cli";
+import { promptSearch } from "./search";
 import {
-  addPlugin,
-  addUser,
-  isActiveMainwp,
-  resetUserPassword,
-  setDisallowFileMods,
-  runWP,
-} from "./wp-cli";
-import { promptSearch, searchSites } from "./search";
-import { addMainwpSite } from "./rest";
-import { REPO_PATH } from "./constants";
-import { join } from "path";
+  addAdmin,
+  createAliases,
+  installPlugin,
+  listInactiveSites,
+  mainWPInstall,
+  runWPCmd,
+  searchTerm,
+} from "./commands";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
@@ -101,26 +97,15 @@ const commands = {
   },
   search: {
     description: "Search for a term in sites.",
-    command: (data: jCmd) => {
-      searchSites(data.target).then((sites) => {
-        console.log("Search results:");
-        sites.forEach((site) => {
-          console.log(`${site.name} (${site.serverName})`);
-        });
-      });
-    },
+    command: searchTerm,
   },
   alias: {
     description: "Create alias file for all sites, or a custom collection.",
-    command: (data: jCmd) => {
-      createAliases(data.target);
-    },
+    command: createAliases,
   },
   inactive: {
     description: "List inactive sites.",
-    command: (data: jCmd) => {
-      listInactiveSites(data.target);
-    },
+    command: listInactiveSites,
   },
   mods: {
     description: "Set disallow file mods.",
@@ -136,202 +121,6 @@ const commands = {
   },
   admin: {
     description: "Create admin user.",
-    command: async (data: jCmd) => {
-      if (data.args.length < 2) {
-        console.error("Please provide a username and email.");
-        return;
-      }
-      for (const site of await promptSearch(data.target)) {
-        console.log(
-          await addUser(
-            site.ssh,
-            site.path,
-            data.args[0],
-            data.args[1],
-            "administrator",
-          ),
-        );
-      }
-    },
+    command: addAdmin,
   },
 };
-
-async function runWPCmd(data: jCmd) {
-  const searchResults = await promptSearch(data.target);
-  const command = data.args.join(" ");
-  for (const result of searchResults) {
-    console.log(
-      `Running command '${command}' on ${result.name} (${result.serverName})`,
-    );
-    try {
-      const ret = await runWP(result.ssh, result.path, command);
-      console.log(ret.output);
-    } catch (error) {
-      console.error(
-        `Error running command '${command}' on ${result.name}:`,
-        error,
-      );
-    }
-  }
-}
-
-async function createAliases(search: string = "") {
-  const serverMap = {};
-  const data = {};
-
-  if (search.length > 0) {
-    const siteList: string[] = [];
-    const group = "@" + search;
-    const sites = await searchSites(search);
-    for (const site of sites) {
-      const alias = `@${site.name}`;
-      data[alias] = {
-        ssh: site.ssh,
-        path: site.path,
-      };
-      siteList.push(alias);
-    }
-    data[group] = siteList;
-  } else {
-    const serverList = {};
-    const servers = await refreshCachedServers();
-    const sites = await refreshCachedSites();
-    servers.forEach((server: Server) => {
-      // Get name as string before first dot.
-      const serverAlias = "@" + server.name.split(".")[0];
-
-      serverMap[server.id] = { alias: serverAlias, hostname: server.name };
-      serverList[serverAlias] = [];
-    });
-
-    sites.forEach((site: Site) => {
-      const server = serverMap[site.server_id];
-      data[`@${site.domain}`] = createSiteAlias(
-        site.site_user,
-        server.hostname,
-      );
-      serverList[server.alias].push(`@${site.domain}`);
-    });
-
-    // Merge serverList to end of data
-    Object.keys(serverList).forEach((key) => {
-      data[key] = serverList[key];
-    });
-  }
-
-  console.error("Creating aliases...");
-
-  console.log(stringify(data));
-}
-
-function createSiteAlias(
-  userName: string,
-  serverName: string,
-  path: string = "files",
-) {
-  return {
-    ssh: `${userName}@${serverName}`,
-    path,
-  };
-}
-
-async function mainWPInstall(data: jCmd) {
-  const searchResults = await promptSearch(data.target);
-  for (const site of searchResults) {
-    const active = await isActiveMainwp(site.ssh, site.path);
-    if (active) {
-      console.log(`MainWP is already active for ${site.name}`);
-      continue;
-    }
-    console.log(`Installing MainWP for ${site.name}`);
-    let password = "";
-    try {
-      console.log("Installing MainWP user");
-      password = await addUser(
-        site.ssh,
-        site.path,
-        "mainwp",
-        "mainwp@jco.fi",
-        "administrator",
-      );
-    } catch (_) {
-      console.error(
-        `MainWP user already exists for ${site.name}, resetting password.`,
-      );
-      try {
-        password = await resetUserPassword(site.ssh, site.path, "mainwp");
-      } catch (_) {
-        console.error(`Failed to reset password for ${site.name}`);
-        continue;
-      }
-    }
-
-    try {
-      console.log("Installing MainWP Child Plugin");
-      if (!(await addPlugin(site.ssh, site.path, "mainwp-child"))) {
-        console.log("MainWP Child Plugin failed to install.");
-        continue;
-      }
-
-      console.log("Adding site to MainWP");
-      await addMainwpSite(`https://${site.name}`, "mainwp", password);
-    } catch (_) {
-      console.error(`Error installing MainWP for ${site.name}`);
-      continue;
-    }
-  }
-}
-
-/**
- * Lists inactive sites based on the provided search string.
- * For each site matching the search, checks if MainWP is active.
- * If not active or there is a connection error, adds the site to the inactive list.
- * At the end, prints all inactive sites found.
- *
- * @param search - The search string to filter sites.
- */
-async function listInactiveSites(search: string) {
-  const inactive: string[] = [];
-  for (const site of await promptSearch(search)) {
-    console.log(`\nChecking ${site.name} (${site.serverName})`);
-    if (await isActiveMainwp(site.ssh, site.path)) {
-      console.log(`Already active`);
-    } else {
-      console.log("Not active, or connection error.");
-      inactive.push(`${site.name} (${site.serverName})`);
-    }
-  }
-
-  if (inactive.length > 0) {
-    console.log(`\nInactive sites:`);
-    for (const site of inactive) {
-      console.log(site);
-    }
-  }
-}
-
-async function installPlugin(data: jCmd) {
-  if (data.args.length < 1) {
-    console.error("Usage: jman plugin <search> <plugin>");
-    return;
-  }
-  const plugin = getPluginName(data.args[0]);
-  for (const site of await promptSearch(data.target)) {
-    console.log(`\nInstalling ${plugin} on ${site.name} (${site.serverName})`);
-    if (await addPlugin(site.ssh, site.path, plugin, false)) {
-      console.log("Plugin installed successfully.");
-    }
-  }
-}
-
-function getPluginName(plugin: string): string {
-  const repo = plugin.match(
-    /(https:\/\/repo\.jco\.fi)\/satispress\/([^/]+)\/(\d+\.\d+\.\d+)/,
-  );
-  if (repo) {
-    const fileName = join(REPO_PATH, repo[2], repo[2] + "-" + repo[3] + ".zip");
-    return repo[1] + fileName;
-  }
-
-  return plugin;
-}
