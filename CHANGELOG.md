@@ -1,3 +1,12 @@
+# [1.3.0](https://github.com/JCO-Digital/jman/compare/v1.2.0...v1.3.0) (2025-11-21)
+
+
+### Features
+
+* Add plugin install command and support for repo plugin URLs ([fc1be7d](https://github.com/JCO-Digital/jman/commit/fc1be7d2ff9aeb92894cd52034d9b7443cdc4903))
+
+
+
 # [1.2.0](https://github.com/JCO-Digital/jman/compare/v1.1.1...v1.2.0) (2025-11-06)
 
 
