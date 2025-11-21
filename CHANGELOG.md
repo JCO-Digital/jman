@@ -1,3 +1,12 @@
+## [1.3.1](https://github.com/JCO-Digital/jman/compare/v1.3.0...v1.3.1) (2025-11-21)
+
+
+### Bug Fixes
+
+* Remove faulty import. Improve plugin install error handling and ([d57891f](https://github.com/JCO-Digital/jman/commit/d57891fffac814aae4f4d4fadf90a6c9643a0269))
+
+
+
 # [1.3.0](https://github.com/JCO-Digital/jman/compare/v1.2.0...v1.3.0) (2025-11-21)
 
 
