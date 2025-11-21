@@ -73,12 +73,25 @@ export async function addPlugin(
   plugin: string,
   activate = true,
 ): Promise<boolean> {
-  const ret = await runWP(
-    ssh,
-    path,
-    `plugin install ${plugin} ${activate ? "--activate" : ""}`,
-  );
-  return ret.output.includes("Success:");
+  try {
+    const ret = await runWP(
+      ssh,
+      path,
+      `plugin install ${plugin} ${activate ? "--activate" : ""}`,
+    );
+    return ret.output.includes("Success:");
+  } catch (error) {
+    if (error.toString().includes("Plugin not found.")) {
+      console.error("Plugin not found.");
+    } else if (
+      error.toString().includes("Destination folder already exists.")
+    ) {
+      console.error("Plugin already installed.");
+    } else {
+      console.error(error.toString());
+    }
+  }
+  return false;
 }
 
 export async function isActiveMainwp(

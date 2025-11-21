@@ -21,7 +21,6 @@ import { promptSearch, searchSites } from "./search";
 import { addMainwpSite } from "./rest";
 import { REPO_PATH } from "./constants";
 import { join } from "path";
-import { console } from "inspector";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
@@ -312,13 +311,15 @@ async function listInactiveSites(search: string) {
 }
 
 async function installPlugin(data: jCmd) {
+  if (data.args.length < 1) {
+    console.error("Usage: jman plugin <search> <plugin>");
+    return;
+  }
   const plugin = getPluginName(data.args[0]);
   for (const site of await promptSearch(data.target)) {
     console.log(`\nInstalling ${plugin} on ${site.name} (${site.serverName})`);
     if (await addPlugin(site.ssh, site.path, plugin, false)) {
-      console.log(`${plugin} installed successfully.`);
-    } else {
-      console.error(`${plugin} failed to install.`);
+      console.log("Plugin installed successfully.");
     }
   }
 }
