@@ -11,11 +11,25 @@ import {
 } from "./wp-cli";
 import { stringify } from "yaml";
 import { REPO_PATH } from "./constants";
-import { refreshCachedServers, refreshCachedSites } from "./cache";
+import {
+  getCachedServers,
+  getCachedSites,
+  refreshCachedServers,
+  refreshCachedSites,
+} from "./cache";
 import { Server } from "./types/server";
 import { Site } from "./types/site";
 import { config } from "./main";
 
+/**
+ * Adds an administrator user to all sites matching the search criteria.
+ * - Requires at least two arguments: username and email.
+ * - For each site found by promptSearch(data.target):
+ *   - Calls addUser to add the user as an administrator.
+ *   - Logs the result of the operation.
+ *
+ * @param data - The command data containing search parameters and arguments.
+ */
 export async function addAdmin(data: jCmd) {
   if (data.args.length < 2) {
     console.error("Please provide a username and email.");
@@ -93,6 +107,42 @@ function createSiteAlias(
     ssh: `${userName}@${serverName}`,
     path,
   };
+}
+
+/**
+ * Fetches and refreshes cached server and site data.
+ * Calls refreshCachedServers and refreshCachedSites, then logs the number of servers and sites refreshed.
+ */
+export function fetchData() {
+  refreshCachedServers().then((servers) => {
+    console.log("Refreshed servers:", servers.length);
+  });
+  refreshCachedSites().then((sites) => {
+    console.log("Refreshed sites:", sites.length);
+  });
+}
+
+export function listData(data: jCmd) {
+  if (data.target === "") {
+    console.error("No target provided for list command.");
+    console.error("Specify: servers, sites or all.");
+  }
+  if (data.target === "all" || data.target === "servers") {
+    getCachedServers().then((servers) => {
+      console.error("\nCached servers:", servers.length);
+      for (const server of servers) {
+        console.log(server.name);
+      }
+    });
+  }
+  if (data.target === "all" || data.target === "sites") {
+    getCachedSites().then((sites) => {
+      console.error("\nCached sites:", sites.length);
+      for (const site of sites) {
+        console.log(site.domain);
+      }
+    });
+  }
 }
 
 /**

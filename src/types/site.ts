@@ -23,7 +23,7 @@ const nginxSchema = z.object({
 });
 
 const databaseSchema = z.object({
-  id: z.number(),
+  id: z.number().nullish(),
   user_id: z.number().nullish(),
   table_prefix: z.string().nullish(),
 });
