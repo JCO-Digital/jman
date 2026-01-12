@@ -38,23 +38,34 @@ export function parser(args: string[]): jCmd {
   return cmdData;
 }
 
-export function runCmd(data: jCmd) {
+export async function runCmd(data: jCmd) {
   const currentCmd = commands[data.cmd];
-  if (currentCmd && (!currentCmd.mainwp || hasMainWP())) {
-    currentCmd.command(data);
-  } else {
+  if (!currentCmd) {
     if (data.cmd !== "") {
       console.error(`Command '${data.cmd}' not found\n`);
     }
     console.error("Available commands:");
-    for (const cmd in commands) {
-      if (!commands[cmd].mainwp || hasMainWP())
-        console.error(`${cmd}: ${commands[cmd].description}`);
+    for (const [key, command] of Object.entries(commands)) {
+      if (!command.mainwp || hasMainWP())
+        console.error(`${key}: ${command.description}`);
+    }
+    return;
+  } else {
+    if (!currentCmd.mainwp || hasMainWP()) {
+      await currentCmd.command(data);
+    } else {
+      console.error(`Command '${data.cmd}' needs MainWP token.\n`);
     }
   }
 }
 
-const commands = {
+type commandItem = {
+  description: string;
+  command: (data: jCmd) => Promise<void>;
+  mainwp?: boolean;
+};
+
+const commands: Record<string, commandItem> = {
   fetch: {
     description: "Fetch data from SpinupWP.",
     command: fetchData,
