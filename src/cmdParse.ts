@@ -1,17 +1,14 @@
-import {
-  getCachedServers,
-  getCachedSites,
-  refreshCachedServers,
-  refreshCachedSites,
-} from "./cache";
 import { runtimeData } from "./config";
 import { cmdSchema, type jCmd } from "./types";
 import { setDisallowFileMods } from "./wp-cli";
 import { promptSearch } from "./search";
+import { hasMainWP } from "./utils";
 import {
   addAdmin,
   createAliases,
+  fetchData,
   installPlugin,
+  listData,
   listInactiveSites,
   mainWPInstall,
   runWPCmd,
@@ -43,7 +40,7 @@ export function parser(args: string[]): jCmd {
 
 export function runCmd(data: jCmd) {
   const currentCmd = commands[data.cmd];
-  if (currentCmd) {
+  if (currentCmd && (!currentCmd.mainwp || hasMainWP())) {
     currentCmd.command(data);
   } else {
     if (data.cmd !== "") {
@@ -51,7 +48,8 @@ export function runCmd(data: jCmd) {
     }
     console.error("Available commands:");
     for (const cmd in commands) {
-      console.error(`${cmd}: ${commands[cmd].description}`);
+      if (!commands[cmd].mainwp || hasMainWP())
+        console.error(`${cmd}: ${commands[cmd].description}`);
     }
   }
 }
@@ -59,33 +57,11 @@ export function runCmd(data: jCmd) {
 const commands = {
   fetch: {
     description: "Fetch data from SpinupWP.",
-    command: () => {
-      refreshCachedServers().then((servers) => {
-        console.log("Refreshed servers:", servers.length);
-      });
-      refreshCachedSites().then((sites) => {
-        console.log("Refreshed sites:", sites.length);
-      });
-    },
+    command: fetchData,
   },
   list: {
     description: "List data from SpinupWP. (not fully implemented)",
-    command: (data: jCmd) => {
-      if (data.target === "") {
-        console.error("No target provided for list command.");
-        console.error("Specify: servers, sites or all.");
-      }
-      if (data.target === "all" || data.target === "servers") {
-        getCachedServers().then((servers) => {
-          console.error("Cached servers:", servers.length);
-        });
-      }
-      if (data.target === "all" || data.target === "sites") {
-        getCachedSites().then((sites) => {
-          console.error("Cached sites:", sites.length);
-        });
-      }
-    },
+    command: listData,
   },
   wp: {
     description: "Run a command on wp-cli.",
@@ -94,6 +70,7 @@ const commands = {
   mainwp: {
     description: "Install MainWP on sites.",
     command: mainWPInstall,
+    mainwp: true,
   },
   search: {
     description: "Search for a term in sites.",
