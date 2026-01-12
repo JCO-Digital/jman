@@ -113,16 +113,14 @@ function createSiteAlias(
  * Fetches and refreshes cached server and site data.
  * Calls refreshCachedServers and refreshCachedSites, then logs the number of servers and sites refreshed.
  */
-export function fetchData() {
-  refreshCachedServers().then((servers) => {
-    console.log("Refreshed servers:", servers.length);
-  });
-  refreshCachedSites().then((sites) => {
-    console.log("Refreshed sites:", sites.length);
-  });
+export async function fetchData() {
+  const servers = await refreshCachedServers();
+  console.log("Fetched servers:", servers.length);
+  const sites = await refreshCachedSites();
+  console.log("Fetched sites:", sites.length);
 }
 
-export function listData(data: jCmd) {
+export async function listData(data: jCmd) {
   if (data.target === "") {
     console.error("No target provided for list command.");
     console.error("Specify: servers, sites or all.");
@@ -255,7 +253,7 @@ export async function runWPCmd(data: jCmd) {
   }
 }
 
-export function searchTerm(data: jCmd) {
+export async function searchTerm(data: jCmd) {
   searchSites(data.target).then((sites) => {
     console.log("Search results:");
     sites.forEach((site) => {
