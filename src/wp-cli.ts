@@ -1,5 +1,6 @@
 import { exec } from "child_process";
 import { runtimeData } from "./config";
+import { getErrorMessage } from "./utils";
 
 export type RunWPArgs = {
   ssh: string;
@@ -81,14 +82,13 @@ export async function addPlugin(
     );
     return ret.output.includes("Success:");
   } catch (error) {
-    if (error.toString().includes("Plugin not found.")) {
+    const errorMessage = getErrorMessage(error);
+    if (errorMessage.includes("Plugin not found.")) {
       console.error("Plugin not found.");
-    } else if (
-      error.toString().includes("Destination folder already exists.")
-    ) {
+    } else if (errorMessage.includes("Destination folder already exists.")) {
       console.error("Plugin already installed.");
     } else {
-      console.error(error.toString());
+      console.error(errorMessage);
     }
   }
   return false;
@@ -102,7 +102,8 @@ export async function isActiveMainwp(
     await runWP(ssh, path, `plugin is-active mainwp-child`);
     return true;
   } catch (error) {
-    if (error.toString().includes("not found")) {
+    const errorMessage = getErrorMessage(error);
+    if (errorMessage.includes("not found")) {
       console.error(`Can't connect to ${ssh}`);
     }
   }
@@ -122,7 +123,8 @@ export async function setDisallowFileMods(
       `config set --raw DISALLOW_FILE_MODS ${valueString}`,
     );
   } catch (error) {
-    if (error.toString().includes("not found")) {
+    const errorMessage = getErrorMessage(error);
+    if (errorMessage.includes("not found")) {
       console.error(`Can't connect to ${ssh}`);
     }
   }
