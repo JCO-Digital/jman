@@ -73,7 +73,11 @@ export async function getSites(): Promise<Site[]> {
   return sites;
 }
 
-export async function addMainwpSite(url, admin, adminpassword) {
+export async function addMainwpSite(
+  url: string,
+  admin: string,
+  adminpassword: string,
+) {
   const endpoint =
     join(config.urlMainwp, "sites/add") +
     `?url=${encodeURIComponent(url)}&admin=${encodeURIComponent(admin)}&adminpassword=${encodeURIComponent(adminpassword)}`;
