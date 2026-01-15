@@ -1,3 +1,13 @@
+# [1.4.0](https://github.com/JCO-Digital/jman/compare/v1.3.3...v1.4.0) (2026-01-15)
+
+
+### Features
+
+* Add getErrorMessage utility function ([b398e39](https://github.com/JCO-Digital/jman/commit/b398e39adb2501d757e9426d2e796e30f08f035a))
+* Add NPM publish to CI and bin entry ([7f89d29](https://github.com/JCO-Digital/jman/commit/7f89d2966812999cae4d73fb67892965267d1757))
+
+
+
 ## [1.3.3](https://github.com/JCO-Digital/jman/compare/v1.3.2...v1.3.3) (2026-01-12)
 
 
