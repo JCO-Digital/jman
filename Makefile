@@ -3,10 +3,10 @@
 build: clean install dist/jman
 
 dist/jman: src/main.ts
-	pnpm esbuild src/main.ts --bundle --minify --platform=node --outfile=dist/jman
+	pnpm run build
 
 dev: clean install
-	pnpm esbuild src/main.ts --bundle --watch  --sourcemap --platform=node --outfile=dist/jman
+	pnpm run dev
 
 install:
 	pnpm i
