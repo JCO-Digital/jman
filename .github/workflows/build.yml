@@ -5,6 +5,10 @@ on:
     tags:
       - "v*"
 
+permissions:
+  id-token: write # Required for OIDC
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -16,7 +20,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - uses: pnpm/action-setup@v3
@@ -33,10 +37,10 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Publish to NPM
+        run: npm publish
+
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
           artifacts: "dist/jman"
-
-      - name: Publish to NPM
-        run: npm publish
