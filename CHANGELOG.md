@@ -1,3 +1,7 @@
+## [1.4.6](https://github.com/JCO-Digital/jman/compare/v1.4.5...v1.4.6) (2026-01-16)
+
+
+
 ## [1.4.5](https://github.com/JCO-Digital/jman/compare/v1.4.4...v1.4.5) (2026-01-16)
 
 
