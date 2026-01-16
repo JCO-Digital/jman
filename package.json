@@ -4,9 +4,11 @@
   "description": "",
   "main": "src/main.ts",
   "bin": {
-    "jman": "./bin/jman"
+    "jman": "./dist/jman"
   },
   "scripts": {
+    "build": "esbuild src/main.ts --bundle --minify --platform=node --outfile=dist/jman",
+    "dev": "esbuild src/main.ts --bundle --watch  --sourcemap --platform=node --outfile=dist/jman",
     "test": "eslint ./src && prettier ./src --check",
     "format": "prettier ./src --write",
     "preversion": "pnpm test",
