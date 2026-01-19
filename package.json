@@ -17,6 +17,9 @@
   "bin": {
     "jman": "./dist/jman"
   },
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "build": "esbuild src/main.ts --bundle --minify --platform=node --outfile=dist/jman",
     "dev": "esbuild src/main.ts --bundle --watch  --sourcemap --platform=node --outfile=dist/jman",
