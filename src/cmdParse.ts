@@ -12,6 +12,7 @@ import {
   listInactiveSites,
   mainWPInstall,
   runWPCmd,
+  scanVulnerabilities,
   searchTerm,
 } from "./commands";
 
@@ -110,5 +111,9 @@ const commands: Record<string, commandItem> = {
   admin: {
     description: "Create admin user.",
     command: addAdmin,
+  },
+  vulnerability: {
+    description: "Scan for vulnerabilities.",
+    command: scanVulnerabilities,
   },
 };

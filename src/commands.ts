@@ -5,6 +5,7 @@ import { jCmd } from "./types";
 import {
   addPlugin,
   addUser,
+  getPlugins,
   isActiveMainwp,
   resetUserPassword,
   runWP,
@@ -286,4 +287,14 @@ function getPluginName(plugin: string): string {
   }
 
   return plugin;
+}
+
+export async function scanVulnerabilities(data: jCmd) {
+  console.log(data);
+  const searchResults = await promptSearch(data.target);
+  for (const site of searchResults) {
+    console.log(`Fetching plugins for ${site.name} (${site.serverName})`);
+    const plugins = await getPlugins(site.ssh, site.path);
+    console.log(plugins);
+  }
 }
