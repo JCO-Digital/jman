@@ -13,6 +13,8 @@ import {
 import { stringify } from "yaml";
 import { REPO_PATH } from "./constants";
 import {
+  getCachedPluginData,
+  getCachedPlugins,
   getCachedServers,
   getCachedSites,
   refreshCachedServers,
@@ -21,6 +23,7 @@ import {
 import { Server } from "./types/server";
 import { Site } from "./types/site";
 import { config } from "./main";
+import { da } from "zod/v4/locales";
 
 /**
  * Adds an administrator user to all sites matching the search criteria.
@@ -290,11 +293,14 @@ function getPluginName(plugin: string): string {
 }
 
 export async function scanVulnerabilities(data: jCmd) {
-  console.log(data);
-  const searchResults = await promptSearch(data.target);
-  for (const site of searchResults) {
-    console.log(`Fetching plugins for ${site.name} (${site.serverName})`);
-    const plugins = await getPlugins(site.ssh, site.path);
-    console.log(plugins);
+  if (data.target) {
+    console.error("Site specific check not yet implemented.");
+    return;
+  }
+
+  for (const plugin of await getCachedPluginData()) {
+    console.error(
+      `Plugin: ${plugin.name} installed on ${plugin.sites.length} sites.`,
+    );
   }
 }
