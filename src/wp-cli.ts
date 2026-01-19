@@ -129,3 +129,17 @@ export async function setDisallowFileMods(
     }
   }
 }
+
+export async function getPlugins(ssh: string, path: string): Promise<string[]> {
+  try {
+    const ret = await runWP(ssh, path, `plugin list --format=json`);
+    const plugins = JSON.parse(ret.output);
+    return plugins;
+  } catch (error) {
+    const errorMessage = getErrorMessage(error);
+    if (errorMessage.includes("not found")) {
+      console.error(`Can't connect to ${ssh}`);
+    }
+  }
+  return [];
+}
