@@ -18,8 +18,8 @@
     "jman": "./dist/jman"
   },
   "scripts": {
-    "build": "esbuild src/main.ts --bundle --minify --platform=node --outfile=dist/jman",
-    "dev": "esbuild src/main.ts --bundle --watch  --sourcemap --platform=node --outfile=dist/jman",
+    "build": "esbuild src/main.ts --bundle --minify --platform=node --external:better-sqlite3 --outfile=dist/jman",
+    "dev": "esbuild src/main.ts --bundle --watch  --sourcemap --platform=node --external:better-sqlite3 --outfile=dist/jman",
     "test": "eslint ./src && prettier ./src --check",
     "format": "prettier ./src --write",
     "preversion": "pnpm test",
@@ -32,12 +32,14 @@
   "dependencies": {
     "@folder/xdg": "^4.0.1",
     "@topcli/prompts": "^2.4.1",
+    "better-sqlite3": "^12.6.2",
     "semver": "^7.7.3",
     "smol-toml": "^1.6.0",
     "zod": "^4.3.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^18.19.130",
     "@types/semver": "^7.7.1",
     "auto-changelog": "^2.5.0",
