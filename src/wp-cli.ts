@@ -1,6 +1,8 @@
 import { exec } from "child_process";
 import { runtimeData } from "./config";
 import { getErrorMessage } from "./utils";
+import { pluginSchema, WpPlugin } from "./types/plugin";
+import { CliSite } from "./types/site";
 
 export type RunWPArgs = {
   ssh: string;
@@ -130,16 +132,30 @@ export async function setDisallowFileMods(
   }
 }
 
-export async function getPlugins(ssh: string, path: string): Promise<string[]> {
+export async function getPlugins(site: CliSite): Promise<WpPlugin[]> {
+  const result: WpPlugin[] = [];
+
   try {
-    const ret = await runWP(ssh, path, `plugin list --format=json`);
+    const ret = await runWP(site.ssh, site.path, `plugin list --format=json`);
     const plugins = JSON.parse(ret.output);
-    return plugins;
+    for (const plugin of plugins) {
+      result.push(
+        pluginSchema.parse({
+          site_id: site.id,
+          name: plugin.name,
+          status: plugin.status,
+          version: plugin.version,
+          update: plugin.update_version,
+          autoUpdate: plugin.auto_update === "on",
+        }),
+      );
+    }
+    console.error(`Fetched ${result.length} plugins for ${site.name}`);
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     if (errorMessage.includes("not found")) {
-      console.error(`Can't connect to ${ssh}`);
+      console.error(`Can't connect to ${site.name}`);
     }
   }
-  return [];
+  return result;
 }
