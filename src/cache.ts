@@ -93,15 +93,24 @@ export async function refreshCachedSites(): Promise<Site[]> {
 
 export async function getCachedVulnerabilities(plugin: string) {
   const filename = join("vulnerabilities", plugin);
-  let vulnerabilities = vulnResponseSchema.parse(readJSONCache(filename, {}));
+  const data = readJSONCache(filename, {});
 
-  if (vulnerabilities.error !== 0) {
-    console.error(`Fetching vulnerabilities for ${plugin}`);
-    vulnerabilities = await getWpVulnerabilities(plugin);
-    writeJSONCache(filename, vulnerabilities);
+  const result = vulnResponseSchema.safeParse(data);
+  if (result.success) {
+    let vulnerabilities = result.data;
+    if (vulnerabilities.error !== 0) {
+      console.error(`Fetching vulnerabilities for ${plugin}`);
+      vulnerabilities = await getWpVulnerabilities(plugin);
+      writeJSONCache(filename, vulnerabilities);
+    }
+
+    return vulnerabilities;
+  } else {
+    console.error(
+      `Error parsing vulnerabilities for ${plugin}: ${result.error}`,
+    );
+    console.error(data);
   }
-
-  return vulnerabilities;
 }
 
 export async function getCachedPlugins() {

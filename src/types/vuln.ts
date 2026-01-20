@@ -21,12 +21,12 @@ export const cvssSchema = z.object({
   score: z.string(),
   severity: z.string(),
   exploitable: z.string(),
-  impact: z.string(),
+  impact: z.string().nullable(),
 });
 
 export const impactSchema = z.object({
-  cvss: cvssSchema,
-  cwe: z.array(cweSchema),
+  cvss: cvssSchema.optional(),
+  cwe: z.array(cweSchema).optional(),
 });
 
 export const sourceSchema = z.object({
@@ -52,6 +52,7 @@ export const vulnerabilitySchema = z.object({
   description: z.string().nullable(),
   operator: operatorSchema,
   source: z.array(sourceSchema),
+  impact: z.union([impactSchema, z.array(z.never())]),
 });
 
 export const vulnDataSchema = z.object({
