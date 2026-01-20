@@ -1,5 +1,9 @@
 import { join } from "path";
-import { API_BASE_URL, RequestMethod } from "./constants";
+import {
+  API_BASE_URL,
+  RequestMethod,
+  WPVULNERABILITY_API_URL,
+} from "./constants";
 import { config } from "./main";
 import { Server, serverSchema } from "./types/server";
 import { Site, siteSchema } from "./types/site";
@@ -95,4 +99,39 @@ export async function addMainwpSite(
   } else {
     console.error(`Failed to add MainWP site for ${url}: ${data.error}`);
   }
+}
+
+export async function sendSlackMessage(message: string) {
+  const endpoint = config.slackHook;
+
+  if (!endpoint) {
+    console.error("Slack webhook URL is not configured");
+    return;
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ text: message }),
+  });
+  if (!response.ok) {
+    console.error(`Failed to send Slack message: ${response.statusText}`);
+  }
+}
+
+export async function getWpVulnerabilities(pluginName: string) {
+  const endpoint = join(WPVULNERABILITY_API_URL, pluginName);
+
+  const response = await fetch(endpoint);
+  if (!response.ok) {
+    console.error(
+      `Failed to fetch vulnerabilities for ${pluginName}: ${response.statusText}`,
+    );
+    return [];
+  }
+
+  const data = await response.json();
+  return data;
 }
