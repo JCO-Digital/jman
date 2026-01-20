@@ -1,7 +1,13 @@
-import { join } from "path";
+import { dirname, join } from "path";
 import { runtimeData } from "./config";
-import { existsSync, readFileSync, statSync, writeFileSync } from "fs";
-import { getServers, getSites } from "./rest";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "fs";
+import { getServers, getSites, getWpVulnerabilities } from "./rest";
 import { getPlugins } from "./wp-cli";
 import { getSiteList } from "./search";
 import type { Server } from "./types/server";
@@ -12,7 +18,7 @@ import {
   type WpPlugin,
   type WpPluginData,
 } from "./types/plugin";
-import { version } from "zod/v4/core";
+import { vulnResponseSchema } from "./types/vuln";
 
 export function readJSONCache(filename: string, defaultValue: object = []) {
   const filePath = getJSONFilename(filename);
@@ -23,10 +29,10 @@ export function readJSONCache(filename: string, defaultValue: object = []) {
   }
 
   try {
-    // If file is more that 24 hours, return default value
+    // If file is more than 12 hours, return default value
     const fileStats = statSync(filePath);
     const fileAge = Date.now() - fileStats.mtimeMs;
-    if (fileAge > 86400000) {
+    if (fileAge > 43200000) {
       return defaultValue;
     }
 
@@ -39,6 +45,13 @@ export function readJSONCache(filename: string, defaultValue: object = []) {
 
 export function writeJSONCache(filename: string, data: object) {
   const filePath = getJSONFilename(filename);
+
+  // If folder does not exist, create it
+  const folderPath = dirname(filePath);
+  if (!existsSync(folderPath)) {
+    mkdirSync(folderPath, { recursive: true });
+  }
+
   try {
     writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8");
   } catch (error) {
@@ -76,6 +89,19 @@ export async function refreshCachedSites(): Promise<Site[]> {
   const sites = await getSites();
   writeJSONCache("sites", sites);
   return sites;
+}
+
+export async function getCachedVulnerabilities(plugin: string) {
+  const filename = join("vulnerabilities", plugin);
+  let vulnerabilities = vulnResponseSchema.parse(readJSONCache(filename, {}));
+
+  if (vulnerabilities.error !== 0) {
+    console.error(`Fetching vulnerabilities for ${plugin}`);
+    vulnerabilities = await getWpVulnerabilities(plugin);
+    writeJSONCache(filename, vulnerabilities);
+  }
+
+  return vulnerabilities;
 }
 
 export async function getCachedPlugins() {
