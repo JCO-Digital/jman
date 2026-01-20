@@ -109,7 +109,6 @@ export async function getCachedVulnerabilities(plugin: string) {
     console.error(
       `Error parsing vulnerabilities for ${plugin}: ${result.error}`,
     );
-    console.error(data);
   }
 }
 
@@ -117,17 +116,20 @@ export async function getCachedPlugins() {
   const plugins: WpPlugin[] = readJSONCache("plugins");
 
   const sites = await getSiteList();
+  let update = false;
   for (const site of sites) {
-    if (plugins.filter((plugin) => plugin.site_id === site.id)) {
+    if (plugins.filter((plugin) => plugin.site_id === site.id).length > 0) {
       continue;
     }
 
     for (const plugin of await getPlugins(site)) {
       plugins.push(plugin);
+      update = true;
     }
   }
-
-  writeJSONCache("plugins", plugins);
+  if (update) {
+    writeJSONCache("plugins", plugins);
+  }
   return plugins;
 }
 
