@@ -22,9 +22,9 @@ import {
 import { Server } from "./types/server";
 import { Site } from "./types/site";
 import { config } from "./main";
-import { da } from "zod/v4/locales";
 import { VulnReport, vulnReportSchema } from "./types/vuln";
 import { decode } from "html-entities";
+import { readJSONData, writeJSONData } from "./data";
 
 /**
  * Adds an administrator user to all sites matching the search criteria.
@@ -294,13 +294,17 @@ function getPluginName(plugin: string): string {
 }
 
 export async function scanVulnerabilities(data: jCmd) {
+  const sentData: string[] = readJSONData("sentSlack", []);
   for (const report of await processVulnerabilities()) {
+    const id = report.vulnerability.uuid;
     const message = await formatReport(report);
     console.log(message);
-    if (data.target === "slack") {
+    if (data.target === "slack" && !sentData.includes(id)) {
       await sendSlackMessage(message);
+      sentData.push(id);
     }
   }
+  writeJSONData("sentSlack", sentData);
 }
 
 async function processVulnerabilities(): Promise<VulnReport[]> {
@@ -309,7 +313,7 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
   for (const plugin of await getCachedPluginData()) {
     const vuln = await getCachedVulnerabilities(plugin.name);
 
-    if (vuln.data.vulnerability) {
+    if (vuln && vuln.data.vulnerability) {
       for (const vulnerability of vuln.data.vulnerability) {
         const report = vulnReportSchema.parse({
           plugin: vuln.data.name,
