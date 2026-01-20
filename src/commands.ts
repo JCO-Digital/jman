@@ -1,6 +1,6 @@
 import { join } from "path";
 import { addMainwpSite, sendSlackMessage } from "./rest";
-import { promptSearch, searchSites } from "./search";
+import { getSiteList, promptSearch, searchSites } from "./search";
 import { jCmd } from "./types";
 import {
   addPlugin,
@@ -24,6 +24,7 @@ import { Site } from "./types/site";
 import { config } from "./main";
 import { da } from "zod/v4/locales";
 import { VulnReport, vulnReportSchema } from "./types/vuln";
+import { decode } from "html-entities";
 
 /**
  * Adds an administrator user to all sites matching the search criteria.
@@ -293,13 +294,13 @@ function getPluginName(plugin: string): string {
 }
 
 export async function scanVulnerabilities(data: jCmd) {
-  if (data.target) {
-    console.error("Site specific check not yet implemented.");
-    return;
+  for (const report of await processVulnerabilities()) {
+    const message = await formatReport(report);
+    console.log(message);
+    if (data.target === "slack") {
+      await sendSlackMessage(message);
+    }
   }
-
-  const reports = await processVulnerabilities();
-  console.log(reports);
 }
 
 async function processVulnerabilities(): Promise<VulnReport[]> {
@@ -311,7 +312,7 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
     if (vuln.data.vulnerability) {
       for (const vulnerability of vuln.data.vulnerability) {
         const report = vulnReportSchema.parse({
-          plugin: plugin.name,
+          plugin: vuln.data.name,
           vulnerability,
           sites: [],
         });
@@ -334,7 +335,26 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
   return reports;
 }
 
-function formatReport(report: VulnReport) {}
+async function formatReport(report: VulnReport): Promise<string> {
+  let formattedReport = `Plugin: ${decode(report.plugin)}\n`;
+  formattedReport += `Vulnerability: ${decode(report.vulnerability.name)}\n`;
+  // List sites affected.
+  formattedReport += `Affected Sites:\n`;
+  for (const site of report.sites) {
+    const siteName = await getSiteName(site.site_id);
+    formattedReport += `  - ${siteName} (${site.version})\n`;
+  }
+  return formattedReport;
+}
+
+async function getSiteName(siteId: number): Promise<string> {
+  for (const site of await getSiteList()) {
+    if (site.id === siteId) {
+      return site.name;
+    }
+  }
+  return "";
+}
 
 function versionIsNotBigger(plugin: string, vuln: string): boolean {
   const pluginParts = plugin.split(".");
