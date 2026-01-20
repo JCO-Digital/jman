@@ -1,11 +1,10 @@
 import { join } from "path";
-import { addMainwpSite } from "./rest";
+import { addMainwpSite, sendSlackMessage } from "./rest";
 import { promptSearch, searchSites } from "./search";
 import { jCmd } from "./types";
 import {
   addPlugin,
   addUser,
-  getPlugins,
   isActiveMainwp,
   resetUserPassword,
   runWP,
@@ -14,9 +13,9 @@ import { stringify } from "yaml";
 import { REPO_PATH } from "./constants";
 import {
   getCachedPluginData,
-  getCachedPlugins,
   getCachedServers,
   getCachedSites,
+  getCachedVulnerabilities,
   refreshCachedServers,
   refreshCachedSites,
 } from "./cache";
@@ -24,6 +23,7 @@ import { Server } from "./types/server";
 import { Site } from "./types/site";
 import { config } from "./main";
 import { da } from "zod/v4/locales";
+import { VulnReport, vulnReportSchema } from "./types/vuln";
 
 /**
  * Adds an administrator user to all sites matching the search criteria.
@@ -298,9 +298,55 @@ export async function scanVulnerabilities(data: jCmd) {
     return;
   }
 
+  const reports = await processVulnerabilities();
+  console.log(reports);
+}
+
+async function processVulnerabilities(): Promise<VulnReport[]> {
+  const reports: VulnReport[] = [];
+
   for (const plugin of await getCachedPluginData()) {
-    console.error(
-      `Plugin: ${plugin.name} installed on ${plugin.sites.length} sites.`,
-    );
+    const vuln = await getCachedVulnerabilities(plugin.name);
+
+    if (vuln.data.vulnerability) {
+      for (const vulnerability of vuln.data.vulnerability) {
+        const report = vulnReportSchema.parse({
+          plugin: plugin.name,
+          vulnerability,
+          sites: [],
+        });
+        const min = vulnerability.operator.min_version ?? "0";
+        const max = vulnerability.operator.max_version ?? "";
+        for (const site of plugin.sites) {
+          if (
+            versionIsNotBigger(site.version, max) &&
+            versionIsNotBigger(min, site.version)
+          ) {
+            report.sites.push(site);
+          }
+        }
+        if (report.sites.length > 0) {
+          reports.push(report);
+        }
+      }
+    }
   }
+  return reports;
+}
+
+function formatReport(report: VulnReport) {}
+
+function versionIsNotBigger(plugin: string, vuln: string): boolean {
+  const pluginParts = plugin.split(".");
+  const vulnParts = vuln.split(".");
+
+  for (let i = 0; i < Math.max(pluginParts.length, vulnParts.length); i++) {
+    const pluginPart = parseInt(pluginParts[i] || "0");
+    const vulnPart = parseInt(vulnParts[i] || "0");
+
+    if (pluginPart > vulnPart) return false;
+    if (pluginPart < vulnPart) return true;
+  }
+
+  return true;
 }
