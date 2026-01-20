@@ -64,10 +64,10 @@ export const vulnDataSchema = z.object({
 });
 
 export const vulnResponseSchema = z.object({
-  error: z.number(),
-  message: z.string().nullable(),
-  data: vulnDataSchema,
-  updated: z.coerce.number(),
+  error: z.number().default(1),
+  message: z.string().default("").nullable(),
+  data: vulnDataSchema.optional(),
+  updated: z.coerce.number().default(0),
 });
 
 export type Cwe = z.infer<typeof cweSchema>;

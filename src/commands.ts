@@ -311,9 +311,10 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
   const reports: VulnReport[] = [];
 
   for (const plugin of await getCachedPluginData()) {
+    console.error(`Processing plugin: ${plugin.name}`);
     const vuln = await getCachedVulnerabilities(plugin.name);
 
-    if (vuln && vuln.data.vulnerability) {
+    if (vuln?.data?.vulnerability) {
       for (const vulnerability of vuln.data.vulnerability) {
         const report = vulnReportSchema.parse({
           plugin: vuln.data.name,
