@@ -25,6 +25,12 @@ export function getConfigFilePath(): string {
 
 export function readConfigFile(): jConfig {
   const configPath = getConfigFilePath();
+
+  if (!existsSync(configPath)) {
+    console.error(`Config file not found at ${configPath}`);
+    process.exit(1);
+  }
+
   const configRaw = readFileSync(configPath, "utf8");
   const config = configSchema.parse(parse(configRaw));
 
