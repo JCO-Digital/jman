@@ -1,4 +1,4 @@
-import { config } from "./main";
+import { config } from "./jman";
 
 export function hasMainWP(): boolean {
   return config.tokenMainwp.length > 0;

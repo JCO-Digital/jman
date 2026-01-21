@@ -13,16 +13,15 @@
 
 ## Installation
 
-The best way to install `jman` is via `pnpm`:
+The best way to install `jman` is via `bun`:
 
 ```bash
-pnpm install -g @jcodigital/jman
+bun install -g @jcodigital/jman
 ```
 
 ### Prerequisites
 
-- Node.js (v18 or later recommended)
-- `pnpm` (recommended)
+- Bun (v1.2 or later recommended)
 - SSH access configured for your SpinupWP servers.
 
 ### Building from source
@@ -37,12 +36,12 @@ pnpm install -g @jcodigital/jman
 2. Install dependencies:
 
    ```bash
-   pnpm install
+   bun install
    ```
 
 3. Build the project:
    ```bash
-   pnpm run build
+   bun run build
    ```
 
 The binary will be generated at `./dist/jman`.
@@ -117,9 +116,9 @@ jman alias my-server-name > ~/.wp-cli/alias.yml
 
 ## Development
 
-- **Run in development mode:** `pnpm run dev`
-- **Linting:** `pnpm run test`
-- **Formatting:** `pnpm run format`
+- **Run in development mode:** `bun run dev`
+- **Linting:** `bun run test`
+- **Formatting:** `bun run format`
 
 ## License
 

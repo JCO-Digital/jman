@@ -1,15 +1,12 @@
 .PHONY: build dev install clean
 
-build: clean install dist/jman
+build: clean install bin/jman
 
-dist/jman: src/main.ts
-	pnpm run build
-
-dev: clean install
-	pnpm run dev
+bin/jman: src/jman.ts
+	bun run build
 
 install:
-	pnpm i
+	bun install
 
 clean:
-	rm -rf dist
+	rm -rf bin

@@ -45,10 +45,10 @@ export async function runCmd(data: jCmd) {
     if (data.cmd !== "") {
       console.error(`Command '${data.cmd}' not found\n`);
     }
-    console.error("Available commands:");
+    console.warn("Available commands:");
     for (const [key, command] of Object.entries(commands)) {
       if (!command.mainwp || hasMainWP())
-        console.error(`${key}: ${command.description}`);
+        console.warn(`${key}: ${command.description}`);
     }
     return;
   } else {

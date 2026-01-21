@@ -4,7 +4,7 @@ import {
   RequestMethod,
   WPVULNERABILITY_API_URL,
 } from "./constants";
-import { config } from "./main";
+import { config } from "./jman";
 import { Server, serverSchema } from "./types/server";
 import { Site, siteSchema } from "./types/site";
 import { SpinupReply } from "./types";
@@ -20,7 +20,7 @@ export async function makeRequest(
   method: RequestMethod = RequestMethod.GET,
   token: string = config.tokenSpinup,
 ): Promise<SpinupReply> {
-  console.error(`Making a ${method} request to ${endpoint}`);
+  console.warn(`Making a ${method} request to ${endpoint}`);
   const response = await fetch(endpoint, {
     method,
     headers: {
