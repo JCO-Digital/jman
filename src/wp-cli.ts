@@ -150,7 +150,7 @@ export async function getPlugins(site: CliSite): Promise<WpPlugin[]> {
         }),
       );
     }
-    console.error(`Fetched ${result.length} plugins for ${site.name}`);
+    console.warn(`Fetched ${result.length} plugins for ${site.name}`);
   } catch (error) {
     const errorMessage = getErrorMessage(error);
     if (errorMessage.includes("not found")) {

@@ -15,28 +15,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: "24"
+          bun-version: latest
           registry-url: "https://registry.npmjs.org"
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          run_install: false
-
       - name: Install Packages
-        run: pnpm install
+        run: bun install
 
       - name: Testing the code
-        run: pnpm test
+        run: bun run test
 
       - name: Build
         run: make build
 
-      - name: Publish to NPM
-        run: npm publish
+      #      - name: Publish to NPM
+      #        run: npm publish
 
       - name: Create Release
         uses: ncipollo/release-action@v1

@@ -21,7 +21,7 @@ import {
 } from "./cache";
 import { Server } from "./types/server";
 import { Site } from "./types/site";
-import { config } from "./main";
+import { config } from "./jman";
 import { VulnReport, vulnReportSchema } from "./types/vuln";
 import { decode } from "html-entities";
 import { readJSONData, writeJSONData } from "./data";
@@ -98,7 +98,7 @@ export async function createAliases(cmdData: jCmd) {
     });
   }
 
-  console.error("Creating aliases...");
+  console.warn("Creating aliases...");
 
   console.log(stringify(data));
 }
@@ -132,7 +132,7 @@ export async function listData(data: jCmd) {
   }
   if (data.target === "all" || data.target === "servers") {
     getCachedServers().then((servers) => {
-      console.error("\nCached servers:", servers.length);
+      console.warn("\nCached servers:", servers.length);
       for (const server of servers) {
         console.log(server.name);
       }
@@ -140,7 +140,7 @@ export async function listData(data: jCmd) {
   }
   if (data.target === "all" || data.target === "sites") {
     getCachedSites().then((sites) => {
-      console.error("\nCached sites:", sites.length);
+      console.warn("\nCached sites:", sites.length);
       for (const site of sites) {
         console.log(site.domain);
       }
@@ -212,7 +212,7 @@ export async function mainWPInstall(data: jCmd) {
         "administrator",
       );
     } catch (_) {
-      console.error(
+      console.warn(
         `MainWP user already exists for ${site.name}, resetting password.`,
       );
       try {
@@ -311,7 +311,7 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
   const reports: VulnReport[] = [];
 
   for (const plugin of await getCachedPluginData()) {
-    console.error(`Processing plugin: ${plugin.name}`);
+    console.warn(`Processing plugin: ${plugin.name}`);
     const vuln = await getCachedVulnerabilities(plugin.name);
 
     if (vuln?.data?.vulnerability) {

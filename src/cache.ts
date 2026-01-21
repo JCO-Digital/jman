@@ -99,7 +99,7 @@ export async function getCachedVulnerabilities(plugin: string) {
   if (result.success) {
     let vulnerabilities = result.data;
     if (vulnerabilities.error !== 0) {
-      console.error(`Fetching vulnerabilities for ${plugin}`);
+      console.warn(`Fetching vulnerabilities for ${plugin}`);
       vulnerabilities = await getWpVulnerabilities(plugin);
       writeJSONCache(filename, vulnerabilities);
     }
