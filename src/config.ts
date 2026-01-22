@@ -1,4 +1,4 @@
-import xdg from "@folder/xdg";
+import { xdgConfig, xdgCache, xdgData } from "xdg-basedir";
 import { join } from "path";
 import { readFileSync, existsSync, mkdirSync } from "fs";
 import { parse } from "smol-toml";
@@ -6,9 +6,9 @@ import { configSchema, jConfig, runtimeSchema } from "./types";
 import { PACKAGE_NAME } from "./constants";
 
 export const runtimeData = runtimeSchema.parse({
-  configDir: join(xdg().config, PACKAGE_NAME),
-  cacheDir: join(xdg().cache, PACKAGE_NAME),
-  dataDir: join(xdg().data, PACKAGE_NAME),
+  configDir: join(xdgConfig ?? "", PACKAGE_NAME),
+  cacheDir: join(xdgCache ?? "", PACKAGE_NAME),
+  dataDir: join(xdgData ?? "", PACKAGE_NAME),
 });
 
 export function getConfigFilePath(): string {

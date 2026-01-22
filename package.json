@@ -30,8 +30,8 @@
   "author": "J&Co Digital",
   "license": "GPL-3.0-only",
   "dependencies": {
-    "@folder/xdg": "^4.0.1",
     "@topcli/prompts": "^2.4.1",
+    "xdg-basedir": "^5.1.0",
     "html-entities": "^2.6.0",
     "semver": "^7.7.3",
     "smol-toml": "^1.6.0",
