@@ -112,7 +112,7 @@ const commands: Record<string, commandItem> = {
     description: "Create admin user.",
     command: addAdmin,
   },
-  vulnerability: {
+  vuln: {
     description: "Scan for vulnerabilities.",
     command: scanVulnerabilities,
   },

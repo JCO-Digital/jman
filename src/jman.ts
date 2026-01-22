@@ -1,6 +1,6 @@
 import { parser, runCmd } from "./cmdParse";
 import { readConfigFile } from "./config";
-import p from "../package.json";
+import p from "../package.json" with { type: "json" };
 
 export const config = readConfigFile();
 
