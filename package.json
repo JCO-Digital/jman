@@ -1,6 +1,6 @@
 {
   "name": "@jcodigital/jman",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "A command-line tool for managing projects",
   "main": "src/jman.ts",
   "type": "module",
@@ -23,7 +23,6 @@
     "test": "eslint ./src && prettier ./src --check",
     "format": "prettier ./src --write",
     "preversion": "bun run test",
-    "version": "auto-changelog && git add CHANGELOG.md",
     "postversion": "git push && git push --tags",
     "prepublishOnly": "bun run build"
   },
