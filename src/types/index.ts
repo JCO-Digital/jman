@@ -15,6 +15,7 @@ export const configSchema = z.object({
   tokenSpinup: z.string().default(""),
   tokenMainwp: z.string().default(""),
   slackHook: z.string().default(""),
+  cvssThreshold: z.number().min(0).max(10).default(7),
 });
 
 export type jConfig = z.infer<typeof configSchema>;

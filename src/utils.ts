@@ -13,3 +13,18 @@ export function getErrorMessage(error: unknown) {
   }
   return "Unknown error";
 }
+
+export function versionIsNotBigger(plugin: string, vuln: string): boolean {
+  const pluginParts = plugin.split(".");
+  const vulnParts = vuln.split(".");
+
+  for (let i = 0; i < Math.max(pluginParts.length, vulnParts.length); i++) {
+    const pluginPart = parseInt(pluginParts[i] || "0");
+    const vulnPart = parseInt(vulnParts[i] || "0");
+
+    if (pluginPart > vulnPart) return false;
+    if (pluginPart < vulnPart) return true;
+  }
+
+  return true;
+}
