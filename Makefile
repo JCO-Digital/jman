@@ -1,12 +1,15 @@
-.PHONY: build dev install clean
+.PHONY: build prepare install clean
 
-build: clean install bin/jman
+build: clean prepare bin/jman
 
 bin/jman: src/jman.ts
 	bun run build
 
-install:
+prepare:
 	bun install
+
+install: build
+	cp bin/jman ~/.local/bin/
 
 clean:
 	rm -rf bin
