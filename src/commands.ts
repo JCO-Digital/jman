@@ -22,11 +22,11 @@ import {
 import { Server } from "./types/server";
 import { Site } from "./types/site";
 import { config } from "./jman";
-import { vulnReportSchema } from "./types/vuln";
 import { decode } from "html-entities";
 import { readJSONData, writeJSONData } from "./data";
 import { versionIsNotBigger } from "./utils";
-import type { VulnReport, Impact } from "./types/vuln";
+import { vulnReportSchema } from "./types/vuln";
+import type { VulnReport } from "./types/vuln";
 
 /**
  * Adds an administrator user to all sites matching the search criteria.
