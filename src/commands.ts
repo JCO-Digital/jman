@@ -22,9 +22,11 @@ import {
 import { Server } from "./types/server";
 import { Site } from "./types/site";
 import { config } from "./jman";
-import { VulnReport, vulnReportSchema } from "./types/vuln";
+import { vulnReportSchema } from "./types/vuln";
 import { decode } from "html-entities";
 import { readJSONData, writeJSONData } from "./data";
+import { versionIsNotBigger } from "./utils";
+import type { VulnReport, Impact } from "./types/vuln";
 
 /**
  * Adds an administrator user to all sites matching the search criteria.
@@ -297,14 +299,27 @@ export async function scanVulnerabilities(data: jCmd) {
   const sentData: string[] = readJSONData("sentSlack", []);
   for (const report of await processVulnerabilities()) {
     const id = report.vulnerability.uuid;
+    const cvss = getCvss(report);
     const message = await formatReport(report);
     console.log(message);
-    if (data.target === "slack" && !sentData.includes(id)) {
+    if (
+      data.target === "slack" &&
+      (!sentData.includes(id) || cvss >= config.cvssThreshold)
+    ) {
       await sendSlackMessage(message);
       sentData.push(id);
     }
   }
   writeJSONData("sentSlack", sentData);
+}
+
+function getCvss(report: VulnReport): number {
+  if (!report.vulnerability.impact?.cvss?.score) {
+    return 0;
+  }
+
+  // parse string to number.
+  return parseFloat(report.vulnerability.impact.cvss.score);
 }
 
 async function processVulnerabilities(): Promise<VulnReport[]> {
@@ -341,8 +356,12 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
 }
 
 async function formatReport(report: VulnReport): Promise<string> {
+  const cvss = getCvss(report);
   let formattedReport = `Plugin: ${decode(report.plugin)}\n`;
   formattedReport += `Vulnerability: ${decode(report.vulnerability.name)}\n`;
+  if (cvss > 0) {
+    formattedReport += `CVS Score: ${cvss}\n`;
+  }
   // List sites affected.
   formattedReport += `Affected Sites:\n`;
   for (const site of report.sites) {
@@ -359,19 +378,4 @@ async function getSiteName(siteId: number): Promise<string> {
     }
   }
   return "";
-}
-
-function versionIsNotBigger(plugin: string, vuln: string): boolean {
-  const pluginParts = plugin.split(".");
-  const vulnParts = vuln.split(".");
-
-  for (let i = 0; i < Math.max(pluginParts.length, vulnParts.length); i++) {
-    const pluginPart = parseInt(pluginParts[i] || "0");
-    const vulnPart = parseInt(vulnParts[i] || "0");
-
-    if (pluginPart > vulnPart) return false;
-    if (pluginPart < vulnPart) return true;
-  }
-
-  return true;
 }
