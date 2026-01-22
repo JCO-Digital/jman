@@ -36,4 +36,4 @@ jobs:
       - name: Create Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "dist/jman"
+          artifacts: "bin/jman"
