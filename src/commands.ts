@@ -300,6 +300,16 @@ export async function scanVulnerabilities(data: jCmd) {
   for (const report of await processVulnerabilities()) {
     const id = report.vulnerability.uuid;
     const cvss = getCvss(report);
+    if (data.target === "cvss") {
+      let cvssThreshold = config.cvssThreshold;
+      if (data.args[0]) {
+        cvssThreshold = parseFloat(data.args[0]);
+      }
+      if (cvss < cvssThreshold) {
+        continue;
+      }
+    }
+
     const message = await formatReport(report);
     console.log(message);
     if (
