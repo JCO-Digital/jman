@@ -24,17 +24,25 @@ export function runWP(
   };
 
   return new Promise((resolve, reject) => {
-    exec(
-      `wp --ssh=${ssh} --path=${path} --skip-plugins --skip-themes ${command}`,
-      options,
-      (error, stdout, stderr) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve({ output: stdout, error: stderr });
-      },
-    );
+    // Check if wp-cli executable exists.
+    exec("which wp", (error, stdout, stderr) => {
+      if (error) {
+        console.error("Wp-cli executable not found.");
+        reject(error);
+        return;
+      }
+      exec(
+        `wp --ssh=${ssh} --path=${path} --skip-plugins --skip-themes ${command}`,
+        options,
+        (error, stdout, stderr) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          resolve({ output: stdout, error: stderr });
+        },
+      );
+    });
   });
 }
 
