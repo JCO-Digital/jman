@@ -18,6 +18,7 @@ export function runWP(
   ssh: string,
   path: string,
   command: string,
+  skip: boolean = true,
 ): Promise<RunWPReturn> {
   const options = {
     cwd: runtimeData.cacheDir,
@@ -25,14 +26,19 @@ export function runWP(
 
   return new Promise((resolve, reject) => {
     // Check if wp-cli executable exists.
-    exec("which wp", (error, stdout, stderr) => {
+    exec("which wp", (error) => {
       if (error) {
         console.error("Wp-cli executable not found.");
         reject(error);
         return;
       }
+      let cmdOptions = "";
+      if (skip) {
+        cmdOptions += "--skip-plugins --skip-themes ";
+      }
+
       exec(
-        `wp --ssh=${ssh} --path=${path} --skip-plugins --skip-themes ${command}`,
+        `wp --ssh=${ssh} --path=${path} ${cmdOptions} ${command}`,
         options,
         (error, stdout, stderr) => {
           if (error) {
