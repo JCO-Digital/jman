@@ -19,8 +19,6 @@ import {
   refreshCachedServers,
   refreshCachedSites,
 } from "./cache";
-import { Server } from "./types/server";
-import { Site } from "./types/site";
 import { config } from "./jman";
 import { decode } from "html-entities";
 import { readJSONData, writeJSONData } from "./data";
@@ -71,6 +69,14 @@ export async function addAdmin(data: jCmd) {
   }
 }
 
+/**
+ * Creates WP-CLI aliases for sites and servers.
+ * - If a search target is provided, creates aliases for matching sites and a group alias.
+ * - If no search target is provided, creates aliases for all sites and server groups.
+ * - Outputs the alias registry in YAML format.
+ *
+ * @param cmdData - The command data containing the search target.
+ */
 export async function createAliases(cmdData: jCmd): Promise<void> {
   const search = cmdData.target;
   const aliasRegistry: AliasRegistry = {};
@@ -87,6 +93,14 @@ export async function createAliases(cmdData: jCmd): Promise<void> {
   console.log(stringify(aliasRegistry));
 }
 
+/**
+ * Creates aliases for sites matching a specific search query.
+ * - Creates individual site aliases (@sitename).
+ * - Creates a group alias (@searchterm) containing all matching sites.
+ *
+ * @param search - The search string to match sites.
+ * @param registry - The alias registry to populate.
+ */
 async function createSearchAliases(
   search: string,
   registry: AliasRegistry,
@@ -104,6 +118,13 @@ async function createSearchAliases(
   registry[groupAlias] = siteAliases;
 }
 
+/**
+ * Creates aliases for all sites and servers.
+ * - Creates individual site aliases (@domain).
+ * - Creates server group aliases (@servername) containing all sites on that server.
+ *
+ * @param registry - The alias registry to populate.
+ */
 async function createAllAliases(registry: AliasRegistry): Promise<void> {
   const serverInfoMap = new Map<number, ServerInfo>();
   const serverAliasLists = new Map<string, string[]>();
@@ -146,6 +167,14 @@ async function createAllAliases(registry: AliasRegistry): Promise<void> {
   }
 }
 
+/**
+ * Creates a site alias object with SSH connection details.
+ *
+ * @param userName - The SSH username for the site.
+ * @param serverName - The hostname of the server.
+ * @param path - The path to the site files (defaults to "files").
+ * @returns A SiteAlias object with ssh and path properties.
+ */
 function createSiteAlias(
   userName: string,
   serverName: string,
@@ -168,6 +197,14 @@ export async function fetchData() {
   console.log("Fetched sites:", sites.length);
 }
 
+/**
+ * Lists cached servers and/or sites based on the target parameter.
+ * - Target "servers": Lists all cached server names.
+ * - Target "sites": Lists all cached site domains.
+ * - Target "all": Lists both servers and sites.
+ *
+ * @param data - The command data containing the target ("servers", "sites", or "all").
+ */
 export async function listData(data: jCmd) {
   if (data.target === "") {
     console.error("No target provided for list command.");
@@ -282,6 +319,14 @@ export async function mainWPInstall(data: jCmd) {
   }
 }
 
+/**
+ * Executes a WP-CLI command on all sites matching the search criteria.
+ * - Searches for sites using promptSearch(data.target).
+ * - Runs the command specified in data.args on each site.
+ * - Logs the output or any errors encountered.
+ *
+ * @param data - The command data containing search parameters and the WP-CLI command arguments.
+ */
 export async function runWPCmd(data: jCmd) {
   const searchResults = await promptSearch(data.target);
   const command = data.args.join(" ");
@@ -301,6 +346,13 @@ export async function runWPCmd(data: jCmd) {
   }
 }
 
+/**
+ * Searches for sites matching the provided search term and displays results.
+ * - Uses searchSites to find matching sites.
+ * - Displays site name and server name for each result.
+ *
+ * @param data - The command data containing the search term in data.target.
+ */
 export async function searchTerm(data: jCmd) {
   searchSites(data.target).then((sites) => {
     console.log("Search results:");
@@ -310,6 +362,14 @@ export async function searchTerm(data: jCmd) {
   });
 }
 
+/**
+ * Installs a WordPress plugin on all sites matching the search criteria.
+ * - Requires at least one argument: the plugin name or URL.
+ * - Supports SatisPress repository URLs for private plugins.
+ * - For each site found by promptSearch(data.target), installs the specified plugin.
+ *
+ * @param data - The command data containing search parameters and plugin name/URL.
+ */
 export async function installPlugin(data: jCmd) {
   if (data.args.length < 1) {
     console.error("Usage: jman plugin <search> <plugin>");
@@ -324,6 +384,14 @@ export async function installPlugin(data: jCmd) {
   }
 }
 
+/**
+ * Processes a plugin identifier and returns the appropriate plugin name or path.
+ * - If the plugin is a SatisPress repository URL, extracts and constructs the local file path.
+ * - Otherwise, returns the plugin name as-is.
+ *
+ * @param plugin - The plugin name or SatisPress URL.
+ * @returns The processed plugin name or file path.
+ */
 function getPluginName(plugin: string): string {
   const repo = plugin.match(
     /(https:\/\/repo\.jco\.fi)\/satispress\/([^/]+)\/(\d+\.\d+\.\d+)/,
@@ -336,6 +404,15 @@ function getPluginName(plugin: string): string {
   return plugin;
 }
 
+/**
+ * Scans for plugin vulnerabilities across all sites.
+ * - Target "cvss": Filters vulnerabilities by CVSS score threshold.
+ * - Target "slack": Sends vulnerability reports to Slack (new or high-severity only).
+ * - Processes all cached plugins and checks for known vulnerabilities.
+ * - Tracks sent Slack messages to avoid duplicates.
+ *
+ * @param data - The command data containing the target ("cvss" or "slack") and optional CVSS threshold.
+ */
 export async function scanVulnerabilities(data: jCmd) {
   const sentData: string[] = readJSONData("sentSlack", []);
   for (const report of await processVulnerabilities()) {
@@ -364,6 +441,12 @@ export async function scanVulnerabilities(data: jCmd) {
   writeJSONData("sentSlack", sentData);
 }
 
+/**
+ * Extracts the CVSS score from a vulnerability report.
+ *
+ * @param report - The vulnerability report.
+ * @returns The CVSS score as a number, or 0 if not available.
+ */
 function getCvss(report: VulnReport): number {
   if (!report.vulnerability.impact?.cvss?.score) {
     return 0;
@@ -373,6 +456,14 @@ function getCvss(report: VulnReport): number {
   return parseFloat(report.vulnerability.impact.cvss.score);
 }
 
+/**
+ * Processes all cached plugins to identify vulnerabilities affecting sites.
+ * - Fetches vulnerability data for each plugin.
+ * - Matches vulnerable version ranges against installed plugin versions.
+ * - Returns a list of reports for vulnerabilities that affect at least one site.
+ *
+ * @returns An array of VulnReport objects containing affected sites.
+ */
 async function processVulnerabilities(): Promise<VulnReport[]> {
   const reports: VulnReport[] = [];
 
@@ -406,6 +497,14 @@ async function processVulnerabilities(): Promise<VulnReport[]> {
   return reports;
 }
 
+/**
+ * Formats a vulnerability report into a human-readable string.
+ * - Includes plugin name, vulnerability name, and CVSS score.
+ * - Lists all affected sites with their plugin versions.
+ *
+ * @param report - The vulnerability report to format.
+ * @returns A formatted string representation of the report.
+ */
 async function formatReport(report: VulnReport): Promise<string> {
   const cvss = getCvss(report);
   let formattedReport = `Plugin: ${decode(report.plugin)}\n`;
@@ -422,6 +521,12 @@ async function formatReport(report: VulnReport): Promise<string> {
   return formattedReport;
 }
 
+/**
+ * Retrieves the site name for a given site ID.
+ *
+ * @param siteId - The numeric ID of the site.
+ * @returns The site name, or an empty string if not found.
+ */
 async function getSiteName(siteId: number): Promise<string> {
   for (const site of await getSiteList()) {
     if (site.id === siteId) {
