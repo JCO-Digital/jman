@@ -28,6 +28,22 @@ import { versionIsNotBigger } from "./utils";
 import { vulnReportSchema } from "./types/vuln";
 import type { VulnReport } from "./types/vuln";
 
+interface SiteAlias {
+  ssh: string;
+  path: string;
+}
+
+interface ServerInfo {
+  alias: string;
+  hostname: string;
+}
+
+type AliasData = SiteAlias | string[];
+
+interface AliasRegistry {
+  [key: string]: AliasData;
+}
+
 /**
  * Adds an administrator user to all sites matching the search criteria.
  * - Requires at least two arguments: username and email.
@@ -55,61 +71,86 @@ export async function addAdmin(data: jCmd) {
   }
 }
 
-export async function createAliases(cmdData: jCmd) {
+export async function createAliases(cmdData: jCmd): Promise<void> {
   const search = cmdData.target;
-  const serverMap = {};
-  const data = {};
+  const aliasRegistry: AliasRegistry = {};
 
   if (search.length > 0) {
-    const siteList: string[] = [];
-    const group = "@" + search;
-    const sites = await searchSites(search);
-    for (const site of sites) {
-      const alias = `@${site.name}`;
-      data[alias] = {
-        ssh: site.ssh,
-        path: site.path,
-      };
-      siteList.push(alias);
-    }
-    data[group] = siteList;
+    // Handle specific search query
+    await createSearchAliases(search, aliasRegistry);
   } else {
-    const serverList = {};
-    const servers = await refreshCachedServers();
-    const sites = await refreshCachedSites();
-    servers.forEach((server: Server) => {
-      // Get name as string before first dot.
-      const serverAlias = "@" + server.name.split(".")[0];
-
-      serverMap[server.id] = { alias: serverAlias, hostname: server.name };
-      serverList[serverAlias] = [];
-    });
-
-    sites.forEach((site: Site) => {
-      const server = serverMap[site.server_id];
-      data[`@${site.domain}`] = createSiteAlias(
-        site.site_user,
-        server.hostname,
-      );
-      serverList[server.alias].push(`@${site.domain}`);
-    });
-
-    // Merge serverList to end of data
-    Object.keys(serverList).forEach((key) => {
-      data[key] = serverList[key];
-    });
+    // Handle all sites and servers
+    await createAllAliases(aliasRegistry);
   }
 
   console.warn("Creating aliases...");
+  console.log(stringify(aliasRegistry));
+}
 
-  console.log(stringify(data));
+async function createSearchAliases(
+  search: string,
+  registry: AliasRegistry,
+): Promise<void> {
+  const siteAliases: string[] = [];
+  const groupAlias = `@${search}`;
+  const sites = await searchSites(search);
+
+  for (const site of sites) {
+    const alias = `@${site.name}`;
+    registry[alias] = createSiteAlias(site.ssh, site.name, site.path);
+    siteAliases.push(alias);
+  }
+
+  registry[groupAlias] = siteAliases;
+}
+
+async function createAllAliases(registry: AliasRegistry): Promise<void> {
+  const serverInfoMap = new Map<number, ServerInfo>();
+  const serverAliasLists = new Map<string, string[]>();
+
+  // Fetch and process servers
+  const servers = await refreshCachedServers();
+  for (const server of servers) {
+    const serverAlias = `@${server.name.split(".")[0]}`;
+    serverInfoMap.set(server.id, {
+      alias: serverAlias,
+      hostname: server.name,
+    });
+    serverAliasLists.set(serverAlias, []);
+  }
+
+  // Fetch and process sites
+  const sites = await refreshCachedSites();
+  for (const site of sites) {
+    const serverInfo = serverInfoMap.get(site.server_id);
+
+    if (!serverInfo) {
+      console.warn(
+        `Server not found for site ${site.domain} (server_id: ${site.server_id})`,
+      );
+      continue;
+    }
+
+    const siteAlias = `@${site.domain}`;
+    registry[siteAlias] = createSiteAlias(site.site_user, serverInfo.hostname);
+
+    const serverList = serverAliasLists.get(serverInfo.alias);
+    if (serverList) {
+      serverList.push(siteAlias);
+    }
+  }
+
+  // Add server group aliases to registry
+  for (const [serverAlias, siteList] of serverAliasLists.entries()) {
+    registry[serverAlias] = siteList;
+  }
 }
 
 function createSiteAlias(
   userName: string,
   serverName: string,
   path: string = "files",
-) {
+): SiteAlias {
   return {
     ssh: `${userName}@${serverName}`,
     path,
