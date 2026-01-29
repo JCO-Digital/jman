@@ -56,6 +56,8 @@ Create the file and add your credentials:
 tokenSpinup = "your_spinupwp_api_token"
 tokenMainwp = "your_mainwp_api_token" (optional)
 urlMainwp = "https://your-mainwp-dashboard.com" (optional)
+slackHook = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL" (optional)
+cvssThreshold = 7.0 (optional, default threshold for vulnerability alerts)
 ```
 
 ## Usage
@@ -86,6 +88,7 @@ jman fetch
 | `alias`    | Create SSH/WP-CLI alias files for all sites or a filtered collection.               |
 | `inactive` | List sites that don't have an active MainWP Child connection.                       |
 | `mainwp`   | Install and configure MainWP on sites.                                              |
+| `vuln`     | Scan for plugin vulnerabilities across all sites.                                   |
 
 ### Examples
 
@@ -113,6 +116,27 @@ jman admin mysite.com myusername user@example.com
 # This outputs a YAML structure compatible with WP-CLI's alias configuration
 jman alias my-server-name > ~/.wp-cli/alias.yml
 ```
+
+**Scan for plugin vulnerabilities:**
+
+```bash
+# Scan all plugins and display vulnerabilities
+jman vuln
+
+# Filter by CVSS score (only show vulnerabilities with score >= 7.0)
+jman vuln cvss 7.0
+
+# Send vulnerability reports to Slack (requires Slack configuration)
+jman vuln slack
+```
+
+The `vuln` command checks all cached plugins against known vulnerability databases and reports:
+
+- Plugin name and affected versions
+- Vulnerability details and CVSS scores
+- List of sites running vulnerable plugin versions
+
+When using the `slack` target, the command tracks sent messages to avoid duplicates and only resends for high-severity vulnerabilities (based on configured CVSS threshold).
 
 ## Development
 
