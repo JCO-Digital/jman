@@ -1,7 +1,4 @@
-import { join } from "path";
 import { config } from "./jman";
-import { writeFile } from "fs";
-import { getFile } from "./fileHelpers";
 
 export function hasMainWP(): boolean {
   return config.tokenMainwp.length > 0;
