@@ -6,7 +6,6 @@ export function downloadReleaseByTag(
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const url = `https://github.com/JCO-Digital/jman/releases/download/${tag}/jman`;
-    console.warn(`Downloading release ${tag} to ${target}`);
 
     getFile(url).then((buffer) => {
       writeFile(target, buffer, (err) => {

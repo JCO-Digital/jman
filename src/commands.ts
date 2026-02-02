@@ -23,7 +23,7 @@ import { formatReport, getCvss, processVulnerabilities } from "./vuln";
 import { runtimeData } from "./config";
 import { getLatestVersion, versionIsNotBigger } from "./utils";
 import { downloadReleaseByTag } from "./fileHelpers";
-import { chmodSync, renameSync, unlinkSync } from "fs";
+import { chmodSync, existsSync, renameSync, unlinkSync } from "fs";
 
 interface SiteAlias {
   ssh: string;
@@ -459,11 +459,22 @@ export async function updateJman() {
     console.error("Can only update bundled version!");
     return;
   }
+  const tempFile = `${runtimeData.execPath}.part`;
   const renamedFile = `${runtimeData.execPath}.bak`;
-  renameSync(runtimeData.execPath, renamedFile);
-  await downloadReleaseByTag(latestTag, runtimeData.execPath);
-
-  // Set exec bit
-  chmodSync(runtimeData.execPath, 0o755);
-  unlinkSync(renamedFile);
+  downloadReleaseByTag(latestTag, tempFile)
+    .then(() => {
+      renameSync(runtimeData.execPath, renamedFile);
+      renameSync(tempFile, runtimeData.execPath);
+      chmodSync(runtimeData.execPath, 0o755);
+      unlinkSync(renamedFile);
+      console.log(
+        `Updated new version ${latestVersion} to ${runtimeData.execPath}`,
+      );
+    })
+    .catch((error) => {
+      console.error(`Failed to update jman: ${error}`);
+      if (existsSync(tempFile)) {
+        unlinkSync(tempFile);
+      }
+    });
 }
