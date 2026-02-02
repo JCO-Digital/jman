@@ -1,11 +1,10 @@
 import { parser, runCmd } from "./cmdParse";
-import { readConfigFile } from "./config";
-import p from "../package.json" with { type: "json" };
+import { readConfigFile, runtimeData } from "./config";
 
 export const config = readConfigFile();
 
 function main(): void {
-  console.warn(`Version: ${p.version}`);
+  console.warn(`Version: ${runtimeData.version}`);
   const cmd = parser(process.argv);
   runCmd(cmd);
 }

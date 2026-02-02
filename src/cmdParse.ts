@@ -14,11 +14,14 @@ import {
   runWPCmd,
   scanVulnerabilities,
   searchTerm,
+  updateJman,
 } from "./commands";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});
 
+  // Get exec path from process
+  runtimeData.execPath = process.execPath;
   // Get node bin from start of array.
   runtimeData.nodePath = args.shift() ?? "";
   // Get script path from next arg.
@@ -70,6 +73,10 @@ const commands: Record<string, commandItem> = {
   fetch: {
     description: "Fetch data from SpinupWP.",
     command: fetchData,
+  },
+  update: {
+    description: "Update jman to latest version.",
+    command: updateJman,
   },
   list: {
     description: "List data from SpinupWP. (not fully implemented)",

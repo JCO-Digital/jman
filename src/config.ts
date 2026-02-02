@@ -4,11 +4,13 @@ import { readFileSync, existsSync, mkdirSync } from "fs";
 import { parse } from "smol-toml";
 import { configSchema, jConfig, runtimeSchema } from "./types";
 import { PACKAGE_NAME } from "./constants";
+import p from "../package.json" with { type: "json" };
 
 export const runtimeData = runtimeSchema.parse({
   configDir: join(xdgConfig ?? "", PACKAGE_NAME),
   cacheDir: join(xdgCache ?? "", PACKAGE_NAME),
   dataDir: join(xdgData ?? "", PACKAGE_NAME),
+  version: p.version,
 });
 
 export function getConfigFilePath(): string {

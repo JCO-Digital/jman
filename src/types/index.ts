@@ -4,8 +4,10 @@ export const runtimeSchema = z.object({
   configDir: z.string(),
   cacheDir: z.string(),
   dataDir: z.string(),
+  version: z.string().default(""),
   nodePath: z.string().default(""),
   scriptPath: z.string().default(""),
+  execPath: z.string().default(""),
 });
 
 export type jRuntime = z.infer<typeof runtimeSchema>;
