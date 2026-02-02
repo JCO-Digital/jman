@@ -23,7 +23,7 @@ import { formatReport, getCvss, processVulnerabilities } from "./vuln";
 import { runtimeData } from "./config";
 import { getLatestVersion, versionIsNotBigger } from "./utils";
 import { downloadReleaseByTag } from "./fileHelpers";
-import { chmodSync, renameSync } from "fs";
+import { chmodSync, renameSync, unlinkSync } from "fs";
 
 interface SiteAlias {
   ssh: string;
@@ -465,4 +465,5 @@ export async function updateJman() {
 
   // Set exec bit
   chmodSync(runtimeData.execPath, 0o755);
+  unlinkSync(renamedFile);
 }
