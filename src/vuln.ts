@@ -56,13 +56,43 @@ export async function processVulnerabilities(): Promise<VulnReport[]> {
  */
 export async function formatReport(report: VulnReport): Promise<string> {
   const cvss = getCvss(report);
+  const info = {
+    name: "",
+    description: report.vulnerability.description,
+    date: "",
+    link: "",
+  };
+
   let formattedReport = `Plugin: ${decode(report.plugin)}\n`;
-  formattedReport += `Vulnerability: ${decode(report.vulnerability.name)}\n`;
+  for (const source of report.vulnerability.source) {
+    if (!info.name && !source.name.startsWith("CVE")) {
+      info.name = source.name;
+    }
+    if (!info.description && source.description) {
+      info.description = source.description;
+    }
+    if (!info.date && source.date) {
+      info.date = source.date;
+    }
+    if (!info.link && source.link) {
+      info.link = source.link;
+    }
+  }
+  if (!info.name) {
+    info.name = report.vulnerability.name;
+  }
+  formattedReport += `Vulnerability: ${decode(info.name)}\n`;
+  if (info.date) {
+    formattedReport += `Date: ${info.date}\n`;
+  }
   if (cvss > 0) {
     formattedReport += `CVS Score: ${cvss}\n`;
   }
+  if (info.description) {
+    formattedReport += `Description: ${decode(info.description)}\n`;
+  }
   // List sites affected.
-  formattedReport += `Affected Sites:\n`;
+  formattedReport += `\nAffected Sites:\n`;
   for (const site of report.sites) {
     const siteName = await getSiteName(site.site_id);
     formattedReport += `  - ${siteName} (${site.version})\n`;
