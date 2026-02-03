@@ -52,7 +52,10 @@ export const vulnerabilitySchema = z.object({
   description: z.string().nullable(),
   operator: operatorSchema,
   source: z.array(sourceSchema),
-  impact: z.union([impactSchema, z.array(z.never())]),
+  impact: z.preprocess(
+    (val) => (Array.isArray(val) && val.length === 0 ? undefined : val),
+    impactSchema.optional(),
+  ),
 });
 
 export const vulnDataSchema = z.object({
