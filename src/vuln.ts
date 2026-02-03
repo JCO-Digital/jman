@@ -92,10 +92,13 @@ export async function getSiteName(siteId: number): Promise<string> {
  * @returns The CVSS score as a number, or 0 if not available.
  */
 export function getCvss(report: VulnReport): number {
-  if (!report.vulnerability.impact?.cvss?.score) {
-    return 0;
+  if (
+    report.vulnerability.impact &&
+    report.vulnerability.impact.cvss &&
+    report.vulnerability.impact.cvss.score
+  ) {
+    return parseFloat(report.vulnerability.impact.cvss.score);
   }
 
-  // parse string to number.
-  return parseFloat(report.vulnerability.impact.cvss.score);
+  return 0;
 }
