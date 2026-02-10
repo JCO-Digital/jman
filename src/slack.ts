@@ -2,6 +2,11 @@ import { WebClient } from "@slack/web-api";
 import { config } from "./jman";
 
 export async function sendMessage(message: string) {
+  if (!config.slackToken) {
+    console.error("Slack token not configured");
+    return;
+  }
+
   const web = new WebClient(config.slackToken);
   try {
     await web.chat.postMessage({
