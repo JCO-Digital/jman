@@ -211,7 +211,7 @@ export async function formatReport(report: VulnReport): Promise<string> {
 function formatSiteReport(site: string, plugins: Map<string, VulnPlugin>) {
   let formattedReport = `${decode(site)}\n`;
   for (const [plugin, info] of plugins.entries()) {
-    formattedReport += `  ${decode(plugin)} (${info.version})\n`;
+    formattedReport += `  ${decode(plugin)} - ${info.version}\n`;
     formattedReport += `    Vulnerabilities: ${info.vulnerability?.length}\n`;
     if (info.cvss) {
       formattedReport += `    Highest CVSS: ${info.cvss}\n`;
