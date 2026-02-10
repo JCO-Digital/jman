@@ -35,8 +35,11 @@ export async function scanVulnerabilities(data: jCmd) {
         }
       }
       if (cvss > config.cvssThreshold || vulns > config.vulnThreshold) {
-        siteCount++;
         const siteName = await getSiteName(site_id);
+        if (config.ignoreSites.includes(siteName)) {
+          continue;
+        }
+        siteCount++;
         const message = formatSiteReport(
           `${siteName} (${vulns} Vulnerabilities)`,
           site,
