@@ -20,6 +20,7 @@ export const configSchema = z.object({
   slackChannel: z.string().default("#testing"),
   cvssThreshold: z.number().min(0).max(10).default(7),
   vulnThreshold: z.number().default(7),
+  ignoreSites: z.array(z.string()).default([]),
 });
 
 export type jConfig = z.infer<typeof configSchema>;
