@@ -1,5 +1,5 @@
 import { join } from "path";
-import { addMainwpSite, sendSlackMessage } from "./rest";
+import { addMainwpSite } from "./rest";
 import { promptSearch, searchSites } from "./search";
 import { jCmd } from "./types";
 import {
@@ -18,8 +18,6 @@ import {
   refreshCachedSites,
 } from "./cache";
 import { config } from "./jman";
-import { readJSONData, writeJSONData } from "./data";
-import { formatReport, getCvss, processVulnerabilities } from "./vuln";
 import { runtimeData } from "./config";
 import { getLatestVersion, versionIsNotBigger } from "./utils";
 import { downloadReleaseByTag } from "./fileHelpers";
@@ -401,43 +399,6 @@ function getPluginName(plugin: string): string {
   }
 
   return plugin;
-}
-
-/**
- * Scans for plugin vulnerabilities across all sites.
- * - Target "cvss": Filters vulnerabilities by CVSS score threshold.
- * - Target "slack": Sends vulnerability reports to Slack (new or high-severity only).
- * - Processes all cached plugins and checks for known vulnerabilities.
- * - Tracks sent Slack messages to avoid duplicates.
- *
- * @param data - The command data containing the target ("cvss" or "slack") and optional CVSS threshold.
- */
-export async function scanVulnerabilities(data: jCmd) {
-  const sentData: string[] = readJSONData("sentSlack", []);
-  for (const report of await processVulnerabilities()) {
-    const id = report.vulnerability.uuid;
-    const cvss = getCvss(report);
-    if (data.target === "cvss") {
-      let cvssThreshold = config.cvssThreshold;
-      if (data.args[0]) {
-        cvssThreshold = parseFloat(data.args[0]);
-      }
-      if (cvss < cvssThreshold) {
-        continue;
-      }
-    }
-
-    const message = await formatReport(report);
-    console.log(message);
-    if (
-      data.target === "slack" &&
-      (!sentData.includes(id) || cvss >= config.cvssThreshold)
-    ) {
-      await sendSlackMessage(message);
-      sentData.push(id);
-    }
-  }
-  writeJSONData("sentSlack", sentData);
 }
 
 export async function updateJman() {

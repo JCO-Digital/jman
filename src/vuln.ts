@@ -1,9 +1,113 @@
 import { decode } from "html-entities";
 import { versionIsNotBigger } from "./utils";
-import { vulnReportSchema } from "./types/vuln";
-import type { VulnReport } from "./types/vuln";
+import { vulnPluginSchema, vulnReportSchema } from "./types/vuln";
+import type { VulnPlugin, VulnReport } from "./types/vuln";
 import { getSiteList } from "./search";
 import { getCachedPluginData, getCachedVulnerabilities } from "./cache";
+import { readJSONData, writeJSONData } from "./data";
+import { jCmd } from "./types";
+import { config } from "./jman";
+import { sendMessage } from "./slack";
+
+/**
+ * Scans for plugin vulnerabilities across all sites.
+ * - Target "cvss": Filters vulnerabilities by CVSS score threshold.
+ * - Target "slack": Sends vulnerability reports to Slack (new or high-severity only).
+ * - Processes all cached plugins and checks for known vulnerabilities.
+ * - Tracks sent Slack messages to avoid duplicates.
+ *
+ * @param data - The command data containing the target ("cvss" or "slack") and optional CVSS threshold.
+ */
+export async function scanVulnerabilities(data: jCmd) {
+  const sentData: string[] = readJSONData("sentSlack", []);
+  if (data.target === "sites") {
+    const sites = await buildSiteList();
+
+    let siteCount = 0;
+    for (const [site_id, site] of sites.entries()) {
+      let cvss = 0;
+      let vulns = 0;
+
+      for (const plugin of site.values()) {
+        vulns += plugin.vulnerability?.length || 0;
+        if (plugin.cvss && plugin.cvss > cvss) {
+          cvss = plugin.cvss;
+        }
+      }
+      if (cvss > config.cvssThreshold || vulns > config.vulnThreshold) {
+        siteCount++;
+        const siteName = await getSiteName(site_id);
+        const message = formatSiteReport(
+          `${siteName} (${vulns} Vulnerabilities)`,
+          site,
+        );
+
+        console.log(message);
+      }
+    }
+    console.warn(`${siteCount} sites match criteria`);
+  } else {
+    for (const report of await processVulnerabilities()) {
+      const id = report.vulnerability.uuid;
+      const cvss = getCvss(report);
+      if (data.target === "cvss") {
+        let cvssThreshold = config.cvssThreshold;
+        if (data.args[0]) {
+          cvssThreshold = parseFloat(data.args[0]);
+        }
+        if (cvss < cvssThreshold) {
+          continue;
+        }
+      }
+
+      const message = await formatReport(report);
+      console.log(message);
+      if (
+        data.target === "slack" &&
+        (!sentData.includes(id) || cvss >= config.cvssThreshold)
+      ) {
+        await sendMessage(message);
+        sentData.push(id);
+      }
+    }
+  }
+  writeJSONData("sentSlack", sentData);
+}
+
+async function buildSiteList(): Promise<Map<number, Map<string, VulnPlugin>>> {
+  const sites = new Map<number, Map<string, VulnPlugin>>();
+
+  for (const report of await processVulnerabilities()) {
+    const cvss = getCvss(report);
+    for (const site of report.sites) {
+      let currentSite = sites.get(site.site_id);
+
+      if (!currentSite) {
+        currentSite = new Map<string, VulnPlugin>();
+        sites.set(site.site_id, currentSite);
+      }
+
+      let currentPlugin = currentSite.get(report.plugin);
+
+      if (!currentPlugin) {
+        currentPlugin = vulnPluginSchema.parse({
+          version: site.version,
+          cvss: cvss,
+          vulnerability: [],
+        });
+        currentSite.set(report.plugin, currentPlugin);
+      }
+
+      if (currentPlugin.cvss === null || cvss > currentPlugin.cvss) {
+        currentPlugin.cvss = cvss;
+      }
+
+      currentPlugin.vulnerability?.push(report.vulnerability);
+    }
+  }
+
+  return sites;
+}
 
 /**
  * Processes all cached plugins to identify vulnerabilities affecting sites.
@@ -97,6 +201,19 @@ export async function formatReport(report: VulnReport): Promise<string> {
     const siteName = await getSiteName(site.site_id);
     formattedReport += `  - ${siteName} (${site.version})\n`;
   }
+  return formattedReport;
+}
+
+function formatSiteReport(site: string, plugins: Map<string, VulnPlugin>) {
+  let formattedReport = `${decode(site)}\n`;
+  for (const [plugin, info] of plugins.entries()) {
+    formattedReport += `  ${decode(plugin)} (${info.version})\n`;
+    formattedReport += `    Vulnerabilities: ${info.vulnerability?.length}\n`;
+    if (info.cvss) {
+      formattedReport += `    Highest CVSS: ${info.cvss}\n`;
+    }
+  }
+
   return formattedReport;
 }
 
