@@ -43,6 +43,10 @@ export async function scanVulnerabilities(data: jCmd) {
         );
 
         console.log(message);
+
+        if (data.args.includes("slack")) {
+          await sendMessage(message);
+        }
       }
     }
     console.warn(`${siteCount} sites match criteria`);
