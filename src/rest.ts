@@ -101,26 +101,6 @@ export async function addMainwpSite(
   }
 }
 
-export async function sendSlackMessage(message: string) {
-  const endpoint = config.slackHook;
-
-  if (!endpoint) {
-    console.error("Slack webhook URL is not configured");
-    return;
-  }
-
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ text: message }),
-  });
-  if (!response.ok) {
-    console.error(`Failed to send Slack message: ${response.statusText}`);
-  }
-}
-
 export async function getWpVulnerabilities(pluginName: string) {
   const endpoint = join(WPVULNERABILITY_API_URL, pluginName);
 
