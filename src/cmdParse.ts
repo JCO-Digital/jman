@@ -12,10 +12,10 @@ import {
   listInactiveSites,
   mainWPInstall,
   runWPCmd,
-  scanVulnerabilities,
   searchTerm,
   updateJman,
 } from "./commands";
+import { scanVulnerabilities } from "./vuln";
 
 export function parser(args: string[]): jCmd {
   const cmdData: jCmd = cmdSchema.parse({});

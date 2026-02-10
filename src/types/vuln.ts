@@ -73,6 +73,18 @@ export const vulnResponseSchema = z.object({
   updated: z.coerce.number().default(0),
 });
 
+export const vulnReportSchema = z.object({
+  plugin: z.string(),
+  vulnerability: vulnerabilitySchema,
+  sites: z.array(pluginSiteSchema),
+});
+
+export const vulnPluginSchema = z.object({
+  version: z.string(),
+  cvss: z.number().min(0).max(10).nullable(),
+  vulnerability: z.array(vulnerabilitySchema).nullable(),
+});
+
 export type Cwe = z.infer<typeof cweSchema>;
 export type Cvss = z.infer<typeof cvssSchema>;
 export type Impact = z.infer<typeof impactSchema>;
@@ -81,11 +93,5 @@ export type Operator = z.infer<typeof operatorSchema>;
 export type Vulnerability = z.infer<typeof vulnerabilitySchema>;
 export type VulnData = z.infer<typeof vulnDataSchema>;
 export type VulnResponse = z.infer<typeof vulnResponseSchema>;
-
-export const vulnReportSchema = z.object({
-  plugin: z.string(),
-  vulnerability: vulnerabilitySchema,
-  sites: z.array(pluginSiteSchema),
-});
-
 export type VulnReport = z.infer<typeof vulnReportSchema>;
+export type VulnPlugin = z.infer<typeof vulnPluginSchema>;
