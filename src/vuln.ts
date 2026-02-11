@@ -4,7 +4,6 @@ import { vulnPluginSchema, vulnReportSchema } from "./types/vuln";
 import type { VulnPlugin, VulnReport } from "./types/vuln";
 import { getSiteList } from "./search";
 import { getCachedPluginData, getCachedVulnerabilities } from "./cache";
-import { readJSONData, writeJSONData } from "./data";
 import { jCmd } from "./types";
 import { config } from "./jman";
 import { sendMessage } from "./slack";
@@ -19,7 +18,6 @@ import { sendMessage } from "./slack";
  * @param data - The command data containing the target ("cvss" or "slack") and optional CVSS threshold.
  */
 export async function scanVulnerabilities(data: jCmd) {
-  const sentData: string[] = readJSONData("sentSlack", []);
   if (data.target === "sites") {
     const sites = await buildSiteList();
 
@@ -55,7 +53,6 @@ export async function scanVulnerabilities(data: jCmd) {
     console.warn(`${siteCount} sites match criteria`);
   } else {
     for (const report of await processVulnerabilities()) {
-      const id = report.vulnerability.uuid;
       const cvss = getCvss(report);
       if (data.target === "cvss") {
         let cvssThreshold = config.cvssThreshold;
@@ -69,16 +66,11 @@ export async function scanVulnerabilities(data: jCmd) {
 
       const message = await formatReport(report);
       console.log(message);
-      if (
-        data.target === "slack" &&
-        (!sentData.includes(id) || cvss >= config.cvssThreshold)
-      ) {
-        await sendMessage(message);
-        sentData.push(id);
+      if (data.target === "slack") {
+        await sendMessage(message, cvss >= config.cvssThreshold);
       }
     }
   }
-  writeJSONData("sentSlack", sentData);
 }
 
 async function buildSiteList(): Promise<Map<number, Map<string, VulnPlugin>>> {
