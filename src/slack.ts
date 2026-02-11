@@ -1,6 +1,6 @@
 import { WebClient } from "@slack/web-api";
 import { config } from "./jman";
-import { readJSONData, writeJSONData } from "./data";
+import { readMapData, writeMapData } from "./data";
 import { crc32 } from "crc";
 
 const sentDataFile = "sentSlackMessages";
@@ -28,29 +28,64 @@ export async function sendMessage(message: string, force = false) {
   }
 }
 
-function checkSent(message: string, timeout = 604800000) {
+function checkSent(message: string, timeout = "1w"): boolean {
   const crc = crc32(message).toString();
-  const sentData: Map<string, number> = new Map(
-    Object.entries(readJSONData(sentDataFile, {})),
-  );
+  const sentData: Map<string, number> = readMapData(sentDataFile);
   const timestamp = sentData.get(crc);
-  if (timestamp && Date.now() - timestamp < timeout) {
+  if (timestamp && Date.now() - timestamp < parseTimeout(timeout)) {
     return true;
   }
   sentData.set(crc, Date.now());
-  writeJSONData(sentDataFile, Object.fromEntries(sentData));
+  writeMapData(sentDataFile, sentData);
   return false;
 }
 
-export function cleanSent(timeout = 604800000) {
-  const sentData: Map<string, number> = new Map(
-    Object.entries(readJSONData(sentDataFile, {})),
-  );
+export function cleanSent(timeout = "1w"): void {
+  const sentData: Map<string, number> = readMapData(sentDataFile);
   const now = Date.now();
   for (const [key, value] of sentData) {
-    if (now - value > timeout) {
+    if (now - value > parseTimeout(timeout)) {
       sentData.delete(key);
     }
   }
-  writeJSONData(sentDataFile, Object.fromEntries(sentData));
+  writeMapData(sentDataFile, sentData);
+}
+
+function parseTimeout(timeout: string): number {
+  const match = timeout.match(/^(\d+)([smhdwMy]?)$/);
+  if (!match) {
+    throw new Error(`Invalid timeout format: ${timeout}`);
+  }
+  const [, value, unit] = match;
+  const numValue = parseInt(value);
+  let unitFactor = 0;
+
+  switch (unit) {
+    case "":
+    case "s":
+      unitFactor = 1;
+      break;
+    case "m":
+      unitFactor = 60;
+      break;
+    case "h":
+      unitFactor = 60 * 60;
+      break;
+    case "d":
+      unitFactor = 24 * 60 * 60;
+      break;
+    case "w":
+      unitFactor = 7 * 24 * 60 * 60;
+      break;
+    case "M":
+      unitFactor = 30 * 24 * 60 * 60;
+      break;
+    case "y":
+      unitFactor = 365 * 24 * 60 * 60;
+      break;
+    default:
+      throw new Error(`Invalid timeout unit: ${unit}`);
+  }
+
+  return numValue * unitFactor * 1000;
 }
