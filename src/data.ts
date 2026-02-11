@@ -37,3 +37,15 @@ export function writeJSONData(filename: string, data: object) {
 function getJSONFilename(filename: string): string {
   return join(runtimeData.dataDir, `${filename}.json`);
 }
+
+export function readMapData(
+  filename: string,
+  defaultValue = new Map(),
+): Map<string, number> {
+  const data = readJSONData(filename, defaultValue);
+  return new Map(Object.entries(data));
+}
+
+export function writeMapData(filename: string, data: Map<string, number>) {
+  writeJSONData(filename, Object.fromEntries(data));
+}
