@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -38,6 +40,32 @@ jobs:
         with:
           artifacts: "bin/jman"
 
+      - name: Collect release commits
+        id: release_commits
+        shell: sh
+        run: |
+          git fetch --tags --force
+
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG="$(git tag --sort=-creatordate | grep -Fxv "$CURRENT_TAG" | head -n 1)"
+
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS="$(git log -n 20 --pretty=format:'- %s (%h)' "$CURRENT_TAG" 2>/dev/null || true)"
+          else
+            COMMITS="$(git log --pretty=format:'- %s (%h)' "${PREV_TAG}..${CURRENT_TAG}" 2>/dev/null || true)"
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            COMMITS="- No commit messages found for this release range."
+          fi
+
+          {
+            echo "previous_tag=${PREV_TAG}"
+            echo "commits<<EOF"
+            echo "$COMMITS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Slack notification (success)
         if: success()
         uses: slackapi/slack-github-action@v1
@@ -45,7 +73,7 @@ jobs:
           channel-id: C0LPYCB8F
           payload: |
             {
-              "text": "✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded."
+              "text": "✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.\n\nCommit messages:\n${{ steps.release_commits.outputs.commits }}"
             }
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -57,7 +85,7 @@ jobs:
           channel-id: C0LPYCB8F
           payload: |
             {
-              "text": "❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed."
+              "text": "❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed.\n\nCommit messages:\n${{ steps.release_commits.outputs.commits }}"
             }
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
