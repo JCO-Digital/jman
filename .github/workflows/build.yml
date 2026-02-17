@@ -82,21 +82,23 @@ jobs:
         if: success()
         uses: slackapi/slack-github-action@v2
         with:
-          channel-id: C0LPYCB8F
-          text: |
-            ✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0LPYCB8F
+            text: |
+              ✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.
 
-            Commit messages:
-            ${{ steps.release_commits.outputs.commits }}
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+              Commit messages:
+              ${{ steps.release_commits.outputs.commits }}
 
       - name: Slack notification (failure)
         if: failure()
         uses: slackapi/slack-github-action@v2
         with:
-          channel-id: C0LPYCB8F
-          text: |
-            ❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed.
-        env:
-          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            channel: C0LPYCB8F
+            text: |
+              ❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed.
