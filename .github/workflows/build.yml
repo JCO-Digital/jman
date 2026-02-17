@@ -47,20 +47,33 @@ jobs:
           git fetch --tags --force
 
           CURRENT_TAG="${GITHUB_REF_NAME}"
-          PREV_TAG="$(git tag --sort=-creatordate | grep -Fxv "$CURRENT_TAG" | head -n 1)"
+          PREV_TAG="$(git tag --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1)"
+          MAX_COMMITS=25
 
           if [ -z "$PREV_TAG" ]; then
-            COMMITS="$(git log -n 20 --pretty=format:'- %s (%h)' "$CURRENT_TAG" 2>/dev/null || true)"
+            RANGE="$CURRENT_TAG"
           else
-            COMMITS="$(git log --pretty=format:'- %s (%h)' "${PREV_TAG}..${CURRENT_TAG}" 2>/dev/null || true)"
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
           fi
+
+          TOTAL_COMMITS="$(git rev-list --count "$RANGE" 2>/dev/null || echo 0)"
+
+          COMMITS="$(git log "$RANGE" \
+            --pretty=format:'- %s (%h) — %an, %ad' \
+            --date=format:'%Y-%m-%d' \
+            -n "$MAX_COMMITS" 2>/dev/null || true)"
 
           if [ -z "$COMMITS" ]; then
             COMMITS="- No commit messages found for this release range."
+          elif [ "$TOTAL_COMMITS" -gt "$MAX_COMMITS" ]; then
+            REMAINING=$((TOTAL_COMMITS - MAX_COMMITS))
+            COMMITS="${COMMITS}
+- ...and ${REMAINING} more commits."
           fi
 
           {
             echo "previous_tag=${PREV_TAG}"
+            echo "total_commits=${TOTAL_COMMITS}"
             echo "commits<<EOF"
             echo "$COMMITS"
             echo "EOF"
@@ -68,24 +81,23 @@ jobs:
 
       - name: Slack notification (success)
         if: success()
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v2
         with:
           channel-id: C0LPYCB8F
-          payload: |
-            {
-              "text": "✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.\n\nCommit messages:\n${{ steps.release_commits.outputs.commits }}"
-            }
+          text: |
+            ✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.
+
+            Commit messages:
+            ${{ steps.release_commits.outputs.commits }}
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
 
       - name: Slack notification (failure)
         if: failure()
-        uses: slackapi/slack-github-action@v1
+        uses: slackapi/slack-github-action@v2
         with:
           channel-id: C0LPYCB8F
-          payload: |
-            {
-              "text": "❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed.\n\nCommit messages:\n${{ steps.release_commits.outputs.commits }}"
-            }
+          text: |
+            ❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed.
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
