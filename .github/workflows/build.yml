@@ -53,17 +53,23 @@ jobs:
           if [ -z "$PREV_TAG" ]; then
             RANGE="$CURRENT_TAG"
           else
-            # Use ^@ to exclude the commit pointed to by the CURRENT_TAG itself
-            # while including everything else in the range
-            RANGE="${PREV_TAG}..${CURRENT_TAG}^@"
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
           fi
 
           TOTAL_COMMITS="$(git rev-list --count "$RANGE" 2>/dev/null || echo 0)"
 
-          COMMITS="$(git log "$RANGE" \
-            --pretty=format:'- %s (%h) — %an, %ad' \
-            --date=format:'%Y-%m-%d' \
-            -n "$MAX_COMMITS" 2>/dev/null || true)"
+          # If we have a range (i.e. not the first release), skip the most recent commit (the tag commit)
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS="$(git log "$RANGE" \
+              --pretty=format:'- %s (%h) — %an, %ad' \
+              --date=format:'%Y-%m-%d' \
+              -n "$((MAX_COMMITS + 1))" 2>/dev/null | tail -n +2 || true)"
+          else
+            COMMITS="$(git log "$RANGE" \
+              --pretty=format:'- %s (%h) — %an, %ad' \
+              --date=format:'%Y-%m-%d' \
+              -n "$MAX_COMMITS" 2>/dev/null || true)"
+          fi
 
           if [ -z "$COMMITS" ]; then
             COMMITS="- No commit messages found for this release range."
