@@ -37,3 +37,27 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           artifacts: "bin/jman"
+
+      - name: Slack notification (success)
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: C0LPYCB8F
+          payload: |
+            {
+              "text": "✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded."
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+
+      - name: Slack notification (failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          channel-id: C0LPYCB8F
+          payload: |
+            {
+              "text": "❌ jman release ${{ github.ref_name }} by ${{ github.actor }} failed."
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
