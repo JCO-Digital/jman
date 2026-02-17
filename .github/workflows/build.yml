@@ -67,8 +67,7 @@ jobs:
             COMMITS="- No commit messages found for this release range."
           elif [ "$TOTAL_COMMITS" -gt "$MAX_COMMITS" ]; then
             REMAINING=$((TOTAL_COMMITS - MAX_COMMITS))
-            COMMITS="${COMMITS}
-- ...and ${REMAINING} more commits."
+            COMMITS="${COMMITS}\n...and ${REMAINING} more commits."
           fi
 
           {
