@@ -53,7 +53,9 @@ jobs:
           if [ -z "$PREV_TAG" ]; then
             RANGE="$CURRENT_TAG"
           else
-            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+            # Use ^@ to exclude the commit pointed to by the CURRENT_TAG itself
+            # while including everything else in the range
+            RANGE="${PREV_TAG}..${CURRENT_TAG}^@"
           fi
 
           TOTAL_COMMITS="$(git rev-list --count "$RANGE" 2>/dev/null || echo 0)"
