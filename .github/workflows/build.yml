@@ -67,7 +67,7 @@ jobs:
             COMMITS="- No commit messages found for this release range."
           elif [ "$TOTAL_COMMITS" -gt "$MAX_COMMITS" ]; then
             REMAINING=$((TOTAL_COMMITS - MAX_COMMITS))
-            COMMITS="${COMMITS}\n...and ${REMAINING} more commits."
+            COMMITS="$(printf "%s\n...and %d more commits." "$COMMITS" "$REMAINING")"
           fi
 
           {
@@ -81,13 +81,19 @@ jobs:
       - name: Slack notification (success)
         if: success()
         uses: slackapi/slack-github-action@v2
+        env:
+          MSG: |-
+            ✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.
+
+            Commit messages:
+            ${{ steps.release_commits.outputs.commits }}
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
             {
               "channel": "C0LPYCB8F",
-              "text": ${{ toJSON(format('✅ jman release {0} by {1} succeeded.\n\nCommit messages:\n{2}', github.ref_name, github.actor, steps.release_commits.outputs.commits)) }}
+              "text": ${{ toJSON(env.MSG) }}
             }
 
       - name: Slack notification (failure)
