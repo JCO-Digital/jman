@@ -91,9 +91,9 @@ export async function refreshCachedSites(): Promise<Site[]> {
   return sites;
 }
 
-export async function getCachedVulnerabilities(plugin: string) {
+export async function getCachedVulnerabilities(plugin: string, force = false) {
   const filename = join("vulnerabilities", plugin);
-  const data = readJSONCache(filename, {});
+  const data = force ? {} : readJSONCache(filename, {});
 
   const result = vulnResponseSchema.safeParse(data);
   if (result.success) {
@@ -112,8 +112,8 @@ export async function getCachedVulnerabilities(plugin: string) {
   }
 }
 
-export async function getCachedPlugins() {
-  const plugins: WpPlugin[] = readJSONCache("plugins");
+export async function getCachedPlugins(force = false) {
+  const plugins: WpPlugin[] = force ? [] : readJSONCache("plugins");
 
   const sites = await getSiteList();
   let update = false;

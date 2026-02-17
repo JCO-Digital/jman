@@ -12,8 +12,10 @@ import {
 import { stringify } from "yaml";
 import { REPO_PATH } from "./constants";
 import {
+  getCachedPlugins,
   getCachedServers,
   getCachedSites,
+  getCachedVulnerabilities,
   refreshCachedServers,
   refreshCachedSites,
 } from "./cache";
@@ -187,11 +189,36 @@ function createSiteAlias(
  * Fetches and refreshes cached server and site data.
  * Calls refreshCachedServers and refreshCachedSites, then logs the number of servers and sites refreshed.
  */
-export async function fetchData() {
-  const servers = await refreshCachedServers();
-  console.log("Fetched servers:", servers.length);
-  const sites = await refreshCachedSites();
-  console.log("Fetched sites:", sites.length);
+export async function fetchData(data: jCmd) {
+  const target = data.target ? data.target : "basic";
+
+  if (target === "basic" || target === "servers" || target === "all") {
+    const servers = await refreshCachedServers();
+    console.log("Fetched servers:", servers.length);
+  }
+  if (target === "basic" || target === "sites" || target === "all") {
+    const sites = await refreshCachedSites();
+    console.log("Fetched sites:", sites.length);
+  }
+  if (target === "plugins" || target === "all") {
+    const plugins = await getCachedPlugins(true);
+    console.log("Fetched plugins:", plugins.length);
+  }
+  if (target === "vuln" || target === "all") {
+    const pluginList: string[] = [];
+    for (const plugin of await getCachedPlugins()) {
+      if (!pluginList.includes(plugin.name)) {
+        pluginList.push(plugin.name);
+      }
+    }
+    for (const plugin of pluginList) {
+      const vulns = await getCachedVulnerabilities(plugin, true);
+      console.log(
+        `Fetched vulnerabilities for ${plugin}:`,
+        vulns?.data?.vulnerability?.length ?? 0,
+      );
+    }
+  }
 }
 
 /**
