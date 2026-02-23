@@ -2,6 +2,8 @@
 
 `jman` is a command-line utility designed to manage WordPress sites hosted on SpinupWP, with additional support for MainWP integration. It provides a streamlined way to fetch site data, run remote `wp-cli` commands, manage plugins, and create administrative users across multiple sites.
 
+*Note: `jman` was recently rewritten in Go for improved performance, concurrent operations, and to provide a statically linked binary.*
+
 ## Features
 
 - **SpinupWP Integration**: Fetch and list site/server data directly from the SpinupWP API.
@@ -13,16 +15,17 @@
 
 ## Installation
 
-The best way to install `jman` is via `bun`:
+You can install `jman` directly via the Go toolchain:
 
 ```bash
-bun install -g @jcodigital/jman
+go install github.com/JCO-Digital/jman/cmd/jman@latest
 ```
 
 ### Prerequisites
 
-- Bun (v1.2 or later recommended)
+- Go (v1.21 or later recommended)
 - SSH access configured for your SpinupWP servers.
+- `wp-cli` available on the target servers.
 
 ### Building from source
 
@@ -33,31 +36,37 @@ bun install -g @jcodigital/jman
    cd jman
    ```
 
-2. Install dependencies:
-
+2. Build the project using `make`:
    ```bash
-   bun install
+   make build
    ```
 
-3. Build the project:
+3. (Optional) Install the binary to `~/.local/bin/`:
    ```bash
-   bun run build
+   make install
    ```
 
-The binary will be generated at `./dist/jman`.
+If you don't use `make install`, the compiled binary will be generated at `./bin/jman`.
 
 ## Configuration
 
-`jman` uses a TOML configuration file located in your XDG config directory (typically `~/.config/jman/config.toml` on Linux).
+`jman` uses a TOML configuration file located in your XDG config directory (typically `~/.config/jman/config.toml` on Linux and macOS).
 
 Create the file and add your credentials:
 
 ```toml
 tokenSpinup = "your_spinupwp_api_token"
-tokenMainwp = "your_mainwp_api_token" (optional)
-urlMainwp = "https://your-mainwp-dashboard.com" (optional)
-slackHook = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL" (optional)
-cvssThreshold = 7.0 (optional, default threshold for vulnerability alerts)
+tokenMainwp = "your_mainwp_api_token" # (optional)
+urlMainwp = "https://your-mainwp-dashboard.com" # (optional)
+
+# Slack notifications for vulnerabilities
+slackToken = "xoxb-your-slack-bot-token" # (optional)
+slackChannel = "#alerts" # (optional, defaults to #testing)
+
+# Vulnerability scanning thresholds
+cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
+vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
+ignoreSites = ["example.com"] # (optional, list of domains to ignore during vulnerability scans)
 ```
 
 ## Usage
@@ -79,7 +88,7 @@ jman fetch
 | Command    | Description                                                                         |
 | :--------- | :---------------------------------------------------------------------------------- |
 | `fetch`    | Fetch latest data from SpinupWP and update local cache.                             |
-| `list`     | List cached data from SpinupWP.                                                     |
+| `list`     | List cached data from SpinupWP (`servers`, `sites`, or `all`).                      |
 | `wp`       | Run a `wp-cli` command on a target site.                                            |
 | `search`   | Search for a specific term across sites.                                            |
 | `admin`    | Create a new administrator user on target sites.                                    |
@@ -140,9 +149,9 @@ When using the `slack` target, the command tracks sent messages to avoid duplica
 
 ## Development
 
-- **Run in development mode:** `bun run dev`
-- **Linting:** `bun run test`
-- **Formatting:** `bun run format`
+- **Run locally without compiling:** `go run ./cmd/jman <command>`
+- **Test:** `make test`
+- **Format:** `make format`
 
 ## License
 

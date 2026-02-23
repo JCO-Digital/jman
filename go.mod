@@ -8,7 +8,6 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4
 	github.com/slack-go/slack v0.18.0
 	github.com/spf13/cobra v1.10.2
-	golang.org/x/mod v0.33.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
