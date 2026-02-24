@@ -1,0 +1,51 @@
+package commands
+
+import (
+	"fmt"
+
+	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/wpcli"
+	"github.com/spf13/cobra"
+)
+
+var adminCmd = &cobra.Command{
+	Use:   "admin <target> <username> <email>",
+	Short: "Create a new administrator user on target sites.",
+	Args:  cobra.ExactArgs(3),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := args[0]
+		username := args[1]
+		email := args[2]
+
+		sites, err := search.PromptSearch(target)
+		if err != nil {
+			return err
+		}
+
+		if len(sites) == 0 {
+			fmt.Println("Operation cancelled or no sites matched.")
+			return nil
+		}
+
+		for _, site := range sites {
+			fmt.Printf("\n=== %s (%s) ===\n", site.Name, site.ServerName)
+			password, err := wpcli.AddUser(site.SSH, site.Path, username, email, "administrator")
+			if err != nil {
+				fmt.Printf("Error creating admin user: %v\n", err)
+				continue
+			}
+
+			if password != "" {
+				fmt.Printf("Successfully created user '%s' with password: %s\n", username, password)
+			} else {
+				fmt.Printf("User '%s' may already exist or creation failed without a returned password.\n", username)
+			}
+		}
+
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(adminCmd)
+}
