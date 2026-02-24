@@ -33,13 +33,13 @@ var wpCmd = &cobra.Command{
 			res, err := wpcli.RunWP(site.SSH, site.Path, wpArgs, false)
 
 			if res.Output != "" {
-				fmt.Println(res.Output)
+				verbosity.Println(verbosity.Quiet, res.Output)
 			}
 			if res.Error != "" {
-				fmt.Println(res.Error)
+				verbosity.PrintErrorln(verbosity.Verbose, res.Error)
 			}
 			if err != nil {
-				verbosity.Printf(verbosity.Verbose, "Error executing command: %v\n", err)
+				verbosity.PrintErrorf(verbosity.Verbose, "Error executing command: %v\n", err)
 			}
 		}
 
