@@ -24,7 +24,7 @@ var aliasCmd = &cobra.Command{
 			searchQuery = args[0]
 		}
 
-		aliasRegistry := make(map[string]interface{})
+		aliasRegistry := make(map[string]any)
 
 		if searchQuery != "" {
 			err := createSearchAliases(searchQuery, aliasRegistry)
@@ -49,7 +49,7 @@ var aliasCmd = &cobra.Command{
 	},
 }
 
-func createSearchAliases(query string, registry map[string]interface{}) error {
+func createSearchAliases(query string, registry map[string]any) error {
 	sites, err := search.SearchSites(query)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func createSearchAliases(query string, registry map[string]interface{}) error {
 	return nil
 }
 
-func createAllAliases(registry map[string]interface{}) error {
+func createAllAliases(registry map[string]any) error {
 	servers, err := cache.GetCachedServers()
 	if err != nil {
 		return fmt.Errorf("failed to get cached servers: %w", err)
