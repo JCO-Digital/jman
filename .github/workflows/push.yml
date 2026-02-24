@@ -20,4 +20,4 @@ jobs:
         uses: TriPSs/conventional-changelog-action@v6
         with:
           github-token: ${{ secrets.MASTER_PAT }}
-          version-file: "./package.json"
+          version-file: "./version.json"
