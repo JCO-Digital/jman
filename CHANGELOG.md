@@ -1,3 +1,17 @@
+# [4.1.0](https://github.com/JCO-Digital/jman/compare/v4.0.1...v4.1.0) (2026-02-24)
+
+
+### Bug Fixes
+
+* **wpcli:** improve error reporting ([82a887d](https://github.com/JCO-Digital/jman/commit/82a887d3e173bf3c0ab9ce43a632bcae54816c0e))
+
+
+### Features
+
+* **fetch:** support targeting specific resources for cache update ([4116051](https://github.com/JCO-Digital/jman/commit/41160518b7b4e8023ef7e6e99ce793db84a1ddec))
+
+
+
 ## [4.0.1](https://github.com/JCO-Digital/jman/compare/v4.0.0...v4.0.1) (2026-02-24)
 
 
@@ -31,10 +45,6 @@
 
 
 ## [3.4.7](https://github.com/JCO-Digital/jman/compare/v3.4.6...v3.4.7) (2026-02-17)
-
-
-
-## [3.4.6](https://github.com/JCO-Digital/jman/compare/v3.4.5...v3.4.6) (2026-02-17)
 
 
 
