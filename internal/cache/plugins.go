@@ -54,7 +54,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 				verbosity.PrintErrorf(verbosity.Normal, "Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
 				return
 			}
-			verbosity.Printf(verbosity.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
+			verbosity.PrintErrorf(verbosity.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
 
 			mu.Lock()
 			plugins = append(plugins, sitePlugins...)
