@@ -100,7 +100,7 @@ func CheckForUpdate(currentVersion string) (string, string, bool, error) {
 		return "", "", false, fmt.Errorf("failed to decode release data: %w", err)
 	}
 
-	downloadURL := release.HTMLURL
+	downloadURL := ""
 	for _, asset := range release.Assets {
 		if asset.Name == "jman" {
 			downloadURL = asset.BrowserDownloadURL
@@ -119,7 +119,7 @@ func CheckForUpdate(currentVersion string) (string, string, bool, error) {
 		return "", "", false, fmt.Errorf("failed to parse latest version %s: %w", release.TagName, err)
 	}
 
-	if vLatest.GreaterThan(vCurrent) {
+	if vLatest.GreaterThan(vCurrent) && downloadURL != "" {
 		return release.TagName, downloadURL, true, nil
 	}
 
