@@ -7,10 +7,58 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/hashicorp/go-version"
 )
+
+// progressReader wraps an io.Reader and prints download progress to stdout.
+type progressReader struct {
+	reader  io.Reader
+	total   int64 // total expected bytes, or -1 if unknown
+	read    int64
+	lastPct int
+	mu      sync.Mutex
+}
+
+func newProgressReader(r io.Reader, total int64) *progressReader {
+	return &progressReader{
+		reader:  r,
+		total:   total,
+		lastPct: -1,
+	}
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 {
+		pr.mu.Lock()
+		pr.read += int64(n)
+		pr.print()
+		pr.mu.Unlock()
+	}
+	return n, err
+}
+
+func (pr *progressReader) print() {
+	readMB := float64(pr.read) / (1024 * 1024)
+	if pr.total > 0 {
+		pct := int(float64(pr.read) * 100 / float64(pr.total))
+		// Only redraw when the percentage changes to avoid excessive writes.
+		if pct != pr.lastPct {
+			pr.lastPct = pct
+			totalMB := float64(pr.total) / (1024 * 1024)
+			fmt.Printf("\r  Downloading: %3d%%  (%.1f / %.1f MB)", pct, readMB, totalMB)
+		}
+	} else {
+		fmt.Printf("\r  Downloading: %.1f MB", readMB)
+	}
+}
+
+func (pr *progressReader) finish() {
+	fmt.Println() // move past the \r line
+}
 
 const LatestReleaseURL = "https://api.github.com/repos/JCO-Digital/jman/releases/latest"
 
@@ -129,10 +177,13 @@ func DownloadAndReplace(downloadURL string) error {
 		return fmt.Errorf("failed to download update: received status code %d", resp.StatusCode)
 	}
 
-	if _, err := io.Copy(tmpFile, resp.Body); err != nil {
+	progress := newProgressReader(resp.Body, resp.ContentLength)
+
+	if _, err := io.Copy(tmpFile, progress); err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write update to temporary file: %w", err)
 	}
+	progress.finish()
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temporary file: %w", err)
 	}
