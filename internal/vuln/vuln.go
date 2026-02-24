@@ -9,6 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/slack"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/hashicorp/go-version"
 )
 
@@ -152,7 +153,7 @@ func ProcessVulnerabilities() ([]models.VulnReport, error) {
 	}
 
 	for _, plugin := range pluginData {
-		fmt.Printf("Processing plugin: %s\n", plugin.Name)
+		verbosity.Printf(verbosity.Verbose, "Processing plugin: %s\n", plugin.Name)
 		vulnResponse, err := cache.GetCachedVulnerabilities(plugin.Name, false)
 		if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 			continue
