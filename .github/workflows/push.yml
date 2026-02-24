@@ -17,31 +17,39 @@ jobs:
           fetch-depth: 0
 
       - name: Conventional Changelog Action
+        id: changelog
         uses: TriPSs/conventional-changelog-action@v6
         with:
           github-token: ${{ secrets.MASTER_PAT }}
           version-file: "./version.json"
 
       - name: Setup Go
+        if: steps.changelog.outputs.skipped == 'false'
         uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
 
       - name: Build
+        if: steps.changelog.outputs.skipped == 'false'
         run: make build
 
       - name: Create Release
+        if: steps.changelog.outputs.skipped == 'false'
         uses: ncipollo/release-action@v1
         with:
           artifacts: "bin/jman"
+          tag: ${{ steps.changelog.outputs.tag }}
+          name: ${{ steps.changelog.outputs.tag }}
+          body: ${{ steps.changelog.outputs.clean_changelog }}
 
       - name: Collect release commits
+        if: steps.changelog.outputs.skipped == 'false'
         id: release_commits
         shell: sh
         run: |
           git fetch --tags --force
 
-          CURRENT_TAG="${GITHUB_REF_NAME}"
+          CURRENT_TAG="${{ steps.changelog.outputs.tag }}"
           PREV_TAG="$(git tag --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1)"
           MAX_COMMITS=25
 
@@ -82,11 +90,11 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Slack notification (success)
-        if: success()
+        if: success() && steps.changelog.outputs.skipped == 'false'
         uses: slackapi/slack-github-action@v2
         env:
           MSG: |-
-            ✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.
+            ✅ jman release ${{ steps.changelog.outputs.tag }} by ${{ github.actor }} succeeded.
 
             Commit messages:
             ${{ steps.release_commits.outputs.commits }}
@@ -100,7 +108,7 @@ jobs:
             }
 
       - name: Slack notification (failure)
-        if: failure()
+        if: failure() && steps.changelog.outputs.skipped == 'false'
         uses: slackapi/slack-github-action@v2
         with:
           method: chat.postMessage
@@ -108,5 +116,5 @@ jobs:
           payload: |
             {
               "channel": "C0LPYCB8F",
-              "text": ${{ toJSON(format('❌ jman release {0} by {1} failed.', github.ref_name, github.actor)) }}
+              "text": ${{ toJSON(format('❌ jman release {0} by {1} failed.', steps.changelog.outputs.tag, github.actor)) }}
             }
