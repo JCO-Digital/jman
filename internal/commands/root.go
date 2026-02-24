@@ -28,7 +28,7 @@ var rootCmd = &cobra.Command{
 			verbosity.Set(verbosity.Normal)
 		}
 
-		verbosity.Printf(verbosity.Normal, "Version: %s\n", config.RunData.Version)
+		verbosity.Printf(verbosity.Verbose, "Version: %s\n", config.RunData.Version)
 		verbosity.Printf(verbosity.Debug, "Verbosity: %s\n", verbosity.Get())
 	},
 }
