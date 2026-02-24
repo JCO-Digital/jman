@@ -12,13 +12,13 @@ var fetchCmd = &cobra.Command{
 	Use:   "fetch",
 	Short: "Fetch latest data from SpinupWP and update local cache.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("Fetching latest data from SpinupWP...")
+		verbosity.PrintErrorln(verbosity.Normal, "Fetching latest data from SpinupWP...")
 
 		servers, err := cache.RefreshCachedServers()
 		if err != nil {
 			return fmt.Errorf("error fetching servers: %w", err)
 		}
-		verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
+		verbosity.PrintErrorf(verbosity.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
 
 		sites, err := cache.RefreshCachedSites()
 		if err != nil {
@@ -26,7 +26,7 @@ var fetchCmd = &cobra.Command{
 		}
 		verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
 
-		fmt.Println("Cache update complete.")
+		verbosity.PrintErrorln(verbosity.Normal, "Cache update complete.")
 		return nil
 	},
 }
