@@ -2,6 +2,7 @@ package cache
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/JCO-Digital/jman/internal/api/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -14,10 +15,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 	var plugins []models.WPPlugin
 
 	if !force {
-		err := ReadJSONCache("plugins", &plugins)
-		if err == nil && len(plugins) > 0 {
-			return plugins, nil
-		}
+		ReadJSONCache("plugins", &plugins)
 	}
 
 	sites, err := GetSiteList()
@@ -26,7 +24,11 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 	}
 
 	updated := false
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+
 	for _, site := range sites {
+		mu.Lock()
 		// Skip if we already have plugins for this site
 		siteHasPlugins := false
 		for _, p := range plugins {
@@ -35,19 +37,29 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 				break
 			}
 		}
+		mu.Unlock()
+
 		if siteHasPlugins && !force {
 			continue
 		}
 
-		sitePlugins, err := wpcli.GetPlugins(site)
-		if err != nil {
-			fmt.Printf("Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
-			continue
-		}
+		site := site
+		wg.Go(func() {
+			sitePlugins, err := wpcli.GetPlugins(site)
+			if err != nil {
+				fmt.Printf("Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
+				return
+			}
+			fmt.Printf("Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
 
-		plugins = append(plugins, sitePlugins...)
-		updated = true
+			mu.Lock()
+			plugins = append(plugins, sitePlugins...)
+			updated = true
+			mu.Unlock()
+		})
 	}
+
+	wg.Wait()
 
 	if updated {
 		if err := WriteJSONCache("plugins", plugins); err != nil {
