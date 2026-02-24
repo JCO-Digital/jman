@@ -6,6 +6,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/api/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
@@ -120,7 +121,7 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 		}
 	}
 
-	fmt.Printf("Fetching vulnerabilities for %s\n", plugin)
+	verbosity.Printf(verbosity.Verbose, "Fetching vulnerabilities for %s\n", plugin)
 	newVulnData, err := wpvuln.GetVulnerabilities(plugin)
 	if err != nil {
 		return nil, err
