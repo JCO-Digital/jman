@@ -90,21 +90,21 @@ func Printf(minLevel Level, format string, a ...any) {
 }
 
 // Error prints an error message if the current verbosity level is at least the given level.
-func Error(minLevel Level, a ...any) {
+func PrintError(minLevel Level, a ...any) {
 	if current >= minLevel {
 		fmt.Fprint(os.Stderr, a...)
 	}
 }
 
 // Errorln prints an error message with a newline if the current verbosity level is at least the given level.
-func Errorln(minLevel Level, a ...any) {
+func PrintErrorln(minLevel Level, a ...any) {
 	if current >= minLevel {
 		fmt.Fprintln(os.Stderr, a...)
 	}
 }
 
 // Errorf prints a formatted error message if the current verbosity level is at least the given level.
-func Errorf(minLevel Level, format string, a ...any) {
+func PrintErrorf(minLevel Level, format string, a ...any) {
 	if current >= minLevel {
 		fmt.Fprintf(os.Stderr, format, a...)
 	}
