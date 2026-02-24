@@ -1,4 +1,0 @@
-#!/bin/bash
-
-# Pass CLI arguments to script.
-bun src/jman.ts "$@"
