@@ -27,6 +27,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 	updated := false
 	var mu sync.Mutex
 	var wg sync.WaitGroup
+	sem := make(chan struct{}, 24)
 
 	for _, site := range sites {
 		mu.Lock()
@@ -46,6 +47,8 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 
 		site := site
 		wg.Go(func() {
+			sem <- struct{}{}
+			defer func() { <-sem }()
 			sitePlugins, err := wpcli.GetPlugins(site)
 			if err != nil {
 				fmt.Printf("Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
