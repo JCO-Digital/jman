@@ -21,14 +21,14 @@ func GetCachedServers() ([]models.Server, error) {
 
 // RefreshCachedServers fetches servers from the API and updates the cache.
 func RefreshCachedServers() ([]models.Server, error) {
-	fmt.Println("Fetching servers from SpinupWP API...")
+	verbosity.PrintErrorln(verbosity.Normal, "Fetching servers from SpinupWP API...")
 	servers, err := spinupwp.GetServers()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %w", err)
 	}
 
 	if err := WriteJSONCache("servers", servers); err != nil {
-		verbosity.Printf(verbosity.Verbose, "Warning: Failed to write servers cache: %v\n", err)
+		verbosity.PrintErrorf(verbosity.Verbose, "Warning: Failed to write servers cache: %v\n", err)
 	}
 
 	return servers, nil
@@ -46,14 +46,14 @@ func GetCachedSites() ([]models.Site, error) {
 
 // RefreshCachedSites fetches sites from the API and updates the cache.
 func RefreshCachedSites() ([]models.Site, error) {
-	fmt.Println("Fetching sites from SpinupWP API...")
+	verbosity.PrintErrorln(verbosity.Normal, "Fetching sites from SpinupWP API...")
 	sites, err := spinupwp.GetSites()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sites: %w", err)
 	}
 
 	if err := WriteJSONCache("sites", sites); err != nil {
-		verbosity.Printf(verbosity.Verbose, "Warning: Failed to write sites cache: %v\n", err)
+		verbosity.PrintErrorf(verbosity.Verbose, "Warning: Failed to write sites cache: %v\n", err)
 	}
 
 	return sites, nil

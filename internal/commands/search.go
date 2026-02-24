@@ -25,9 +25,9 @@ var searchCmd = &cobra.Command{
 			return nil
 		}
 
-		verbosity.Printf(verbosity.Verbose, "Found %d sites matching '%s':\n", len(sites), query)
+		verbosity.Printf(verbosity.Normal, "Found %d sites matching '%s':\n", len(sites), query)
 		for _, site := range sites {
-			verbosity.Printf(verbosity.Verbose, "- %s (Server: %s)\n", site.Name, site.ServerName)
+			verbosity.Printf(verbosity.Quiet, "- %s (Server: %s)\n", site.Name, site.ServerName)
 		}
 
 		return nil

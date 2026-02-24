@@ -43,12 +43,12 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 		return nil, fmt.Errorf("no sites found")
 	}
 
-	fmt.Println("Found sites:")
+	verbosity.PrintErrorln(verbosity.Normal, "Found sites:")
 	for _, site := range sites {
-		verbosity.Printf(verbosity.Verbose, "%s (%s)\n", site.Name, site.ServerName)
+		verbosity.PrintErrorf(verbosity.Quiet, "%s (%s)\n", site.Name, site.ServerName)
 	}
 
-	fmt.Print("Do you want to continue? [Y/n]: ")
+	verbosity.PrintErrorf(verbosity.Quiet, "Do you want to continue? [Y/n]: ")
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
