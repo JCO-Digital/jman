@@ -2,6 +2,7 @@ package vuln
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -45,13 +46,7 @@ func scanSites(args []string) error {
 			}
 
 			// Check ignore list
-			ignored := false
-			for _, is := range config.Cfg.IgnoreSites {
-				if is == siteName {
-					ignored = true
-					break
-				}
-			}
+			ignored := slices.Contains(config.Cfg.IgnoreSites, siteName)
 			if ignored {
 				continue
 			}
@@ -61,13 +56,7 @@ func scanSites(args []string) error {
 			fmt.Println(message)
 
 			// If "slack" is in args, send to slack
-			sendToSlack := false
-			for _, arg := range args {
-				if arg == "slack" {
-					sendToSlack = true
-					break
-				}
-			}
+			sendToSlack := slices.Contains(args, "slack")
 
 			if sendToSlack {
 				slack.SendMessage(message, false)
@@ -211,7 +200,7 @@ func formatReport(report models.VulnReport) (string, error) {
 	infoLink := ""
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Plugin: %s\n", report.Plugin))
+	fmt.Fprintf(&sb, "Plugin: %s\n", report.Plugin)
 
 	for _, source := range report.Vulnerability.Source {
 		if infoName == "" && !strings.HasPrefix(source.Name, "CVE") {
@@ -232,21 +221,21 @@ func formatReport(report models.VulnReport) (string, error) {
 		infoName = report.Vulnerability.Name
 	}
 
-	sb.WriteString(fmt.Sprintf("Vulnerability: %s\n", infoName))
+	fmt.Fprintf(&sb, "Vulnerability: %s\n", infoName)
 	if infoDate != "" {
-		sb.WriteString(fmt.Sprintf("Date: %s\n", infoDate))
+		fmt.Fprintf(&sb, "Date: %s\n", infoDate)
 	}
 	if cvss > 0 {
-		sb.WriteString(fmt.Sprintf("CVS Score: %.1f\n", cvss))
+		fmt.Fprintf(&sb, "CVS Score: %.1f\n", cvss)
 	}
 	if infoDesc != "" {
-		sb.WriteString(fmt.Sprintf("Description: %s\n", infoDesc))
+		fmt.Fprintf(&sb, "Description: %s\n", infoDesc)
 	}
 
 	sb.WriteString("\nAffected Sites:\n")
 	for _, site := range report.Sites {
 		siteName, _ := getSiteName(site.SiteID)
-		sb.WriteString(fmt.Sprintf("  - %s (%s)\n", siteName, site.Version))
+		fmt.Fprintf(&sb, "  - %s (%s)\n", siteName, site.Version)
 	}
 
 	return sb.String(), nil
@@ -254,13 +243,13 @@ func formatReport(report models.VulnReport) (string, error) {
 
 func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) string {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s\n", siteTitle))
+	fmt.Fprintf(&sb, "%s\n", siteTitle)
 
 	for pluginName, info := range plugins {
-		sb.WriteString(fmt.Sprintf("  %s - %s\n", pluginName, info.Version))
-		sb.WriteString(fmt.Sprintf("    Vulnerabilities: %d\n", len(info.Vulnerability)))
+		fmt.Fprintf(&sb, "  %s - %s\n", pluginName, info.Version)
+		fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
 		if info.Cvss != nil {
-			sb.WriteString(fmt.Sprintf("    Highest CVSS: %.1f\n", *info.Cvss))
+			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
 		}
 	}
 
