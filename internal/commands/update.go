@@ -32,7 +32,7 @@ var updateCmd = &cobra.Command{
 		if currentVersion == "dev" {
 			fmt.Println("You are running a development version of jman.")
 			if latestVersion != "" {
-				fmt.Printf("The latest stable version is: %s\n", latestVersion)
+				verbosity.Printf(verbosity.Verbose, "The latest stable version is: %s\n", latestVersion)
 			}
 			return nil
 		}
@@ -42,7 +42,7 @@ var updateCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("\nA new version of jman is available: %s\n", latestVersion)
+		verbosity.Printf(verbosity.Verbose, "\nA new version of jman is available: %s\n", latestVersion)
 		fmt.Print("\nWould you like to download and install it? [y/N]: ")
 
 		var response string
@@ -56,7 +56,7 @@ var updateCmd = &cobra.Command{
 			return fmt.Errorf("update failed: %w", err)
 		}
 
-		fmt.Printf("Successfully updated jman to %s\n", latestVersion)
+		verbosity.Printf(verbosity.Verbose, "Successfully updated jman to %s\n", latestVersion)
 		os.Exit(0)
 		return nil
 	},

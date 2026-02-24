@@ -8,6 +8,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 )
 
 // SearchSites filters the site list based on the provided query string
@@ -44,7 +45,7 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 
 	fmt.Println("Found sites:")
 	for _, site := range sites {
-		fmt.Printf("%s (%s)\n", site.Name, site.ServerName)
+		verbosity.Printf(verbosity.Verbose, "%s (%s)\n", site.Name, site.ServerName)
 	}
 
 	fmt.Print("Do you want to continue? [Y/n]: ")

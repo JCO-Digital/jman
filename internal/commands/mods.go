@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
@@ -26,12 +27,12 @@ var modsCmd = &cobra.Command{
 		}
 
 		for _, site := range sites {
-			fmt.Printf("Setting DISALLOW_FILE_MODS on %s...\n", site.Name)
+			verbosity.Printf(verbosity.Verbose, "Setting DISALLOW_FILE_MODS on %s...\n", site.Name)
 			err := wpcli.SetDisallowFileMods(site.SSH, site.Path, true)
 			if err != nil {
-				fmt.Printf("Error setting DISALLOW_FILE_MODS for %s: %v\n", site.Name, err)
+				verbosity.Printf(verbosity.Verbose, "Error setting DISALLOW_FILE_MODS for %s: %v\n", site.Name, err)
 			} else {
-				fmt.Printf("Successfully set DISALLOW_FILE_MODS for %s.\n", site.Name)
+				verbosity.Printf(verbosity.Verbose, "Successfully set DISALLOW_FILE_MODS for %s.\n", site.Name)
 			}
 		}
 

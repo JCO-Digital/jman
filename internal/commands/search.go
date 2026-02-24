@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/spf13/cobra"
 )
 
@@ -20,13 +21,13 @@ var searchCmd = &cobra.Command{
 		}
 
 		if len(sites) == 0 {
-			fmt.Printf("No sites found matching '%s'.\n", query)
+			verbosity.Printf(verbosity.Verbose, "No sites found matching '%s'.\n", query)
 			return nil
 		}
 
-		fmt.Printf("Found %d sites matching '%s':\n", len(sites), query)
+		verbosity.Printf(verbosity.Verbose, "Found %d sites matching '%s':\n", len(sites), query)
 		for _, site := range sites {
-			fmt.Printf("- %s (Server: %s)\n", site.Name, site.ServerName)
+			verbosity.Printf(verbosity.Verbose, "- %s (Server: %s)\n", site.Name, site.ServerName)
 		}
 
 		return nil

@@ -51,10 +51,10 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 			defer func() { <-sem }()
 			sitePlugins, err := wpcli.GetPlugins(site)
 			if err != nil {
-				fmt.Printf("Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
+				verbosity.Errorf(verbosity.Normal, "Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
 				return
 			}
-			fmt.Printf("Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
+			verbosity.Printf(verbosity.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
 
 			mu.Lock()
 			plugins = append(plugins, sitePlugins...)
@@ -67,7 +67,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 
 	if updated {
 		if err := WriteJSONCache("plugins", plugins); err != nil {
-			fmt.Printf("Warning: failed to write plugins cache: %v\n", err)
+			verbosity.Errorf(verbosity.Normal, "Warning: failed to write plugins cache: %v\n", err)
 		}
 	}
 
@@ -131,7 +131,7 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 	}
 
 	if err := WriteJSONCache(filename, newVulnData); err != nil {
-		fmt.Printf("Warning: failed to write vulnerability cache for %s: %v\n", plugin, err)
+		verbosity.Errorf(verbosity.Normal, "Warning: failed to write vulnerability cache for %s: %v\n", plugin, err)
 	}
 
 	return newVulnData, nil

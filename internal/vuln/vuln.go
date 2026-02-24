@@ -67,7 +67,7 @@ func scanSites(args []string) error {
 		}
 	}
 
-	fmt.Printf("%d sites match criteria\n", siteCount)
+	verbosity.Printf(verbosity.Verbose, "%d sites match criteria\n", siteCount)
 	return nil
 }
 

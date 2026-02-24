@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/spf13/cobra"
 )
 
@@ -23,9 +24,9 @@ var listCmd = &cobra.Command{
 		if target == "all" || target == "servers" {
 			servers, err := cache.GetCachedServers()
 			if err != nil {
-				fmt.Printf("Error fetching cached servers: %v\n", err)
+				verbosity.Printf(verbosity.Verbose, "Error fetching cached servers: %v\n", err)
 			} else {
-				fmt.Printf("\nCached servers: %d\n", len(servers))
+				verbosity.Printf(verbosity.Verbose, "\nCached servers: %d\n", len(servers))
 				for _, server := range servers {
 					fmt.Println(server.Name)
 				}
@@ -35,9 +36,9 @@ var listCmd = &cobra.Command{
 		if target == "all" || target == "sites" {
 			sites, err := cache.GetCachedSites()
 			if err != nil {
-				fmt.Printf("Error fetching cached sites: %v\n", err)
+				verbosity.Printf(verbosity.Verbose, "Error fetching cached sites: %v\n", err)
 			} else {
-				fmt.Printf("\nCached sites: %d\n", len(sites))
+				verbosity.Printf(verbosity.Verbose, "\nCached sites: %d\n", len(sites))
 				for _, site := range sites {
 					fmt.Println(site.Domain)
 				}
