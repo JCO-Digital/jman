@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/update"
@@ -42,14 +43,21 @@ var updateCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\nA new version of jman is available: %s\n", latestVersion)
-		fmt.Print("\nWould you like to download it? [y/N]: ")
+		fmt.Print("\nWould you like to download and install it? [y/N]: ")
 
 		var response string
 		fmt.Scanln(&response)
-		if response == "y" || response == "Y" {
-			fmt.Printf("\nPlease download the latest version from:\n%s\n", releaseURL)
+		if response != "y" && response != "Y" {
+			return nil
 		}
 
+		fmt.Println("\nDownloading new version...")
+		if err := update.DownloadAndReplace(releaseURL); err != nil {
+			return fmt.Errorf("update failed: %w", err)
+		}
+
+		fmt.Printf("Successfully updated jman to %s\n", latestVersion)
+		os.Exit(0)
 		return nil
 	},
 }
