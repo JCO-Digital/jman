@@ -3,7 +3,7 @@ name: Release version
 on:
   push:
     branches:
-      - release
+      - main
       - "push-action/**"
 
 jobs:
@@ -21,3 +21,92 @@ jobs:
         with:
           github-token: ${{ secrets.MASTER_PAT }}
           version-file: "./version.json"
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.25.x
+
+      - name: Build
+        run: make build
+
+      - name: Create Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "bin/jman"
+
+      - name: Collect release commits
+        id: release_commits
+        shell: sh
+        run: |
+          git fetch --tags --force
+
+          CURRENT_TAG="${GITHUB_REF_NAME}"
+          PREV_TAG="$(git tag --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1)"
+          MAX_COMMITS=25
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="$CURRENT_TAG"
+          else
+            RANGE="${PREV_TAG}..${CURRENT_TAG}"
+          fi
+
+          TOTAL_COMMITS="$(git rev-list --count "$RANGE" 2>/dev/null || echo 0)"
+
+          # If we have a range (i.e. not the first release), skip the most recent commit (the tag commit)
+          if [ -n "$PREV_TAG" ]; then
+            COMMITS="$(git log "$RANGE" \
+              --pretty=format:'- %s (%h) — %an, %ad' \
+              --date=format:'%Y-%m-%d' \
+              -n "$((MAX_COMMITS + 1))" 2>/dev/null | tail -n +2 || true)"
+          else
+            COMMITS="$(git log "$RANGE" \
+              --pretty=format:'- %s (%h) — %an, %ad' \
+              --date=format:'%Y-%m-%d' \
+              -n "$MAX_COMMITS" 2>/dev/null || true)"
+          fi
+
+          if [ -z "$COMMITS" ]; then
+            COMMITS="- No commit messages found for this release range."
+          elif [ "$TOTAL_COMMITS" -gt "$MAX_COMMITS" ]; then
+            REMAINING=$((TOTAL_COMMITS - MAX_COMMITS))
+            COMMITS="$(printf "%s\n...and %d more commits." "$COMMITS" "$REMAINING")"
+          fi
+
+          {
+            echo "previous_tag=${PREV_TAG}"
+            echo "total_commits=${TOTAL_COMMITS}"
+            echo "commits<<EOF"
+            echo "$COMMITS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Slack notification (success)
+        if: success()
+        uses: slackapi/slack-github-action@v2
+        env:
+          MSG: |-
+            ✅ jman release ${{ github.ref_name }} by ${{ github.actor }} succeeded.
+
+            Commit messages:
+            ${{ steps.release_commits.outputs.commits }}
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            {
+              "channel": "C0LPYCB8F",
+              "text": ${{ toJSON(env.MSG) }}
+            }
+
+      - name: Slack notification (failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            {
+              "channel": "C0LPYCB8F",
+              "text": ${{ toJSON(format('❌ jman release {0} by {1} failed.', github.ref_name, github.actor)) }}
+            }

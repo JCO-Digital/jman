@@ -48,10 +48,10 @@ func AddUser(ssh, path, username, email, role string) (string, error) {
 		return "", fmt.Errorf("failed to add user: %w (stderr: %s)", err, res.Error)
 	}
 
-	lines := strings.Split(res.Output, "\n")
-	for _, line := range lines {
-		if strings.HasPrefix(line, "Password: ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "Password: ")), nil
+	lines := strings.SplitSeq(res.Output, "\n")
+	for line := range lines {
+		if after, ok := strings.CutPrefix(line, "Password: "); ok {
+			return strings.TrimSpace(after), nil
 		}
 	}
 	return "", nil
@@ -107,7 +107,10 @@ func SetDisallowFileMods(ssh, path string, value bool) error {
 func GetPlugins(site models.CliSite) ([]models.WPPlugin, error) {
 	res, err := RunWP(site.SSH, site.Path, "plugin list --format=json", true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get plugins for %s: %w", site.Name, err)
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			return nil, fmt.Errorf("not a WordPress site")
+		}
+		return nil, fmt.Errorf("unknown error: %w", err)
 	}
 
 	output := res.Output
