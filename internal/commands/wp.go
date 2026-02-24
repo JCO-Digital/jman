@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
@@ -28,7 +29,7 @@ var wpCmd = &cobra.Command{
 		}
 
 		for _, site := range sites {
-			fmt.Printf("\n=== %s (%s) ===\n", site.Name, site.ServerName)
+			verbosity.Printf(verbosity.Verbose, "\n=== %s (%s) ===\n", site.Name, site.ServerName)
 			res, err := wpcli.RunWP(site.SSH, site.Path, wpArgs, false)
 
 			if res.Output != "" {
@@ -38,7 +39,7 @@ var wpCmd = &cobra.Command{
 				fmt.Println(res.Error)
 			}
 			if err != nil {
-				fmt.Printf("Error executing command: %v\n", err)
+				verbosity.Printf(verbosity.Verbose, "Error executing command: %v\n", err)
 			}
 		}
 

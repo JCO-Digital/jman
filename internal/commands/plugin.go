@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
@@ -28,18 +29,18 @@ var pluginCmd = &cobra.Command{
 		}
 
 		for _, site := range sites {
-			fmt.Printf("Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
+			verbosity.Printf(verbosity.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
 			success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
 
 			if err != nil {
-				fmt.Printf("Error installing plugin on %s: %v\n", site.Name, err)
+				verbosity.Printf(verbosity.Verbose, "Error installing plugin on %s: %v\n", site.Name, err)
 				continue
 			}
 
 			if success {
-				fmt.Printf("Successfully installed and activated '%s' on %s.\n", pluginName, site.Name)
+				verbosity.Printf(verbosity.Verbose, "Successfully installed and activated '%s' on %s.\n", pluginName, site.Name)
 			} else {
-				fmt.Printf("Failed to install '%s' on %s. (It might already be installed)\n", pluginName, site.Name)
+				verbosity.Printf(verbosity.Verbose, "Failed to install '%s' on %s. (It might already be installed)\n", pluginName, site.Name)
 			}
 		}
 

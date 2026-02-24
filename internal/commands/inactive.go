@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +31,7 @@ var inactiveCmd = &cobra.Command{
 
 			var inactive []string
 			for _, site := range sites {
-				fmt.Printf("\nChecking %s (%s)\n", site.Name, site.ServerName)
+				verbosity.Printf(verbosity.Verbose, "\nChecking %s (%s)\n", site.Name, site.ServerName)
 				active := wpcli.IsActiveMainwp(site.SSH, site.Path)
 				if active {
 					fmt.Println("Already active")

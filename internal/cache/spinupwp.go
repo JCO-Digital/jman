@@ -6,6 +6,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/api/spinupwp"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 )
 
 // GetCachedServers retrieves servers from the cache or fetches them from the API if expired/missing.
@@ -27,7 +28,7 @@ func RefreshCachedServers() ([]models.Server, error) {
 	}
 
 	if err := WriteJSONCache("servers", servers); err != nil {
-		fmt.Printf("Warning: Failed to write servers cache: %v\n", err)
+		verbosity.Printf(verbosity.Verbose, "Warning: Failed to write servers cache: %v\n", err)
 	}
 
 	return servers, nil
@@ -52,7 +53,7 @@ func RefreshCachedSites() ([]models.Site, error) {
 	}
 
 	if err := WriteJSONCache("sites", sites); err != nil {
-		fmt.Printf("Warning: Failed to write sites cache: %v\n", err)
+		verbosity.Printf(verbosity.Verbose, "Warning: Failed to write sites cache: %v\n", err)
 	}
 
 	return sites, nil

@@ -1,6 +1,9 @@
 package verbosity
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+)
 
 // Level represents the verbosity level of the application.
 type Level int
@@ -83,5 +86,26 @@ func Println(minLevel Level, a ...any) {
 func Printf(minLevel Level, format string, a ...any) {
 	if current >= minLevel {
 		fmt.Printf(format, a...)
+	}
+}
+
+// Error prints an error message if the current verbosity level is at least the given level.
+func Error(minLevel Level, a ...any) {
+	if current >= minLevel {
+		fmt.Fprint(os.Stderr, a...)
+	}
+}
+
+// Errorln prints an error message with a newline if the current verbosity level is at least the given level.
+func Errorln(minLevel Level, a ...any) {
+	if current >= minLevel {
+		fmt.Fprintln(os.Stderr, a...)
+	}
+}
+
+// Errorf prints a formatted error message if the current verbosity level is at least the given level.
+func Errorf(minLevel Level, format string, a ...any) {
+	if current >= minLevel {
+		fmt.Fprintf(os.Stderr, format, a...)
 	}
 }

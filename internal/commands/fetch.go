@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/spf13/cobra"
 )
 
@@ -17,13 +18,13 @@ var fetchCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("error fetching servers: %w", err)
 		}
-		fmt.Printf("Successfully fetched and cached %d servers.\n", len(servers))
+		verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
 
 		sites, err := cache.RefreshCachedSites()
 		if err != nil {
 			return fmt.Errorf("error fetching sites: %w", err)
 		}
-		fmt.Printf("Successfully fetched and cached %d sites.\n", len(sites))
+		verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
 
 		fmt.Println("Cache update complete.")
 		return nil
