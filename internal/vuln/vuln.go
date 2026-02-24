@@ -2,6 +2,8 @@ package vuln
 
 import (
 	"fmt"
+	"html"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -201,7 +203,7 @@ func formatReport(report models.VulnReport) (string, error) {
 	infoLink := ""
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Plugin: %s\n", report.Plugin)
+	fmt.Fprintf(&sb, "Plugin: %s\n", cleanHTML(report.Plugin))
 
 	for _, source := range report.Vulnerability.Source {
 		if infoName == "" && !strings.HasPrefix(source.Name, "CVE") {
@@ -222,7 +224,7 @@ func formatReport(report models.VulnReport) (string, error) {
 		infoName = report.Vulnerability.Name
 	}
 
-	fmt.Fprintf(&sb, "Vulnerability: %s\n", infoName)
+	fmt.Fprintf(&sb, "Vulnerability: %s\n", cleanHTML(infoName))
 	if infoDate != "" {
 		fmt.Fprintf(&sb, "Date: %s\n", infoDate)
 	}
@@ -230,7 +232,7 @@ func formatReport(report models.VulnReport) (string, error) {
 		fmt.Fprintf(&sb, "CVS Score: %.1f\n", cvss)
 	}
 	if infoDesc != "" {
-		fmt.Fprintf(&sb, "Description: %s\n", infoDesc)
+		fmt.Fprintf(&sb, "Description: %s\n", cleanHTML(infoDesc))
 	}
 
 	sb.WriteString("\nAffected Sites:\n")
@@ -247,7 +249,7 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) s
 	fmt.Fprintf(&sb, "%s\n", siteTitle)
 
 	for pluginName, info := range plugins {
-		fmt.Fprintf(&sb, "  %s - %s\n", pluginName, info.Version)
+		fmt.Fprintf(&sb, "  %s - %s\n", cleanHTML(pluginName), info.Version)
 		fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
 		if info.Cvss != nil {
 			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
@@ -278,6 +280,15 @@ func getCvss(report models.VulnReport) float64 {
 		return score
 	}
 	return 0
+}
+
+var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
+
+// cleanHTML strips HTML tags and decodes HTML entities from a string.
+func cleanHTML(s string) string {
+	s = htmlTagRegexp.ReplaceAllString(s, "")
+	s = html.UnescapeString(s)
+	return strings.TrimSpace(s)
 }
 
 // versionIsNotBigger compares v1 and v2 using hashicorp/go-version comparison.
