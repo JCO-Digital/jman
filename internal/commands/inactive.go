@@ -16,13 +16,6 @@ var inactiveCmd = &cobra.Command{
 		target := ""
 		if len(args) > 0 {
 			target = args[0]
-		} else {
-			// If no target is provided, promptSearch typically expects a query in TS.
-			// Let's pass an empty string and handle "all sites" if needed,
-			// or default to all sites if the TS implementation allowed it.
-			// The original promptSearch doesn't allow empty queries,
-			// but listInactiveSites passes data.target.
-			// We will just fetch all sites directly if target is empty.
 		}
 
 		if target != "" {
