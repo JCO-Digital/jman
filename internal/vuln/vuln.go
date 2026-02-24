@@ -229,7 +229,7 @@ func formatReport(report models.VulnReport) (string, error) {
 		fmt.Fprintf(&sb, "Date: %s\n", infoDate)
 	}
 	if cvss > 0 {
-		fmt.Fprintf(&sb, "CVS Score: %.1f\n", cvss)
+		fmt.Fprintf(&sb, "CVSS Score: %.1f\n", cvss)
 	}
 	if infoDesc != "" {
 		fmt.Fprintf(&sb, "Description: %s\n", cleanHTML(infoDesc))
