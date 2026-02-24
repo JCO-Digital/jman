@@ -75,10 +75,10 @@ type VulnData struct {
 }
 
 type VulnResponse struct {
-	Error   int         `json:"error"`
-	Message *string     `json:"message"`
-	Data    *VulnData   `json:"data,omitempty"`
-	Updated interface{} `json:"updated"`
+	Error   int       `json:"error"`
+	Message *string   `json:"message"`
+	Data    *VulnData `json:"data,omitempty"`
+	Updated any       `json:"updated"`
 }
 
 type VulnReport struct {
