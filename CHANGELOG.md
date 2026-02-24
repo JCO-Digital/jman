@@ -1,3 +1,12 @@
+# [4.2.0](https://github.com/JCO-Digital/jman/compare/v4.1.0...v4.2.0) (2026-02-24)
+
+
+### Features
+
+* **fetch:** add support for fetching plugin vulnerabilities ([de08dc5](https://github.com/JCO-Digital/jman/commit/de08dc5e3a863634a6bdb80c4347ac0fff093fa6))
+
+
+
 # [4.1.0](https://github.com/JCO-Digital/jman/compare/v4.0.1...v4.1.0) (2026-02-24)
 
 
@@ -41,10 +50,6 @@
 
 
 ## [3.4.8](https://github.com/JCO-Digital/jman/compare/v3.4.7...v3.4.8) (2026-02-17)
-
-
-
-## [3.4.7](https://github.com/JCO-Digital/jman/compare/v3.4.6...v3.4.7) (2026-02-17)
 
 
 
