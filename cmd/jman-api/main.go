@@ -32,13 +32,13 @@ func main() {
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf(`{"status":"ok","version":%q}`, Version)))
+		fmt.Fprintf(w, `{"status":"ok","version":%q}`, Version)
 	})
 
 	mux.HandleFunc("GET /api/plugins", func(w http.ResponseWriter, r *http.Request) {
 		var plugins []models.WPPlugin
 		if err := cache.ReadJSONCache("plugins", &plugins); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"Cache missing or expired: %v. Run 'jman update' to fetch data."}`, err), http.StatusNotFound)
+			http.Error(w, fmt.Sprintf(`{"error":"Cache missing or expired: %v. Run 'jman fetch plugins' to fetch data."}`, err), http.StatusNotFound)
 			return
 		}
 		writeJSON(w, plugins)
@@ -47,7 +47,7 @@ func main() {
 	mux.HandleFunc("GET /api/servers", func(w http.ResponseWriter, r *http.Request) {
 		var servers []models.Server
 		if err := cache.ReadJSONCache("servers", &servers); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"Cache missing or expired: %v. Run 'jman update' to fetch data."}`, err), http.StatusNotFound)
+			http.Error(w, fmt.Sprintf(`{"error":"Cache missing or expired: %v. Run 'jman fetch servers' to fetch data."}`, err), http.StatusNotFound)
 			return
 		}
 		writeJSON(w, servers)
@@ -56,7 +56,7 @@ func main() {
 	mux.HandleFunc("GET /api/sites", func(w http.ResponseWriter, r *http.Request) {
 		var sites []models.Site
 		if err := cache.ReadJSONCache("sites", &sites); err != nil {
-			http.Error(w, fmt.Sprintf(`{"error":"Cache missing or expired: %v. Run 'jman update' to fetch data."}`, err), http.StatusNotFound)
+			http.Error(w, fmt.Sprintf(`{"error":"Cache missing or expired: %v. Run 'jman fetch sites' to fetch data."}`, err), http.StatusNotFound)
 			return
 		}
 		writeJSON(w, sites)
