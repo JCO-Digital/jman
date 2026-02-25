@@ -2,10 +2,8 @@ package models
 
 // Config represents the user configuration typically stored in a TOML file.
 type Config struct {
-	UrlMainwp     string   `toml:"urlMainwp" json:"urlMainwp"`
 	TokenSpinup   string   `toml:"tokenSpinup" json:"tokenSpinup"`
-	TokenMainwp   string   `toml:"tokenMainwp" json:"tokenMainwp"`
-	SlackToken    string   `toml:"slackToken" json:"slackToken"`
+	TokenSlack    string   `toml:"slackToken" json:"slackToken"`
 	SlackChannel  string   `toml:"slackChannel" json:"slackChannel"`
 	CvssThreshold float64  `toml:"cvssThreshold" json:"cvssThreshold"`
 	VulnThreshold float64  `toml:"vulnThreshold" json:"vulnThreshold"`
