@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/middleware"
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
@@ -29,7 +29,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, `{"status":"ok","version":%q}`, Version)
@@ -78,7 +78,7 @@ func main() {
 		writeJSON(w, vulnData)
 	})
 
-	handler := loggingMiddleware(corsMiddleware(jsonMiddleware(mux)))
+	handler := middleware.LoggingMiddleware(middleware.CorsMiddleware(middleware.JsonMiddleware(mux)))
 
 	log.Printf("Starting jman-api (version: %s) on :%s", Version, port)
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
@@ -90,50 +90,4 @@ func writeJSON(w http.ResponseWriter, data any) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("Error encoding JSON: %v", err)
 	}
-}
-
-// jsonMiddleware ensures Content-Type is set, except if an error was already returned in plain text (though we use plain text for simplicity in errors above, we can set default to json).
-// Actually, it's better to just ensure application/json is the default.
-func jsonMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		next.ServeHTTP(w, r)
-	})
-}
-
-// corsMiddleware adds basic CORS headers
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
-}
-
-// loggingMiddleware logs the incoming HTTP requests
-func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		ww := &responseWriter{w, http.StatusOK}
-		next.ServeHTTP(ww, r)
-		log.Printf("%s %s %d %s", r.Method, r.URL.Path, ww.statusCode, time.Since(start))
-	})
-}
-
-// responseWriter captures the status code for logging
-type responseWriter struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (rw *responseWriter) WriteHeader(code int) {
-	rw.statusCode = code
-	rw.ResponseWriter.WriteHeader(code)
 }
