@@ -15,7 +15,7 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "jman",
 	Short: "A CLI tool for managing WordPress projects",
-	Long:  `jman is a command-line utility designed to manage WordPress sites hosted on SpinupWP, with additional support for MainWP integration.`,
+	Long:  `jman is a command-line utility designed to manage WordPress sites hosted on SpinupWP.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		switch {
 		case flagDebug:

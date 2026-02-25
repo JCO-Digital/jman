@@ -86,12 +86,6 @@ func AddPlugin(ssh, path, plugin string, activate bool) (bool, error) {
 	return strings.Contains(res.Output, "Success:"), nil
 }
 
-// IsActiveMainwp checks if the mainwp-child plugin is active.
-func IsActiveMainwp(ssh, path string) bool {
-	_, err := RunWP(ssh, path, "plugin is-active mainwp-child", true)
-	return err == nil
-}
-
 // SetDisallowFileMods updates the DISALLOW_FILE_MODS constant in wp-config.php.
 func SetDisallowFileMods(ssh, path string, value bool) error {
 	valStr := "false"
