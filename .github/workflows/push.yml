@@ -37,7 +37,9 @@ jobs:
         if: steps.changelog.outputs.skipped == 'false'
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "bin/jman"
+          artifacts:
+            - "bin/jman"
+            - "bin/jman-api"
           tag: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}
           body: ${{ steps.changelog.outputs.clean_changelog }}
