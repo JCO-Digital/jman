@@ -21,10 +21,8 @@ type Runtime struct {
 
 // AppConfig represents the user-defined settings mapped from the TOML config file.
 type AppConfig struct {
-	URLMainWP     string   `toml:"urlMainwp"`
 	TokenSpinup   string   `toml:"tokenSpinup"`
-	TokenMainWP   string   `toml:"tokenMainwp"`
-	SlackToken    string   `toml:"slackToken"`
+	TokenSlack    string   `toml:"slackToken"`
 	SlackChannel  string   `toml:"slackChannel"`
 	CVSSThreshold float64  `toml:"cvssThreshold"`
 	VulnThreshold float64  `toml:"vulnThreshold"`
