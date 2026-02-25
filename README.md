@@ -57,8 +57,6 @@ Create the file and add your credentials:
 
 ```toml
 tokenSpinup = "your_spinupwp_api_token"
-tokenMainwp = "your_mainwp_api_token" # (optional)
-urlMainwp = "https://your-mainwp-dashboard.com" # (optional)
 
 # Slack notifications for vulnerabilities
 slackToken = "xoxb-your-slack-bot-token" # (optional)
