@@ -86,6 +86,10 @@ func GetSiteList() ([]models.CliSite, error) {
 	}
 
 	for _, site := range sites {
+		if !site.IsWordpress {
+			continue
+		}
+
 		if serverNameFull, ok := serverMap[site.ServerID]; ok {
 			serverNameParts := strings.Split(serverNameFull, ".")
 			serverName := serverNameParts[0]
