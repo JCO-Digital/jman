@@ -1,3 +1,18 @@
+# [4.3.0](https://github.com/JCO-Digital/jman/compare/v4.2.0...v4.3.0) (2026-02-26)
+
+
+### Bug Fixes
+
+* **cache:** filter out non-WordPress sites from site list ([3b2baa8](https://github.com/JCO-Digital/jman/commit/3b2baa849bfd019870d8cb38e4ef8e309274c878))
+
+
+### Features
+
+* **api:** add jman-api REST service ([c024dac](https://github.com/JCO-Digital/jman/commit/c024dacde8b84592be8bea94433bb93034f6787c))
+* **search:** add plugin search and case-insensitive site matching ([383789c](https://github.com/JCO-Digital/jman/commit/383789c5136603c58601c4cc7fd39dd06b803300))
+
+
+
 # [4.2.0](https://github.com/JCO-Digital/jman/compare/v4.1.0...v4.2.0) (2026-02-24)
 
 
@@ -46,10 +61,6 @@
 
 * **cache:** fetch plugins concurrently ([4dbe3b9](https://github.com/JCO-Digital/jman/commit/4dbe3b967612909aac86e2d1994206cd87f6ca41))
 * **cache:** limit concurrent plugin fetching to 24 ([560aa8b](https://github.com/JCO-Digital/jman/commit/560aa8b3d659cda046318cd7f684c6abd115c9e0))
-
-
-
-## [3.4.8](https://github.com/JCO-Digital/jman/compare/v3.4.7...v3.4.8) (2026-02-17)
 
 
 
