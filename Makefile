@@ -3,7 +3,7 @@
 # Go build flags
 LDFLAGS := -s -w -X main.Version=$(shell git describe --tags --always --dirty || echo "dev")
 
-build: clean prepare bin/jman bin/jman-api
+build: clean prepare bin/jman bin/jman-api bin/jman-monitor
 
 bin/jman:
 	go build -ldflags="$(LDFLAGS)" -o bin/jman ./cmd/jman
@@ -11,9 +11,13 @@ bin/jman:
 bin/jman-api:
 	go build -ldflags="$(LDFLAGS)" -o bin/jman-api ./cmd/jman-api
 
+bin/jman-monitor:
+	go build -ldflags="$(LDFLAGS)" -o bin/jman-monitor ./cmd/jman-monitor
+
 dev: clean prepare
 	go build -o bin/jman ./cmd/jman
 	go build -o bin/jman-api ./cmd/jman-api
+	go build -o bin/jman-monitor ./cmd/jman-monitor
 
 prepare:
 	go mod download

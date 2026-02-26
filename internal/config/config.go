@@ -21,12 +21,15 @@ type Runtime struct {
 
 // AppConfig represents the user-defined settings mapped from the TOML config file.
 type AppConfig struct {
-	TokenSpinup   string   `toml:"tokenSpinup"`
-	TokenSlack    string   `toml:"slackToken"`
-	SlackChannel  string   `toml:"slackChannel"`
-	CVSSThreshold float64  `toml:"cvssThreshold"`
-	VulnThreshold float64  `toml:"vulnThreshold"`
-	IgnoreSites   []string `toml:"ignoreSites"`
+	TokenSpinup         string   `toml:"tokenSpinup"`
+	TokenSlack          string   `toml:"slackToken"`
+	SlackChannel        string   `toml:"slackChannel"`
+	SlackMonitorChannel string   `toml:"slackMonitorChannel"`
+	MonitorThreshold    int      `toml:"monitorThreshold"`
+	MonitorTimeout      int      `toml:"monitorTimeout"`
+	CVSSThreshold       float64  `toml:"cvssThreshold"`
+	VulnThreshold       float64  `toml:"vulnThreshold"`
+	IgnoreSites         []string `toml:"ignoreSites"`
 }
 
 var (
@@ -58,10 +61,12 @@ func Init(version string) error {
 func loadConfig() error {
 	// Set defaults
 	Cfg = AppConfig{
-		SlackChannel:  "#testing",
-		CVSSThreshold: 7.0,
-		VulnThreshold: 7.0,
-		IgnoreSites:   []string{},
+		SlackChannel:     "#testing",
+		MonitorThreshold: 3,
+		MonitorTimeout:   10,
+		CVSSThreshold:    7.0,
+		VulnThreshold:    7.0,
+		IgnoreSites:      []string{},
 	}
 
 	configPath := filepath.Join(RunData.ConfigDir, "config.toml")
