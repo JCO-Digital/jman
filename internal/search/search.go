@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -19,11 +20,52 @@ func SearchSites(query string) ([]models.CliSite, error) {
 	}
 
 	var matched []models.CliSite
+	query = strings.ToLower(query)
 	for _, site := range sites {
-		if strings.Contains(site.Name, query) || strings.Contains(site.ServerName, query) {
+		if strings.Contains(strings.ToLower(site.Name), query) || strings.Contains(strings.ToLower(site.ServerName), query) {
 			matched = append(matched, site)
 		}
 	}
+
+	return matched, nil
+}
+
+// SearchPlugins filters the plugin list based on the provided query string
+func SearchPlugins(query string) ([]models.WPPluginData, error) {
+	plugins, err := cache.GetCachedPlugins(false)
+	if err != nil {
+		return nil, err
+	}
+
+	pluginMap := make(map[string]*models.WPPluginData)
+	query = strings.ToLower(query)
+
+	for _, p := range plugins {
+		if strings.Contains(strings.ToLower(p.Name), query) {
+			data, exists := pluginMap[p.Name]
+			if !exists {
+				newData := &models.WPPluginData{
+					Name:  p.Name,
+					Sites: []models.PluginSite{},
+				}
+				pluginMap[p.Name] = newData
+				data = newData
+			}
+			data.Sites = append(data.Sites, models.PluginSite{
+				SiteID:  p.SiteID,
+				Version: p.Version,
+			})
+		}
+	}
+
+	var matched []models.WPPluginData
+	for _, data := range pluginMap {
+		matched = append(matched, *data)
+	}
+
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].Name < matched[j].Name
+	})
 
 	return matched, nil
 }
