@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/api/spinupwp"
+	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/monitor"
 	"github.com/JCO-Digital/jman/internal/slack"
@@ -54,7 +55,7 @@ func main() {
 	}
 
 	// Fetch sites
-	sites, err := spinupwp.GetSites()
+	sites, err := cache.GetCachedSites()
 	if err != nil {
 		verbosity.Printf(verbosity.Normal, "Error fetching sites: %v\n", err)
 		os.Exit(1)
@@ -79,13 +80,7 @@ func main() {
 
 	for _, site := range sites {
 		// Check if site is ignored
-		isIgnored := false
-		for _, ignored := range config.Cfg.IgnoreSites {
-			if site.Domain == ignored {
-				isIgnored = true
-				break
-			}
-		}
+		isIgnored := slices.Contains(config.Cfg.IgnoreSites, site.Domain)
 		if isIgnored {
 			verbosity.Printf(verbosity.Verbose, "Skipping ignored site: %s\n", site.Domain)
 			continue
