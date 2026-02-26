@@ -77,10 +77,8 @@ type Asset struct {
 }
 
 // CheckForUpdate checks if a newer version of the CLI is available.
-// It returns the latest version string and a boolean indicating if an update is available.
-// CheckForUpdate checks if a newer version of the CLI is available.
-// It returns the latest version string, the release URL, and a boolean indicating if an update is available.
-func CheckForUpdate(currentVersion string) (string, string, bool, error) {
+// It returns the latest version string, the release URL for the specified component, and a boolean indicating if an update is available.
+func CheckForUpdate(currentVersion string, component string) (string, string, bool, error) {
 
 	client := &http.Client{
 		Timeout: 5 * time.Second,
@@ -103,7 +101,7 @@ func CheckForUpdate(currentVersion string) (string, string, bool, error) {
 
 	downloadURL := ""
 	for _, asset := range release.Assets {
-		if asset.Name == "jman" {
+		if asset.Name == component {
 			downloadURL = asset.BrowserDownloadURL
 			break
 		}
@@ -128,32 +126,35 @@ func CheckForUpdate(currentVersion string) (string, string, bool, error) {
 }
 
 // DownloadAndReplace downloads the binary from downloadURL, writes it to a
-// temporary file, and then replaces the currently running executable with it.
-// On Linux the running binary's inode stays valid even after unlinking, so
-// the process can continue long enough to print a message and exit.
-func DownloadAndReplace(downloadURL string) error {
-	// Resolve the path of the currently running executable (follow symlinks).
-	execPath, err := os.Executable()
+// temporary file, and then replaces the target component binary with it.
+// If component is "jman", it replaces the currently running executable.
+// Otherwise, it looks for the component in the same directory as the jman binary.
+func DownloadAndReplace(downloadURL string, component string) error {
+	// Resolve the path of the currently running jman executable (follow symlinks).
+	jmanPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("failed to determine executable path: %w", err)
 	}
-	execPath, err = filepath.EvalSymlinks(execPath)
+	jmanPath, err = filepath.EvalSymlinks(jmanPath)
 	if err != nil {
 		return fmt.Errorf("failed to resolve executable symlinks: %w", err)
 	}
 
-	// Grab the permissions of the current binary so we can preserve them.
-	info, err := os.Stat(execPath)
-	if err != nil {
-		return fmt.Errorf("failed to stat current executable: %w", err)
+	dir := filepath.Dir(jmanPath)
+	targetPath := jmanPath
+	if component != "jman" {
+		targetPath = filepath.Join(dir, component)
 	}
-	mode := info.Mode().Perm()
+
+	// Default mode to 0755 if the target doesn't exist yet.
+	mode := os.FileMode(0755)
+	if info, err := os.Stat(targetPath); err == nil {
+		mode = info.Mode().Perm()
+	}
 
 	// Download the new binary to a temporary file in the same directory as the
-	// current executable. Using the same directory avoids cross-device rename
-	// issues.
-	dir := filepath.Dir(execPath)
-	tmpFile, err := os.CreateTemp(dir, "jman-update-*")
+	// target binary. Using the same directory avoids cross-device rename issues.
+	tmpFile, err := os.CreateTemp(dir, fmt.Sprintf("%s-update-*", component))
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
@@ -195,8 +196,8 @@ func DownloadAndReplace(downloadURL string) error {
 	}
 
 	// Replace the old binary. os.Rename is atomic on the same filesystem.
-	if err := os.Rename(tmpPath, execPath); err != nil {
-		return fmt.Errorf("failed to replace current binary (do you have write permission?): %w", err)
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		return fmt.Errorf("failed to replace binary %s (do you have write permission?): %w", component, err)
 	}
 
 	return nil
