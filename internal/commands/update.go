@@ -52,12 +52,12 @@ var updateCmd = &cobra.Command{
 			}
 
 			if !available {
-				fmt.Println("You are running the latest version of jman.")
+				verbosity.Println(verbosity.Normal, "You are running the latest version of jman.")
 				return nil
 			}
 
-			verbosity.Printf(verbosity.Verbose, "\nA new version of jman is available: %s\n", latestVersion)
-			fmt.Print("\nWould you like to download and install it? [y/N]: ")
+			verbosity.Printf(verbosity.Normal, "\nA new version of jman is available: %s\n", latestVersion)
+			verbosity.Printf(verbosity.Quiet, "\nWould you like to download and install it? [y/N]: ")
 
 			var response string
 			fmt.Scanln(&response)
