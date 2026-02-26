@@ -16,8 +16,17 @@ const slackTrackerFile = "slack_messages"
 // SendMessage sends a message to the configured Slack channel.
 // It tracks sent messages to avoid duplicates. If force is true, it will send even if previously sent.
 func SendMessage(message string, force bool) error {
+	return SendMessageToChannel(message, config.Cfg.SlackChannel, force)
+}
+
+// SendMessageToChannel sends a message to a specific Slack channel.
+func SendMessageToChannel(message string, channel string, force bool) error {
 	if config.Cfg.TokenSlack == "" {
 		return fmt.Errorf("Slack token is not configured")
+	}
+
+	if channel == "" {
+		channel = "#testing"
 	}
 
 	hash := hashMessage(message)
@@ -36,11 +45,6 @@ func SendMessage(message string, force bool) error {
 	}
 
 	api := slack.New(config.Cfg.TokenSlack)
-	channel := config.Cfg.SlackChannel
-	if channel == "" {
-		channel = "#testing"
-	}
-
 	_, _, err = api.PostMessage(
 		channel,
 		slack.MsgOptionText(message, false),
