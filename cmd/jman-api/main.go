@@ -8,7 +8,6 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/api"
 	"github.com/JCO-Digital/jman/internal/config"
-	"github.com/JCO-Digital/jman/internal/middleware"
 )
 
 // Version is injected by the build flags
@@ -31,9 +30,9 @@ func main() {
 	api.RegisterHandlers(mux, Version)
 
 	// Wrap mux with middleware
-	handler := middleware.LoggingMiddleware(
-		middleware.CorsMiddleware(
-			middleware.JsonMiddleware(mux),
+	handler := api.LoggingMiddleware(
+		api.CorsMiddleware(
+			api.JsonMiddleware(mux),
 		),
 	)
 
