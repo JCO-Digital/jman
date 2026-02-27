@@ -48,7 +48,7 @@ func Run() error {
 		// Check if site is ignored
 		isIgnored := slices.Contains(config.Cfg.IgnoreSites, site.Domain)
 		if isIgnored {
-			verbosity.LogPrintf(verbosity.Verbose, "Skipping ignored site: %s\n", site.Domain)
+			verbosity.LogPrintf(verbosity.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}
 
