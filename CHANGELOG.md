@@ -1,3 +1,12 @@
+# [4.5.0](https://github.com/JCO-Digital/jman/compare/v4.4.0...v4.5.0) (2026-02-27)
+
+
+### Features
+
+* **monitor:** log duration of monitoring check ([761f3e4](https://github.com/JCO-Digital/jman/commit/761f3e41d62385d9ad1cd3cdfcb94da84057bc7e))
+
+
+
 # [4.4.0](https://github.com/JCO-Digital/jman/compare/v4.3.0...v4.4.0) (2026-02-26)
 
 
@@ -48,15 +57,6 @@
 ### Features
 
 * **fetch:** support targeting specific resources for cache update ([4116051](https://github.com/JCO-Digital/jman/commit/41160518b7b4e8023ef7e6e99ce793db84a1ddec))
-
-
-
-## [4.0.1](https://github.com/JCO-Digital/jman/compare/v4.0.0...v4.0.1) (2026-02-24)
-
-
-### Bug Fixes
-
-* separate stdout and stderror to allow piping to files. ([6ee0ebd](https://github.com/JCO-Digital/jman/commit/6ee0ebd4a9501a7e605baa6ad827392e070b080f))
 
 
 
