@@ -1,3 +1,12 @@
+# [4.6.0](https://github.com/JCO-Digital/jman/compare/v4.5.0...v4.6.0) (2026-02-27)
+
+
+### Features
+
+* **monitor:** set custom User-Agent header for monitoring requests ([ede2b9b](https://github.com/JCO-Digital/jman/commit/ede2b9b5eef8c3e4fece6fc472bbb5a9c9750a61))
+
+
+
 # [4.5.0](https://github.com/JCO-Digital/jman/compare/v4.4.0...v4.5.0) (2026-02-27)
 
 
@@ -43,20 +52,6 @@
 ### Features
 
 * **fetch:** add support for fetching plugin vulnerabilities ([de08dc5](https://github.com/JCO-Digital/jman/commit/de08dc5e3a863634a6bdb80c4347ac0fff093fa6))
-
-
-
-# [4.1.0](https://github.com/JCO-Digital/jman/compare/v4.0.1...v4.1.0) (2026-02-24)
-
-
-### Bug Fixes
-
-* **wpcli:** improve error reporting ([82a887d](https://github.com/JCO-Digital/jman/commit/82a887d3e173bf3c0ab9ce43a632bcae54816c0e))
-
-
-### Features
-
-* **fetch:** support targeting specific resources for cache update ([4116051](https://github.com/JCO-Digital/jman/commit/41160518b7b4e8023ef7e6e99ce793db84a1ddec))
 
 
 
