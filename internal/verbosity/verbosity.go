@@ -2,6 +2,7 @@ package verbosity
 
 import (
 	"fmt"
+	"log"
 	"os"
 )
 
@@ -107,5 +108,11 @@ func PrintErrorln(minLevel Level, a ...any) {
 func PrintErrorf(minLevel Level, format string, a ...any) {
 	if current >= minLevel {
 		fmt.Fprintf(os.Stderr, format, a...)
+	}
+}
+
+func LogPrintf(minLevel Level, format string, a ...any) {
+	if current >= minLevel {
+		log.Printf(format, a...)
 	}
 }
