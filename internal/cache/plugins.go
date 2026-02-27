@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/JCO-Digital/jman/internal/api/wpvuln"
+	"github.com/JCO-Digital/jman/internal/fetch/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verbosity"
 	"github.com/JCO-Digital/jman/internal/wpcli"
