@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/JCO-Digital/jman/internal/api/spinupwp"
+	"github.com/JCO-Digital/jman/internal/fetch/spinupwp"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verbosity"
 )
