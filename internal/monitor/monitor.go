@@ -62,7 +62,16 @@ func Run() error {
 
 			verbosity.LogPrintf(verbosity.Debug, "Checking %s...\n", domain)
 
-			resp, err := client.Get("https://" + domain)
+			req, err := http.NewRequest(http.MethodGet, "https://"+domain, nil)
+			if err != nil {
+				mu.Lock()
+				status := state.GetStatus(domain)
+				status.FailureCount++
+				mu.Unlock()
+				return
+			}
+			req.Header.Set("User-Agent", "JMan Uptime Monitoring/1.0")
+			resp, err := client.Do(req)
 			isUp := false
 			statusMsg := ""
 
