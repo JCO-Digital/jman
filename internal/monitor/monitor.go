@@ -29,6 +29,8 @@ func Run() error {
 
 	verbosity.LogPrintf(verbosity.Normal, "Monitoring %d sites...\n", len(sites))
 
+	start := time.Now()
+
 	// Monitoring parameters
 	semaphore := make(chan struct{}, 24)
 	var wg sync.WaitGroup
@@ -48,7 +50,7 @@ func Run() error {
 		// Check if site is ignored
 		isIgnored := slices.Contains(config.Cfg.IgnoreSites, site.Domain)
 		if isIgnored {
-			verbosity.LogPrintf(verbosity.Verbose, "Skipping ignored site: %s\n", site.Domain)
+			verbosity.LogPrintf(verbosity.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}
 
@@ -118,6 +120,6 @@ func Run() error {
 		return fmt.Errorf("error saving monitor state: %w", err)
 	}
 
-	verbosity.LogPrintf(verbosity.Verbose, "Monitoring check complete.\n")
+	verbosity.LogPrintf(verbosity.Verbose, "Monitoring check complete in %f seconds.\n", time.Since(start).Seconds())
 	return nil
 }
