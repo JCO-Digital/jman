@@ -384,7 +384,7 @@ func cleanHTML(s string) string {
 // versionCompare compares v1 and v2 using semantic version parsing.
 //
 // If semantic parsing fails for either input, it falls back to lexicographic string compare.
-func versionCompare(v1, v2 string, op string) (bool, error) {
+func versionCompare(v1, v2, op string) (bool, error) {
 	parsed1, err1 := version.NewVersion(v1)
 	parsed2, err2 := version.NewVersion(v2)
 
@@ -402,6 +402,6 @@ func versionCompare(v1, v2 string, op string) (bool, error) {
 	case "lt":
 		return parsed1.LessThan(parsed2), nil
 	default:
-		return parsed1.LessThanOrEqual(parsed2), nil
+		return false, fmt.Errorf("unknown operator: %s", op)
 	}
 }
