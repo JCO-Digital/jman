@@ -1,3 +1,18 @@
+# [4.7.0](https://github.com/JCO-Digital/jman/compare/v4.6.0...v4.7.0) (2026-03-03)
+
+
+### Bug Fixes
+
+* **vuln:** return error for unknown operators in versionCompare ([914cc79](https://github.com/JCO-Digital/jman/commit/914cc790c4212e086bbf12743af8decded985886))
+
+
+### Features
+
+* **api:** add main entry point ([7f8d242](https://github.com/JCO-Digital/jman/commit/7f8d242ac943a8e1256899b87fc07ef9d4fa0d04))
+* **vuln:** enhance version matching and reporting ([2c1aee2](https://github.com/JCO-Digital/jman/commit/2c1aee26be34bbc20733236732ecc49214bfe3c4))
+
+
+
 # [4.6.0](https://github.com/JCO-Digital/jman/compare/v4.5.0...v4.6.0) (2026-02-27)
 
 
@@ -43,15 +58,6 @@
 
 * **api:** add jman-api REST service ([c024dac](https://github.com/JCO-Digital/jman/commit/c024dacde8b84592be8bea94433bb93034f6787c))
 * **search:** add plugin search and case-insensitive site matching ([383789c](https://github.com/JCO-Digital/jman/commit/383789c5136603c58601c4cc7fd39dd06b803300))
-
-
-
-# [4.2.0](https://github.com/JCO-Digital/jman/compare/v4.1.0...v4.2.0) (2026-02-24)
-
-
-### Features
-
-* **fetch:** add support for fetching plugin vulnerabilities ([de08dc5](https://github.com/JCO-Digital/jman/commit/de08dc5e3a863634a6bdb80c4347ac0fff093fa6))
 
 
 
