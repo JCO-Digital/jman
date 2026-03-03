@@ -235,9 +235,16 @@ func ProcessVulnerabilities() ([]models.VulnReport, error) {
 
 			// Add every site whose installed plugin version falls inside [minVer, maxVer].
 			for _, site := range plugin.Sites {
-				if (maxVer == "" || versionCompare(site.Version, maxVer, maxOp)) && versionCompare(site.Version, minVer, minOp) {
-					report.Sites = append(report.Sites, site)
+				if maxVer != "" {
+					if maxTest, _ := versionCompare(site.Version, maxVer, maxOp); !maxTest {
+						continue
+					}
 				}
+				if minTest, _ := versionCompare(site.Version, minVer, minOp); !minTest {
+					continue
+				}
+
+				report.Sites = append(report.Sites, site)
 			}
 
 			// Keep only vulnerabilities that affect at least one known site.
@@ -377,36 +384,24 @@ func cleanHTML(s string) string {
 // versionCompare compares v1 and v2 using semantic version parsing.
 //
 // If semantic parsing fails for either input, it falls back to lexicographic string compare.
-func versionCompare(v1, v2 string, op string) bool {
+func versionCompare(v1, v2 string, op string) (bool, error) {
 	parsed1, err1 := version.NewVersion(v1)
 	parsed2, err2 := version.NewVersion(v2)
 
 	if err1 != nil || err2 != nil {
-		// Fallback to simple string comparison if parsing fails.
-		switch op {
-		case "ge":
-			return v1 >= v2
-		case "le":
-			return v1 <= v2
-		case "gt":
-			return v1 > v2
-		case "lt":
-			return v1 < v2
-		default:
-			return v1 <= v2
-		}
+		return false, fmt.Errorf("failed to parse version: v1=%s v2=%s op=%s", v1, v2, op)
 	}
 
 	switch op {
 	case "ge":
-		return parsed1.GreaterThanOrEqual(parsed2)
+		return parsed1.GreaterThanOrEqual(parsed2), nil
 	case "le":
-		return parsed1.LessThanOrEqual(parsed2)
+		return parsed1.LessThanOrEqual(parsed2), nil
 	case "gt":
-		return parsed1.GreaterThan(parsed2)
+		return parsed1.GreaterThan(parsed2), nil
 	case "lt":
-		return parsed1.LessThan(parsed2)
+		return parsed1.LessThan(parsed2), nil
 	default:
-		return parsed1.LessThanOrEqual(parsed2)
+		return parsed1.LessThanOrEqual(parsed2), nil
 	}
 }
