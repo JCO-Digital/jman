@@ -98,7 +98,15 @@ func listPlugins(site models.CliSite) error {
 
 	verbosity.Printf(verbosity.Normal, "Plugins on %s:\n", site.Name)
 	for _, plugin := range plugins {
-		verbosity.Printf(verbosity.Normal, "- %s (%s) - Version: %s Update: %s\n", plugin.Name, plugin.Status, plugin.Version, plugin.Update)
+		status := ""
+		if plugin.Status != "active" {
+			status += fmt.Sprintf("(%s) ", plugin.Status)
+		}
+		update := ""
+		if plugin.Update != "" {
+			update += fmt.Sprintf("-> %s available", plugin.Update)
+		}
+		verbosity.Printf(verbosity.Normal, "- %s %s%s %s\n", plugin.Name, status, plugin.Version, update)
 	}
 	//verbosity.Printf(verbosity.Normal, "Plugins on %s:\n%s\n", site.Name, plugins)
 	return nil
