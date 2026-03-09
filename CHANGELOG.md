@@ -1,3 +1,12 @@
+# [4.8.0](https://github.com/JCO-Digital/jman/compare/v4.7.0...v4.8.0) (2026-03-09)
+
+
+### Features
+
+* **config:** integrate viper for configuration and environment support ([358d962](https://github.com/JCO-Digital/jman/commit/358d96207f1aaf16747237863ed37950220554b3))
+
+
+
 # [4.7.0](https://github.com/JCO-Digital/jman/compare/v4.6.0...v4.7.0) (2026-03-03)
 
 
@@ -43,21 +52,6 @@
 
 * **monitor:** add site health monitoring tool ([b15ad11](https://github.com/JCO-Digital/jman/commit/b15ad11c38e0d63c4e0f2d30fdec868fd27c8fe0))
 * **update:** add support for updating api and monitor components ([99985b9](https://github.com/JCO-Digital/jman/commit/99985b9d7f49c358f6a01c95467ecf14ce0df573))
-
-
-
-# [4.3.0](https://github.com/JCO-Digital/jman/compare/v4.2.0...v4.3.0) (2026-02-26)
-
-
-### Bug Fixes
-
-* **cache:** filter out non-WordPress sites from site list ([3b2baa8](https://github.com/JCO-Digital/jman/commit/3b2baa849bfd019870d8cb38e4ef8e309274c878))
-
-
-### Features
-
-* **api:** add jman-api REST service ([c024dac](https://github.com/JCO-Digital/jman/commit/c024dacde8b84592be8bea94433bb93034f6787c))
-* **search:** add plugin search and case-insensitive site matching ([383789c](https://github.com/JCO-Digital/jman/commit/383789c5136603c58601c4cc7fd39dd06b803300))
 
 
 
