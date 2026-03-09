@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/adrg/xdg"
-	"github.com/pelletier/go-toml/v2"
+	"github.com/spf13/viper"
 )
 
 const AppName = "jman"
@@ -19,17 +20,17 @@ type Runtime struct {
 	Version   string
 }
 
-// AppConfig represents the user-defined settings mapped from the TOML config file.
+// AppConfig represents the user-defined settings mapped from the config file or environment variables.
 type AppConfig struct {
-	TokenSpinup         string   `toml:"tokenSpinup"`
-	TokenSlack          string   `toml:"slackToken"`
-	SlackChannel        string   `toml:"slackChannel"`
-	SlackMonitorChannel string   `toml:"slackMonitorChannel"`
-	MonitorThreshold    int      `toml:"monitorThreshold"`
-	MonitorTimeout      int      `toml:"monitorTimeout"`
-	CVSSThreshold       float64  `toml:"cvssThreshold"`
-	VulnThreshold       float64  `toml:"vulnThreshold"`
-	IgnoreSites         []string `toml:"ignoreSites"`
+	TokenSpinup         string   `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
+	TokenSlack          string   `toml:"slackToken" mapstructure:"slackToken"`
+	SlackChannel        string   `toml:"slackChannel" mapstructure:"slackChannel"`
+	SlackMonitorChannel string   `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
+	MonitorThreshold    int      `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
+	MonitorTimeout      int      `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
+	CVSSThreshold       float64  `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
+	VulnThreshold       float64  `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	IgnoreSites         []string `toml:"ignoreSites" mapstructure:"ignoreSites"`
 }
 
 var (
@@ -57,30 +58,63 @@ func Init(version string) error {
 	return loadConfig()
 }
 
-// loadConfig reads and parses the TOML configuration file.
+// loadConfig reads and parses the configuration using viper.
 func loadConfig() error {
 	// Set defaults
-	Cfg = AppConfig{
-		SlackChannel:     "#testing",
-		MonitorThreshold: 3,
-		MonitorTimeout:   10,
-		CVSSThreshold:    7.0,
-		VulnThreshold:    7.0,
-		IgnoreSites:      []string{},
+	viper.SetDefault("slackChannel", "#testing")
+	viper.SetDefault("monitorThreshold", 3)
+	viper.SetDefault("monitorTimeout", 10)
+	viper.SetDefault("cvssThreshold", 7.0)
+	viper.SetDefault("vulnThreshold", 7.0)
+	viper.SetDefault("ignoreSites", []string{})
+
+	// Viper configuration
+	viper.SetConfigName("config")
+	viper.SetConfigType("toml")
+	viper.AddConfigPath(RunData.ConfigDir)
+
+	// Environment variables support
+	viper.SetEnvPrefix(strings.ToUpper(AppName))
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	// Explicitly bind environment variables for better control and clarity.
+	// This ensures that environment variables like JMAN_SLACKTOKEN correctly map to the slackToken key.
+	envBindings := map[string]string{
+		"tokenSpinup":         "TOKENSPINUP",
+		"slackToken":          "SLACKTOKEN",
+		"slackChannel":        "SLACKCHANNEL",
+		"slackMonitorChannel": "SLACKMONITORCHANNEL",
+		"monitorThreshold":    "MONITORTHRESHOLD",
+		"monitorTimeout":      "MONITORTIMEOUT",
+		"cvssThreshold":       "CVSSTHRESHOLD",
+		"vulnThreshold":       "VULNTHRESHOLD",
+		"ignoreSites":         "IGNORESITES",
 	}
 
-	configPath := filepath.Join(RunData.ConfigDir, "config.toml")
-
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("config file not found at %s. Please create it and add your credentials", configPath)
+	for key, envVar := range envBindings {
+		if err := viper.BindEnv(key, fmt.Sprintf("%s_%s", strings.ToUpper(AppName), envVar)); err != nil {
+			return fmt.Errorf("failed to bind env var %s for key %s: %w", envVar, key, err)
 		}
-		return fmt.Errorf("failed to read config file: %w", err)
 	}
 
-	if err := toml.Unmarshal(data, &Cfg); err != nil {
-		return fmt.Errorf("failed to parse config file: %w", err)
+	// Read the config file
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// If file is missing, check if required environment variables are set.
+			// At a minimum, TokenSpinup is usually required for the app to be useful.
+			if viper.GetString("tokenSpinup") == "" {
+				configPath := filepath.Join(RunData.ConfigDir, "config.toml")
+				return fmt.Errorf("config file not found at %s and JMAN_TOKENSPINUP environment variable is not set", configPath)
+			}
+		} else {
+			return fmt.Errorf("failed to read config file: %w", err)
+		}
+	}
+
+	// Unmarshal into the Cfg struct
+	if err := viper.Unmarshal(&Cfg); err != nil {
+		return fmt.Errorf("failed to unmarshal configuration: %w", err)
 	}
 
 	return nil
