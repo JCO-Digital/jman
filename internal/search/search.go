@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -86,11 +87,11 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 	}
 
 	verbosity.PrintErrorln(verbosity.Normal, "Found sites:")
-	for _, site := range sites {
-		verbosity.PrintErrorf(verbosity.Quiet, "%s (%s)\n", site.Name, site.ServerName)
+	for i, site := range sites {
+		verbosity.PrintErrorf(verbosity.Quiet, "[%d] %s (%s)\n", i+1, site.Name, site.ServerName)
 	}
 
-	verbosity.PrintErrorf(verbosity.Quiet, "Do you want to continue? [Y/n]: ")
+	verbosity.PrintErrorf(verbosity.Quiet, "Enter numbers separated by space (empty for all, 'n' to cancel): ")
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
@@ -98,9 +99,26 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 	}
 
 	response = strings.TrimSpace(strings.ToLower(response))
-	if response == "" || response == "y" || response == "yes" {
+	if response == "" {
 		return sites, nil
 	}
 
-	return []models.CliSite{}, nil
+	if response == "n" || response == "no" {
+		return []models.CliSite{}, nil
+	}
+
+	parts := strings.Fields(response)
+	var selected []models.CliSite
+	for _, part := range parts {
+		idx, err := strconv.Atoi(part)
+		if err != nil {
+			return nil, fmt.Errorf("invalid selection: %s", part)
+		}
+		if idx < 1 || idx > len(sites) {
+			return nil, fmt.Errorf("selection out of range: %d", idx)
+		}
+		selected = append(selected, sites[idx-1])
+	}
+
+	return selected, nil
 }
