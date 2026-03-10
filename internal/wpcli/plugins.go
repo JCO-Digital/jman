@@ -82,22 +82,33 @@ type UpdateResult struct {
 	Status     string `json:"status"`
 }
 
-func UpdatePlugin(ssh, path, plugin string) error {
-	cmd := fmt.Sprintf("plugin update %s --format=json", plugin)
+func UpdatePlugin(ssh, path, pluginList string) (int, error) {
+	cmd := fmt.Sprintf("plugin update %s --format=json", pluginList)
 	res, err := RunWP(ssh, path, cmd, true)
 	if err != nil {
-		return fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
+		return 0, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
 	var updates []UpdateResult
 	if err := json.Unmarshal([]byte(res.Output), &updates); err != nil {
-		return fmt.Errorf("failed to parse update result: %w", err)
+		return 0, fmt.Errorf("failed to parse update result: %w", err)
 	}
-	if len(updates) == 0 {
-		return fmt.Errorf("Failed to update '%s'.\n", plugin)
+	updated := 0
+	for _, update := range updates {
+		if update.Status == "Updated" {
+			updated++
+			verbosity.Printf(verbosity.Normal, "Updated %s from %s to %s\n", update.Name, update.OldVersion, update.NewVersion)
+		} else {
+			verbosity.Printf(verbosity.Normal, "Failed to update %s: %s\n", update.Name, update.Status)
+		}
 	}
-	if updates[0].Status != "Updated" {
-		return fmt.Errorf("Failed to update '%s'. Status: %s\n", plugin, updates[0].Status)
+	return updated, nil
+}
+
+func RemovePlugin(ssh, path, plugin string) (bool, error) {
+	cmd := fmt.Sprintf("plugin uninstall %s --deactivate", plugin)
+	res, err := RunWP(ssh, path, cmd, true)
+	if err != nil {
+		return false, fmt.Errorf("failed to remove plugin: %w (stderr: %s)", err, res.Error)
 	}
-	verbosity.Printf(verbosity.Verbose, "Updated to %s\n", updates[0].NewVersion)
-	return nil
+	return strings.Contains(res.Output, "Success: Uninstalled"), nil
 }
