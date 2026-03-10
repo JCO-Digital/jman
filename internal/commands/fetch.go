@@ -65,7 +65,7 @@ var fetchCmd = &cobra.Command{
 					if err != nil {
 						return fmt.Errorf("error fetching vulnerabilities: %w", err)
 					}
-					verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d vulnerabilities.\n", len(*&response.Data.Vulnerability))
+					verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d vulnerabilities.\n", len(response.Data.Vulnerability))
 				}
 			}
 		}
