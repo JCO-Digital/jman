@@ -30,9 +30,9 @@ var modsCmd = &cobra.Command{
 			verbosity.Printf(verbosity.Verbose, "Setting DISALLOW_FILE_MODS on %s...\n", site.Name)
 			err := wpcli.SetDisallowFileMods(site.SSH, site.Path, true)
 			if err != nil {
-				verbosity.Printf(verbosity.Verbose, "Error setting DISALLOW_FILE_MODS for %s: %v\n", site.Name, err)
+				verbosity.Printf(verbosity.Normal, "Error setting DISALLOW_FILE_MODS for %s: %v\n", site.Name, err)
 			} else {
-				verbosity.Printf(verbosity.Verbose, "Successfully set DISALLOW_FILE_MODS for %s.\n", site.Name)
+				verbosity.Printf(verbosity.Normal, "Successfully set DISALLOW_FILE_MODS for %s.\n", site.Name)
 			}
 		}
 
