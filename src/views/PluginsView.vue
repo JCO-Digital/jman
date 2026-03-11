@@ -83,10 +83,14 @@ const goToPlugin = (name: string) => {
 </script>
 
 <template>
-	<div class="plugins-view">
+	<div class="view-container">
 		<header class="header">
 			<h1>Plugins Management</h1>
-			<button class="refresh-btn" @click="refreshData" :disabled="isLoading">
+			<button
+				class="btn btn-primary"
+				@click="refreshData"
+				:disabled="isLoading"
+			>
 				<span
 					v-if="isLoading"
 					class="spinner spinner-small"
@@ -113,7 +117,7 @@ const goToPlugin = (name: string) => {
 		</div>
 
 		<main class="table-container">
-			<table class="plugin-table">
+			<table class="data-table sortable">
 				<thead>
 					<tr>
 						<th @click="handleSort('name')">
@@ -187,141 +191,5 @@ const goToPlugin = (name: string) => {
 </template>
 
 <style scoped>
-.plugins-view {
-	max-width: 1200px;
-	width: 95%;
-	margin: 0 auto;
-	padding: 20px;
-}
-
-.header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 24px;
-}
-
-.header h1 {
-	margin: 0;
-	font-size: 24px;
-}
-
-.error-banner {
-	background-color: var(--error-bg);
-	border-left: 4px solid var(--error-border);
-	color: var(--error-text);
-	padding: 12px 16px;
-	margin-bottom: 20px;
-	border-radius: 4px;
-}
-
-.error-banner p {
-	margin: 0;
-}
-
-.refresh-btn {
-	padding: 8px 16px;
-	background-color: var(--primary);
-	color: var(--primary-text);
-	border: none;
-	border-radius: 4px;
-	cursor: pointer;
-	font-weight: 500;
-}
-
-.refresh-btn:hover {
-	background-color: var(--primary-hover);
-}
-
-.controls {
-	margin-bottom: 20px;
-}
-
-.search-input {
-	width: 100%;
-	max-width: 400px;
-	padding: 10px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 14px;
-}
-
-.table-container {
-	background: var(--bg-card);
-	border: 1px solid var(--border-color);
-	border-radius: 8px;
-	overflow: hidden;
-}
-
-.plugin-table {
-	width: 100%;
-	border-collapse: collapse;
-	text-align: left;
-}
-
-.plugin-table th,
-.plugin-table td {
-	padding: 12px 16px;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.plugin-table th {
-	background-color: var(--bg-table-header);
-	font-weight: 600;
-	color: var(--text-table-header);
-	cursor: pointer;
-}
-
-.plugin-table th:hover {
-	background-color: var(--bg-hover);
-}
-
-.empty-state {
-	text-align: center;
-	padding: 32px !important;
-	color: var(--text-muted);
-}
-
-.clickable-row {
-	cursor: pointer;
-}
-
-.clickable-row:hover td {
-	background-color: var(--bg-hover);
-}
-
-.pagination {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 12px 16px;
-	background-color: var(--bg-table-header);
-	border-top: 1px solid var(--border-color);
-}
-
-.rows-per-page select {
-	margin-left: 8px;
-	padding: 4px;
-}
-
-.page-controls {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.page-controls button {
-	padding: 6px 12px;
-	border: 1px solid var(--border-input);
-	background-color: var(--bg-card);
-	border-radius: 4px;
-	cursor: pointer;
-	color: var(--text-main);
-}
-
-.page-controls button:disabled {
-	background-color: var(--bg-disabled);
-	color: var(--text-disabled);
-	cursor: not-allowed;
-}
+/* All generic styles moved to style.css */
 </style>
