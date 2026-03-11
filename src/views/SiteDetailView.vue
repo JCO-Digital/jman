@@ -24,7 +24,7 @@ const goBack = () => {
 const goToPlugin = (name: string) => {
 	router.push({
 		name: "plugin-detail",
-		params: { name: encodeURIComponent(name) },
+		params: { name },
 	});
 };
 </script>

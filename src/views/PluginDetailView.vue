@@ -10,7 +10,7 @@ const props = defineProps<{
 const router = useRouter();
 const { plugins, sites, isLoading } = useData();
 
-const pluginName = computed(() => decodeURIComponent(props.name));
+const pluginName = computed(() => props.name);
 
 const sitesWithPlugin = computed(() => {
 	const name = pluginName.value;
