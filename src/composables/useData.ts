@@ -17,9 +17,9 @@ const error = ref<string | null>(null);
 export function useData() {
 	const loadFromCache = (): boolean => {
 		try {
-			const cachedServers = localStorage.getItem(CACHE_KEY_SERVERS);
-			const cachedSites = localStorage.getItem(CACHE_KEY_SITES);
-			const cachedPlugins = localStorage.getItem(CACHE_KEY_PLUGINS);
+			const cachedServers = sessionStorage.getItem(CACHE_KEY_SERVERS);
+			const cachedSites = sessionStorage.getItem(CACHE_KEY_SITES);
+			const cachedPlugins = sessionStorage.getItem(CACHE_KEY_PLUGINS);
 
 			if (cachedServers && cachedSites && cachedPlugins) {
 				servers.value = JSON.parse(cachedServers);
@@ -56,9 +56,9 @@ export function useData() {
 			sites.value = sitesData;
 			plugins.value = pluginsData;
 
-			localStorage.setItem(CACHE_KEY_SERVERS, JSON.stringify(serversData));
-			localStorage.setItem(CACHE_KEY_SITES, JSON.stringify(sitesData));
-			localStorage.setItem(CACHE_KEY_PLUGINS, JSON.stringify(pluginsData));
+			sessionStorage.setItem(CACHE_KEY_SERVERS, JSON.stringify(serversData));
+			sessionStorage.setItem(CACHE_KEY_SITES, JSON.stringify(sitesData));
+			sessionStorage.setItem(CACHE_KEY_PLUGINS, JSON.stringify(pluginsData));
 
 			isLoaded.value = true;
 		} catch (e: any) {

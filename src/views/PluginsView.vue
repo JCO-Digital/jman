@@ -2,56 +2,48 @@
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { useData } from "../composables/useData";
-import type { Site } from "../types";
 
 const router = useRouter();
-const { sites, servers, plugins, isLoading, error, refreshData } = useData();
+const { plugins, isLoading, error, refreshData } = useData();
 
 const searchQuery = ref("");
-const sortKey = ref<keyof Site | "server" | "plugins">("domain");
+const sortKey = ref<"name" | "count">("name");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(1);
 const rowsPerPage = ref(50);
 
-const getServerName = (serverId: number) => {
-	const server = servers.value.find((s) => s.id === serverId);
-	return server ? server.name : "Unknown";
-};
-
-const getPluginCount = (siteId: number) => {
-	return plugins.value.filter((p) => p.site_id === siteId).length;
-};
-
-const handleSort = (key: string) => {
+const handleSort = (key: "name" | "count") => {
 	if (sortKey.value === key) {
 		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
 	} else {
-		sortKey.value = key as any;
+		sortKey.value = key;
 		sortOrder.value = "asc";
 	}
 };
 
-const filteredAndSortedSites = computed(() => {
-	let result = sites.value;
+const uniquePlugins = computed(() => {
+	const pluginMap = new Map<string, number>();
+
+	plugins.value.forEach((p) => {
+		const count = pluginMap.get(p.name) || 0;
+		pluginMap.set(p.name, count + 1);
+	});
+
+	let result = Array.from(pluginMap.entries()).map(([name, count]) => ({
+		name,
+		count,
+	}));
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
-		result = result.filter((site) => {
-			return site.domain.toLowerCase().includes(query);
-		});
+		result = result.filter((p) => p.name.toLowerCase().includes(query));
 	}
 
-	result = [...result].sort((a, b) => {
-		let valA: any = a[sortKey.value as keyof Site];
-		let valB: any = b[sortKey.value as keyof Site];
+	result.sort((a, b) => {
+		let valA: any = a[sortKey.value];
+		let valB: any = b[sortKey.value];
 
-		if (sortKey.value === "server") {
-			valA = getServerName(a.server_id).toLowerCase();
-			valB = getServerName(b.server_id).toLowerCase();
-		} else if (sortKey.value === "plugins") {
-			valA = getPluginCount(a.id);
-			valB = getPluginCount(b.id);
-		} else if (typeof valA === "string") {
+		if (typeof valA === "string") {
 			valA = valA.toLowerCase();
 			valB = valB.toLowerCase();
 		}
@@ -65,13 +57,13 @@ const filteredAndSortedSites = computed(() => {
 });
 
 const totalPages = computed(
-	() => Math.ceil(filteredAndSortedSites.value.length / rowsPerPage.value) || 1,
+	() => Math.ceil(uniquePlugins.value.length / rowsPerPage.value) || 1,
 );
 
-const paginatedSites = computed(() => {
+const paginatedPlugins = computed(() => {
 	const start = (currentPage.value - 1) * rowsPerPage.value;
 	const end = start + rowsPerPage.value;
-	return filteredAndSortedSites.value.slice(start, end);
+	return uniquePlugins.value.slice(start, end);
 });
 
 const prevPage = () => {
@@ -82,15 +74,18 @@ const nextPage = () => {
 	if (currentPage.value < totalPages.value) currentPage.value++;
 };
 
-const goToSite = (id: number) => {
-	router.push({ name: "site-detail", params: { id: id.toString() } });
+const goToPlugin = (name: string) => {
+	router.push({
+		name: "plugin-detail",
+		params: { name },
+	});
 };
 </script>
 
 <template>
 	<div class="view-container">
 		<header class="header">
-			<h1>Site Management</h1>
+			<h1>Plugins Management</h1>
 			<button
 				class="btn btn-primary"
 				@click="refreshData"
@@ -114,9 +109,10 @@ const goToSite = (id: number) => {
 		<div class="controls">
 			<input
 				type="text"
-				placeholder="Search sites by name or URL..."
+				placeholder="Search plugins by name..."
 				class="search-input"
 				v-model="searchQuery"
+				@input="currentPage = 1"
 			/>
 		</div>
 
@@ -124,50 +120,43 @@ const goToSite = (id: number) => {
 			<table class="data-table sortable">
 				<thead>
 					<tr>
-						<th @click="handleSort('domain')">
-							Site Name
-							<span v-if="sortKey === 'domain'">{{
+						<th @click="handleSort('name')">
+							Plugin Name
+							<span v-if="sortKey === 'name'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('server')">
-							Server
-							<span v-if="sortKey === 'server'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th @click="handleSort('plugins')">
-							Plugins
-							<span v-if="sortKey === 'plugins'">{{
+						<th @click="handleSort('count')">
+							Installed on Sites
+							<span v-if="sortKey === 'count'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="isLoading && sites.length === 0">
-						<td colspan="3" class="empty-state">
+					<tr v-if="isLoading && plugins.length === 0">
+						<td colspan="2" class="empty-state">
 							<div class="spinner" style="margin-bottom: 12px"></div>
 							<div>Loading data...</div>
 						</td>
 					</tr>
-					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="3" class="empty-state">
+					<tr v-else-if="paginatedPlugins.length === 0">
+						<td colspan="2" class="empty-state">
 							<span v-if="searchQuery"
-								>No sites found matching "{{ searchQuery }}".</span
+								>No plugins found matching "{{ searchQuery }}".</span
 							>
-							<span v-else>No sites available.</span>
+							<span v-else>No plugins available.</span>
 						</td>
 					</tr>
 					<tr
-						v-for="site in paginatedSites"
-						:key="site.id"
+						v-for="plugin in paginatedPlugins"
+						:key="plugin.name"
 						class="clickable-row"
-						@click="goToSite(site.id)"
+						@click="goToPlugin(plugin.name)"
 					>
-						<td>{{ site.domain }}</td>
-						<td>{{ getServerName(site.server_id) }}</td>
-						<td>{{ getPluginCount(site.id) }}</td>
+						<td>{{ plugin.name }}</td>
+						<td>{{ plugin.count }}</td>
 					</tr>
 				</tbody>
 			</table>
