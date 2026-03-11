@@ -4,103 +4,85 @@ import { useRouter } from "vue-router";
 import { useData } from "../composables/useData";
 
 const props = defineProps<{
-	id: string;
+	name: string;
 }>();
 
 const router = useRouter();
-const { getSiteById, getServerById, getPluginsBySiteId, isLoading } = useData();
+const { plugins, sites, isLoading } = useData();
 
-const siteId = parseInt(props.id, 10);
-const site = getSiteById(siteId);
-const server = computed(() =>
-	site.value ? getServerById(site.value.server_id).value : null,
-);
-const sitePlugins = getPluginsBySiteId(siteId);
+const pluginName = computed(() => decodeURIComponent(props.name));
+
+const sitesWithPlugin = computed(() => {
+	const name = pluginName.value;
+	return plugins.value
+		.filter((p) => p.name === name)
+		.map((p) => {
+			const site = sites.value.find((s) => s.id === p.site_id);
+			return {
+				...p,
+				site_domain: site ? site.domain : "Unknown Site",
+				site_id: p.site_id,
+			};
+		})
+		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
+});
 
 const goBack = () => {
-	router.push({ name: "home" });
+	router.push({ name: "plugins" });
 };
 
-const goToPlugin = (name: string) => {
-	router.push({
-		name: "plugin-detail",
-		params: { name: encodeURIComponent(name) },
-	});
+const goToSite = (siteId: number) => {
+	router.push({ name: "site-detail", params: { id: siteId.toString() } });
 };
 </script>
 
 <template>
-	<div class="site-detail-view">
+	<div class="plugin-detail-view">
 		<header class="header">
 			<div class="title-area">
-				<button class="back-btn" @click="goBack">&larr; Back to Sites</button>
-				<h1>Site Details</h1>
+				<button class="back-btn" @click="goBack">&larr; Back to Plugins</button>
+				<h1>Plugin Details</h1>
 			</div>
 		</header>
 
-		<main class="content" v-if="site">
+		<main class="content" v-if="sitesWithPlugin.length > 0">
 			<section class="card">
-				<h2>Site Information</h2>
+				<h2>Plugin Information</h2>
 				<div class="info-grid">
 					<div class="info-item">
-						<span class="label">Site ID:</span>
-						<span class="value">{{ site.id }}</span>
+						<span class="label">Plugin Name:</span>
+						<span class="value">{{ pluginName }}</span>
 					</div>
 					<div class="info-item">
-						<span class="label">Domain:</span>
-						<span class="value">{{ site.domain }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">PHP Version:</span>
-						<span class="value">{{ site.php_version }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">Status:</span>
-						<span class="value">{{ site.status }}</span>
-					</div>
-				</div>
-			</section>
-
-			<section class="card" v-if="server">
-				<h2>Server Information</h2>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Server Name:</span>
-						<span class="value">{{ server.name }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">IP Address:</span>
-						<span class="value">{{ server.ip_address }}</span>
+						<span class="label">Total Installations:</span>
+						<span class="value">{{ sitesWithPlugin.length }}</span>
 					</div>
 				</div>
 			</section>
 
 			<section class="card">
-				<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
+				<h2>Installed on Sites</h2>
 				<div class="table-container">
-					<table class="plugin-table">
+					<table class="install-table">
 						<thead>
 							<tr>
-								<th>Plugin Name</th>
+								<th>Site Domain</th>
 								<th>Version</th>
 								<th>Status</th>
 							</tr>
 						</thead>
 						<tbody>
-							<tr v-if="sitePlugins.length === 0">
-								<td colspan="3" class="empty-state">No plugins found.</td>
-							</tr>
 							<tr
-								v-for="plugin in sitePlugins"
-								:key="plugin.name"
+								v-for="item in sitesWithPlugin"
+								:key="item.site_id"
 								class="clickable-row"
-								@click="goToPlugin(plugin.name)"
+								@click="goToSite(item.site_id)"
 							>
-								<td>{{ plugin.name }}</td>
-								<td>{{ plugin.version }}</td>
+								<td>{{ item.site_domain }}</td>
+								<td>{{ item.version }}</td>
 								<td>
-									<span :class="['status-badge', plugin.status.toLowerCase()]">
-										{{ plugin.status }}
+									<span :class="['status-badge', item.status.toLowerCase()]">
+										{{ item.status }}
 									</span>
 								</td>
 							</tr>
@@ -109,16 +91,17 @@ const goToPlugin = (name: string) => {
 				</div>
 			</section>
 		</main>
+
 		<main class="content" v-else>
 			<div class="card">
 				<div v-if="isLoading" class="empty-state">
 					<div class="spinner" style="margin-bottom: 12px"></div>
-					<div>Loading site details...</div>
+					<div>Loading plugin details...</div>
 				</div>
 				<div v-else class="empty-state">
-					<p>Site not found.</p>
+					<p>Plugin details not found or plugin is not installed on any sites.</p>
 					<button class="back-btn" @click="goBack" style="margin-top: 16px">
-						Go back to sites
+						Go back to plugins
 					</button>
 				</div>
 			</div>
@@ -127,7 +110,7 @@ const goToPlugin = (name: string) => {
 </template>
 
 <style scoped>
-.site-detail-view {
+.plugin-detail-view {
 	max-width: 1000px;
 	width: 95%;
 	margin: 0 auto;
@@ -187,7 +170,7 @@ const goToPlugin = (name: string) => {
 
 .info-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 	gap: 16px;
 }
 
@@ -210,37 +193,28 @@ const goToPlugin = (name: string) => {
 	color: var(--text-heading);
 }
 
-.placeholder {
-	color: var(--text-placeholder);
-	font-style: italic;
-}
-
 .table-container {
 	border: 1px solid var(--border-color);
 	border-radius: 6px;
 	overflow: hidden;
 }
 
-.plugin-table {
+.install-table {
 	width: 100%;
 	border-collapse: collapse;
 	text-align: left;
 }
 
-.plugin-table th,
-.plugin-table td {
+.install-table th,
+.install-table td {
 	padding: 10px 16px;
 	border-bottom: 1px solid var(--border-color);
 }
 
-.plugin-table th {
+.install-table th {
 	background-color: var(--bg-table-header);
 	font-weight: 600;
 	color: var(--text-table-header);
-}
-
-.plugin-table tbody tr:last-child td {
-	border-bottom: none;
 }
 
 .clickable-row {
@@ -249,12 +223,6 @@ const goToPlugin = (name: string) => {
 
 .clickable-row:hover td {
 	background-color: var(--bg-hover);
-}
-
-.empty-state {
-	text-align: center;
-	padding: 24px !important;
-	color: var(--text-muted);
 }
 
 .status-badge {
@@ -279,13 +247,9 @@ const goToPlugin = (name: string) => {
 	color: var(--badge-inactive-text);
 }
 
-.status-badge.must-use {
-	background-color: var(--badge-must-use-bg);
-	color: var(--badge-must-use-text);
-}
-
-.status-badge.drop-in {
-	background-color: var(--badge-drop-in-bg);
-	color: var(--badge-drop-in-text);
+.empty-state {
+	text-align: center;
+	padding: 24px;
+	color: var(--text-muted);
 }
 </style>

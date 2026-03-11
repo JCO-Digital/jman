@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { RouterView } from "vue-router";
+import { RouterView, RouterLink, useRoute } from "vue-router";
 import { useData } from "./composables/useData";
 import packageInfo from "../package.json";
 
+const route = useRoute();
 const { initData } = useData();
 initData();
 
@@ -11,6 +12,28 @@ const version = packageInfo.version;
 
 <template>
 	<div class="app-container">
+		<nav class="app-nav">
+			<div class="nav-container">
+				<RouterLink
+					to="/"
+					class="nav-item"
+					:class="{
+						active: route.name === 'home' || route.name === 'site-detail',
+					}"
+				>
+					Sites
+				</RouterLink>
+				<RouterLink
+					to="/plugins"
+					class="nav-item"
+					:class="{
+						active: route.name === 'plugins' || route.name === 'plugin-detail',
+					}"
+				>
+					Plugins
+				</RouterLink>
+			</div>
+		</nav>
 		<div class="main-content">
 			<RouterView />
 		</div>
@@ -43,6 +66,38 @@ body {
 	flex: 1;
 	display: flex;
 	flex-direction: column;
+}
+
+.app-nav {
+	background-color: var(--bg-card);
+	border-bottom: 1px solid var(--border-color);
+	padding: 0 20px;
+}
+
+.nav-container {
+	max-width: 1200px;
+	margin: 0 auto;
+	display: flex;
+	gap: 24px;
+}
+
+.nav-item {
+	padding: 16px 4px;
+	color: var(--text-muted);
+	text-decoration: none;
+	font-weight: 500;
+	font-size: 14px;
+	border-bottom: 2px solid transparent;
+	transition: all 0.2s ease;
+}
+
+.nav-item:hover {
+	color: var(--text-main);
+}
+
+.nav-item.active {
+	color: var(--primary);
+	border-bottom-color: var(--primary);
 }
 
 .app-footer {
