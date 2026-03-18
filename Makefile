@@ -8,6 +8,9 @@ build: clean prepare bin/jman bin/jman-api bin/jman-monitor
 bin/jman:
 	go build -ldflags="$(LDFLAGS)" -o bin/jman ./cmd/jman
 
+bin/jman.exe:
+	GOOS=windows go build -ldflags="$(LDFLAGS)" -o bin/jman.exe ./cmd/jman
+
 bin/jman-api:
 	go build -ldflags="$(LDFLAGS)" -o bin/jman-api ./cmd/jman-api
 

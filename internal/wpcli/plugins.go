@@ -12,7 +12,7 @@ import (
 
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite) ([]models.WPPlugin, error) {
-	res, err := RunWP(site.SSH, site.Path, "plugin list --format=json", true)
+	res, err := RunWP(site.SSH, site.Path, true, "plugin", "list", "--format=json")
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return nil, fmt.Errorf("not a WordPress site")
@@ -58,12 +58,11 @@ func GetPlugins(site models.CliSite) ([]models.WPPlugin, error) {
 
 // AddPlugin installs and optionally activates a plugin.
 func AddPlugin(ssh, path, plugin string, activate bool) (bool, error) {
-	activateFlag := ""
+	args := []string{"plugin", "install", plugin}
 	if activate {
-		activateFlag = "--activate"
+		args = append(args, "--activate")
 	}
-	cmd := fmt.Sprintf("plugin install %s %s", plugin, activateFlag)
-	res, err := RunWP(ssh, path, cmd, true)
+	res, err := RunWP(ssh, path, true, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -82,9 +81,17 @@ type UpdateResult struct {
 	Status     string `json:"status"`
 }
 
-func UpdatePlugin(ssh, path, pluginList string) (int, error) {
-	cmd := fmt.Sprintf("plugin update %s --format=json", pluginList)
-	res, err := RunWP(ssh, path, cmd, true)
+// UpdatePlugin updates one or more plugins.
+func UpdatePlugin(ssh, path string, plugins []string) (int, error) {
+	if len(plugins) == 0 {
+		return 0, nil
+	}
+
+	args := []string{"plugin", "update"}
+	args = append(args, plugins...)
+	args = append(args, "--format=json")
+
+	res, err := RunWP(ssh, path, true, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
@@ -104,9 +111,9 @@ func UpdatePlugin(ssh, path, pluginList string) (int, error) {
 	return updated, nil
 }
 
+// RemovePlugin uninstalls and deactivates a plugin.
 func RemovePlugin(ssh, path, plugin string) (bool, error) {
-	cmd := fmt.Sprintf("plugin uninstall %s --deactivate", plugin)
-	res, err := RunWP(ssh, path, cmd, true)
+	res, err := RunWP(ssh, path, true, "plugin", "uninstall", plugin, "--deactivate")
 	if err != nil {
 		return false, fmt.Errorf("failed to remove plugin: %w (stderr: %s)", err, res.Error)
 	}

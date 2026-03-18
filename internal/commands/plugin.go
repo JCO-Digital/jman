@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
@@ -13,8 +12,8 @@ import (
 
 var pluginCmd = &cobra.Command{
 	Use:   "plugin <target> [list|install|update|remove] <plugin-name>",
-	Short: "Install a plugin on target sites.",
-	Long:  "Install a plugin on target sites. Supports WordPress.org slugs or custom repo URLs.",
+	Short: "Plugin actions on target sites.",
+	Long:  "List, install, update or remove plugins on target sites. Supports WordPress.org slugs or custom repo URLs.",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  pluginCommand,
 }
@@ -157,9 +156,7 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 	}
 	verbosity.Printf(verbosity.Normal, "Updating %d plugins on %s...\n", len(toUpdate), site.Name)
 
-	pluginList := strings.Join(toUpdate, " ")
-
-	updated, err := wpcli.UpdatePlugin(site.SSH, site.Path, pluginList)
+	updated, err := wpcli.UpdatePlugin(site.SSH, site.Path, toUpdate)
 
 	verbosity.Printf(verbosity.Verbose, "Updated %d plugins on %s.\n", updated, site.Name)
 
