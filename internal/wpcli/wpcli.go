@@ -12,35 +12,56 @@ type RunResult struct {
 	Error  string
 }
 
-// RunWP executes a wp-cli command via SSH.
-func RunWP(ssh, path, command string, skip bool) (RunResult, error) {
+// RunWP executes a wp-cli command. If ssh is provided, it runs via SSH.
+// It uses variadic arguments to avoid shell injection and quoting issues.
+func RunWP(ssh, path string, skip bool, args ...string) (RunResult, error) {
 	if _, err := exec.LookPath("wp"); err != nil {
 		return RunResult{}, fmt.Errorf("wp-cli executable not found in PATH")
 	}
 
-	skipArgs := ""
-	if skip {
-		skipArgs = "--skip-plugins --skip-themes "
+	var fullArgs []string
+	if ssh != "" {
+		fullArgs = append(fullArgs, fmt.Sprintf("--ssh=%s", ssh))
+	}
+	if path != "" {
+		fullArgs = append(fullArgs, fmt.Sprintf("--path=%s", path))
 	}
 
-	fullCmd := fmt.Sprintf("wp --ssh=%s --path=%s %s %s", ssh, path, skipArgs, command)
-	cmd := exec.Command("sh", "-c", fullCmd)
+	if skip {
+		fullArgs = append(fullArgs, "--skip-plugins", "--skip-themes")
+	}
+
+	fullArgs = append(fullArgs, args...)
+
+	cmd := exec.Command("wp", fullArgs...)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 
 	err := cmd.Run()
-	return RunResult{
+	res := RunResult{
 		Output: outBuf.String(),
 		Error:  errBuf.String(),
-	}, err
+	}
+
+	// If cmd.Run() returned an error (non-zero exit code), we return it.
+	if err != nil {
+		return res, err
+	}
+
+	// wp-cli sometimes exits with 0 even on certain failures (like connection errors),
+	// so we check stderr for the "Error:" prefix to detect these cases.
+	if strings.Contains(res.Error, "Error:") {
+		return res, fmt.Errorf("wp-cli error: %s", strings.TrimSpace(res.Error))
+	}
+
+	return res, nil
 }
 
 // AddUser creates a new user on the target WordPress site.
 func AddUser(ssh, path, username, email, role string) (string, error) {
-	cmd := fmt.Sprintf("user create %s %s --role=%s", username, email, role)
-	res, err := RunWP(ssh, path, cmd, true)
+	res, err := RunWP(ssh, path, true, "user", "create", username, email, "--role="+role)
 	if err != nil {
 		return "", fmt.Errorf("failed to add user: %w (stderr: %s)", err, res.Error)
 	}
@@ -56,8 +77,7 @@ func AddUser(ssh, path, username, email, role string) (string, error) {
 
 // ResetUserPassword resets the password for a given user.
 func ResetUserPassword(ssh, path, username string) (string, error) {
-	cmd := fmt.Sprintf("user reset-password %s --porcelain", username)
-	res, err := RunWP(ssh, path, cmd, true)
+	res, err := RunWP(ssh, path, true, "user", "reset-password", username, "--porcelain")
 	if err != nil {
 		return "", fmt.Errorf("failed to reset password: %w (stderr: %s)", err, res.Error)
 	}
@@ -70,7 +90,6 @@ func SetDisallowFileMods(ssh, path string, value bool) error {
 	if value {
 		valStr = "true"
 	}
-	cmd := fmt.Sprintf("config set --raw DISALLOW_FILE_MODS %s", valStr)
-	_, err := RunWP(ssh, path, cmd, true)
+	_, err := RunWP(ssh, path, true, "config", "set", "--raw", "DISALLOW_FILE_MODS", valStr)
 	return err
 }

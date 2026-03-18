@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verbosity"
@@ -16,7 +15,6 @@ var wpCmd = &cobra.Command{
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target := args[0]
-		wpArgs := strings.Join(args[1:], " ")
 
 		sites, err := search.PromptSearch(target)
 		if err != nil {
@@ -30,7 +28,7 @@ var wpCmd = &cobra.Command{
 
 		for _, site := range sites {
 			verbosity.Printf(verbosity.Verbose, "\n=== %s (%s) ===\n", site.Name, site.ServerName)
-			res, err := wpcli.RunWP(site.SSH, site.Path, wpArgs, false)
+			res, err := wpcli.RunWP(site.SSH, site.Path, false, args[1:]...)
 
 			if res.Output != "" {
 				verbosity.Println(verbosity.Quiet, res.Output)
