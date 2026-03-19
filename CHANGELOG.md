@@ -1,3 +1,12 @@
+## [4.10.1](https://github.com/JCO-Digital/jman/compare/v4.10.0...v4.10.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* **wpcli:** Disable skip in RunWP for plugin actions ([bbededb](https://github.com/JCO-Digital/jman/commit/bbededbe96173cfc436948d8cfd35eb468db278f))
+
+
+
 # [4.10.0](https://github.com/JCO-Digital/jman/compare/v4.9.0...v4.10.0) (2026-03-19)
 
 
@@ -56,15 +65,6 @@
 
 * **api:** add main entry point ([7f8d242](https://github.com/JCO-Digital/jman/commit/7f8d242ac943a8e1256899b87fc07ef9d4fa0d04))
 * **vuln:** enhance version matching and reporting ([2c1aee2](https://github.com/JCO-Digital/jman/commit/2c1aee26be34bbc20733236732ecc49214bfe3c4))
-
-
-
-# [4.6.0](https://github.com/JCO-Digital/jman/compare/v4.5.0...v4.6.0) (2026-02-27)
-
-
-### Features
-
-* **monitor:** set custom User-Agent header for monitoring requests ([ede2b9b](https://github.com/JCO-Digital/jman/commit/ede2b9b5eef8c3e4fece6fc472bbb5a9c9750a61))
 
 
 
