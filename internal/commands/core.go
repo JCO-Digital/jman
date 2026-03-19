@@ -34,7 +34,7 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(sites) == 0 {
-		fmt.Println("Operation cancelled or no sites matched.")
+		verbosity.Println(verbosity.Normal, "Operation cancelled or no sites matched.")
 		return nil
 	}
 
