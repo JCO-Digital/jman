@@ -44,13 +44,20 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		updated := 0
 		for _, site := range sites {
 			verbosity.Printf(verbosity.Verbose, "Checking WordPress core on %s...\n", site.Name)
-			hasUpdate, err := wpcli.CheckCore(site.SSH, site.Path)
+			coreUpdates, err := wpcli.CheckCore(site.SSH, site.Path)
 			if err != nil {
 				verbosity.PrintErrorf(verbosity.Normal, "Error checking core on %s: %v\n", site.Name, err)
 				continue
 			}
-			if hasUpdate {
-				verbosity.Printf(verbosity.Normal, "Update available for %s.\n", site.Name)
+			if len(coreUpdates) > 0 {
+				currentVersion, err := wpcli.CoreVersion(site.SSH, site.Path)
+				if err != nil {
+					verbosity.PrintErrorf(verbosity.Normal, "Error getting current core version on %s: %v\n", site.Name, err)
+					continue
+				}
+				for _, update := range coreUpdates {
+					verbosity.Printf(verbosity.Normal, "Update available for %s: %s -> %s (%s)\n", site.Name, currentVersion, update.Version, update.UpdateType)
+				}
 				updates++
 			} else {
 				verbosity.Printf(verbosity.Verbose, "WordPress core is up to date on %s.\n", site.Name)
