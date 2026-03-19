@@ -10,11 +10,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 )
 
-// Version is injected by the build flags
-var Version = "dev"
-
 func main() {
-	if err := config.Init(Version); err != nil {
+	if err := config.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
 		os.Exit(1)
 	}
@@ -27,7 +24,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Register API routes from the internal/api package
-	api.RegisterHandlers(mux, Version)
+	api.RegisterHandlers(mux, config.AppVersion)
 
 	// Wrap mux with middleware
 	handler := api.LoggingMiddleware(
@@ -36,7 +33,7 @@ func main() {
 		),
 	)
 
-	log.Printf("Starting jman-api (version: %s) on :%s", Version, port)
+	log.Printf("Starting jman-api (version: %s) on :%s", config.AppVersion, port)
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
