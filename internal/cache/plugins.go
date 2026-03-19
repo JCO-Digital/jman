@@ -6,7 +6,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/fetch/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
@@ -51,10 +51,10 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 			defer func() { <-sem }()
 			sitePlugins, err := wpcli.GetPlugins(site)
 			if err != nil {
-				verbosity.PrintErrorf(verbosity.Normal, "Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
+				verb.PrintErrorf(verb.Normal, "Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
 				return
 			}
-			verbosity.PrintErrorf(verbosity.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
+			verb.PrintErrorf(verb.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
 
 			mu.Lock()
 			plugins = append(plugins, sitePlugins...)
@@ -67,7 +67,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 
 	if updated {
 		if err := WriteJSONCache("plugins", plugins); err != nil {
-			verbosity.PrintErrorf(verbosity.Normal, "Warning: failed to write plugins cache: %v\n", err)
+			verb.PrintErrorf(verb.Normal, "Warning: failed to write plugins cache: %v\n", err)
 		}
 	}
 
@@ -124,14 +124,14 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 		}
 	}
 
-	verbosity.Printf(verbosity.Verbose, "Fetching vulnerabilities for %s\n", plugin)
+	verb.Printf(verb.Verbose, "Fetching vulnerabilities for %s\n", plugin)
 	newVulnData, err := wpvuln.GetVulnerabilities(plugin)
 	if err != nil {
 		return nil, err
 	}
 
 	if err := WriteJSONCache(filename, newVulnData); err != nil {
-		verbosity.PrintErrorf(verbosity.Normal, "Warning: failed to write vulnerability cache for %s: %v\n", plugin, err)
+		verb.PrintErrorf(verb.Normal, "Warning: failed to write vulnerability cache for %s: %v\n", plugin, err)
 	}
 
 	return newVulnData, nil

@@ -7,7 +7,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/update"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
 
@@ -29,7 +29,7 @@ var updateCmd = &cobra.Command{
 		}
 
 		currentVersion := config.RunData.Version
-		verbosity.Printf(verbosity.Normal, "Current jman version: %s\n", currentVersion)
+		verb.Printf(verb.Normal, "Current jman version: %s\n", verb.Blue(currentVersion))
 
 		// Use a dummy version if running in dev to see what the latest version is
 		checkVersion := currentVersion
@@ -44,20 +44,20 @@ var updateCmd = &cobra.Command{
 
 		if component == "jman" {
 			if currentVersion == "dev" {
-				fmt.Println("You are running a development version of jman.")
+				fmt.Println(verb.Yellow("You are running a development version of jman."))
 				if latestVersion != "" {
-					verbosity.Printf(verbosity.Verbose, "The latest stable version is: %s\n", latestVersion)
+					verb.Printf(verb.Verbose, "The latest stable version is: %s\n", verb.Blue(latestVersion))
 				}
 				return nil
 			}
 
 			if !available {
-				verbosity.Println(verbosity.Normal, "You are running the latest version of jman.")
+				verb.Println(verb.Normal, verb.Green("You are running the latest version of jman."))
 				return nil
 			}
 
-			verbosity.Printf(verbosity.Normal, "\nA new version of jman is available: %s\n", latestVersion)
-			verbosity.Printf(verbosity.Quiet, "\nWould you like to download and install it? [y/N]: ")
+			verb.Printf(verb.Normal, "\nA new version of jman is available: %s\n", verb.Green(latestVersion))
+			verb.Printf(verb.Quiet, "\n%s? [y/N]: ", verb.Bold("Would you like to download and install it"))
 
 			var response string
 			fmt.Scanln(&response)
@@ -71,9 +71,9 @@ var updateCmd = &cobra.Command{
 
 			execPath, _ := os.Executable()
 			binDir := filepath.Dir(execPath)
-			fmt.Printf("\nLatest version of %s is %s.\n", component, latestVersion)
-			fmt.Printf("This will download %s to %s and overwrite any existing version.\n", component, binDir)
-			fmt.Print("Proceed? [y/N]: ")
+			fmt.Printf("\nLatest version of %s is %s.\n", verb.Blue(component), verb.Green(latestVersion))
+			fmt.Printf("This will download %s to %s and overwrite any existing version.\n", verb.Blue(component), verb.Gray(binDir))
+			fmt.Printf("%s? [y/N]: ", verb.Bold("Proceed"))
 
 			var response string
 			fmt.Scanln(&response)
@@ -82,12 +82,12 @@ var updateCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println("\nDownloading...")
+		fmt.Printf("\n%s...\n", verb.Cyan("Downloading"))
 		if err := update.DownloadAndReplace(releaseURL, component); err != nil {
 			return fmt.Errorf("update failed: %w", err)
 		}
 
-		verbosity.Printf(verbosity.Verbose, "Successfully updated %s to %s\n", component, latestVersion)
+		verb.Printf(verb.Verbose, "Successfully updated %s to %s\n", verb.Blue(component), verb.Green(latestVersion))
 		if component == "jman" {
 			os.Exit(0)
 		}

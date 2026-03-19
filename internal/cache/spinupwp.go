@@ -6,7 +6,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/fetch/spinupwp"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // GetCachedServers retrieves servers from the cache or fetches them from the API if expired/missing.
@@ -21,14 +21,14 @@ func GetCachedServers() ([]models.Server, error) {
 
 // RefreshCachedServers fetches servers from the API and updates the cache.
 func RefreshCachedServers() ([]models.Server, error) {
-	verbosity.PrintErrorln(verbosity.Normal, "Fetching servers from SpinupWP API...")
+	verb.PrintErrorln(verb.Normal, "Fetching servers from SpinupWP API...")
 	servers, err := spinupwp.GetServers()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %w", err)
 	}
 
 	if err := WriteJSONCache("servers", servers); err != nil {
-		verbosity.PrintErrorf(verbosity.Verbose, "Warning: Failed to write servers cache: %v\n", err)
+		verb.PrintErrorf(verb.Verbose, "Warning: Failed to write servers cache: %v\n", err)
 	}
 
 	return servers, nil
@@ -46,14 +46,14 @@ func GetCachedSites() ([]models.Site, error) {
 
 // RefreshCachedSites fetches sites from the API and updates the cache.
 func RefreshCachedSites() ([]models.Site, error) {
-	verbosity.PrintErrorln(verbosity.Normal, "Fetching sites from SpinupWP API...")
+	verb.PrintErrorln(verb.Normal, "Fetching sites from SpinupWP API...")
 	sites, err := spinupwp.GetSites()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sites: %w", err)
 	}
 
 	if err := WriteJSONCache("sites", sites); err != nil {
-		verbosity.PrintErrorf(verbosity.Verbose, "Warning: Failed to write sites cache: %v\n", err)
+		verb.PrintErrorf(verb.Verbose, "Warning: Failed to write sites cache: %v\n", err)
 	}
 
 	return sites, nil

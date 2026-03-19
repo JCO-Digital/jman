@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // jsonMiddleware ensures Content-Type is set, except if an error was already returned in plain text (though we use plain text for simplicity in errors above, we can set default to json).
@@ -38,7 +38,7 @@ func LoggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		ww := &responseWriter{w, http.StatusOK}
 		next.ServeHTTP(ww, r)
-		verbosity.LogPrintf(verbosity.Normal, "%s %s %d %s", r.Method, r.URL.Path, ww.statusCode, time.Since(start))
+		verb.LogPrintf(verb.Normal, "%s %s %d %s", r.Method, r.URL.Path, ww.statusCode, time.Since(start))
 	})
 }
 

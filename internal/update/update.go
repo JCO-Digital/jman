@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/hashicorp/go-version"
 )
 
@@ -50,10 +50,10 @@ func (pr *progressReader) print() {
 		if pct != pr.lastPct {
 			pr.lastPct = pct
 			totalMB := float64(pr.total) / (1024 * 1024)
-			verbosity.Printf(verbosity.Verbose, "\r  Downloading: %3d%%  (%.1f / %.1f MB)", pct, readMB, totalMB)
+			verb.Printf(verb.Verbose, "\r  Downloading: %3d%%  (%.1f / %.1f MB)", pct, readMB, totalMB)
 		}
 	} else {
-		verbosity.Printf(verbosity.Verbose, "\r  Downloading: %.1f MB", readMB)
+		verb.Printf(verb.Verbose, "\r  Downloading: %.1f MB", readMB)
 	}
 }
 
