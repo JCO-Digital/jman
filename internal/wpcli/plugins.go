@@ -12,7 +12,7 @@ import (
 
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite) ([]models.WPPlugin, error) {
-	res, err := RunWP(site.SSH, site.Path, true, "plugin", "list", "--format=json")
+	res, err := RunWP(site.SSH, site.Path, false, "plugin", "list", "--format=json")
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
 			return nil, fmt.Errorf("not a WordPress site")
@@ -62,7 +62,7 @@ func AddPlugin(ssh, path, plugin string, activate bool) (bool, error) {
 	if activate {
 		args = append(args, "--activate")
 	}
-	res, err := RunWP(ssh, path, true, args...)
+	res, err := RunWP(ssh, path, false, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -91,7 +91,7 @@ func UpdatePlugin(ssh, path string, plugins []string) (int, error) {
 	args = append(args, plugins...)
 	args = append(args, "--format=json")
 
-	res, err := RunWP(ssh, path, true, args...)
+	res, err := RunWP(ssh, path, false, args...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
@@ -113,7 +113,7 @@ func UpdatePlugin(ssh, path string, plugins []string) (int, error) {
 
 // RemovePlugin uninstalls and deactivates a plugin.
 func RemovePlugin(ssh, path, plugin string) (bool, error) {
-	res, err := RunWP(ssh, path, true, "plugin", "uninstall", plugin, "--deactivate")
+	res, err := RunWP(ssh, path, false, "plugin", "uninstall", plugin, "--deactivate")
 	if err != nil {
 		return false, fmt.Errorf("failed to remove plugin: %w (stderr: %s)", err, res.Error)
 	}

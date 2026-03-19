@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+
+	"github.com/JCO-Digital/jman/internal/verbosity"
 )
 
 type RunResult struct {
@@ -44,6 +46,8 @@ func RunWP(ssh, path string, skip bool, args ...string) (RunResult, error) {
 		Output: outBuf.String(),
 		Error:  errBuf.String(),
 	}
+
+	verbosity.Printf(verbosity.Debug, "Command output:\n%s\n\nError output:\n%s", res.Output, res.Error)
 
 	// If cmd.Run() returned an error (non-zero exit code), we return it.
 	if err != nil {
