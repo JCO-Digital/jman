@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 
-	"github.com/JCO-Digital/jman/internal/ansi"
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
@@ -58,9 +57,9 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 				}
 				for _, update := range coreUpdates {
 					verb.Printf(verb.Normal, "Update available for %s: %s -> %s (%s)\n",
-						ansi.Blue(site.Name),
-						ansi.Yellow(currentVersion),
-						ansi.Green(update.Version),
+						verb.Blue(site.Name),
+						verb.Yellow(currentVersion),
+						verb.Green(update.Version),
 						update.UpdateType,
 					)
 				}

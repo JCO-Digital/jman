@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/JCO-Digital/jman/internal/ansi"
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -89,10 +88,10 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 
 	verb.PrintErrorln(verb.Normal, "Found sites:")
 	for i, site := range sites {
-		verb.PrintErrorf(verb.Quiet, "[%d] %s %s\n", i+1, ansi.Blue(site.Name), ansi.Gray("("+site.ServerName+")"))
+		verb.PrintErrorf(verb.Quiet, "[%d] %s %s\n", i+1, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 	}
 
-	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", ansi.Bold("Enter numbers separated by space"))
+	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", verb.Bold("Enter numbers separated by space"))
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
