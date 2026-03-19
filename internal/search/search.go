@@ -10,7 +10,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // SearchSites filters the site list based on the provided query string
@@ -86,12 +86,12 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 		return nil, fmt.Errorf("no sites found")
 	}
 
-	verbosity.PrintErrorln(verbosity.Normal, "Found sites:")
+	verb.PrintErrorln(verb.Normal, "Found sites:")
 	for i, site := range sites {
-		verbosity.PrintErrorf(verbosity.Quiet, "[%d] %s (%s)\n", i+1, site.Name, site.ServerName)
+		verb.PrintErrorf(verb.Quiet, "[%d] %s %s\n", i+1, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 	}
 
-	verbosity.PrintErrorf(verbosity.Quiet, "Enter numbers separated by space (empty for all, 'n' to cancel): ")
+	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", verb.Bold("Enter numbers separated by space"))
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {

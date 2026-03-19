@@ -6,7 +6,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/search"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -103,7 +103,7 @@ func createAllAliases(registry map[string]any) error {
 	for _, site := range sites {
 		serverInfo, ok := serverInfoMap[site.ServerID]
 		if !ok {
-			verbosity.Printf(verbosity.Verbose, "Warning: Server not found for site %s (server_id: %d)\n", site.Domain, site.ServerID)
+			verb.Printf(verb.Verbose, "Warning: Server not found for site %s (server_id: %d)\n", site.Domain, site.ServerID)
 			continue
 		}
 

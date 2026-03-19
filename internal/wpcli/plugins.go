@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // GetPlugins returns a list of installed plugins on the target site.
@@ -103,9 +103,9 @@ func UpdatePlugin(ssh, path string, plugins []string) (int, error) {
 	for _, update := range updates {
 		if update.Status == "Updated" {
 			updated++
-			verbosity.Printf(verbosity.Normal, "Updated %s from %s to %s\n", update.Name, update.OldVersion, update.NewVersion)
+			verb.Printf(verb.Normal, "Updated %s from %s to %s\n", update.Name, update.OldVersion, update.NewVersion)
 		} else {
-			verbosity.Printf(verbosity.Normal, "Failed to update %s: %s\n", update.Name, update.Status)
+			verb.Printf(verb.Normal, "Failed to update %s: %s\n", update.Name, update.Status)
 		}
 	}
 	return updated, nil

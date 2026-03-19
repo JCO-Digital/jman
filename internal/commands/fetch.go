@@ -5,7 +5,7 @@ import (
 	"slices"
 
 	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,7 @@ var fetchCmd = &cobra.Command{
 		}
 
 		if slices.Contains([]string{"servers", "sites", "basic", "all"}, target) {
-			verbosity.PrintErrorln(verbosity.Normal, "Fetching latest data from SpinupWP...")
+			verb.PrintErrorln(verb.Normal, "Fetching latest data from SpinupWP...")
 		}
 
 		if slices.Contains([]string{"servers", "basic", "all"}, target) {
@@ -27,7 +27,7 @@ var fetchCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("error fetching servers: %w", err)
 			}
-			verbosity.PrintErrorf(verbosity.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
+			verb.PrintErrorf(verb.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
 		}
 
 		if slices.Contains([]string{"sites", "basic", "all"}, target) {
@@ -35,7 +35,7 @@ var fetchCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("error fetching sites: %w", err)
 			}
-			verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
+			verb.Printf(verb.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
 		}
 
 		fetchPlugins := slices.Contains([]string{"plugins", "all"}, target)
@@ -43,14 +43,14 @@ var fetchCmd = &cobra.Command{
 
 		if fetchPlugins || fetchVulns {
 			if fetchPlugins {
-				verbosity.Print(verbosity.Verbose, "Fetching plugins.")
+				verb.Print(verb.Verbose, "Fetching plugins.")
 			}
 			plugins, err := cache.GetCachedPlugins(fetchPlugins)
 			if err != nil {
 				return fmt.Errorf("error fetching plugins: %w", err)
 			}
 			if fetchPlugins {
-				verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d plugins.\n", len(plugins))
+				verb.Printf(verb.Verbose, "Successfully fetched and cached %d plugins.\n", len(plugins))
 			}
 
 			if fetchVulns {
@@ -59,18 +59,18 @@ var fetchCmd = &cobra.Command{
 				for _, plugin := range plugins {
 					pluginList[plugin.Name] = true
 				}
-				verbosity.Printf(verbosity.Normal, "Fetching vulnerabilities for %d plugins.\n", len(pluginList))
+				verb.Printf(verb.Normal, "Fetching vulnerabilities for %d plugins.\n", len(pluginList))
 				for plugin, _ := range pluginList {
 					response, err := cache.GetCachedVulnerabilities(plugin, true)
 					if err != nil {
 						return fmt.Errorf("error fetching vulnerabilities: %w", err)
 					}
-					verbosity.Printf(verbosity.Verbose, "Successfully fetched and cached %d vulnerabilities.\n", len(response.Data.Vulnerability))
+					verb.Printf(verb.Verbose, "Successfully fetched and cached %d vulnerabilities.\n", len(response.Data.Vulnerability))
 				}
 			}
 		}
 
-		verbosity.PrintErrorln(verbosity.Normal, "Cache update complete.")
+		verb.PrintErrorln(verb.Normal, "Cache update complete.")
 		return nil
 	},
 }

@@ -7,7 +7,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // RegisterHandlers registers all API routes to the provided mux.
@@ -78,6 +78,6 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 // WriteJSON is a helper to encode data as JSON to the response writer.
 func WriteJSON(w http.ResponseWriter, data any) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		verbosity.LogPrintf(verbosity.Normal, "Error encoding JSON: %v", err)
+		verb.LogPrintf(verb.Normal, "Error encoding JSON: %v", err)
 	}
 }
