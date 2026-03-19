@@ -10,7 +10,6 @@ var (
 	flagQuiet   bool
 	flagVerbose bool
 	flagDebug   bool
-	flagVersion bool
 )
 
 var rootCmd = &cobra.Command{
@@ -18,17 +17,7 @@ var rootCmd = &cobra.Command{
 	Short: "A CLI tool for managing WordPress projects",
 	Long:  `jman is a command-line utility designed to manage WordPress sites hosted on SpinupWP.`,
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		// If no subcommand is provided, show the help message
-		if !flagVersion {
-			cmd.Help()
-		}
-	},
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if flagVersion {
-			verbosity.PrintErrorf(verbosity.Quiet, "jman version %s\n", config.RunData.Version)
-			return nil
-		}
 
 		switch {
 		case flagDebug:
@@ -56,10 +45,9 @@ func init() {
 	rootCmd.PersistentFlags().BoolVarP(&flagQuiet, "quiet", "q", false, "suppress all non-essential output")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false, "enable additional informational output")
 	rootCmd.PersistentFlags().BoolVarP(&flagDebug, "debug", "d", false, "enable detailed debug output")
-
-	rootCmd.PersistentFlags().BoolVar(&flagVersion, "version", false, "show version information")
-
 	rootCmd.MarkFlagsMutuallyExclusive("quiet", "verbose", "debug")
+
+	rootCmd.Version = config.AppVersion
 
 	// Hide the default completion command
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true
