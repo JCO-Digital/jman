@@ -12,6 +12,8 @@ import (
 
 const AppName = "jman"
 
+var AppVersion = "dev"
+
 // Runtime holds the dynamic paths and version information for the application.
 type Runtime struct {
 	ConfigDir string
@@ -39,12 +41,11 @@ var (
 )
 
 // Init sets up the application runtime directories and loads the configuration.
-func Init(version string) error {
+func Init() error {
 	RunData = Runtime{
 		ConfigDir: filepath.Join(xdg.ConfigHome, AppName),
 		CacheDir:  filepath.Join(xdg.CacheHome, AppName),
 		DataDir:   filepath.Join(xdg.DataHome, AppName),
-		Version:   version,
 	}
 
 	// Ensure directories exist
