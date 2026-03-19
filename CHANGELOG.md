@@ -1,3 +1,23 @@
+# [4.10.0](https://github.com/JCO-Digital/jman/compare/v4.9.0...v4.10.0) (2026-03-19)
+
+
+### Bug Fixes
+
+* RunWP better error handling ([c602704](https://github.com/JCO-Digital/jman/commit/c602704d25a279acd50fa4b2067cedb3e3e1273f))
+* **verbosity:** Use verbosity.Println for cancelled operation message ([6d6409e](https://github.com/JCO-Digital/jman/commit/6d6409ee05e47508341e4635f91923b56960c70d))
+* **wpcli:** Make update regex multiline aware ([6bff80b](https://github.com/JCO-Digital/jman/commit/6bff80bdf5d19497ec5368439c690dfec2fb35b6))
+* **wpcli:** Print update core output verbosely ([30c9aac](https://github.com/JCO-Digital/jman/commit/30c9aac071a970ecdd83045ead075c3f60e4e066))
+* **wpcli:** Use strings.SplitSeq for error splitting ([13de961](https://github.com/JCO-Digital/jman/commit/13de96132f51d1e68965778e3b6ea83e7ab3b2eb))
+
+
+### Features
+
+* **core:** Command to check core for updates and to update. ([cde24be](https://github.com/JCO-Digital/jman/commit/cde24beb85d88e4347d527021897e9fc3a10a76b))
+* **core:** improve core check, update, and version commands ([31fb77a](https://github.com/JCO-Digital/jman/commit/31fb77a36843aa51bcdfa392cd1784b2db68c9fc))
+* **wpcli:** Enhance core update check output ([10a8406](https://github.com/JCO-Digital/jman/commit/10a84068ca6b47348ecb03d72d65d65ed64c14ee))
+
+
+
 # [4.9.0](https://github.com/JCO-Digital/jman/compare/v4.8.0...v4.9.0) (2026-03-10)
 
 
@@ -45,15 +65,6 @@
 ### Features
 
 * **monitor:** set custom User-Agent header for monitoring requests ([ede2b9b](https://github.com/JCO-Digital/jman/commit/ede2b9b5eef8c3e4fece6fc472bbb5a9c9750a61))
-
-
-
-# [4.5.0](https://github.com/JCO-Digital/jman/compare/v4.4.0...v4.5.0) (2026-02-27)
-
-
-### Features
-
-* **monitor:** log duration of monitoring check ([761f3e4](https://github.com/JCO-Digital/jman/commit/761f3e41d62385d9ad1cd3cdfcb94da84057bc7e))
 
 
 
