@@ -1,6 +1,7 @@
 package wpcli
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -8,19 +9,31 @@ import (
 	"github.com/JCO-Digital/jman/internal/verbosity"
 )
 
-// Check WordPress core for updates and display the current version and available updates if any.
-func CheckCore(ssh, path string) (bool, error) {
-	res, err := RunWP(ssh, path, true, "core", "check-update")
+// CoreUpdate represents a WordPress core update notification from wp-cli.
+type CoreUpdate struct {
+	Version    string `json:"version"`
+	UpdateType string `json:"update_type"`
+	PackageURL string `json:"package_url"`
+}
+
+// Check WordPress core for updates and return the available updates if any.
+func CheckCore(ssh, path string) ([]CoreUpdate, error) {
+	res, err := RunWP(ssh, path, true, "core", "check-update", "--format=json")
 	if err != nil {
-		return false, fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
-	}
-	if strings.TrimSpace(res.Output) == "Success: WordPress is at the latest version." {
-		verbosity.Println(verbosity.Verbose, "WordPress core is up to date.")
-		return false, nil
+		return nil, fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
 	}
 
-	verbosity.Print(verbosity.Normal, res.Output)
-	return true, nil
+	output := strings.TrimSpace(res.Output)
+	if output == "" || output == "[]" {
+		return nil, nil
+	}
+
+	var updates []CoreUpdate
+	if err := json.Unmarshal([]byte(output), &updates); err != nil {
+		return nil, fmt.Errorf("failed to parse core update JSON: %w", err)
+	}
+
+	return updates, nil
 }
 
 var updateRegex = regexp.MustCompile(`^Updating to version [0-9.-]+ \([^)]+\)...`)
