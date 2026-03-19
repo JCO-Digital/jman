@@ -8,7 +8,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 const APIBaseURL = "https://api.spinupwp.app/v1"
@@ -29,7 +29,7 @@ type spinupResponse[T any] struct {
 
 // makeRequest handles the HTTP request and decoding for paginated resources.
 func makeRequest[T any](endpoint string) ([]T, *Pagination, error) {
-	verbosity.Printf(verbosity.Verbose, "Making a GET request to %s\n", endpoint)
+	verb.Printf(verb.Verbose, "Making a GET request to %s\n", endpoint)
 
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 	if err != nil {

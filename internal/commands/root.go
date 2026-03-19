@@ -2,7 +2,7 @@ package commands
 
 import (
 	"github.com/JCO-Digital/jman/internal/config"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
 
@@ -21,17 +21,17 @@ var rootCmd = &cobra.Command{
 
 		switch {
 		case flagDebug:
-			verbosity.Set(verbosity.Debug)
+			verb.Set(verb.Debug)
 		case flagVerbose:
-			verbosity.Set(verbosity.Verbose)
+			verb.Set(verb.Verbose)
 		case flagQuiet:
-			verbosity.Set(verbosity.Quiet)
+			verb.Set(verb.Quiet)
 		default:
-			verbosity.Set(verbosity.Normal)
+			verb.Set(verb.Normal)
 		}
 
-		verbosity.PrintErrorf(verbosity.Verbose, "Version: %s\n", config.RunData.Version)
-		verbosity.PrintErrorf(verbosity.Debug, "Verbosity: %s\n", verbosity.Get())
+		verb.PrintErrorf(verb.Verbose, "Version: %s\n", config.RunData.Version)
+		verb.PrintErrorf(verb.Debug, "Verbosity: %s\n", verb.Get())
 		return nil
 	},
 }

@@ -5,7 +5,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
@@ -37,7 +37,7 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 	switch operation {
 	case "list":
 		if pluginName != "" {
-			verbosity.Printf(verbosity.Verbose, "Plugin name '%s' will be ignored for 'list' operation.\n", pluginName)
+			verb.Printf(verb.Verbose, "Plugin name '%s' will be ignored for 'list' operation.\n", pluginName)
 		}
 	case "install", "remove":
 		if pluginName == "" {
@@ -60,34 +60,34 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 		case "list":
 			err := listPlugins(site)
 			if err != nil {
-				verbosity.Printf(verbosity.Verbose, "Error listing plugins on %s: %v\n", site.Name, err)
+				verb.Printf(verb.Verbose, "Error listing plugins on %s: %v\n", site.Name, err)
 				continue
 			}
 		case "update":
 			updateErr := updatePlugin(site, pluginName)
 			if updateErr != nil {
-				verbosity.Printf(verbosity.Verbose, "Error updating plugin on %s: %v\n", site.Name, updateErr)
+				verb.Printf(verb.Verbose, "Error updating plugin on %s: %v\n", site.Name, updateErr)
 				continue
 			}
 		case "remove":
 			err := removePlugin(site, pluginName)
 			if err != nil {
-				verbosity.Printf(verbosity.Verbose, "Error removing plugin from %s: %v\n", site.Name, err)
+				verb.Printf(verb.Verbose, "Error removing plugin from %s: %v\n", site.Name, err)
 				continue
 			}
 		case "install":
-			verbosity.Printf(verbosity.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
+			verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
 			success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
 
 			if err != nil {
-				verbosity.Printf(verbosity.Verbose, "Error installing plugin on %s: %v\n", site.Name, err)
+				verb.Printf(verb.Verbose, "Error installing plugin on %s: %v\n", site.Name, err)
 				continue
 			}
 
 			if success {
-				verbosity.Printf(verbosity.Normal, "Successfully installed and activated '%s' on %s.\n", pluginName, site.Name)
+				verb.Printf(verb.Normal, "Successfully installed and activated '%s' on %s.\n", pluginName, site.Name)
 			} else {
-				verbosity.Printf(verbosity.Normal, "Failed to install '%s' on %s. (It might already be installed)\n", pluginName, site.Name)
+				verb.Printf(verb.Normal, "Failed to install '%s' on %s. (It might already be installed)\n", pluginName, site.Name)
 			}
 		}
 	}
@@ -96,18 +96,18 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 }
 
 func listPlugins(site models.CliSite) error {
-	verbosity.Printf(verbosity.Verbose, "Listing plugins on %s (%s)...\n", site.Name, site.ServerName)
+	verb.Printf(verb.Verbose, "Listing plugins on %s (%s)...\n", site.Name, site.ServerName)
 	plugins, err := wpcli.GetPlugins(site)
 	if err != nil {
 		return fmt.Errorf("failed to get plugins: %w", err)
 	}
 
 	if len(plugins) == 0 {
-		verbosity.Printf(verbosity.Normal, "No plugins found on %s.\n", site.Name)
+		verb.Printf(verb.Normal, "No plugins found on %s.\n", site.Name)
 		return nil
 	}
 
-	verbosity.Printf(verbosity.Normal, "Plugins on %s:\n", site.Name)
+	verb.Printf(verb.Normal, "Plugins on %s:\n", site.Name)
 	for _, plugin := range plugins {
 		status := ""
 		if plugin.Status != "active" {
@@ -117,9 +117,9 @@ func listPlugins(site models.CliSite) error {
 		if plugin.Update != "" {
 			update += fmt.Sprintf("-> %s available", plugin.Update)
 		}
-		verbosity.Printf(verbosity.Normal, "- %s %s%s %s\n", plugin.Name, status, plugin.Version, update)
+		verb.Printf(verb.Normal, "- %s %s%s %s\n", plugin.Name, status, plugin.Version, update)
 	}
-	//verbosity.Printf(verbosity.Normal, "Plugins on %s:\n%s\n", site.Name, plugins)
+	//verb.Printf(verb.Normal, "Plugins on %s:\n%s\n", site.Name, plugins)
 	return nil
 }
 
@@ -127,7 +127,7 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 	if pluginName == "" {
 		pluginName = "all"
 	}
-	verbosity.Printf(verbosity.Verbose, "Updating '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
+	verb.Printf(verb.Verbose, "Updating '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
 
 	plugins, err := getPluginUpdates(site)
 	if err != nil {
@@ -135,10 +135,10 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 	}
 
 	if len(plugins) == 0 {
-		verbosity.Printf(verbosity.Normal, "No plugins to update on %s.\n", site.Name)
+		verb.Printf(verb.Normal, "No plugins to update on %s.\n", site.Name)
 		return nil
 	}
-	verbosity.Printf(verbosity.Normal, "Found %d plugins with updates available:\n", len(plugins))
+	verb.Printf(verb.Normal, "Found %d plugins with updates available:\n", len(plugins))
 
 	var toUpdate []string
 	for _, plugin := range plugins {
@@ -148,20 +148,20 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 		} else {
 			toUpdate = append(toUpdate, plugin.Name)
 		}
-		verbosity.Printf(verbosity.Normal, "- %s (%s -> %s)%s\n", plugin.Name, plugin.Version, plugin.Update, selected)
+		verb.Printf(verb.Normal, "- %s (%s -> %s)%s\n", plugin.Name, plugin.Version, plugin.Update, selected)
 	}
 	if len(toUpdate) == 0 {
-		verbosity.Printf(verbosity.Normal, "No matching plugins to update on %s.\n", site.Name)
+		verb.Printf(verb.Normal, "No matching plugins to update on %s.\n", site.Name)
 		return nil
 	}
-	verbosity.Printf(verbosity.Normal, "Updating %d plugins on %s...\n", len(toUpdate), site.Name)
+	verb.Printf(verb.Normal, "Updating %d plugins on %s...\n", len(toUpdate), site.Name)
 
 	updated, err := wpcli.UpdatePlugin(site.SSH, site.Path, toUpdate)
 
-	verbosity.Printf(verbosity.Verbose, "Updated %d plugins on %s.\n", updated, site.Name)
+	verb.Printf(verb.Verbose, "Updated %d plugins on %s.\n", updated, site.Name)
 
 	if err != nil {
-		verbosity.Printf(verbosity.Normal, "Error updating plugins\n")
+		verb.Printf(verb.Normal, "Error updating plugins\n")
 	}
 
 	return nil
@@ -182,16 +182,16 @@ func getPluginUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 }
 
 func removePlugin(site models.CliSite, pluginName string) error {
-	verbosity.Printf(verbosity.Verbose, "Removing '%s' from %s (%s)...\n", pluginName, site.Name, site.ServerName)
+	verb.Printf(verb.Verbose, "Removing '%s' from %s (%s)...\n", pluginName, site.Name, site.ServerName)
 	success, err := wpcli.RemovePlugin(site.SSH, site.Path, pluginName)
 	if err != nil {
 		return fmt.Errorf("failed to remove plugin: %w", err)
 	}
 
 	if success {
-		verbosity.Printf(verbosity.Normal, "Successfully removed '%s' from %s.\n", pluginName, site.Name)
+		verb.Printf(verb.Normal, "Successfully removed '%s' from %s.\n", pluginName, site.Name)
 	} else {
-		verbosity.Printf(verbosity.Normal, "Failed to remove '%s' from %s. (It might not be installed)\n", pluginName, site.Name)
+		verb.Printf(verb.Normal, "Failed to remove '%s' from %s. (It might not be installed)\n", pluginName, site.Name)
 	}
 	return nil
 }

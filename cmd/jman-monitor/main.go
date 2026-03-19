@@ -7,7 +7,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/monitor"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 var (
@@ -25,11 +25,11 @@ func main() {
 
 	// Set verbosity
 	if flagDebug {
-		verbosity.Set(verbosity.Debug)
+		verb.Set(verb.Debug)
 	} else if flagVerbose {
-		verbosity.Set(verbosity.Verbose)
+		verb.Set(verb.Verbose)
 	} else {
-		verbosity.Set(verbosity.Normal)
+		verb.Set(verb.Normal)
 	}
 
 	// Initialize config
@@ -40,7 +40,7 @@ func main() {
 
 	// Run monitor
 	if err := monitor.Run(); err != nil {
-		verbosity.Printf(verbosity.Normal, "%v\n", err)
+		verb.Printf(verb.Normal, "%v\n", err)
 		os.Exit(1)
 	}
 }

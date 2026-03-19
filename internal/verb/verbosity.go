@@ -1,4 +1,4 @@
-package verbosity
+package verb
 
 import (
 	"fmt"

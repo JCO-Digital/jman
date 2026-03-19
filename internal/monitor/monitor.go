@@ -10,7 +10,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/slack"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // Run checks all configured sites and sends alerts if they are down.
@@ -27,7 +27,7 @@ func Run() error {
 		return fmt.Errorf("error fetching sites: %w", err)
 	}
 
-	verbosity.LogPrintf(verbosity.Normal, "Monitoring %d sites...\n", len(sites))
+	verb.LogPrintf(verb.Normal, "Monitoring %d sites...\n", len(sites))
 
 	start := time.Now()
 
@@ -50,7 +50,7 @@ func Run() error {
 		// Check if site is ignored
 		isIgnored := slices.Contains(config.Cfg.IgnoreSites, site.Domain)
 		if isIgnored {
-			verbosity.LogPrintf(verbosity.Debug, "Skipping ignored site: %s\n", site.Domain)
+			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}
 
@@ -60,7 +60,7 @@ func Run() error {
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			verbosity.LogPrintf(verbosity.Debug, "Checking %s...\n", domain)
+			verb.LogPrintf(verb.Debug, "Checking %s...\n", domain)
 
 			req, err := http.NewRequest(http.MethodGet, "https://"+domain, nil)
 			if err != nil {
@@ -95,26 +95,26 @@ func Run() error {
 				if status.IsDown {
 					// Site came back up
 					msg := fmt.Sprintf("✅ Site %s is back up.", domain)
-					verbosity.LogPrintf(verbosity.Normal, "%s\n", msg)
+					verb.LogPrintf(verb.Normal, "%s\n", msg)
 					_ = slack.SendMessageToChannel(msg, slackChannel, true)
 				}
 				state.RemoveStatus(domain)
 			} else {
 				status.FailureCount++
-				verbosity.LogPrintf(verbosity.Verbose, "Site %s failure count: %d (%s)\n", domain, status.FailureCount, statusMsg)
+				verb.LogPrintf(verb.Verbose, "Site %s failure count: %d (%s)\n", domain, status.FailureCount, statusMsg)
 
 				if status.FailureCount >= config.Cfg.MonitorThreshold {
 					// Check if we should send an alert (not sent in last hour or never sent)
 					if status.LastAlertTime.IsZero() || time.Since(status.LastAlertTime) > time.Hour {
 						msg := fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", domain, statusMsg)
-						verbosity.LogPrintf(verbosity.Normal, "%s\n", msg)
+						verb.LogPrintf(verb.Normal, "%s\n", msg)
 
 						err := slack.SendMessageToChannel(msg, slackChannel, true)
 						if err == nil {
 							status.LastAlertTime = time.Now()
 							status.IsDown = true
 						} else {
-							verbosity.LogPrintf(verbosity.Normal, "Failed to send Slack alert for %s: %v\n", domain, err)
+							verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", domain, err)
 						}
 					}
 				}
@@ -129,6 +129,6 @@ func Run() error {
 		return fmt.Errorf("error saving monitor state: %w", err)
 	}
 
-	verbosity.LogPrintf(verbosity.Verbose, "Monitoring check complete in %f seconds.\n", time.Since(start).Seconds())
+	verb.LogPrintf(verb.Verbose, "Monitoring check complete in %f seconds.\n", time.Since(start).Seconds())
 	return nil
 }

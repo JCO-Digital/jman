@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // CoreUpdate represents a WordPress core update notification from wp-cli.
@@ -50,11 +50,11 @@ func UpdateCore(ssh, path string) (bool, error) {
 		return false, nil
 	}
 
-	verbosity.Print(verbosity.Debug, res.Output)
+	verb.Print(verb.Debug, res.Output)
 
 	updateLines := updateRegex.FindString(res.Output)
 	if updateLines != "" {
-		verbosity.Println(verbosity.Normal, updateLines)
+		verb.Println(verb.Normal, updateLines)
 	}
 	if !strings.Contains(res.Output, "Success: WordPress updated successfully.") {
 		return false, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
@@ -64,7 +64,7 @@ func UpdateCore(ssh, path string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
-	verbosity.Print(verbosity.Verbose, res.Output)
+	verb.Print(verb.Verbose, res.Output)
 
 	return true, nil
 }
