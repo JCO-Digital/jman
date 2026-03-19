@@ -38,40 +38,50 @@ func CheckCore(ssh, path string) ([]CoreUpdate, error) {
 
 var updateRegex = regexp.MustCompile(`(?m)^Updating to version ([0-9.-]+) \(([^)]+)\)...`)
 
-// Update WordPress core to the latest minor version. This will also update the database if necessary.
-func UpdateCore(ssh, path string) (string, string, error) {
+type CoreUpdateResult struct {
+	Success  bool
+	Version  string
+	Language string
+}
+
+// UpdateCore updates WordPress core to the latest minor version. It returns the new version and language if an update was performed.
+func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
+	result := CoreUpdateResult{
+		Success:  false,
+		Version:  "unknown",
+		Language: "",
+	}
+
 	res, err := RunWP(ssh, path, true, "core", "update", "--minor")
 	if err != nil {
-		return "", "", fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
+		return result, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
 	}
 
 	// return early if already up to date to avoid printing unnecessary output
 	if strings.Contains(res.Output, "Success: WordPress is at the latest") {
-		return "", "", nil
+		return result, nil
 	}
 
 	verb.Print(verb.Debug, res.Output)
 
-	newVersion := ""
-	language := ""
-
 	matches := updateRegex.FindStringSubmatch(res.Output)
 	if len(matches) == 3 {
-		newVersion = matches[1]
-		language = matches[2]
+		result.Version = matches[1]
+		result.Language = matches[2]
 	}
 
 	if !strings.Contains(res.Output, "Success: WordPress updated successfully.") {
-		return newVersion, language, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
+		return result, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
 	}
+	result.Success = true
 
 	res, err = RunWP(ssh, path, true, "core", "update-db")
 	if err != nil {
-		return newVersion, language, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
+		return result, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
 	verb.Print(verb.Verbose, res.Output)
 
-	return newVersion, language, nil
+	return result, nil
 }
 
 // CoreVersion returns the current WordPress core version on the target site.
