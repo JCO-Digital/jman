@@ -64,7 +64,7 @@ func UpdateCore(ssh, path string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
-	fmt.Print(res.Output)
+	verbosity.Print(verbosity.Verbose, res.Output)
 
 	return true, nil
 }
