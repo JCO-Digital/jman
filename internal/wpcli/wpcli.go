@@ -53,7 +53,7 @@ func RunWP(ssh, path string, skip bool, args ...string) (RunResult, error) {
 	// wp-cli sometimes exits with 0 even on certain failures (like connection errors),
 	// so we check the first non-empty stderr line for the "Error:" prefix to detect these cases.
 	if res.Error != "" {
-		for _, line := range strings.Split(res.Error, "\n") {
+		for line := range strings.SplitSeq(res.Error, "\n") {
 			trimmed := strings.TrimSpace(line)
 			if trimmed == "" {
 				continue
