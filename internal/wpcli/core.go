@@ -36,37 +36,42 @@ func CheckCore(ssh, path string) ([]CoreUpdate, error) {
 	return updates, nil
 }
 
-var updateRegex = regexp.MustCompile(`(?m)^Updating to version [0-9.-]+ \([^)]+\)...`)
+var updateRegex = regexp.MustCompile(`(?m)^Updating to version ([0-9.-]+) \(([^)]+)\)...`)
 
 // Update WordPress core to the latest minor version. This will also update the database if necessary.
-func UpdateCore(ssh, path string) (bool, error) {
+func UpdateCore(ssh, path string) (string, string, error) {
 	res, err := RunWP(ssh, path, true, "core", "update", "--minor")
 	if err != nil {
-		return false, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
+		return "", "", fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
 	}
 
 	// return early if already up to date to avoid printing unnecessary output
 	if strings.Contains(res.Output, "Success: WordPress is at the latest") {
-		return false, nil
+		return "", "", nil
 	}
 
 	verb.Print(verb.Debug, res.Output)
 
-	updateLines := updateRegex.FindString(res.Output)
-	if updateLines != "" {
-		verb.Println(verb.Normal, updateLines)
+	newVersion := ""
+	language := ""
+
+	matches := updateRegex.FindStringSubmatch(res.Output)
+	if len(matches) == 3 {
+		newVersion = matches[1]
+		language = matches[2]
 	}
+
 	if !strings.Contains(res.Output, "Success: WordPress updated successfully.") {
-		return false, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
+		return newVersion, language, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
 	}
 
 	res, err = RunWP(ssh, path, true, "core", "update-db")
 	if err != nil {
-		return false, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
+		return newVersion, language, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
 	verb.Print(verb.Verbose, res.Output)
 
-	return true, nil
+	return newVersion, language, nil
 }
 
 // CoreVersion returns the current WordPress core version on the target site.

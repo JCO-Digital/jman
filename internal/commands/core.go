@@ -79,13 +79,13 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		updated := 0
 		for _, site := range sites {
 			verb.Printf(verb.Verbose, "Updating WordPress core on %s...\n", site.Name)
-			success, err := wpcli.UpdateCore(site.SSH, site.Path)
+			newVersion, language, err := wpcli.UpdateCore(site.SSH, site.Path)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Error updating core on %s: %v\n", site.Name, err)
 				continue
 			}
-			if success {
-				verb.Printf(verb.Normal, "Successfully updated WordPress core on %s.\n", site.Name)
+			if newVersion != "" {
+				verb.Printf(verb.Normal, "Successfully updated WordPress core on %s to %s (%s) .\n", verb.Blue(site.Name), verb.Green(newVersion), verb.Cyan(language))
 				updated++
 			}
 		}
