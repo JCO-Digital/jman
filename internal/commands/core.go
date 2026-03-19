@@ -38,26 +38,57 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	for _, site := range sites {
-		switch operation {
-		case "check":
-			err := wpcli.CheckCore(site.SSH, site.Path)
+	switch operation {
+	case "check":
+		updates := 0
+		updated := 0
+		for _, site := range sites {
+			verbosity.Printf(verbosity.Verbose, "Checking WordPress core on %s...\n", site.Name)
+			hasUpdate, err := wpcli.CheckCore(site.SSH, site.Path)
 			if err != nil {
 				verbosity.PrintErrorf(verbosity.Normal, "Error checking core on %s: %v\n", site.Name, err)
 				continue
 			}
-		case "update":
-			updateErr := wpcli.UpdateCore(site.SSH, site.Path)
-			if updateErr != nil {
-				verbosity.PrintErrorf(verbosity.Normal, "Error updating core on %s: %v\n", site.Name, updateErr)
+			if hasUpdate {
+				verbosity.Printf(verbosity.Normal, "Update available for %s.\n", site.Name)
+				updates++
+			} else {
+				verbosity.Printf(verbosity.Verbose, "WordPress core is up to date on %s.\n", site.Name)
+				updated++
+			}
+		}
+		if updated > 0 {
+			verbosity.Printf(verbosity.Normal, "%d site(s) are up to date.\n", updated)
+		}
+		if updates > 0 {
+			verbosity.Printf(verbosity.Normal, "%d site(s) have updates available.\n", updates)
+		}
+	case "update":
+		updated := 0
+		for _, site := range sites {
+			verbosity.Printf(verbosity.Verbose, "Updating WordPress core on %s...\n", site.Name)
+			success, err := wpcli.UpdateCore(site.SSH, site.Path)
+			if err != nil {
+				verbosity.PrintErrorf(verbosity.Normal, "Error updating core on %s: %v\n", site.Name, err)
 				continue
 			}
-		case "version":
-			err := wpcli.ShowCoreVersion(site.SSH, site.Path)
+			if success {
+				verbosity.Printf(verbosity.Normal, "Successfully updated WordPress core on %s.\n", site.Name)
+				updated++
+			}
+		}
+		if updated > 0 {
+			verbosity.Printf(verbosity.Normal, "Successfully updated core on %d site(s).\n", updated)
+		}
+	case "version":
+		for _, site := range sites {
+			verbosity.Printf(verbosity.Verbose, "Showing WordPress core version on %s...\n", site.Name)
+			version, err := wpcli.CoreVersion(site.SSH, site.Path)
 			if err != nil {
 				verbosity.PrintErrorf(verbosity.Normal, "Error showing core version on %s: %v\n", site.Name, err)
 				continue
 			}
+			verbosity.Printf(verbosity.Normal, "WordPress core version on %s: %s\n", site.Name, version)
 		}
 	}
 
