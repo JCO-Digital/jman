@@ -12,7 +12,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/slack"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/hashicorp/go-version"
 )
 
@@ -86,7 +86,7 @@ func scanSites(args []string) error {
 		}
 	}
 
-	verbosity.Printf(verbosity.Verbose, "%d sites match criteria\n", siteCount)
+	verb.Printf(verb.Verbose, "%d sites match criteria\n", siteCount)
 	return nil
 }
 
@@ -199,7 +199,7 @@ func ProcessVulnerabilities() ([]models.VulnReport, error) {
 	}
 
 	for _, plugin := range pluginData {
-		verbosity.Printf(verbosity.Verbose, "Processing plugin: %s\n", plugin.Name)
+		verb.Printf(verb.Verbose, "Processing plugin: %s\n", plugin.Name)
 		vulnResponse, err := cache.GetCachedVulnerabilities(plugin.Name, false)
 		if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 			// Missing or invalid vulnerability cache for this plugin; skip it.

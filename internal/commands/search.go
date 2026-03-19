@@ -6,7 +6,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/search"
-	"github.com/JCO-Digital/jman/internal/verbosity"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
 
@@ -28,14 +28,14 @@ var searchCmd = &cobra.Command{
 		}
 
 		if len(matchedSites) == 0 && len(matchedPlugins) == 0 {
-			verbosity.Printf(verbosity.Normal, "No sites or plugins found matching '%s'.\n", query)
+			verb.Printf(verb.Normal, "No sites or plugins found matching '%s'.\n", query)
 			return nil
 		}
 
 		if len(matchedSites) > 0 {
-			verbosity.Printf(verbosity.Normal, "Found %d sites matching '%s':\n", len(matchedSites), query)
+			verb.Printf(verb.Normal, "Found %d sites matching '%s':\n", len(matchedSites), query)
 			for _, site := range matchedSites {
-				verbosity.Printf(verbosity.Quiet, "- %s (Server: %s)\n", site.Name, site.ServerName)
+				verb.Printf(verb.Quiet, "- %s (Server: %s)\n", site.Name, site.ServerName)
 			}
 			if len(matchedPlugins) > 0 {
 				fmt.Println()
@@ -52,9 +52,9 @@ var searchCmd = &cobra.Command{
 				siteMap[s.ID] = s.Name
 			}
 
-			verbosity.Printf(verbosity.Normal, "Found %d plugins matching '%s':\n", len(matchedPlugins), query)
+			verb.Printf(verb.Normal, "Found %d plugins matching '%s':\n", len(matchedPlugins), query)
 			for _, plugin := range matchedPlugins {
-				verbosity.Printf(verbosity.Quiet, "- %s\n", plugin.Name)
+				verb.Printf(verb.Quiet, "- %s\n", plugin.Name)
 
 				sort.Slice(plugin.Sites, func(i, j int) bool {
 					return siteMap[plugin.Sites[i].SiteID] < siteMap[plugin.Sites[j].SiteID]
@@ -65,7 +65,7 @@ var searchCmd = &cobra.Command{
 					if siteName == "" {
 						siteName = fmt.Sprintf("Unknown Site (ID: %d)", site.SiteID)
 					}
-					verbosity.Printf(verbosity.Quiet, "  * %s (%s)\n", siteName, site.Version)
+					verb.Printf(verb.Quiet, "  * %s (%s)\n", siteName, site.Version)
 				}
 			}
 		}
