@@ -2,50 +2,65 @@ package wpcli
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
+
+	"github.com/JCO-Digital/jman/internal/verbosity"
 )
 
 // Check WordPress core for updates and display the current version and available updates if any.
-func CheckCore(ssh, path string) error {
-	res, err := RunWP(ssh, path, true, "core", "version")
+func CheckCore(ssh, path string) (bool, error) {
+	res, err := RunWP(ssh, path, true, "core", "check-update")
 	if err != nil {
-		return fmt.Errorf("failed to get core version: %w (stderr: %s)", err, res.Error)
+		return false, fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
 	}
-	fmt.Printf("Current version: %s", res.Output)
+	if strings.TrimSpace(res.Output) == "Success: WordPress is at the latest version." {
+		verbosity.Println(verbosity.Verbose, "WordPress core is up to date.")
+		return false, nil
+	}
 
-	res, err = RunWP(ssh, path, true, "core", "check-update")
-	if err != nil {
-		return fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
-	}
-	fmt.Print(res.Output)
-	return nil
+	verbosity.Print(verbosity.Normal, res.Output)
+	return true, nil
 }
+
+var updateRegex = regexp.MustCompile(`^Updating to version [0-9.-]+ \([^)]+\)...`)
 
 // Update WordPress core to the latest minor version. This will also update the database if necessary.
-func UpdateCore(ssh, path string) error {
-	fmt.Println("Updating WordPress core...")
+func UpdateCore(ssh, path string) (bool, error) {
 	res, err := RunWP(ssh, path, true, "core", "update", "--minor")
 	if err != nil {
-		return fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
+		return false, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
 	}
-	fmt.Print(res.Output)
 
-	fmt.Println("Checking for database updates...")
+	// return early if already up to date to avoid printing unnecessary output
+	if strings.Contains(res.Output, "Success: WordPress is at the latest") {
+		return false, nil
+	}
+
+	verbosity.Print(verbosity.Debug, res.Output)
+
+	updateLines := updateRegex.FindString(res.Output)
+	if updateLines != "" {
+		verbosity.Println(verbosity.Normal, updateLines)
+	}
+	if !strings.Contains(res.Output, "Success: WordPress updated successfully.") {
+		return false, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
+	}
+
 	res, err = RunWP(ssh, path, true, "core", "update-db")
 	if err != nil {
-		return fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
+		return false, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
 	fmt.Print(res.Output)
 
-	return nil
+	return true, nil
 }
 
-// ShowCoreVersion displays the current WordPress core version on the target site.
-func ShowCoreVersion(ssh, path string) error {
+// CoreVersion returns the current WordPress core version on the target site.
+func CoreVersion(ssh, path string) (string, error) {
 	res, err := RunWP(ssh, path, true, "core", "version")
 	if err != nil {
-		return fmt.Errorf("failed to show core version: %w (stderr: %s)", err, res.Error)
+		return "", fmt.Errorf("failed to show core version: %w (stderr: %s)", err, res.Error)
 	}
-	fmt.Printf("WordPress version: %s", strings.TrimSpace(res.Output))
-	return nil
+	return strings.TrimSpace(res.Output), nil
 }
