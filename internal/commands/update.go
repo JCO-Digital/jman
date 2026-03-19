@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/JCO-Digital/jman/internal/ansi"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/update"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -30,7 +29,7 @@ var updateCmd = &cobra.Command{
 		}
 
 		currentVersion := config.RunData.Version
-		verb.Printf(verb.Normal, "Current jman version: %s\n", ansi.Blue(currentVersion))
+		verb.Printf(verb.Normal, "Current jman version: %s\n", verb.Blue(currentVersion))
 
 		// Use a dummy version if running in dev to see what the latest version is
 		checkVersion := currentVersion
@@ -45,20 +44,20 @@ var updateCmd = &cobra.Command{
 
 		if component == "jman" {
 			if currentVersion == "dev" {
-				fmt.Println(ansi.Yellow("You are running a development version of jman."))
+				fmt.Println(verb.Yellow("You are running a development version of jman."))
 				if latestVersion != "" {
-					verb.Printf(verb.Verbose, "The latest stable version is: %s\n", ansi.Blue(latestVersion))
+					verb.Printf(verb.Verbose, "The latest stable version is: %s\n", verb.Blue(latestVersion))
 				}
 				return nil
 			}
 
 			if !available {
-				verb.Println(verb.Normal, ansi.Green("You are running the latest version of jman."))
+				verb.Println(verb.Normal, verb.Green("You are running the latest version of jman."))
 				return nil
 			}
 
-			verb.Printf(verb.Normal, "\nA new version of jman is available: %s\n", ansi.Green(latestVersion))
-			verb.Printf(verb.Quiet, "\n%s? [y/N]: ", ansi.Bold("Would you like to download and install it"))
+			verb.Printf(verb.Normal, "\nA new version of jman is available: %s\n", verb.Green(latestVersion))
+			verb.Printf(verb.Quiet, "\n%s? [y/N]: ", verb.Bold("Would you like to download and install it"))
 
 			var response string
 			fmt.Scanln(&response)
@@ -72,9 +71,9 @@ var updateCmd = &cobra.Command{
 
 			execPath, _ := os.Executable()
 			binDir := filepath.Dir(execPath)
-			fmt.Printf("\nLatest version of %s is %s.\n", ansi.Blue(component), ansi.Green(latestVersion))
-			fmt.Printf("This will download %s to %s and overwrite any existing version.\n", ansi.Blue(component), ansi.Gray(binDir))
-			fmt.Printf("%s? [y/N]: ", ansi.Bold("Proceed"))
+			fmt.Printf("\nLatest version of %s is %s.\n", verb.Blue(component), verb.Green(latestVersion))
+			fmt.Printf("This will download %s to %s and overwrite any existing version.\n", verb.Blue(component), verb.Gray(binDir))
+			fmt.Printf("%s? [y/N]: ", verb.Bold("Proceed"))
 
 			var response string
 			fmt.Scanln(&response)
@@ -83,12 +82,12 @@ var updateCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Printf("\n%s...\n", ansi.Cyan("Downloading"))
+		fmt.Printf("\n%s...\n", verb.Cyan("Downloading"))
 		if err := update.DownloadAndReplace(releaseURL, component); err != nil {
 			return fmt.Errorf("update failed: %w", err)
 		}
 
-		verb.Printf(verb.Verbose, "Successfully updated %s to %s\n", ansi.Blue(component), ansi.Green(latestVersion))
+		verb.Printf(verb.Verbose, "Successfully updated %s to %s\n", verb.Blue(component), verb.Green(latestVersion))
 		if component == "jman" {
 			os.Exit(0)
 		}
