@@ -51,9 +51,19 @@ func RunWP(ssh, path string, skip bool, args ...string) (RunResult, error) {
 	}
 
 	// wp-cli sometimes exits with 0 even on certain failures (like connection errors),
-	// so we check stderr for the "Error:" prefix to detect these cases.
-	if strings.Contains(res.Error, "Error:") {
-		return res, fmt.Errorf("wp-cli error: %s", strings.TrimSpace(res.Error))
+	// so we check the first non-empty stderr line for the "Error:" prefix to detect these cases.
+	if res.Error != "" {
+		for _, line := range strings.Split(res.Error, "\n") {
+			trimmed := strings.TrimSpace(line)
+			if trimmed == "" {
+				continue
+			}
+			if strings.HasPrefix(trimmed, "Error:") {
+				return res, fmt.Errorf("wp-cli error: %s", trimmed)
+			}
+			// Only consider the first non-empty line.
+			break
+		}
 	}
 
 	return res, nil
