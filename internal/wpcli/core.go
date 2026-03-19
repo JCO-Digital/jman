@@ -36,7 +36,7 @@ func CheckCore(ssh, path string) ([]CoreUpdate, error) {
 	return updates, nil
 }
 
-var updateRegex = regexp.MustCompile(`^Updating to version [0-9.-]+ \([^)]+\)...`)
+var updateRegex = regexp.MustCompile(`(?m)^Updating to version [0-9.-]+ \([^)]+\)...`)
 
 // Update WordPress core to the latest minor version. This will also update the database if necessary.
 func UpdateCore(ssh, path string) (bool, error) {
