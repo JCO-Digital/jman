@@ -10,9 +10,6 @@ import (
 	"github.com/JCO-Digital/jman/internal/verbosity"
 )
 
-// Version is injected by the build flags
-var Version = "dev"
-
 var (
 	flagVerbose bool
 	flagDebug   bool
@@ -36,7 +33,7 @@ func main() {
 	}
 
 	// Initialize config
-	if err := config.Init(Version); err != nil {
+	if err := config.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
 		os.Exit(1)
 	}

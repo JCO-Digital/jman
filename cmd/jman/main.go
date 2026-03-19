@@ -8,11 +8,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 )
 
-// Version is injected by the build flags
-var Version = "dev"
-
 func main() {
-	if err := config.Init(Version); err != nil {
+	if err := config.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
 		os.Exit(1)
 	}
