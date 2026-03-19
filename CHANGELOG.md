@@ -1,3 +1,17 @@
+# [4.11.0](https://github.com/JCO-Digital/jman/compare/v4.10.1...v4.11.0) (2026-03-19)
+
+
+### Bug Fixes
+
+* **wpcli:** Return structured data from UpdateCore ([b7769c1](https://github.com/JCO-Digital/jman/commit/b7769c1e52dcd0e468eecfbe476c8d51037d1dc6))
+
+
+### Features
+
+* **wpcli:** Return new version and language from UpdateCore ([a6fc4bb](https://github.com/JCO-Digital/jman/commit/a6fc4bbb2898bb676aa9a3a558db7c258b4b8023))
+
+
+
 ## [4.10.1](https://github.com/JCO-Digital/jman/compare/v4.10.0...v4.10.1) (2026-03-19)
 
 
@@ -50,21 +64,6 @@
 ### Features
 
 * **config:** integrate viper for configuration and environment support ([358d962](https://github.com/JCO-Digital/jman/commit/358d96207f1aaf16747237863ed37950220554b3))
-
-
-
-# [4.7.0](https://github.com/JCO-Digital/jman/compare/v4.6.0...v4.7.0) (2026-03-03)
-
-
-### Bug Fixes
-
-* **vuln:** return error for unknown operators in versionCompare ([914cc79](https://github.com/JCO-Digital/jman/commit/914cc790c4212e086bbf12743af8decded985886))
-
-
-### Features
-
-* **api:** add main entry point ([7f8d242](https://github.com/JCO-Digital/jman/commit/7f8d242ac943a8e1256899b87fc07ef9d4fa0d04))
-* **vuln:** enhance version matching and reporting ([2c1aee2](https://github.com/JCO-Digital/jman/commit/2c1aee26be34bbc20733236732ecc49214bfe3c4))
 
 
 
