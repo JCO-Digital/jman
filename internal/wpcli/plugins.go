@@ -3,7 +3,6 @@ package wpcli
 import (
 	"encoding/json"
 	"fmt"
-	"os/exec"
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -14,10 +13,7 @@ import (
 func GetPlugins(site models.CliSite) ([]models.WPPlugin, error) {
 	res, err := RunWP(site.SSH, site.Path, false, "plugin", "list", "--format=json")
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return nil, fmt.Errorf("not a WordPress site")
-		}
-		return nil, fmt.Errorf("unknown error: %w", err)
+		return nil, err
 	}
 
 	output := res.Output

@@ -68,25 +68,25 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 		case "list":
 			err := listPlugins(site)
 			if err != nil {
-				verb.Printf(verb.Normal, "Error listing plugins on %s: %v\n", verb.Blue(site.Name), err)
+				verb.Printf(verb.Normal, "Error listing plugins on %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 				continue
 			}
 		case "update":
 			updateErr := updatePlugin(site, pluginName)
 			if updateErr != nil {
-				verb.Printf(verb.Normal, "Error updating plugin on %s: %v\n", verb.Blue(site.Name), updateErr)
+				verb.Printf(verb.Normal, "Error updating plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(updateErr))
 				continue
 			}
 		case "remove":
 			err := removePlugin(site, pluginName)
 			if err != nil {
-				verb.Printf(verb.Normal, "Error removing plugin from %s: %v\n", verb.Blue(site.Name), err)
+				verb.Printf(verb.Normal, "Error removing plugin from %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 				continue
 			}
 		case "install":
 			err := installPlugin(site, pluginName)
 			if err != nil {
-				verb.Printf(verb.Normal, "Error installing plugin on %s: %v\n", verb.Blue(site.Name), err)
+				verb.Printf(verb.Normal, "Error installing plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 				continue
 			}
 		}
@@ -96,7 +96,7 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 }
 
 func installPlugin(site models.CliSite, pluginName string) error {
-	verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, verb.Blue(site.Name), site.ServerName)
+	verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, verb.Blue(site.Name), verb.Yellow(site.ServerName))
 	success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
 	if err != nil {
 		return err

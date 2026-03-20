@@ -49,24 +49,18 @@ func RunWP(ssh, path string, skip bool, args ...string) (RunResult, error) {
 
 	verb.Printf(verb.Debug, "Command output:\n%s\n\nError output:\n%s", res.Output, res.Error)
 
-	// If cmd.Run() returned an error (non-zero exit code), we return it.
+	// If cmd.Run() returned an error (non-zero exit code), look for the first error line.
 	if err != nil {
-		return res, err
-	}
-
-	// wp-cli sometimes exits with 0 even on certain failures (like connection errors),
-	// so we check the first non-empty stderr line for the "Error:" prefix to detect these cases.
-	if res.Error != "" {
-		for line := range strings.SplitSeq(res.Error, "\n") {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
-				continue
+		if res.Error != "" {
+			for line := range strings.SplitSeq(res.Error, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if trimmed == "" {
+					continue
+				}
+				if strings.HasPrefix(trimmed, "Error:") || strings.HasPrefix(trimmed, "Fatal error:") {
+					return res, fmt.Errorf("%s", trimmed)
+				}
 			}
-			if strings.HasPrefix(trimmed, "Error:") {
-				return res, fmt.Errorf("wp-cli error: %s", trimmed)
-			}
-			// Only consider the first non-empty line.
-			break
 		}
 	}
 
