@@ -62,6 +62,7 @@ func RunWP(ssh, path string, skip bool, args ...string) (RunResult, error) {
 				}
 			}
 		}
+		return res, err
 	}
 
 	return res, nil
