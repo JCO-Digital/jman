@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -13,7 +14,7 @@ import (
 var pluginCmd = &cobra.Command{
 	Use:   "plugin <target> [list|install|update|remove] <plugin-name>",
 	Short: "Plugin actions on target sites.",
-	Long:  "List, install, update or remove plugins on target sites. Supports WordPress.org slugs or custom repo URLs.",
+	Long:  "List, install, update or remove plugins on target sites. Supports WordPress.org slugs, custom repo URLs, or aliases defined in config (install only).",
 	Args:  cobra.MinimumNArgs(2),
 	RunE:  pluginCommand,
 }
@@ -42,6 +43,12 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 	case "install", "remove":
 		if pluginName == "" {
 			return fmt.Errorf("plugin name is required for '%s' operation", operation)
+		}
+		if operation == "install" {
+			if alias, ok := config.Cfg.PluginAliases[pluginName]; ok {
+				verb.Printf(verb.Verbose, "Using alias for '%s': %s\n", pluginName, alias)
+				pluginName = alias
+			}
 		}
 	}
 
@@ -76,22 +83,29 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 				continue
 			}
 		case "install":
-			verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
-			success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
-
+			err := installPlugin(site, pluginName)
 			if err != nil {
 				verb.Printf(verb.Verbose, "Error installing plugin on %s: %v\n", site.Name, err)
 				continue
 			}
-
-			if success {
-				verb.Printf(verb.Normal, "Successfully installed and activated '%s' on %s.\n", pluginName, site.Name)
-			} else {
-				verb.Printf(verb.Normal, "Failed to install '%s' on %s. (It might already be installed)\n", pluginName, site.Name)
-			}
 		}
 	}
 
+	return nil
+}
+
+func installPlugin(site models.CliSite, pluginName string) error {
+	verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
+	success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
+	if err != nil {
+		return fmt.Errorf("failed to install plugin: %w", err)
+	}
+
+	if success {
+		verb.Printf(verb.Normal, "Successfully installed and activated '%s' on %s.\n", pluginName, site.Name)
+	} else {
+		verb.Printf(verb.Normal, "Failed to install '%s' on %s. (It might already be installed)\n", pluginName, site.Name)
+	}
 	return nil
 }
 
