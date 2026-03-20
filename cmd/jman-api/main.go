@@ -16,6 +16,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Load users config (fatal if missing or invalid — authentication is mandatory).
+	usersCfg, err := config.LoadUsersConfig(config.RunData.ConfigDir)
+	if err != nil {
+		log.Fatalf("Failed to load users config: %v", err)
+	}
+
 	port := os.Getenv("JMAN_API_PORT")
 	if port == "" {
 		port = "8080"
@@ -24,7 +30,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Register API routes from the internal/api package
-	api.RegisterHandlers(mux, config.AppVersion)
+	api.RegisterHandlers(mux, config.AppVersion, usersCfg)
 
 	// Wrap mux with middleware
 	handler := api.LoggingMiddleware(
