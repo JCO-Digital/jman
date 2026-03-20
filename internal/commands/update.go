@@ -28,7 +28,7 @@ var updateCmd = &cobra.Command{
 			}
 		}
 
-		currentVersion := config.RunData.Version
+		currentVersion := config.AppVersion
 		verb.Printf(verb.Normal, "Current jman version: %s\n", verb.Blue(currentVersion))
 
 		// Use a dummy version if running in dev to see what the latest version is
