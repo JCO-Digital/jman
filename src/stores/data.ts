@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import type { Server, Site, Plugin } from "../types";
+import { useAuthStore } from "./auth";
 
 const CACHE_KEY_SERVERS = "jman_servers";
 const CACHE_KEY_SITES = "jman_sites";
@@ -36,15 +37,42 @@ export const useDataStore = defineStore("data", () => {
 		return false;
 	}
 
+	function clearCache() {
+		sessionStorage.removeItem(CACHE_KEY_SERVERS);
+		sessionStorage.removeItem(CACHE_KEY_SITES);
+		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
+		servers.value = [];
+		sites.value = [];
+		plugins.value = [];
+		isLoaded.value = false;
+	}
+
 	async function fetchFromApi() {
+		const authStore = useAuthStore();
+
 		isLoading.value = true;
 		error.value = null;
 		try {
+			const headers: Record<string, string> = {
+				...authStore.authHeader,
+			};
+
 			const [serversRes, sitesRes, pluginsRes] = await Promise.all([
-				fetch(`${BASE_URL}/servers`),
-				fetch(`${BASE_URL}/sites`),
-				fetch(`${BASE_URL}/plugins`),
+				fetch(`${BASE_URL}/servers`, { headers }),
+				fetch(`${BASE_URL}/sites`, { headers }),
+				fetch(`${BASE_URL}/plugins`, { headers }),
 			]);
+
+			// Handle 401 on any response — token is invalid or expired
+			if (
+				serversRes.status === 401 ||
+				sitesRes.status === 401 ||
+				pluginsRes.status === 401
+			) {
+				clearCache();
+				authStore.logout();
+				return;
+			}
 
 			if (!serversRes.ok || !sitesRes.ok || !pluginsRes.ok) {
 				throw new Error("Failed to fetch data from API endpoints");
@@ -108,6 +136,7 @@ export const useDataStore = defineStore("data", () => {
 		// Actions
 		initData,
 		refreshData,
+		clearCache,
 		// Getters
 		getSiteById,
 		getServerById,
