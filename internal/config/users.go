@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/viper"
 )
 
@@ -67,6 +68,24 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 	}
 
 	return cfg, nil
+}
+
+// SaveUsersConfig marshals the given UsersConfig to TOML and writes it to
+// users.toml in the specified config directory with restrictive permissions (0600).
+func SaveUsersConfig(configDir string, cfg UsersConfig) error {
+	data, err := toml.Marshal(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to marshal users config: %w", err)
+	}
+
+	header := []byte("# jman-api user configuration\n# See README_API.md for details\n\n")
+	content := append(header, data...)
+
+	filePath := filepath.Join(configDir, "users.toml")
+	if err := os.WriteFile(filePath, content, 0600); err != nil {
+		return fmt.Errorf("failed to write %s: %w", filePath, err)
+	}
+	return nil
 }
 
 // FindUser searches the UsersConfig for a user with the given username.

@@ -15,11 +15,72 @@ JMAN_API_PORT=8080 ./bin/jman-api
 
 The API listens on the port specified by the `JMAN_API_PORT` environment variable (default: `8080`).
 
+## CLI Helpers
+
+`jman-api` includes built-in subcommands for managing users and credentials. Run `jman-api --help` to see all available commands.
+
+### `useradd` — Add a new user
+
+Creates a new user entry in `users.toml`. Prompts for a password interactively (with echo disabled). If `users.toml` does not yet exist, a new file is created with a randomly generated JWT secret.
+
+```bash
+jman-api useradd --username admin --display-name "Admin User"
+```
+
+| Flag             | Required | Description                   |
+| ---------------- | -------- | ----------------------------- |
+| `--username`     | Yes      | Username for the new user     |
+| `--display-name` | Yes      | Display name for the new user |
+
+The command will:
+
+1. Create `users.toml` with a generated JWT secret if it doesn't exist.
+2. Reject duplicate usernames.
+3. Prompt for the password twice (with confirmation).
+4. Hash the password with bcrypt (cost factor 12).
+5. Append the `[[users]]` entry and save with `0600` permissions.
+
+### `hashpw` — Hash a password
+
+A standalone utility that prompts for a password and prints the bcrypt hash to stdout. Useful for manually constructing or editing `users.toml` entries.
+
+```bash
+jman-api hashpw
+```
+
+### `totp-setup` — Configure TOTP for a user
+
+Generates a new TOTP secret for an existing user, prints the base32 secret and an `otpauth://` URI (suitable for QR code generation), and updates `users.toml`.
+
+```bash
+jman-api totp-setup --username admin
+```
+
+| Flag         | Required | Description                    |
+| ------------ | -------- | ------------------------------ |
+| `--username` | Yes      | Username to configure TOTP for |
+
+The command will:
+
+1. Load `users.toml` and find the specified user.
+2. Warn and ask for confirmation if the user already has a TOTP secret.
+3. Generate a new secret compatible with standard authenticator apps (Google Authenticator, Authy, etc.).
+4. Print the base32 secret and `otpauth://` URI to stdout.
+5. Save the updated `users.toml`.
+
+Once configured, the user must provide a valid TOTP code at login. If the `totpSecret` field is empty or omitted, TOTP is not required for that user.
+
 ## Authentication Setup
 
 ### 1. Create `users.toml`
 
-Create the file `~/.config/jman/users.toml` with the following structure:
+The quickest way to get started is with the `useradd` command:
+
+```bash
+jman-api useradd --username admin --display-name "Admin User"
+```
+
+This creates `~/.config/jman/users.toml` automatically. You can also create it manually with the following structure:
 
 ```toml
 # Secret used to sign and verify JWT tokens.
@@ -44,6 +105,8 @@ totpSecret = "JBSWY3DPEHPK3PXP"  # base32-encoded TOTP secret
 
 ### 2. Generate a JWT Secret
 
+If you used `jman-api useradd` to create the first user, a JWT secret was generated automatically. To generate one manually:
+
 ```bash
 openssl rand -hex 32
 ```
@@ -52,7 +115,13 @@ The secret must be at least 32 characters long.
 
 ### 3. Generate Password Hashes
 
-Use any bcrypt tool to generate password hashes. For example, with `htpasswd`:
+The easiest way is with the built-in `hashpw` command:
+
+```bash
+jman-api hashpw
+```
+
+You can also use external tools. For example, with `htpasswd`:
 
 ```bash
 htpasswd -nbBC 12 "" 'your_password' | cut -d: -f2
@@ -66,7 +135,7 @@ python3 -c "import bcrypt; print(bcrypt.hashpw(b'your_password', bcrypt.gensalt(
 
 ### 4. Set File Permissions
 
-The `users.toml` file contains sensitive credentials. Restrict its permissions:
+The `users.toml` file contains sensitive credentials. Files created by the CLI helpers already have `0600` permissions. If you created the file manually, restrict its permissions:
 
 ```bash
 chmod 600 ~/.config/jman/users.toml
@@ -76,9 +145,15 @@ The API will log a warning at startup if permissions are more open than `0600`.
 
 ### 5. TOTP (Optional)
 
-If a user has a `totpSecret` configured, they must provide a valid TOTP code at login. The secret should be a base32-encoded string compatible with standard authenticator apps (Google Authenticator, Authy, etc.).
+The easiest way to configure TOTP is with the built-in command:
 
-If the `totpSecret` field is empty or omitted, TOTP is not required for that user.
+```bash
+jman-api totp-setup --username admin
+```
+
+This generates a secret, updates `users.toml`, and prints the base32 secret and `otpauth://` URI for your authenticator app.
+
+If a user has a `totpSecret` configured, they must provide a valid TOTP code at login. If the `totpSecret` field is empty or omitted, TOTP is not required for that user.
 
 ## Authentication Endpoints
 
