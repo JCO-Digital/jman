@@ -1,3 +1,22 @@
+# [4.12.0](https://github.com/JCO-Digital/jman/compare/v4.11.0...v4.12.0) (2026-03-20)
+
+
+### Bug Fixes
+
+* **cache:** Improve plugin fetch error reporting ([0edde0a](https://github.com/JCO-Digital/jman/commit/0edde0a3f5e48f1ee84204ac412577419cdb6e9f))
+* **plugin:** Correct site name formatting in remove output ([8d885c7](https://github.com/JCO-Digital/jman/commit/8d885c72b5883672bd756e7c93ee689ec7de0b9e))
+* **plugin:** Improve error handling for plugin operations ([114b17d](https://github.com/JCO-Digital/jman/commit/114b17d4ff22dea9f2b1524f82ce91e0c34ebe99))
+* **wpcli:** Ensure error is returned from RunWP ([64ce754](https://github.com/JCO-Digital/jman/commit/64ce75495ae6ab3158358bef600fe65c4c565ca7))
+* **wpcli:** Improve error handling for WP-CLI commands ([f51f99e](https://github.com/JCO-Digital/jman/commit/f51f99ed6fe56c819c704ea3a4d7fa06d4a9c118))
+
+
+### Features
+
+* **plugin:** Add plugin alias support ([7d2aeda](https://github.com/JCO-Digital/jman/commit/7d2aeda1d87dcc2a586e964dd72a9645f339755b))
+* **plugin:** colorize site names in output ([d1d6a52](https://github.com/JCO-Digital/jman/commit/d1d6a528efb8bd9664694ccade36b5f2409615a4))
+
+
+
 # [4.11.0](https://github.com/JCO-Digital/jman/compare/v4.10.1...v4.11.0) (2026-03-19)
 
 
@@ -55,15 +74,6 @@
 * **plugin:** batch updates and implement removal ([f7557b4](https://github.com/JCO-Digital/jman/commit/f7557b4db390142bc8ccd211222b079819d8bc30))
 * **plugin:** improve plugin list output formatting ([f506f78](https://github.com/JCO-Digital/jman/commit/f506f78c6cc1cbffa0aca3c0eb31edaa3ab2a778))
 * **search:** allow selecting specific sites by index in results prompt ([42c5c21](https://github.com/JCO-Digital/jman/commit/42c5c212a938d9705cced2037996aa5cbeb2379d))
-
-
-
-# [4.8.0](https://github.com/JCO-Digital/jman/compare/v4.7.0...v4.8.0) (2026-03-09)
-
-
-### Features
-
-* **config:** integrate viper for configuration and environment support ([358d962](https://github.com/JCO-Digital/jman/commit/358d96207f1aaf16747237863ed37950220554b3))
 
 
 
