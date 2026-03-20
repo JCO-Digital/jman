@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -67,25 +68,25 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 		case "list":
 			err := listPlugins(site)
 			if err != nil {
-				verb.Printf(verb.Verbose, "Error listing plugins on %s: %v\n", site.Name, err)
+				verb.Printf(verb.Normal, "Error listing plugins on %s: %v\n", site.Name, err)
 				continue
 			}
 		case "update":
 			updateErr := updatePlugin(site, pluginName)
 			if updateErr != nil {
-				verb.Printf(verb.Verbose, "Error updating plugin on %s: %v\n", site.Name, updateErr)
+				verb.Printf(verb.Normal, "Error updating plugin on %s: %v\n", site.Name, updateErr)
 				continue
 			}
 		case "remove":
 			err := removePlugin(site, pluginName)
 			if err != nil {
-				verb.Printf(verb.Verbose, "Error removing plugin from %s: %v\n", site.Name, err)
+				verb.Printf(verb.Normal, "Error removing plugin from %s: %v\n", site.Name, err)
 				continue
 			}
 		case "install":
 			err := installPlugin(site, pluginName)
 			if err != nil {
-				verb.Printf(verb.Verbose, "Error installing plugin on %s: %v\n", site.Name, err)
+				verb.Printf(verb.Normal, "Error installing plugin on %s: %v\n", site.Name, err)
 				continue
 			}
 		}
@@ -98,7 +99,7 @@ func installPlugin(site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, site.Name, site.ServerName)
 	success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
 	if err != nil {
-		return fmt.Errorf("failed to install plugin: %w", err)
+		return err
 	}
 
 	if success {
@@ -113,7 +114,7 @@ func listPlugins(site models.CliSite) error {
 	verb.Printf(verb.Verbose, "Listing plugins on %s (%s)...\n", site.Name, site.ServerName)
 	plugins, err := wpcli.GetPlugins(site)
 	if err != nil {
-		return fmt.Errorf("failed to get plugins: %w", err)
+		return err
 	}
 
 	if len(plugins) == 0 {
@@ -185,7 +186,7 @@ func getPluginUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 	var updateList []models.WPPlugin
 	plugins, err := wpcli.GetPlugins(site)
 	if err != nil {
-		return updateList, fmt.Errorf("failed to get plugins: %w", err)
+		return updateList, err
 	}
 	for _, plugin := range plugins {
 		if plugin.Update != "" {
@@ -199,7 +200,10 @@ func removePlugin(site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Verbose, "Removing '%s' from %s (%s)...\n", pluginName, site.Name, site.ServerName)
 	success, err := wpcli.RemovePlugin(site.SSH, site.Path, pluginName)
 	if err != nil {
-		return fmt.Errorf("failed to remove plugin: %w", err)
+		if strings.Contains(err.Error(), "plugin could not be found") {
+			return fmt.Errorf("plugin not found")
+		}
+		return err
 	}
 
 	if success {
