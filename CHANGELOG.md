@@ -1,3 +1,13 @@
+# [4.13.0](https://github.com/JCO-Digital/jman/compare/v4.12.1...v4.13.0) (2026-03-20)
+
+
+### Features
+
+* **api:** Implement JWT authentication and rate limiting ([5f14d56](https://github.com/JCO-Digital/jman/commit/5f14d56d989f5d38a29757cfa6336740bcd137eb))
+* **cmd:** Add CLI tools for user and credential management ([ebcd5c7](https://github.com/JCO-Digital/jman/commit/ebcd5c7136b4c7b61e3e3155aabeedc814842a17))
+
+
+
 ## [4.12.1](https://github.com/JCO-Digital/jman/compare/v4.12.0...v4.12.1) (2026-03-20)
 
 
@@ -46,26 +56,6 @@
 ### Bug Fixes
 
 * **wpcli:** Disable skip in RunWP for plugin actions ([bbededb](https://github.com/JCO-Digital/jman/commit/bbededbe96173cfc436948d8cfd35eb468db278f))
-
-
-
-# [4.10.0](https://github.com/JCO-Digital/jman/compare/v4.9.0...v4.10.0) (2026-03-19)
-
-
-### Bug Fixes
-
-* RunWP better error handling ([c602704](https://github.com/JCO-Digital/jman/commit/c602704d25a279acd50fa4b2067cedb3e3e1273f))
-* **verbosity:** Use verbosity.Println for cancelled operation message ([6d6409e](https://github.com/JCO-Digital/jman/commit/6d6409ee05e47508341e4635f91923b56960c70d))
-* **wpcli:** Make update regex multiline aware ([6bff80b](https://github.com/JCO-Digital/jman/commit/6bff80bdf5d19497ec5368439c690dfec2fb35b6))
-* **wpcli:** Print update core output verbosely ([30c9aac](https://github.com/JCO-Digital/jman/commit/30c9aac071a970ecdd83045ead075c3f60e4e066))
-* **wpcli:** Use strings.SplitSeq for error splitting ([13de961](https://github.com/JCO-Digital/jman/commit/13de96132f51d1e68965778e3b6ea83e7ab3b2eb))
-
-
-### Features
-
-* **core:** Command to check core for updates and to update. ([cde24be](https://github.com/JCO-Digital/jman/commit/cde24beb85d88e4347d527021897e9fc3a10a76b))
-* **core:** improve core check, update, and version commands ([31fb77a](https://github.com/JCO-Digital/jman/commit/31fb77a36843aa51bcdfa392cd1784b2db68c9fc))
-* **wpcli:** Enhance core update check output ([10a8406](https://github.com/JCO-Digital/jman/commit/10a84068ca6b47348ecb03d72d65d65ed64c14ee))
 
 
 
