@@ -208,7 +208,7 @@ func removePlugin(site models.CliSite, pluginName string) error {
 	if success {
 		verb.Printf(verb.Normal, "Successfully removed '%s' from %s.\n", verb.Yellow(pluginName), verb.Blue(site.Name))
 	} else {
-		verb.Printf(verb.Normal, "Failed to remove '%s' from %s. (It might not be installed)\n", verb.Yellow(pluginName), verb.Blue(verb.Blue(site.Name)))
+		verb.Printf(verb.Normal, "Failed to remove '%s' from %s. (It might not be installed)\n", verb.Yellow(pluginName), verb.Blue(site.Name))
 	}
 	return nil
 }
