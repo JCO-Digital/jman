@@ -24,15 +24,16 @@ type Runtime struct {
 
 // AppConfig represents the user-defined settings mapped from the config file or environment variables.
 type AppConfig struct {
-	TokenSpinup         string   `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
-	TokenSlack          string   `toml:"slackToken" mapstructure:"slackToken"`
-	SlackChannel        string   `toml:"slackChannel" mapstructure:"slackChannel"`
-	SlackMonitorChannel string   `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
-	MonitorThreshold    int      `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
-	MonitorTimeout      int      `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
-	CVSSThreshold       float64  `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
-	VulnThreshold       float64  `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
-	IgnoreSites         []string `toml:"ignoreSites" mapstructure:"ignoreSites"`
+	TokenSpinup         string            `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
+	TokenSlack          string            `toml:"slackToken" mapstructure:"slackToken"`
+	SlackChannel        string            `toml:"slackChannel" mapstructure:"slackChannel"`
+	SlackMonitorChannel string            `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
+	MonitorThreshold    int               `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
+	MonitorTimeout      int               `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
+	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
+	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	IgnoreSites         []string          `toml:"ignoreSites" mapstructure:"ignoreSites"`
+	PluginAliases       map[string]string `toml:"pluginAliases" mapstructure:"pluginAliases"`
 }
 
 var (
@@ -68,6 +69,7 @@ func loadConfig() error {
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
 	viper.SetDefault("ignoreSites", []string{})
+	viper.SetDefault("pluginAliases", map[string]string{})
 
 	// Viper configuration
 	viper.SetConfigName("config")
