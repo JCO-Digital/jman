@@ -51,10 +51,10 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 			defer func() { <-sem }()
 			sitePlugins, err := wpcli.GetPlugins(site)
 			if err != nil {
-				verb.PrintErrorf(verb.Normal, "Warning: failed to fetch plugins for site %s: %v\n", site.Name, err)
+				verb.PrintErrorf(verb.Normal, "Warning: failed to fetch plugins for site %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 				return
 			}
-			verb.PrintErrorf(verb.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), site.Name)
+			verb.PrintErrorf(verb.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), verb.Blue(site.Name))
 
 			mu.Lock()
 			plugins = append(plugins, sitePlugins...)
