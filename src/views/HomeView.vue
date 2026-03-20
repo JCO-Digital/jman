@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { useData } from "../composables/useData";
+import { useDataStore } from "../stores/data";
 import type { Site } from "../types";
 
 const router = useRouter();
-const { sites, servers, plugins, isLoading, error, refreshData } = useData();
+const dataStore = useDataStore();
 
 const searchQuery = ref("");
 const sortKey = ref<keyof Site | "server" | "plugins">("domain");
@@ -14,12 +14,12 @@ const currentPage = ref(1);
 const rowsPerPage = ref(50);
 
 const getServerName = (serverId: number) => {
-	const server = servers.value.find((s) => s.id === serverId);
+	const server = dataStore.servers.find((s) => s.id === serverId);
 	return server ? server.name : "Unknown";
 };
 
 const getPluginCount = (siteId: number) => {
-	return plugins.value.filter((p) => p.site_id === siteId).length;
+	return dataStore.plugins.filter((p) => p.site_id === siteId).length;
 };
 
 const handleSort = (key: string) => {
@@ -32,7 +32,7 @@ const handleSort = (key: string) => {
 };
 
 const filteredAndSortedSites = computed(() => {
-	let result = sites.value;
+	let result = dataStore.sites;
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
@@ -93,22 +93,22 @@ const goToSite = (id: number) => {
 			<h1>Site Management</h1>
 			<button
 				class="btn btn-primary"
-				@click="refreshData"
-				:disabled="isLoading"
+				@click="dataStore.refreshData()"
+				:disabled="dataStore.isLoading"
 			>
 				<span
-					v-if="isLoading"
+					v-if="dataStore.isLoading"
 					class="spinner spinner-small"
 					style="margin-right: 8px; vertical-align: middle"
 				></span>
 				<span style="vertical-align: middle">{{
-					isLoading ? "Refreshing..." : "Refresh Data"
+					dataStore.isLoading ? "Refreshing..." : "Refresh Data"
 				}}</span>
 			</button>
 		</header>
 
-		<div v-if="error" class="error-banner">
-			<p><strong>Error loading data:</strong> {{ error }}</p>
+		<div v-if="dataStore.error" class="error-banner">
+			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
 		</div>
 
 		<div class="controls">
@@ -145,7 +145,7 @@ const goToSite = (id: number) => {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="isLoading && sites.length === 0">
+					<tr v-if="dataStore.isLoading && dataStore.sites.length === 0">
 						<td colspan="3" class="empty-state">
 							<div class="spinner" style="margin-bottom: 12px"></div>
 							<div>Loading data...</div>

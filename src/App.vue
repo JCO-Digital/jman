@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { RouterView, RouterLink, useRoute } from "vue-router";
-import { useData } from "./composables/useData";
+import { useDataStore } from "./stores/data";
 import packageInfo from "../package.json";
 
 const route = useRoute();
-const { initData } = useData();
-initData();
+const dataStore = useDataStore();
+dataStore.initData();
 
 const version = packageInfo.version;
 </script>
