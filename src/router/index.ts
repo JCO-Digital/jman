@@ -1,8 +1,15 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { useAuthStore } from "../stores/auth";
 
 const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
 	routes: [
+		{
+			path: "/login",
+			name: "login",
+			component: () => import("../views/LoginView.vue"),
+			meta: { public: true },
+		},
 		{
 			path: "/",
 			name: "home",
@@ -26,6 +33,25 @@ const router = createRouter({
 			props: true,
 		},
 	],
+});
+
+router.beforeEach((to) => {
+	const authStore = useAuthStore();
+
+	if (to.meta.public) {
+		// If already authenticated and going to login, redirect to home
+		if (to.name === "login" && authStore.isAuthenticated) {
+			return { name: "home" };
+		}
+		return true;
+	}
+
+	// Protected route: check authentication
+	if (!authStore.isAuthenticated) {
+		return { name: "login" };
+	}
+
+	return true;
 });
 
 export default router;
