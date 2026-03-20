@@ -66,6 +66,10 @@ slackChannel = "#alerts" # (optional, defaults to #testing)
 cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
 vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
 ignoreSites = ["example.com"] # (optional, list of domains to ignore during vulnerability scans)
+
+# Plugin aliases for shorthand installs
+[pluginAliases]
+jquest = "https://github.com/JCO-Digital/jquest-plugin/releases/latest/download/jquest.zip"
 ```
 
 ## Usage
@@ -84,19 +88,19 @@ jman fetch
 
 ### Available Commands
 
-| Command    | Description                                                                         |
-| :--------- | :---------------------------------------------------------------------------------- |
-| `fetch`    | Fetch latest data from SpinupWP and update local cache.                             |
-| `list`     | List cached data from SpinupWP (`servers`, `sites`, or `all`).                      |
-| `wp`       | Run a `wp-cli` command on a target site.                                            |
-| `search`   | Search for a specific term across sites.                                            |
-| `admin`    | Create a new administrator user on target sites.                                    |
-| `plugin`   | Install a plugin on target sites. Supports WordPress.org slugs or custom repo URLs. |
-| `mods`     | Set `DISALLOW_FILE_MODS` to true on target sites.                                   |
-| `alias`    | Create SSH/WP-CLI alias files for all sites or a filtered collection.               |
-| `inactive` | List sites that don't have an active MainWP Child connection.                       |
-| `mainwp`   | Install and configure MainWP on sites.                                              |
-| `vuln`     | Scan for plugin vulnerabilities across all sites.                                   |
+| Command    | Description                                                                     |
+| :--------- | :------------------------------------------------------------------------------ |
+| `fetch`    | Fetch latest data from SpinupWP and update local cache.                         |
+| `list`     | List cached data from SpinupWP (`servers`, `sites`, or `all`).                  |
+| `wp`       | Run a `wp-cli` command on a target site.                                        |
+| `search`   | Search for a specific term across sites.                                        |
+| `admin`    | Create a new administrator user on target sites.                                |
+| `plugin`   | Install a plugin on target sites. Supports slugs, repo URLs, or config aliases. |
+| `mods`     | Set `DISALLOW_FILE_MODS` to true on target sites.                               |
+| `alias`    | Create SSH/WP-CLI alias files for all sites or a filtered collection.           |
+| `inactive` | List sites that don't have an active MainWP Child connection.                   |
+| `mainwp`   | Install and configure MainWP on sites.                                          |
+| `vuln`     | Scan for plugin vulnerabilities across all sites.                               |
 
 ### Examples
 
@@ -109,7 +113,7 @@ jman wp mysite.com plugin list --status=active
 **Install a plugin on a site:**
 
 ```bash
-jman plugin mysite.com akismet
+jman plugin mysite.com install akismet
 ```
 
 **Create an admin user:**
