@@ -23,8 +23,15 @@ const handleLogin = async () => {
 			totp.value || undefined,
 		);
 		router.push("/");
-	} catch (err: any) {
-		const message = err?.message ?? String(err);
+	} catch (err: unknown) {
+		let message: string;
+		if (err instanceof Error && err.message) {
+			message = err.message;
+		} else if (typeof err === "string") {
+			message = err;
+		} else {
+			message = String(err);
+		}
 		error.value = message;
 	} finally {
 		isLoading.value = false;
