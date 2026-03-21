@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
@@ -132,7 +134,7 @@ func listPlugins(site models.CliSite) error {
 		if plugin.Update != "" {
 			update += fmt.Sprintf("-> %s available", plugin.Update)
 		}
-		verb.Printf(verb.Normal, "- %s %s%s %s\n", plugin.Name, status, plugin.Version, update)
+		verb.Printf(verb.Normal, "- %s %s%s %s\n", utils.DisplayPluginName(plugin.Name, true, true), status, plugin.Version, update)
 	}
 	return nil
 }
@@ -162,7 +164,7 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 		} else {
 			toUpdate = append(toUpdate, plugin.Name)
 		}
-		verb.Printf(verb.Normal, "- %s (%s -> %s)%s\n", plugin.Name, plugin.Version, plugin.Update, selected)
+		verb.Printf(verb.Normal, "- %s (%s) (%s -> %s)%s\n", cache.GetPluginName(plugin.Name), plugin.Name, plugin.Version, plugin.Update, selected)
 	}
 	if len(toUpdate) == 0 {
 		verb.Printf(verb.Normal, "No matching plugins to update on %s.\n", verb.Blue(site.Name))
