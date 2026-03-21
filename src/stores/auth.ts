@@ -44,12 +44,43 @@ export const useAuthStore = defineStore("auth", () => {
 			body: JSON.stringify(body),
 		});
 
-		const data = await res.json();
+		const contentType = res.headers.get("content-type") || "";
+		let data: any = null;
+		let rawBody: string | null = null;
 
-		if (!res.ok) {
-			throw new Error(data.error || "Login failed");
+		if (contentType.includes("application/json")) {
+			try {
+				data = await res.json();
+			} catch {
+				// If the server indicates failure but we cannot parse JSON,
+				// treat it as a generic login failure instead of surfacing
+				// a JSON parsing error to the UI.
+				if (!res.ok) {
+					throw new Error("Login failed");
+				}
+				// For a successful status with invalid JSON, this is an
+				// unexpected server response.
+				throw new Error("Unexpected server response");
+			}
+		} else {
+			try {
+				rawBody = await res.text();
+			} catch {
+				rawBody = null;
+			}
 		}
 
+		if (!res.ok) {
+			const message =
+				(data && data.error) ||
+				(rawBody && rawBody.trim()) ||
+				"Login failed";
+			throw new Error(message);
+		}
+
+		if (!data) {
+			throw new Error("Unexpected server response");
+		}
 		token.value = data.token;
 		user.value = data.user;
 		expiresAt.value = data.expiresAt;
