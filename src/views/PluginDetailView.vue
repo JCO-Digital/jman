@@ -1,23 +1,23 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { useData } from "../composables/useData";
+import { useDataStore } from "../stores/data";
 
 const props = defineProps<{
 	name: string;
 }>();
 
 const router = useRouter();
-const { plugins, sites, isLoading } = useData();
+const dataStore = useDataStore();
 
 const pluginName = computed(() => props.name);
 
 const sitesWithPlugin = computed(() => {
 	const name = pluginName.value;
-	return plugins.value
+	return dataStore.plugins
 		.filter((p) => p.name === name)
 		.map((p) => {
-			const site = sites.value.find((s) => s.id === p.site_id);
+			const site = dataStore.sites.find((s) => s.id === p.site_id);
 			return {
 				...p,
 				site_domain: site ? site.domain : "Unknown Site",
@@ -94,7 +94,7 @@ const goToSite = (siteId: number) => {
 
 		<main class="content" v-else>
 			<div class="card">
-				<div v-if="isLoading" class="empty-state">
+				<div v-if="dataStore.isLoading" class="empty-state">
 					<div class="spinner" style="margin-bottom: 12px"></div>
 					<div>Loading plugin details...</div>
 				</div>

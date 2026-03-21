@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
-import { useData } from "../composables/useData";
+import { useDataStore } from "../stores/data";
 
 const router = useRouter();
-const { plugins, isLoading, error, refreshData } = useData();
+const dataStore = useDataStore();
 
 const searchQuery = ref("");
 const sortKey = ref<"name" | "count">("name");
@@ -24,7 +24,7 @@ const handleSort = (key: "name" | "count") => {
 const uniquePlugins = computed(() => {
 	const pluginMap = new Map<string, number>();
 
-	plugins.value.forEach((p) => {
+	dataStore.plugins.forEach((p) => {
 		const count = pluginMap.get(p.name) || 0;
 		pluginMap.set(p.name, count + 1);
 	});
@@ -88,22 +88,22 @@ const goToPlugin = (name: string) => {
 			<h1>Plugins Management</h1>
 			<button
 				class="btn btn-primary"
-				@click="refreshData"
-				:disabled="isLoading"
+				@click="dataStore.refreshData()"
+				:disabled="dataStore.isLoading"
 			>
 				<span
-					v-if="isLoading"
+					v-if="dataStore.isLoading"
 					class="spinner spinner-small"
 					style="margin-right: 8px; vertical-align: middle"
 				></span>
 				<span style="vertical-align: middle">{{
-					isLoading ? "Refreshing..." : "Refresh Data"
+					dataStore.isLoading ? "Refreshing..." : "Refresh Data"
 				}}</span>
 			</button>
 		</header>
 
-		<div v-if="error" class="error-banner">
-			<p><strong>Error loading data:</strong> {{ error }}</p>
+		<div v-if="dataStore.error" class="error-banner">
+			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
 		</div>
 
 		<div class="controls">
@@ -135,7 +135,7 @@ const goToPlugin = (name: string) => {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="isLoading && plugins.length === 0">
+					<tr v-if="dataStore.isLoading && dataStore.plugins.length === 0">
 						<td colspan="2" class="empty-state">
 							<div class="spinner" style="margin-bottom: 12px"></div>
 							<div>Loading data...</div>
@@ -189,7 +189,3 @@ const goToPlugin = (name: string) => {
 		</main>
 	</div>
 </template>
-
-<style scoped>
-/* All generic styles moved to style.css */
-</style>
