@@ -1,21 +1,21 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRouter } from "vue-router";
-import { useData } from "../composables/useData";
+import { useDataStore } from "../stores/data";
 
 const props = defineProps<{
 	id: string;
 }>();
 
 const router = useRouter();
-const { getSiteById, getServerById, getPluginsBySiteId, isLoading } = useData();
+const dataStore = useDataStore();
 
 const siteId = parseInt(props.id, 10);
-const site = getSiteById(siteId);
+const site = computed(() => dataStore.getSiteById(siteId));
 const server = computed(() =>
-	site.value ? getServerById(site.value.server_id).value : null,
+	site.value ? dataStore.getServerById(site.value.server_id) : null,
 );
-const sitePlugins = getPluginsBySiteId(siteId);
+const sitePlugins = computed(() => dataStore.getPluginsBySiteId(siteId));
 
 const goBack = () => {
 	router.push({ name: "home" });
@@ -111,7 +111,7 @@ const goToPlugin = (name: string) => {
 		</main>
 		<main class="content" v-else>
 			<div class="card">
-				<div v-if="isLoading" class="empty-state">
+				<div v-if="dataStore.isLoading" class="empty-state">
 					<div class="spinner" style="margin-bottom: 12px"></div>
 					<div>Loading site details...</div>
 				</div>
