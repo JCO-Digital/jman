@@ -40,8 +40,9 @@ var fetchCmd = &cobra.Command{
 
 		fetchPlugins := slices.Contains([]string{"plugins", "all"}, target)
 		fetchVulns := slices.Contains([]string{"vulns", "all"}, target)
+		fetchInfo := slices.Contains([]string{"info", "plugins", "all"}, target)
 
-		if fetchPlugins || fetchVulns {
+		if fetchPlugins || fetchVulns || fetchInfo {
 			if fetchPlugins {
 				verb.Print(verb.Verbose, "Fetching plugins.")
 			}
@@ -53,19 +54,31 @@ var fetchCmd = &cobra.Command{
 				verb.Printf(verb.Verbose, "Successfully fetched and cached %d plugins.\n", len(plugins))
 			}
 
-			if fetchVulns {
-				// Make a de-duplicated list.
-				pluginList := make(map[string]bool)
-				for _, plugin := range plugins {
-					pluginList[plugin.Name] = true
+			// Make a de-duplicated list of plugins.
+			pluginList := make(map[string]bool)
+			for _, plugin := range plugins {
+				pluginList[plugin.Name] = true
+			}
+
+			if fetchInfo {
+				slugs := make([]string, 0, len(pluginList))
+				for slug := range pluginList {
+					slugs = append(slugs, slug)
 				}
+				verb.Printf(verb.Normal, "Fetching plugin info for %d plugins.\n", len(slugs))
+				if err := cache.RefreshPluginInfoCache(slugs); err != nil {
+					verb.PrintErrorf(verb.Normal, "Warning: failed to refresh plugin info: %v\n", err)
+				}
+			}
+
+			if fetchVulns {
 				verb.Printf(verb.Normal, "Fetching vulnerabilities for %d plugins.\n", len(pluginList))
-				for plugin, _ := range pluginList {
+				for plugin := range pluginList {
 					response, err := cache.GetCachedVulnerabilities(plugin, true)
 					if err != nil {
 						return fmt.Errorf("error fetching vulnerabilities: %w", err)
 					}
-					verb.Printf(verb.Verbose, "Successfully fetched and cached %d vulnerabilities.\n", len(response.Data.Vulnerability))
+					verb.Printf(verb.Verbose, "Successfully fetched and cached %d vulnerabilities for %s (%s).\n", len(response.Data.Vulnerability), cache.GetPluginName(plugin), plugin)
 				}
 			}
 		}

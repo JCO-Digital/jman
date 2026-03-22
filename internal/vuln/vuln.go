@@ -2,8 +2,7 @@ package vuln
 
 import (
 	"fmt"
-	"html"
-	"regexp"
+
 	"slices"
 	"sort"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/slack"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/hashicorp/go-version"
 )
@@ -273,7 +273,7 @@ func formatReport(report models.VulnReport) (string, error) {
 	infoLink := ""
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Plugin: %s\n", cleanHTML(report.Plugin))
+	fmt.Fprintf(&sb, "Plugin: %s\n", utils.CleanHTML(report.Plugin))
 
 	// Pull the first useful values from source metadata.
 	// Non-CVE names are preferred for readability when available.
@@ -296,7 +296,7 @@ func formatReport(report models.VulnReport) (string, error) {
 		infoName = report.Vulnerability.Name
 	}
 
-	fmt.Fprintf(&sb, "Vulnerability: %s\n", cleanHTML(infoName))
+	fmt.Fprintf(&sb, "Vulnerability: %s\n", utils.CleanHTML(infoName))
 	if infoDate != "" {
 		fmt.Fprintf(&sb, "Date: %s\n", infoDate)
 	}
@@ -304,7 +304,7 @@ func formatReport(report models.VulnReport) (string, error) {
 		fmt.Fprintf(&sb, "CVSS Score: %.1f\n", cvss)
 	}
 	if infoDesc != "" {
-		fmt.Fprintf(&sb, "Description: %s\n", cleanHTML(infoDesc))
+		fmt.Fprintf(&sb, "Description: %s\n", utils.CleanHTML(infoDesc))
 	}
 	if infoLink != "" {
 		fmt.Fprintf(&sb, "Link: %s\n", infoLink)
@@ -334,7 +334,7 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) s
 
 	for _, pluginName := range keys {
 		info := plugins[pluginName]
-		fmt.Fprintf(&sb, "  %s - %s\n", cleanHTML(pluginName), info.Version)
+		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(pluginName), info.Version)
 		fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
 		if info.Cvss != nil {
 			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
@@ -368,17 +368,6 @@ func getCvss(report models.VulnReport) float64 {
 		return score
 	}
 	return 0
-}
-
-// htmlTagRegexp matches basic HTML tags for removal in cleanHTML.
-var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
-
-// cleanHTML removes HTML tags, decodes HTML entities, and trims surrounding whitespace.
-// This normalizes text from external vulnerability feeds for CLI/Slack output.
-func cleanHTML(s string) string {
-	s = htmlTagRegexp.ReplaceAllString(s, "")
-	s = html.UnescapeString(s)
-	return strings.TrimSpace(s)
 }
 
 // versionCompare compares v1 and v2 using semantic version parsing.
