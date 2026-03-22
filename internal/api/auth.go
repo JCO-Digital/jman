@@ -116,10 +116,6 @@ type refreshResponse struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-type errorResponse struct {
-	Error string `json:"error"`
-}
-
 // --- Handlers ---
 
 // dummyHash is a pre-computed bcrypt hash used when the requested user does
@@ -133,18 +129,18 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req loginRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Invalid request body")
+			WriteError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		if req.Username == "" || req.Password == "" {
-			writeError(w, http.StatusBadRequest, "Invalid request body")
+			WriteError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
 		// Rate limiting check.
 		if !limiter.Allow(req.Username) {
-			writeError(w, http.StatusTooManyRequests, "Too many login attempts, try again later")
+			WriteError(w, http.StatusTooManyRequests, "Too many login attempts, try again later")
 			return
 		}
 
@@ -157,7 +153,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		}
 		if err := bcrypt.CompareHashAndPassword(hashToCompare, []byte(req.Password)); err != nil || user == nil {
 			limiter.RecordFailure(req.Username)
-			writeError(w, http.StatusUnauthorized, "Invalid credentials")
+			WriteError(w, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
 
@@ -165,13 +161,13 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		if user.TOTPSecret != "" {
 			if req.TOTP == "" {
 				// Don't record as a failure — the client may retry with the code.
-				writeError(w, http.StatusUnauthorized, "TOTP code required")
+				WriteError(w, http.StatusUnauthorized, "TOTP code required")
 				return
 			}
 			valid := totp.Validate(req.TOTP, user.TOTPSecret)
 			if !valid {
 				limiter.RecordFailure(req.Username)
-				writeError(w, http.StatusUnauthorized, "Invalid TOTP code")
+				WriteError(w, http.StatusUnauthorized, "Invalid TOTP code")
 				return
 			}
 		}
@@ -180,14 +176,13 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		token, expiresAt, err := signToken(usersCfg, user.Username, user.DisplayName)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to sign JWT: %v", err)
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 
 		limiter.Reset(req.Username)
 
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(loginResponse{
+		WriteJSON(w, http.StatusOK, loginResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
 			User: loginRespUser{
@@ -204,19 +199,18 @@ func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
 		if claims == nil {
-			writeError(w, http.StatusUnauthorized, "Authentication required")
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
 
 		token, expiresAt, err := signToken(usersCfg, claims.Username, claims.DisplayName)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to sign refresh JWT: %v", err)
-			writeError(w, http.StatusInternalServerError, "Internal server error")
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(refreshResponse{
+		WriteJSON(w, http.StatusOK, refreshResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
 		})
@@ -231,7 +225,7 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
-			writeError(w, http.StatusUnauthorized, "Authentication required")
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
 
@@ -239,13 +233,13 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 		const bearerPrefix = "Bearer "
 		if len(authHeader) < len(bearerPrefix) ||
 			subtle.ConstantTimeCompare([]byte(authHeader[:len(bearerPrefix)]), []byte(bearerPrefix)) != 1 {
-			writeError(w, http.StatusUnauthorized, "Authentication required")
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
 
 		rawToken := strings.TrimSpace(authHeader[len(bearerPrefix):])
 		if rawToken == "" {
-			writeError(w, http.StatusUnauthorized, "Authentication required")
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
 			return
 		}
 
@@ -253,11 +247,11 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 		if err != nil {
 			// Distinguish expired tokens for a friendlier client experience.
 			if strings.Contains(err.Error(), "token is expired") {
-				writeError(w, http.StatusUnauthorized, "Token expired")
+				WriteError(w, http.StatusUnauthorized, "Token expired")
 				return
 			}
 			verb.LogPrintf(verb.Debug, "JWT validation failed: %v", err)
-			writeError(w, http.StatusUnauthorized, "Invalid token")
+			WriteError(w, http.StatusUnauthorized, "Invalid token")
 			return
 		}
 
@@ -269,13 +263,4 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 		ctx := contextWithClaims(r.Context(), authClaims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
-}
-
-// --- Helpers ---
-
-// writeError writes a JSON error response with the given HTTP status code.
-func writeError(w http.ResponseWriter, status int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(errorResponse{Error: message})
 }

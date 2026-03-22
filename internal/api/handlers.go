@@ -1,7 +1,6 @@
 package api
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -24,6 +23,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	mux.Handle("POST /api/auth/refresh", auth(RefreshHandler(&usersCfg)))
 	mux.Handle("GET /api/plugins", auth(PluginsHandler))
+	mux.Handle("GET /api/plugininfo", auth(PluginInfoHandler))
 	mux.Handle("GET /api/servers", auth(ServersHandler))
 	mux.Handle("GET /api/sites", auth(SitesHandler))
 	mux.Handle("GET /api/vulns", auth(VulnsHandler))
@@ -32,8 +32,9 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 // HealthHandler returns a simple health check response.
 func HealthHandler(version string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		fmt.Fprintf(w, `{"status":"ok","version":%q}`, version)
+		WriteJSON(w, http.StatusOK, map[string]string{
+			"status":  "ok",
+			"version": version,
+		})
 	}
 }
