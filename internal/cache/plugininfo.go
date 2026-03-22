@@ -46,7 +46,7 @@ func loadPluginInfoCache() *PluginInfoCache {
 
 	// We use ReadJSONCache which handles TTL, but for this specific cache
 	// we manage TTL per-entry. However, the helper is still useful for loading.
-	_ = ReadJSONCache("plugin_info", cache)
+	_ = ReadJSONCache("plugin_info", cache, 0)
 
 	if cache.Plugins == nil {
 		cache.Plugins = make(map[string]PluginInfoEntry)

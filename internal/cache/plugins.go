@@ -16,7 +16,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 	var plugins []models.WPPlugin
 
 	if !force {
-		ReadJSONCache("plugins", &plugins)
+		ReadJSONCache("plugins", &plugins, 6)
 	}
 
 	sites, err := GetSiteList()
@@ -133,7 +133,7 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 
 	var vulnData models.VulnResponse
 	if !force {
-		err := ReadJSONCache(filename, &vulnData)
+		err := ReadJSONCache(filename, &vulnData, 6)
 		if err == nil && vulnData.Error == 0 {
 			return &vulnData, nil
 		}
