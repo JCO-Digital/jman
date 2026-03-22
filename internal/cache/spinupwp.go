@@ -12,7 +12,7 @@ import (
 // GetCachedServers retrieves servers from the cache or fetches them from the API if expired/missing.
 func GetCachedServers() ([]models.Server, error) {
 	var servers []models.Server
-	err := ReadJSONCache("servers", &servers)
+	err := ReadJSONCache("servers", &servers, 6)
 	if err != nil || len(servers) == 0 {
 		return RefreshCachedServers()
 	}
@@ -37,7 +37,7 @@ func RefreshCachedServers() ([]models.Server, error) {
 // GetCachedSites retrieves sites from the cache or fetches them from the API if expired/missing.
 func GetCachedSites() ([]models.Site, error) {
 	var sites []models.Site
-	err := ReadJSONCache("sites", &sites)
+	err := ReadJSONCache("sites", &sites, 6)
 	if err != nil || len(sites) == 0 {
 		return RefreshCachedSites()
 	}

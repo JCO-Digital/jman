@@ -10,9 +10,6 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 )
 
-// cacheTTL is the maximum age of a cache file (12 hours)
-const cacheTTL = 6 * time.Hour
-
 func getCacheFilePath(filename string) string {
 	return filepath.Join(config.RunData.CacheDir, filename+".json")
 }
@@ -22,8 +19,9 @@ func getDataFilePath(filename string) string {
 }
 
 // ReadJSONCache reads a JSON file from the cache directory and unmarshals it into dest.
-// If the file does not exist or is older than 12 hours, it returns an error.
-func ReadJSONCache(filename string, dest any) error {
+// If ttlHours > 0 and the file is older than ttlHours, it returns an error.
+// If ttlHours is 0, the cache never expires.
+func ReadJSONCache(filename string, dest any, ttlHours int) error {
 	filePath := getCacheFilePath(filename)
 
 	info, err := os.Stat(filePath)
@@ -34,8 +32,11 @@ func ReadJSONCache(filename string, dest any) error {
 		return err
 	}
 
-	if time.Since(info.ModTime()) > cacheTTL {
-		return fmt.Errorf("cache file %s is expired", filename)
+	if ttlHours > 0 {
+		ttl := time.Duration(ttlHours) * time.Hour
+		if time.Since(info.ModTime()) > ttl {
+			return fmt.Errorf("cache file %s is expired", filename)
+		}
 	}
 
 	data, err := os.ReadFile(filePath)
