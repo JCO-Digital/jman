@@ -1,5 +1,3 @@
-import type { P } from "vue-router/dist/router-CWoNjPRp.mjs";
-
 export interface DiskSpace {
 	total: number;
 	available: number;
