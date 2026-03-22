@@ -151,9 +151,6 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 			name = *newVulnData.Data.Name
 		}
 		latest := ""
-		if newVulnData.Data.Latest != nil {
-			latest = *newVulnData.Data.Latest
-		}
 		if UpdatePluginInfo(plugin, name, latest) {
 			_ = SavePluginInfoCache()
 		}
