@@ -1,3 +1,21 @@
+# [4.14.0](https://github.com/JCO-Digital/jman/compare/v4.13.0...v4.14.0) (2026-03-22)
+
+
+### Bug Fixes
+
+* **cache:** Remove Latest field update from WPVuln ([6854d95](https://github.com/JCO-Digital/jman/commit/6854d95c44a0970347067b35faefffd66b6e8c62))
+* **cache:** sanitize plugin metadata by decoding entities and stripping ([2593d75](https://github.com/JCO-Digital/jman/commit/2593d75d0244831c1976386ffc5b66fa0921847f))
+
+
+### Features
+
+* **api:** Refactor response handling and add plugin info endpoint ([1f4e1bb](https://github.com/JCO-Digital/jman/commit/1f4e1bbadc6aac9269c96d7330547de6dce978dd))
+* **cache:** Add plugin info caching and fetching ([f6d4003](https://github.com/JCO-Digital/jman/commit/f6d4003329aa4da956bef93e40f5e115da52ba83))
+* **cache:** Add version comparison for plugin updates ([0b070b8](https://github.com/JCO-Digital/jman/commit/0b070b89ee329349c378fe04722e35e4e1753259))
+* **cache:** Refactor plugin info update logic ([29b37fc](https://github.com/JCO-Digital/jman/commit/29b37fcbe01ead14b871cb939ffe81d293cf7920))
+
+
+
 # [4.13.0](https://github.com/JCO-Digital/jman/compare/v4.12.1...v4.13.0) (2026-03-20)
 
 
@@ -47,15 +65,6 @@
 ### Features
 
 * **wpcli:** Return new version and language from UpdateCore ([a6fc4bb](https://github.com/JCO-Digital/jman/commit/a6fc4bbb2898bb676aa9a3a558db7c258b4b8023))
-
-
-
-## [4.10.1](https://github.com/JCO-Digital/jman/compare/v4.10.0...v4.10.1) (2026-03-19)
-
-
-### Bug Fixes
-
-* **wpcli:** Disable skip in RunWP for plugin actions ([bbededb](https://github.com/JCO-Digital/jman/commit/bbededbe96173cfc436948d8cfd35eb468db278f))
 
 
 
