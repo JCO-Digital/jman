@@ -7,12 +7,12 @@ const router = useRouter();
 const dataStore = useDataStore();
 
 const searchQuery = ref("");
-const sortKey = ref<"name" | "count">("name");
+const sortKey = ref<"name" | "count" | "version" | "author">("name");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(1);
 const rowsPerPage = ref(50);
 
-const handleSort = (key: "name" | "count") => {
+const handleSort = (key: "name" | "count" | "version" | "author") => {
 	if (sortKey.value === key) {
 		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
 	} else {
@@ -22,26 +22,56 @@ const handleSort = (key: "name" | "count") => {
 };
 
 const uniquePlugins = computed(() => {
-	const pluginMap = new Map<string, number>();
+	const pluginMap = new Map<string, any>();
 
+	// Process installations first to ensure everything installed is listed
 	dataStore.plugins.forEach((p) => {
-		const count = pluginMap.get(p.name) || 0;
-		pluginMap.set(p.name, count + 1);
+		if (!pluginMap.has(p.name)) {
+			pluginMap.set(p.name, {
+				name: p.name,
+				slug: "-",
+				version: p.version,
+				author: "-",
+				count: 0,
+			});
+		}
+		pluginMap.get(p.name).count++;
 	});
 
-	let result = Array.from(pluginMap.entries()).map(([name, count]) => ({
-		name,
-		count,
-	}));
+	// Enrich with metadata from the array
+	dataStore.pluginInfo.forEach((info) => {
+		const entry = pluginMap.get(info.name);
+		if (entry) {
+			entry.slug = info.slug;
+			entry.version = info.version;
+			entry.author = info.author;
+		} else {
+			pluginMap.set(info.name, {
+				name: info.name,
+				slug: info.slug,
+				version: info.version,
+				author: info.author,
+				count: 0,
+			});
+		}
+	});
 
+	const result = Array.from(pluginMap.values());
+
+	let filtered = result;
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
-		result = result.filter((p) => p.name.toLowerCase().includes(query));
+		filtered = result.filter(
+			(p) =>
+				p.name.toLowerCase().includes(query) ||
+				p.slug.toLowerCase().includes(query) ||
+				p.author.toLowerCase().includes(query),
+		);
 	}
 
-	result.sort((a, b) => {
-		let valA: any = a[sortKey.value];
-		let valB: any = b[sortKey.value];
+	filtered.sort((a, b) => {
+		let valA: any = (a as any)[sortKey.value];
+		let valB: any = (b as any)[sortKey.value];
 
 		if (typeof valA === "string") {
 			valA = valA.toLowerCase();
@@ -53,7 +83,7 @@ const uniquePlugins = computed(() => {
 		return 0;
 	});
 
-	return result;
+	return filtered;
 });
 
 const totalPages = computed(
@@ -126,8 +156,20 @@ const goToPlugin = (name: string) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
+						<th @click="handleSort('version')">
+							Version
+							<span v-if="sortKey === 'version'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
+						<th @click="handleSort('author')">
+							Author
+							<span v-if="sortKey === 'author'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
 						<th @click="handleSort('count')">
-							Installed on Sites
+							Sites
 							<span v-if="sortKey === 'count'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
@@ -135,14 +177,14 @@ const goToPlugin = (name: string) => {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="dataStore.isLoading && dataStore.plugins.length === 0">
-						<td colspan="2" class="empty-state">
+					<tr v-if="dataStore.isLoading && dataStore.pluginInfo.length === 0">
+						<td colspan="4" class="empty-state">
 							<div class="spinner" style="margin-bottom: 12px"></div>
 							<div>Loading data...</div>
 						</td>
 					</tr>
 					<tr v-else-if="paginatedPlugins.length === 0">
-						<td colspan="2" class="empty-state">
+						<td colspan="4" class="empty-state">
 							<span v-if="searchQuery"
 								>No plugins found matching "{{ searchQuery }}".</span
 							>
@@ -151,11 +193,18 @@ const goToPlugin = (name: string) => {
 					</tr>
 					<tr
 						v-for="plugin in paginatedPlugins"
-						:key="plugin.name"
+						:key="plugin.slug"
 						class="clickable-row"
 						@click="goToPlugin(plugin.name)"
 					>
-						<td>{{ plugin.name }}</td>
+						<td>
+							<div style="font-weight: 500">{{ plugin.name }}</div>
+							<div style="font-size: 0.85em; color: #666">
+								{{ plugin.slug }}
+							</div>
+						</td>
+						<td>{{ plugin.version }}</td>
+						<td>{{ plugin.author }}</td>
 						<td>{{ plugin.count }}</td>
 					</tr>
 				</tbody>
