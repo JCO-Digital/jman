@@ -1,6 +1,9 @@
 package cache
 
 import (
+	"html"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +28,7 @@ type PluginInfoEntry struct {
 var (
 	pluginInfoCacheInstance *PluginInfoCache
 	pluginInfoMutex         sync.RWMutex
+	htmlTagRe               = regexp.MustCompile(`<[^>]*>`)
 )
 
 // loadPluginInfoCache ensures the cache is loaded from disk.
@@ -76,11 +80,32 @@ func GetPluginName(slug string) string {
 	return slug
 }
 
+// sanitizePluginInfo normalizes fields before writing to cache.
+func sanitizePluginInfo(info *models.PluginInfo) {
+	if info == nil {
+		return
+	}
+
+	// Decode numeric/named HTML entities in plugin name.
+	// Example: "My Plugin &#8211; Lite" -> "My Plugin – Lite"
+	info.Name = strings.TrimSpace(html.UnescapeString(info.Name))
+
+	// Strip HTML tags from author field and decode entities.
+	// Example: "<a href='...'>Jane Doe</a>" -> "Jane Doe"
+	info.Author = strings.TrimSpace(
+		html.UnescapeString(
+			htmlTagRe.ReplaceAllString(info.Author, ""),
+		),
+	)
+}
+
 // updatePluginInfoInternal handles the actual cache update logic.
 func updatePluginInfoInternal(info *models.PluginInfo, isFull bool) bool {
 	if info == nil || info.Slug == "" {
 		return false
 	}
+
+	sanitizePluginInfo(info)
 
 	cache := loadPluginInfoCache()
 	pluginInfoMutex.Lock()
