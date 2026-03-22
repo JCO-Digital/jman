@@ -76,10 +76,9 @@ func GetPluginName(slug string) string {
 	return slug
 }
 
-// UpdatePluginInfo updates or creates a plugin info entry with new data.
-// It returns true if the cache was modified.
-func UpdatePluginInfo(slug, name, ver string) bool {
-	if slug == "" {
+// updatePluginInfoInternal handles the actual cache update logic.
+func updatePluginInfoInternal(info *models.PluginInfo, isFull bool) bool {
+	if info == nil || info.Slug == "" {
 		return false
 	}
 
@@ -87,46 +86,65 @@ func UpdatePluginInfo(slug, name, ver string) bool {
 	pluginInfoMutex.Lock()
 	defer pluginInfoMutex.Unlock()
 
-	entry, exists := cache.Plugins[slug]
+	entry, exists := cache.Plugins[info.Slug]
 	updated := false
 
 	if !exists {
 		entry = PluginInfoEntry{
-			Info: models.PluginInfo{
-				Slug:    slug,
-				Name:    name,
-				Version: ver,
-			},
-			FetchedAt: time.Now(),
+			Info: *info,
+		}
+		if isFull {
+			entry.FetchedAt = time.Now()
 		}
 		if entry.Info.Name == "" {
-			entry.Info.Name = slug
+			entry.Info.Name = info.Slug
 		}
 		updated = true
 	} else {
-		// Update name if we have a better one
-		if name != "" && (entry.Info.Name == "" || entry.Info.Name == slug) {
-			entry.Info.Name = name
+		if isFull {
+			entry.FetchedAt = time.Now()
+			entry.Info = *info
 			updated = true
-		}
-
-		// Update version if the new one is higher
-		if ver != "" && ver != entry.Info.Version {
-			vNew, errNew := version.NewVersion(ver)
-			vOld, errOld := version.NewVersion(entry.Info.Version)
-
-			if errNew == nil && (errOld != nil || vNew.GreaterThan(vOld)) {
-				entry.Info.Version = ver
+		} else {
+			// Update name if we have a better one
+			if info.Name != "" && (entry.Info.Name == "" || entry.Info.Name == info.Slug) {
+				entry.Info.Name = info.Name
 				updated = true
+			}
+
+			// Update version if the new one is higher
+			if info.Version != "" && info.Version != entry.Info.Version {
+				vNew, errNew := version.NewVersion(info.Version)
+				vOld, errOld := version.NewVersion(entry.Info.Version)
+
+				if errNew == nil && (errOld != nil || vNew.GreaterThan(vOld)) {
+					entry.Info.Version = info.Version
+					updated = true
+				}
 			}
 		}
 	}
 
 	if updated {
-		cache.Plugins[slug] = entry
+		cache.Plugins[info.Slug] = entry
 	}
 
 	return updated
+}
+
+// UpdatePluginInfo updates or creates a plugin info entry with new data.
+// If fullFetch is true, it also updates the FetchAt timestamp.
+// It returns true if the cache was modified.
+func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
+	isFull := false
+	if len(fullFetch) > 0 && fullFetch[0] {
+		isFull = true
+	}
+	return updatePluginInfoInternal(&models.PluginInfo{
+		Slug:    slug,
+		Name:    name,
+		Version: ver,
+	}, isFull)
 }
 
 // GetPluginInfo returns the full cached PluginInfo for a slug,
@@ -161,8 +179,8 @@ func GetPluginInfo(slug string) *models.PluginInfo {
 		return nil
 	}
 
-	// Update cache using the version-aware helper
-	if UpdatePluginInfo(slug, info.Name, info.Version) {
+	// Update cache using the version-aware helper, marking as full fetch
+	if updatePluginInfoInternal(info, true) {
 		_ = SavePluginInfoCache()
 	}
 
@@ -207,7 +225,7 @@ func RefreshPluginInfoCache(slugs []string) error {
 
 			if info != nil {
 				mu.Lock()
-				if UpdatePluginInfo(slug, info.Name, info.Version) {
+				if updatePluginInfoInternal(info, true) {
 					updated = true
 				}
 				mu.Unlock()
