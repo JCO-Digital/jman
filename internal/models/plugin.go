@@ -21,3 +21,16 @@ type WPPluginData struct {
 	Name  string       `json:"name"`
 	Sites []PluginSite `json:"sites"`
 }
+
+// PluginInfo holds metadata fetched from the WordPress.org plugin API.
+type PluginInfo struct {
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	Version       string `json:"version"`
+	Author        string `json:"author"`
+	AuthorProfile string `json:"author_profile"`
+	Requires      string `json:"requires"`
+	Tested        string `json:"tested"`
+	LastUpdated   string `json:"last_updated"`
+	Homepage      string `json:"homepage"`
+}
