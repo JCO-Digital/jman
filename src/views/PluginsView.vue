@@ -22,46 +22,11 @@ const handleSort = (key: "name" | "count" | "version" | "author") => {
 };
 
 const uniquePlugins = computed(() => {
-	const pluginMap = new Map<string, any>();
+	let filtered = [...dataStore.enrichedPlugins];
 
-	// Process installations first to ensure everything installed is listed
-	dataStore.plugins.forEach((p) => {
-		if (!pluginMap.has(p.name)) {
-			pluginMap.set(p.name, {
-				name: p.name,
-				slug: "-",
-				version: p.version,
-				author: "-",
-				count: 0,
-			});
-		}
-		pluginMap.get(p.name).count++;
-	});
-
-	// Enrich with metadata from the array
-	dataStore.pluginInfo.forEach((info) => {
-		const entry = pluginMap.get(info.name);
-		if (entry) {
-			entry.slug = info.slug;
-			entry.version = info.version;
-			entry.author = info.author;
-		} else {
-			pluginMap.set(info.name, {
-				name: info.name,
-				slug: info.slug,
-				version: info.version,
-				author: info.author,
-				count: 0,
-			});
-		}
-	});
-
-	const result = Array.from(pluginMap.values());
-
-	let filtered = result;
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
-		filtered = result.filter(
+		filtered = filtered.filter(
 			(p) =>
 				p.name.toLowerCase().includes(query) ||
 				p.slug.toLowerCase().includes(query) ||
@@ -195,10 +160,10 @@ const goToPlugin = (name: string) => {
 						v-for="plugin in paginatedPlugins"
 						:key="plugin.slug"
 						class="clickable-row"
-						@click="goToPlugin(plugin.name)"
+						@click="goToPlugin(plugin.slug)"
 					>
 						<td>
-							<div style="font-weight: 500">{{ plugin.name }}</div>
+							<div style="font-weight: 500">{{ plugin.shortName }}</div>
 							<div style="font-size: 0.85em; color: #666">
 								{{ plugin.slug }}
 							</div>

@@ -10,16 +10,13 @@ const props = defineProps<{
 const router = useRouter();
 const dataStore = useDataStore();
 
-const pluginName = computed(() => props.name);
-
 const info = computed(() => {
-	return dataStore.pluginInfo.find((i) => i.name === props.name);
+	return dataStore.enrichedPlugins.find((i) => i.slug === props.name);
 });
 
 const sitesWithPlugin = computed(() => {
-	const name = pluginName.value;
 	return dataStore.plugins
-		.filter((p) => p.name === name)
+		.filter((p) => p.name === props.name)
 		.map((p) => {
 			const site = dataStore.sites.find((s) => s.id === p.site_id);
 			return {
@@ -55,7 +52,7 @@ const goToSite = (siteId: number) => {
 				<div class="info-grid">
 					<div class="info-item">
 						<span class="label">Plugin Name:</span>
-						<span class="value">{{ pluginName }}</span>
+						<span class="value">{{ info?.name }}</span>
 					</div>
 					<div class="info-item" v-if="info">
 						<span class="label">Slug:</span>
