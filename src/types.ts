@@ -1,109 +1,123 @@
+import type { P } from "vue-router/dist/router-CWoNjPRp.mjs";
+
 export interface DiskSpace {
-  total: number;
-  available: number;
-  used: number;
-  updated_at: string;
+	total: number;
+	available: number;
+	used: number;
+	updated_at: string;
 }
 
 export interface ServerDatabase {
-  server: string;
-  host: string;
-  port: number;
+	server: string;
+	host: string;
+	port: number;
 }
 
 export interface Server {
-  id: number;
-  name: string;
-  provider_name: string;
-  ubuntu_version: string;
-  ip_address: string;
-  ssh_port: number;
-  timezone: string;
-  region: string;
-  size: string;
-  disk_space: DiskSpace;
-  database: ServerDatabase;
-  ssh_publickey: string;
-  git_publickey: string;
-  connection_status: string;
-  reboot_required: boolean;
-  upgrade_required: boolean;
-  install_notes: string;
-  created_at: string;
-  status: string;
+	id: number;
+	name: string;
+	provider_name: string;
+	ubuntu_version: string;
+	ip_address: string;
+	ssh_port: number;
+	timezone: string;
+	region: string;
+	size: string;
+	disk_space: DiskSpace;
+	database: ServerDatabase;
+	ssh_publickey: string;
+	git_publickey: string;
+	connection_status: string;
+	reboot_required: boolean;
+	upgrade_required: boolean;
+	install_notes: string;
+	created_at: string;
+	status: string;
 }
 
 export interface AdditionalDomain {
-  domain: string;
-  redirect: {
-    enabled: boolean;
-  };
-  created_at: string;
+	domain: string;
+	redirect: {
+		enabled: boolean;
+	};
+	created_at: string;
 }
 
 export interface SiteDatabase {
-  id?: number;
-  user_id?: number;
-  table_prefix?: string;
+	id?: number;
+	user_id?: number;
+	table_prefix?: string;
 }
 
 export interface StorageProvider {
-  id: number;
-  region: string;
-  bucket: string;
+	id: number;
+	region: string;
+	bucket: string;
 }
 
 export interface Backups {
-  files: boolean;
-  database: boolean;
-  paths_to_exclude: string;
-  is_backups_retention_period_enabled: boolean;
-  retention_period: number;
-  next_run_time: string | null;
-  storage_provider: StorageProvider;
+	files: boolean;
+	database: boolean;
+	paths_to_exclude: string;
+	is_backups_retention_period_enabled: boolean;
+	retention_period: number;
+	next_run_time: string | null;
+	storage_provider: StorageProvider;
 }
 
 export interface Site {
-  id: number;
-  server_id: number;
-  domain: string;
-  additional_domains: AdditionalDomain[];
-  site_user: string;
-  user_auth: string;
-  php_version: string;
-  public_folder: string;
-  is_wordpress: boolean;
-  page_cache: {
-    enabled: boolean;
-  };
-  https: {
-    enabled: boolean;
-    certificate_expires: string | null;
-    certificate_renews: string | null;
-  };
-  nginx: {
-    uploads_directory_protected: boolean;
-    xmlrpc_protected: boolean;
-    subdirectory_rewrite_in_place: boolean;
-  };
-  database: SiteDatabase;
-  backups: Backups;
-  wp_core_update: boolean | number;
-  wp_theme_updates: boolean | number;
-  wp_plugin_updates: boolean | number;
-  basic_auth: {
-    enabled: boolean;
-    username: string;
-  };
-  created_at: string;
-  status: string;
+	id: number;
+	server_id: number;
+	domain: string;
+	additional_domains: AdditionalDomain[];
+	site_user: string;
+	user_auth: string;
+	php_version: string;
+	public_folder: string;
+	is_wordpress: boolean;
+	page_cache: {
+		enabled: boolean;
+	};
+	https: {
+		enabled: boolean;
+		certificate_expires: string | null;
+		certificate_renews: string | null;
+	};
+	nginx: {
+		uploads_directory_protected: boolean;
+		xmlrpc_protected: boolean;
+		subdirectory_rewrite_in_place: boolean;
+	};
+	database: SiteDatabase;
+	backups: Backups;
+	wp_core_update: boolean | number;
+	wp_theme_updates: boolean | number;
+	wp_plugin_updates: boolean | number;
+	basic_auth: {
+		enabled: boolean;
+		username: string;
+	};
+	created_at: string;
+	status: string;
 }
 
 export interface Plugin {
-  site_id: number;
-  name: string;
-  status: string;
-  version: string;
-  update: string;
-  autoUpdate: string | boolean;
+	site_id: number;
+	name: string;
+	status: string;
+	version: string;
+	update: string;
+	autoUpdate: string | boolean;
+}
+
+export interface PluginInfo {
+	name: string;
+	slug: string;
+	version: string;
+	author: string;
+	author_profile: string;
+	requires: string;
+	tested: string;
+	last_updated: string;
+	homepage: string;
 }
