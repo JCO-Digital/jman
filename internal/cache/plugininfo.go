@@ -7,6 +7,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/fetch/wporg"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
+	"github.com/hashicorp/go-version"
 )
 
 // PluginInfoCache is the on-disk structure for plugin_info.json.
@@ -51,8 +52,8 @@ func loadPluginInfoCache() *PluginInfoCache {
 	return pluginInfoCacheInstance
 }
 
-// savePluginInfoCache writes the current cache instance to disk.
-func savePluginInfoCache() error {
+// SavePluginInfoCache writes the current cache instance to disk.
+func SavePluginInfoCache() error {
 	pluginInfoMutex.RLock()
 	defer pluginInfoMutex.RUnlock()
 
@@ -73,6 +74,59 @@ func GetPluginName(slug string) string {
 		return info.Name
 	}
 	return slug
+}
+
+// UpdatePluginInfo updates or creates a plugin info entry with new data.
+// It returns true if the cache was modified.
+func UpdatePluginInfo(slug, name, ver string) bool {
+	if slug == "" {
+		return false
+	}
+
+	cache := loadPluginInfoCache()
+	pluginInfoMutex.Lock()
+	defer pluginInfoMutex.Unlock()
+
+	entry, exists := cache.Plugins[slug]
+	updated := false
+
+	if !exists {
+		entry = PluginInfoEntry{
+			Info: models.PluginInfo{
+				Slug:    slug,
+				Name:    name,
+				Version: ver,
+			},
+			FetchedAt: time.Now(),
+		}
+		if entry.Info.Name == "" {
+			entry.Info.Name = slug
+		}
+		updated = true
+	} else {
+		// Update name if we have a better one
+		if name != "" && (entry.Info.Name == "" || entry.Info.Name == slug) {
+			entry.Info.Name = name
+			updated = true
+		}
+
+		// Update version if the new one is higher
+		if ver != "" && ver != entry.Info.Version {
+			vNew, errNew := version.NewVersion(ver)
+			vOld, errOld := version.NewVersion(entry.Info.Version)
+
+			if errNew == nil && (errOld != nil || vNew.GreaterThan(vOld)) {
+				entry.Info.Version = ver
+				updated = true
+			}
+		}
+	}
+
+	if updated {
+		cache.Plugins[slug] = entry
+	}
+
+	return updated
 }
 
 // GetPluginInfo returns the full cached PluginInfo for a slug,
@@ -107,17 +161,17 @@ func GetPluginInfo(slug string) *models.PluginInfo {
 		return nil
 	}
 
-	// Update cache
-	pluginInfoMutex.Lock()
-	cache.Plugins[slug] = PluginInfoEntry{
-		Info:      *info,
-		FetchedAt: time.Now(),
+	// Update cache using the version-aware helper
+	if UpdatePluginInfo(slug, info.Name, info.Version) {
+		_ = SavePluginInfoCache()
 	}
-	pluginInfoMutex.Unlock()
 
-	_ = savePluginInfoCache()
+	// Fetch again to get the merged result
+	pluginInfoMutex.RLock()
+	entry, _ = cache.Plugins[slug]
+	pluginInfoMutex.RUnlock()
 
-	return info
+	return &entry.Info
 }
 
 // RefreshPluginInfoCache fetches info for all given slugs concurrently,
@@ -153,13 +207,9 @@ func RefreshPluginInfoCache(slugs []string) error {
 
 			if info != nil {
 				mu.Lock()
-				pluginInfoMutex.Lock()
-				cache.Plugins[slug] = PluginInfoEntry{
-					Info:      *info,
-					FetchedAt: time.Now(),
+				if UpdatePluginInfo(slug, info.Name, info.Version) {
+					updated = true
 				}
-				pluginInfoMutex.Unlock()
-				updated = true
 				mu.Unlock()
 			}
 		})
@@ -168,7 +218,7 @@ func RefreshPluginInfoCache(slugs []string) error {
 	wg.Wait()
 
 	if updated {
-		return savePluginInfoCache()
+		return SavePluginInfoCache()
 	}
 
 	return nil

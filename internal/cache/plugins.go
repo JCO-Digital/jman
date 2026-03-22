@@ -65,10 +65,25 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 
 	wg.Wait()
 
+	infoUpdated := false
+	for _, p := range plugins {
+		bestVer := p.Version
+		if p.Update != "" {
+			bestVer = p.Update
+		}
+		if UpdatePluginInfo(p.Name, "", bestVer) {
+			infoUpdated = true
+		}
+	}
+
 	if updated {
 		if err := WriteJSONCache("plugins", plugins); err != nil {
 			verb.PrintErrorf(verb.Normal, "Warning: failed to write plugins cache: %v\n", err)
 		}
+	}
+
+	if infoUpdated {
+		_ = SavePluginInfoCache()
 	}
 
 	return plugins, nil
@@ -128,6 +143,20 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 	newVulnData, err := wpvuln.GetVulnerabilities(plugin)
 	if err != nil {
 		return nil, err
+	}
+
+	if newVulnData != nil && newVulnData.Data != nil {
+		name := ""
+		if newVulnData.Data.Name != nil {
+			name = *newVulnData.Data.Name
+		}
+		latest := ""
+		if newVulnData.Data.Latest != nil {
+			latest = *newVulnData.Data.Latest
+		}
+		if UpdatePluginInfo(plugin, name, latest) {
+			_ = SavePluginInfoCache()
+		}
 	}
 
 	if err := WriteJSONCache(filename, newVulnData); err != nil {
