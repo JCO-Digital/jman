@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import type { Server, Site, Plugin, PluginInfo } from "../types";
 import { useAuthStore } from "./auth";
@@ -19,6 +19,38 @@ export const useDataStore = defineStore("data", () => {
 	const isLoaded = ref(false);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
+
+	// Getters
+	const enrichedPlugins = computed(() => {
+		return pluginInfo.value.map((info) => {
+			const count = plugins.value.filter((p) => p.name === info.slug).length;
+			let name = info.name || info.slug || "Unknown Plugin";
+			if (name === info.slug) {
+				// Turn "advanced-custom-fields-pro" into "Advanced Custom Fields Pro".
+				name = name
+					.split(/[-_]/)
+					.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+					.join(" ");
+			}
+			let shortName = name;
+
+			if (shortName) {
+				const parts = shortName.split(/ [-–—] /);
+				if (parts.length > 1 && parts[0] !== undefined) {
+					shortName = parts[0];
+				}
+			}
+
+			return {
+				...info,
+				name,
+				shortName,
+				version: info.version || "N/A",
+				author: info.author || "Unknown",
+				count,
+			};
+		});
+	});
 
 	// Actions
 	function loadFromCache(): boolean {
@@ -133,7 +165,6 @@ export const useDataStore = defineStore("data", () => {
 		await fetchFromApi();
 	}
 
-	// Getters
 	function getSiteById(id: number) {
 		return sites.value.find((s) => s.id === id);
 	}
@@ -155,13 +186,14 @@ export const useDataStore = defineStore("data", () => {
 		isLoaded,
 		isLoading,
 		error,
+		// Getters
+		enrichedPlugins,
+		getSiteById,
+		getServerById,
+		getPluginsBySiteId,
 		// Actions
 		initData,
 		refreshData,
 		clearCache,
-		// Getters
-		getSiteById,
-		getServerById,
-		getPluginsBySiteId,
 	};
 });
