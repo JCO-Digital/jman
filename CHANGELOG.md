@@ -1,3 +1,17 @@
+# [4.15.0](https://github.com/JCO-Digital/jman/compare/v4.14.1...v4.15.0) (2026-03-23)
+
+
+### Bug Fixes
+
+* **cache:** sanitize plugin metadata by decoding entities and stripping ([1596077](https://github.com/JCO-Digital/jman/commit/1596077a6cc3d0ef02d4b953c57a456406cc4c78))
+
+
+### Features
+
+* **mods:** Add ability to enable/disable file mods ([4669dd5](https://github.com/JCO-Digital/jman/commit/4669dd545398a657008937fb3beddbf7a10e9284))
+
+
+
 ## [4.14.1](https://github.com/JCO-Digital/jman/compare/v4.14.0...v4.14.1) (2026-03-23)
 
 
@@ -10,98 +24,38 @@
 
 # [4.14.0](https://github.com/JCO-Digital/jman/compare/v4.13.0...v4.14.0) (2026-03-22)
 
-## 4.15.0 (2026-03-23)
 
-#### Features
-- mods: Add ability to enable/disable file mods (4669dd5)
+### Bug Fixes
 
-#### Bug Fixes
-- cache: sanitize plugin metadata by decoding entities and stripping tags (1596077)
+* **cache:** Remove Latest field update from WPVuln ([6854d95](https://github.com/JCO-Digital/jman/commit/6854d95c44a0970347067b35faefffd66b6e8c62))
+* **cache:** sanitize plugin metadata by decoding entities and stripping ([2593d75](https://github.com/JCO-Digital/jman/commit/2593d75d0244831c1976386ffc5b66fa0921847f))
 
-#### Refactor
-- cache: make JSON cache TTL configurable (e100418)
 
-#### Maintenance
-- release: v4.14.0 [skip ci] (5b72dcb)
-- release: v4.13.0 [skip ci] (dbea3ba)
-- release: v4.12.1 [skip ci] (5b0b84e)
+### Features
 
-### v4.14.1 (2026-03-23)
+* **api:** Refactor response handling and add plugin info endpoint ([1f4e1bb](https://github.com/JCO-Digital/jman/commit/1f4e1bbadc6aac9269c96d7330547de6dce978dd))
+* **cache:** Add plugin info caching and fetching ([f6d4003](https://github.com/JCO-Digital/jman/commit/f6d4003329aa4da956bef93e40f5e115da52ba83))
+* **cache:** Add version comparison for plugin updates ([0b070b8](https://github.com/JCO-Digital/jman/commit/0b070b89ee329349c378fe04722e35e4e1753259))
+* **cache:** Refactor plugin info update logic ([29b37fc](https://github.com/JCO-Digital/jman/commit/29b37fcbe01ead14b871cb939ffe81d293cf7920))
 
-#### Bug Fixes
-- wpcli: Pass skip parameter to GetPlugins (230b8c6)
-- admin: Use normal verbosity for user creation messages (d9219bc)
 
-#### Refactor
-- wpcli: Introduce CliOptions struct (a7378d5)
 
-#### Documentation
-- Add prerequisites to README (0d6a432)
-- Update installation instructions (371a014)
+# [4.13.0](https://github.com/JCO-Digital/jman/compare/v4.12.1...v4.13.0) (2026-03-20)
 
-#### Maintenance
-- release: v4.14.1 [skip ci] (66b03e7)
 
-## v4.14.0 (2026-03-22)
+### Features
 
-#### Features
-- cache: Refactor plugin info update logic (29b37fc)
-- api: Refactor response handling and add plugin info endpoint (1f4e1bb)
-- cache: Add version comparison for plugin updates (0b070b8)
-- cache: Add plugin info caching and fetching (f6d4003)
+* **api:** Implement JWT authentication and rate limiting ([5f14d56](https://github.com/JCO-Digital/jman/commit/5f14d56d989f5d38a29757cfa6336740bcd137eb))
+* **cmd:** Add CLI tools for user and credential management ([ebcd5c7](https://github.com/JCO-Digital/jman/commit/ebcd5c7136b4c7b61e3e3155aabeedc814842a17))
 
-#### Bug Fixes
-- cache: sanitize plugin metadata by decoding entities and stripping tags (2593d75)
-- cache: Remove Latest field update from WPVuln (6854d95)
 
-#### Refactor
-- cache: make JSON cache TTL configurable (6648422)
 
-#### Maintenance
-- release: v4.14.0 [skip ci] (8c939de)
+## [4.12.1](https://github.com/JCO-Digital/jman/compare/v4.12.0...v4.12.1) (2026-03-20)
 
-## v4.13.0 (2026-03-20)
 
-#### Features
-- cmd: Add CLI tools for user and credential management (ebcd5c7)
-- api: Implement JWT authentication and rate limiting (5f14d56)
+### Bug Fixes
 
-#### Maintenance
-- release: v4.13.0 [skip ci] (cc52714)
+* **update:** Use AppVersion for current version check ([218093b](https://github.com/JCO-Digital/jman/commit/218093bbb3d10023a10dd566da740a5d0726ae58))
 
-### v4.12.1 (2026-03-20)
 
-#### Bug Fixes
-- update: Use AppVersion for current version check (218093b)
-
-#### Maintenance
-- release: v4.12.1 [skip ci] (7ae2041)
-
-## v4.12.0 (2026-03-20)
-
-#### Features
-- plugin: colorize site names in output (d1d6a52)
-- plugin: Add plugin alias support (7d2aeda)
-
-#### Bug Fixes
-- plugin: Correct site name formatting in remove output (8d885c7)
-- wpcli: Ensure error is returned from RunWP (64ce754)
-- cache: Improve plugin fetch error reporting (0edde0a)
-- wpcli: Improve error handling for WP-CLI commands (f51f99e)
-- plugin: Improve error handling for plugin operations (114b17d)
-
-#### Maintenance
-- release: v4.12.0 [skip ci] (d846159)
-
-## v4.11.0 (2026-03-19)
-
-#### Features
-- wpcli: Return new version and language from UpdateCore (a6fc4bb)
-
-#### Bug Fixes
-- wpcli: Return structured data from UpdateCore (b7769c1)
-
-#### Refactor
-- verb: Rename ansi to verb and move ANSI color functions (ec587e5)
-- verbosity: Rename verbosity package to verb (ca2481f)
 
