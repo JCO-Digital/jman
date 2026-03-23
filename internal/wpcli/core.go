@@ -18,7 +18,7 @@ type CoreUpdate struct {
 
 // Check WordPress core for updates and return the available updates if any.
 func CheckCore(ssh, path string) ([]CoreUpdate, error) {
-	res, err := RunWP(ssh, path, true, "core", "check-update", "--format=json")
+	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "core", "check-update", "--format=json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
 	}
@@ -52,7 +52,7 @@ func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
 		Language: "",
 	}
 
-	res, err := RunWP(ssh, path, true, "core", "update", "--minor")
+	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "core", "update", "--minor")
 	if err != nil {
 		return result, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
 	}
@@ -75,7 +75,7 @@ func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
 	}
 	result.Success = true
 
-	res, err = RunWP(ssh, path, true, "core", "update-db")
+	res, err = RunWP(CliOptions{SSH: ssh, Path: path}, "core", "update-db")
 	if err != nil {
 		return result, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
@@ -86,7 +86,7 @@ func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
 
 // CoreVersion returns the current WordPress core version on the target site.
 func CoreVersion(ssh, path string) (string, error) {
-	res, err := RunWP(ssh, path, true, "core", "version")
+	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "core", "version")
 	if err != nil {
 		return "", fmt.Errorf("failed to show core version: %w (stderr: %s)", err, res.Error)
 	}
