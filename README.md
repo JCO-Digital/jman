@@ -15,19 +15,24 @@ _Note: `jman` was recently rewritten in Go for improved performance, concurrent 
 
 ## Installation
 
-You can install `jman` directly via the Go toolchain:
+### Option A: Download a prebuilt binary (recommended)
+
+1. Open the latest release page:
+   https://github.com/JCO-Digital/jman/releases/latest
+2. Download the executable for your OS/architecture.
+3. Extract it.
+4. Move the `jman` binary to a directory in your `PATH` (for example `~/.local/bin` or `/usr/local/bin` if you want it system wide).
+
+Example (Linux/macOS):
 
 ```bash
-go install github.com/JCO-Digital/jman/cmd/jman@latest
+chmod +x jman
+mv jman ~/.local/bin/jman
 ```
 
-### Prerequisites
+### Option B: Build from source
 
-- Go (v1.21 or later recommended)
-- SSH access configured for your SpinupWP servers.
-- `wp-cli` available on the target servers.
-
-### Building from source
+If you prefer building locally, clone the repository and build with the project’s standard build process, then place the resulting `jman` binary in your `PATH`.
 
 1. Clone the repository:
 
@@ -48,6 +53,12 @@ go install github.com/JCO-Digital/jman/cmd/jman@latest
    ```
 
 If you don't use `make install`, the compiled binary will be generated at `./bin/jman`.
+
+### Prerequisites
+
+- SSH access configured for your SpinupWP servers.
+- `wp-cli` available locally and on the target servers.
+- Go (needed if building from source, v1.25 or later recommended)
 
 ## Configuration
 

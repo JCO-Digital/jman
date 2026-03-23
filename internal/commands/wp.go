@@ -28,7 +28,7 @@ var wpCmd = &cobra.Command{
 
 		for _, site := range sites {
 			verb.Printf(verb.Verbose, "\n=== %s (%s) ===\n", site.Name, site.ServerName)
-			res, err := wpcli.RunWP(site.SSH, site.Path, false, args[1:]...)
+			res, err := wpcli.RunWP(wpcli.CliOptions{SSH: site.SSH, Path: site.Path}, args[1:]...)
 
 			if res.Output != "" {
 				verb.Println(verb.Quiet, res.Output)
