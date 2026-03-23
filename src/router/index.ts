@@ -11,26 +11,42 @@ const router = createRouter({
 			meta: { public: true },
 		},
 		{
-			path: "/",
-			name: "home",
-			component: () => import("../views/HomeView.vue"),
-		},
-		{
 			path: "/site/:id",
 			name: "site-detail",
 			component: () => import("../views/SiteDetailView.vue"),
 			props: true,
 		},
 		{
-			path: "/plugins",
+			path: "/plugins/:page(\\d+)?/:rowsPerPage(\\d+)?",
 			name: "plugins",
 			component: () => import("../views/PluginsView.vue"),
+			props: (route) => ({
+				page: route.params.page
+					? parseInt(route.params.page as string, 10)
+					: undefined,
+				rowsPerPage: route.params.rowsPerPage
+					? parseInt(route.params.rowsPerPage as string, 10)
+					: undefined,
+			}),
 		},
 		{
 			path: "/plugin/:name",
 			name: "plugin-detail",
 			component: () => import("../views/PluginDetailView.vue"),
 			props: true,
+		},
+		{
+			path: "/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			name: "home",
+			component: () => import("../views/HomeView.vue"),
+			props: (route) => ({
+				page: route.params.page
+					? parseInt(route.params.page as string, 10)
+					: undefined,
+				rowsPerPage: route.params.rowsPerPage
+					? parseInt(route.params.rowsPerPage as string, 10)
+					: undefined,
+			}),
 		},
 	],
 });
