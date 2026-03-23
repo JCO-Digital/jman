@@ -56,7 +56,9 @@ export const useDataStore = defineStore("data", () => {
 		return sites.value.map((site) => {
 			return {
 				...site,
-				server: servers.value.find((s) => s.id === site.server_id),
+				server:
+					servers.value.find((s) => s.id === site.server_id)?.name ??
+					"Unknown Server",
 				plugins: plugins.value.filter((p) => p.site_id === site.id),
 			};
 		});
