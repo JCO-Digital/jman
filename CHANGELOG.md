@@ -1,70 +1,605 @@
-# [4.14.0](https://github.com/JCO-Digital/jman/compare/v4.13.0...v4.14.0) (2026-03-22)
+# Changelog
 
+## 4.15.0 (2026-03-23)
 
-### Bug Fixes
+#### Features
+- mods: Add ability to enable/disable file mods (4669dd5)
 
-* **cache:** Remove Latest field update from WPVuln ([6854d95](https://github.com/JCO-Digital/jman/commit/6854d95c44a0970347067b35faefffd66b6e8c62))
-* **cache:** sanitize plugin metadata by decoding entities and stripping ([2593d75](https://github.com/JCO-Digital/jman/commit/2593d75d0244831c1976386ffc5b66fa0921847f))
+#### Bug Fixes
+- cache: sanitize plugin metadata by decoding entities and stripping tags (1596077)
 
+#### Refactor
+- cache: make JSON cache TTL configurable (e100418)
 
-### Features
+#### Maintenance
+- release: v4.14.0 [skip ci] (5b72dcb)
+- release: v4.13.0 [skip ci] (dbea3ba)
+- release: v4.12.1 [skip ci] (5b0b84e)
 
-* **api:** Refactor response handling and add plugin info endpoint ([1f4e1bb](https://github.com/JCO-Digital/jman/commit/1f4e1bbadc6aac9269c96d7330547de6dce978dd))
-* **cache:** Add plugin info caching and fetching ([f6d4003](https://github.com/JCO-Digital/jman/commit/f6d4003329aa4da956bef93e40f5e115da52ba83))
-* **cache:** Add version comparison for plugin updates ([0b070b8](https://github.com/JCO-Digital/jman/commit/0b070b89ee329349c378fe04722e35e4e1753259))
-* **cache:** Refactor plugin info update logic ([29b37fc](https://github.com/JCO-Digital/jman/commit/29b37fcbe01ead14b871cb939ffe81d293cf7920))
+### v4.14.1 (2026-03-23)
 
+#### Bug Fixes
+- wpcli: Pass skip parameter to GetPlugins (230b8c6)
+- admin: Use normal verbosity for user creation messages (d9219bc)
 
+#### Refactor
+- wpcli: Introduce CliOptions struct (a7378d5)
 
-# [4.13.0](https://github.com/JCO-Digital/jman/compare/v4.12.1...v4.13.0) (2026-03-20)
+#### Documentation
+- Add prerequisites to README (0d6a432)
+- Update installation instructions (371a014)
 
+#### Maintenance
+- release: v4.14.1 [skip ci] (66b03e7)
 
-### Features
+## v4.14.0 (2026-03-22)
 
-* **api:** Implement JWT authentication and rate limiting ([5f14d56](https://github.com/JCO-Digital/jman/commit/5f14d56d989f5d38a29757cfa6336740bcd137eb))
-* **cmd:** Add CLI tools for user and credential management ([ebcd5c7](https://github.com/JCO-Digital/jman/commit/ebcd5c7136b4c7b61e3e3155aabeedc814842a17))
+#### Features
+- cache: Refactor plugin info update logic (29b37fc)
+- api: Refactor response handling and add plugin info endpoint (1f4e1bb)
+- cache: Add version comparison for plugin updates (0b070b8)
+- cache: Add plugin info caching and fetching (f6d4003)
 
+#### Bug Fixes
+- cache: sanitize plugin metadata by decoding entities and stripping tags (2593d75)
+- cache: Remove Latest field update from WPVuln (6854d95)
 
+#### Refactor
+- cache: make JSON cache TTL configurable (6648422)
 
-## [4.12.1](https://github.com/JCO-Digital/jman/compare/v4.12.0...v4.12.1) (2026-03-20)
+#### Maintenance
+- release: v4.14.0 [skip ci] (8c939de)
 
+## v4.13.0 (2026-03-20)
 
-### Bug Fixes
+#### Features
+- cmd: Add CLI tools for user and credential management (ebcd5c7)
+- api: Implement JWT authentication and rate limiting (5f14d56)
 
-* **update:** Use AppVersion for current version check ([218093b](https://github.com/JCO-Digital/jman/commit/218093bbb3d10023a10dd566da740a5d0726ae58))
+#### Maintenance
+- release: v4.13.0 [skip ci] (cc52714)
 
+### v4.12.1 (2026-03-20)
 
+#### Bug Fixes
+- update: Use AppVersion for current version check (218093b)
 
-# [4.12.0](https://github.com/JCO-Digital/jman/compare/v4.11.0...v4.12.0) (2026-03-20)
+#### Maintenance
+- release: v4.12.1 [skip ci] (7ae2041)
 
+## v4.12.0 (2026-03-20)
 
-### Bug Fixes
+#### Features
+- plugin: colorize site names in output (d1d6a52)
+- plugin: Add plugin alias support (7d2aeda)
 
-* **cache:** Improve plugin fetch error reporting ([0edde0a](https://github.com/JCO-Digital/jman/commit/0edde0a3f5e48f1ee84204ac412577419cdb6e9f))
-* **plugin:** Correct site name formatting in remove output ([8d885c7](https://github.com/JCO-Digital/jman/commit/8d885c72b5883672bd756e7c93ee689ec7de0b9e))
-* **plugin:** Improve error handling for plugin operations ([114b17d](https://github.com/JCO-Digital/jman/commit/114b17d4ff22dea9f2b1524f82ce91e0c34ebe99))
-* **wpcli:** Ensure error is returned from RunWP ([64ce754](https://github.com/JCO-Digital/jman/commit/64ce75495ae6ab3158358bef600fe65c4c565ca7))
-* **wpcli:** Improve error handling for WP-CLI commands ([f51f99e](https://github.com/JCO-Digital/jman/commit/f51f99ed6fe56c819c704ea3a4d7fa06d4a9c118))
+#### Bug Fixes
+- plugin: Correct site name formatting in remove output (8d885c7)
+- wpcli: Ensure error is returned from RunWP (64ce754)
+- cache: Improve plugin fetch error reporting (0edde0a)
+- wpcli: Improve error handling for WP-CLI commands (f51f99e)
+- plugin: Improve error handling for plugin operations (114b17d)
 
+#### Maintenance
+- release: v4.12.0 [skip ci] (d846159)
 
-### Features
+## v4.11.0 (2026-03-19)
 
-* **plugin:** Add plugin alias support ([7d2aeda](https://github.com/JCO-Digital/jman/commit/7d2aeda1d87dcc2a586e964dd72a9645f339755b))
-* **plugin:** colorize site names in output ([d1d6a52](https://github.com/JCO-Digital/jman/commit/d1d6a528efb8bd9664694ccade36b5f2409615a4))
+#### Features
+- wpcli: Return new version and language from UpdateCore (a6fc4bb)
 
+#### Bug Fixes
+- wpcli: Return structured data from UpdateCore (b7769c1)
 
+#### Refactor
+- verb: Rename ansi to verb and move ANSI color functions (ec587e5)
+- verbosity: Rename verbosity package to verb (ca2481f)
 
-# [4.11.0](https://github.com/JCO-Digital/jman/compare/v4.10.1...v4.11.0) (2026-03-19)
+#### Maintenance
+- release: v4.11.0 [skip ci] (1e19c14)
 
+### v4.10.1 (2026-03-19)
 
-### Bug Fixes
+#### Bug Fixes
+- wpcli: Disable skip in RunWP for plugin actions (bbededb)
 
-* **wpcli:** Return structured data from UpdateCore ([b7769c1](https://github.com/JCO-Digital/jman/commit/b7769c1e52dcd0e468eecfbe476c8d51037d1dc6))
+#### Maintenance
+- release: v4.10.1 [skip ci] (bd72baf)
 
+## v4.10.0 (2026-03-19)
 
-### Features
+#### Features
+- wpcli: Enhance core update check output (10a8406)
+- core: improve core check, update, and version commands (31fb77a)
+- core: Command to check core for updates and to update. (cde24be)
 
-* **wpcli:** Return new version and language from UpdateCore ([a6fc4bb](https://github.com/JCO-Digital/jman/commit/a6fc4bbb2898bb676aa9a3a558db7c258b4b8023))
+#### Bug Fixes
+- wpcli: Use strings.SplitSeq for error splitting (13de961)
+- RunWP better error handling (c602704)
+- verbosity: Use verbosity.Println for cancelled operation message (6d6409e)
+- wpcli: Make update regex multiline aware (6bff80b)
+- wpcli: Print update core output verbosely (30c9aac)
 
+#### Build System
+- makefile: Inject app version into LDFLAGS via config (55640a7)
 
+#### Maintenance
+- release: v4.10.0 [skip ci] (337ed81)
+
+## v4.9.0 (2026-03-10)
+
+#### Features
+- plugin: batch updates and implement removal (f7557b4)
+- search: allow selecting specific sites by index in results prompt (42c5c21)
+- plugin: improve plugin list output formatting (f506f78)
+- plugin: add list, update, and remove subcommands (e892e30)
+
+#### Bug Fixes
+- mods: show status messages at normal verbosity (22eae0b)
+
+#### Refactor
+- fetch: remove redundant pointer indirection (7954c9c)
+
+#### Maintenance
+- release: v4.9.0 [skip ci] (0171443)
+
+## v4.8.0 (2026-03-09)
+
+#### Features
+- config: integrate viper for configuration and environment support (358d962)
+
+#### Maintenance
+- release: v4.8.0 [skip ci] (2c93eaf)
+
+## v4.7.0 (2026-03-03)
+
+#### Features
+- api: add main entry point (7f8d242)
+- vuln: enhance version matching and reporting (2c1aee2)
+
+#### Bug Fixes
+- vuln: return error for unknown operators in versionCompare (914cc79)
+
+#### Refactor
+- vuln: remove version comparison fallback and simplify filtering (a09e359)
+
+#### Maintenance
+- release: v4.7.0 [skip ci] (b6765ec)
+- remove accidental copy of the entrypoint. (f0f8a28)
+
+## v4.6.0 (2026-02-27)
+
+#### Features
+- monitor: set custom User-Agent header for monitoring requests (ede2b9b)
+
+#### Maintenance
+- release: v4.6.0 [skip ci] (29579bf)
+
+## v4.5.0 (2026-02-27)
+
+#### Features
+- monitor: log duration of monitoring check (761f3e4)
+
+#### Refactor
+- monitor: use debug log level for ignored sites (3567e12)
+- verbosity: migrate standard logging to level-aware LogPrintf (13efe7c)
+- monitor: move monitoring logic to internal package (330d0d7)
+- api: move middleware into api package (4d9cd6f)
+- api: move route handlers to internal/api package (7d7c892)
+
+#### Documentation
+- readme: reorganize sidecar utility documentation (f90ad4b)
+
+#### Maintenance
+- release: v4.5.0 [skip ci] (1525eca)
+- rename internal/api package to internal/fetch (a9cfc43)
+
+## v4.4.0 (2026-02-26)
+
+#### Features
+- update: add support for updating api and monitor components (99985b9)
+- monitor: add site health monitoring tool (b15ad11)
+
+#### Bug Fixes
+- update: use verbosity levels for output messages (a7835b5)
+
+#### Refactor
+- monitor: use cached sites and remove PLAN.md (c1bf600)
+
+#### Continuous Integration
+- github: add jman-monitor to release artifacts (8832a8b)
+
+#### Maintenance
+- release: v4.4.0 [skip ci] (3707c51)
+
+## v4.3.0 (2026-02-26)
+
+#### Features
+- search: add plugin search and case-insensitive site matching (383789c)
+- api: add jman-api REST service (c024dac)
+
+#### Bug Fixes
+- cache: filter out non-WordPress sites from site list (3b2baa8)
+
+#### Refactor
+- api: move middleware to internal package and update health route (588fa2d)
+- api: move middleware to internal package and update health route (2351f6d)
+- api: update fetch command references and health endpoint (2608c51)
+
+#### Continuous Integration
+- include jman-api in release artifacts (76c8c44)
+
+#### Maintenance
+- release: v4.3.0 [skip ci] (8c7da53)
+- remove MainWP integration and rename Slack config (60c2936)
+- remove MainWP integration and rename Slack config (13f5fed)
+
+## v4.2.0 (2026-02-24)
+
+#### Features
+- fetch: add support for fetching plugin vulnerabilities (de08dc5)
+
+#### Continuous Integration
+- github: skip release steps when no version change is detected (3bb6ad2)
+
+#### Maintenance
+- release: v4.2.0 [skip ci] (1863b94)
+- zed: remove editor settings (fffcde4)
+
+## v4.1.0 (2026-02-24)
+
+#### Features
+- fetch: support targeting specific resources for cache update (4116051)
+
+#### Bug Fixes
+- wpcli: improve error reporting (82a887d)
+
+#### Continuous Integration
+- remove build and release workflow (a21ecbd)
+- github: update release workflow with build and notifications (e5824d4)
+
+#### Maintenance
+- release: v4.1.0 [skip ci] (1b2974b)
+
+### v4.0.1 (2026-02-24)
+
+#### Bug Fixes
+- separate stdout and stderror to allow piping to files. (6ee0ebd)
+
+#### Refactor
+- cache: use verbosity package for logging (62d1039)
+- verbosity: use verbosity package for output instead of fmt (5931c49)
+
+#### Continuous Integration
+- github: update version-file path to version.json (7fbe45a)
+- add automated release workflow and version file (e36ad4c)
+
+#### Maintenance
+- release: v4.0.1 [skip ci] (9843ebc)
+
+### Misc
+- Refactor verbosity API and improve output handling (ced9cec)
+
+## v4.0.0 (2026-02-24)
+
+#### Features
+- update: show download progress during updates (51396b6)
+- update: implement automatic self-updating (473ad52)
+- update: add command to check for latest version (c93affd)
+- cmd: add verbosity flags and level management (94a59ab)
+- verbosity: implement verbosity control and conditional printing (5b375df)
+
+#### Bug Fixes
+- vuln: fix typo in CVSS score label (00eb324)
+- update: require valid download URL for update notification (4392dbc)
+- root: show version only in verbose mode (f74ab69)
+- vuln: sanitize HTML tags and entities in reports (85f4eb8)
+
+#### Performance Improvements
+- cache: limit concurrent plugin fetching to 24 (560aa8b)
+- cache: fetch plugins concurrently (4dbe3b9)
+
+#### Refactor
+- cache: use verbosity level for plugin vulnerability logging (bf34026)
+- vuln: use verbosity package for plugin processing output (f439f50)
+- vuln: use slices.Contains and fmt.Fprintf (199764a)
+- alias: replace interface{} with any (b4fddc6)
+
+#### Build System
+- ci: migrate build workflow from Bun to Go (685e4a9)
+
+#### Continuous Integration
+- github: update Go version to 1.25.x (35e9783)
+
+#### Maintenance
+- inactive: remove unused comments (5e0eeb6)
+- remove PLAN.md and add dev target to Makefile (d319724)
+- cleanup and documentation (dda9541)
+- rewrite the whole thing in Go (be2b5f1)
+
+### v3.4.8 (2026-02-17)
+
+#### Continuous Integration
+- Github: fix commit range and skip tag commit when generating changelog (452e8cd)
+
+### v3.4.7 (2026-02-17)
+
+#### Continuous Integration
+- workflow: exclude commit pointed to by CURRENT_TAG when counting commits (01703e4)
+- workflows: use env-based Slack message and fix commit summary formatting (4fff1a6)
+
+### v3.4.6 (2026-02-17)
+
+#### Continuous Integration
+- slack: send Slack notifications as JSON payload using toJSON and format (18bf0c3)
+
+### v3.4.5 (2026-02-17)
+
+#### Continuous Integration
+- workflow: update Slack action to use method/token/payload format (0a4b12c)
+
+### v3.4.4 (2026-02-17)
+
+#### Continuous Integration
+- github: use explicit newline escape when truncating commit list (04fd398)
+
+### v3.4.3 (2026-02-17)
+
+#### Continuous Integration
+- workflow: limit and format release commit list, add totals, upgrade Slack action to v2 (b8c9395)
+
+### v3.4.2 (2026-02-17)
+
+#### Continuous Integration
+- github: fetch full history and include release commit list in Slack notifications (033dbbc)
+
+### v3.4.1 (2026-02-17)
+
+#### Continuous Integration
+- workflow: add Slack notification step to release job (6835679)
+
+## v3.4.0 (2026-02-17)
+
+#### Features
+- commands: add targeted fetch option and force flag to cache getters (e0c5175)
+
+## v3.3.0 (2026-02-11)
+
+#### Features
+- helpers: add progress indicator to release downloads (3fd55f9)
+- slack: support string-based durations for message tracking (bf36e66)
+
+## v3.2.0 (2026-02-11)
+
+#### Features
+- slack: prevent duplicate messages using CRC32 hashing (1b7a0c9)
+
+## v3.1.0 (2026-02-10)
+
+#### Features
+- vuln: add ability to ignore specific sites (d6a875b)
+
+#### Bug Fixes
+- slack: handle missing slack token (f6de5a6)
+
+#### Refactor
+- report: change plugin version separator to hyphen (364265c)
+
+## v3.0.0 (2026-02-10)
+
+#### Features
+- vuln: add slack notification support (5166345)
+- vuln: add site-based reporting and refactor scanning logic (031c2a2)
+- report formatting to use source data (3128ea7)
+
+#### Refactor
+- slack: move messaging to dedicated module and use WebClient SDK (7030ef1)
+- CVSS score retrieval (55b2832)
+
+### v2.3.2 (2026-02-02)
+
+#### Bug Fixes
+- changed to correct version number. (99d0807)
+- Improve update jman reliability (339a3c0)
+
+### v2.3.1 (2026-02-02)
+
+#### Bug Fixes
+- Add unlinkSync to updateJman command (4092cd4)
+
+## v2.3.0 (2026-02-02)
+
+#### Features
+- Add update command and logic (7783cf4)
+
+#### Bug Fixes
+- Remove unused imports from utils (ee98d87)
+
+#### Refactor
+- createAliases command (b43d403)
+
+#### Documentation
+- Added documentation for vuln command to readme (ae2678e)
+- Added comments to functions (bfa97eb)
+
+## v2.2.0 (2026-01-27)
+
+#### Features
+- Add skip option to runWP function (594e90e)
+- Add CVSS threshold filtering (22849b0)
+
+### Misc
+- Add check for wp-cli executable (b4185d3)
+
+### v2.1.1 (2026-01-22)
+
+#### Features
+- Add CVSS threshold for Slack notifications (75df7a5)
+
+#### Bug Fixes
+- Remove autochangelog (c0529c5)
+- type imports in commands.ts (1d45c46)
+
+### v2.0.1 (2026-01-22)
+
+#### Build System
+- add binary install script to makefile (9699553)
+
+#### Continuous Integration
+- Update release artifact path (4fa14d6)
+
+## v2.0.0 (2026-01-22)
+
+#### Bug Fixes
+- Add check for config file existence (3c4bf36)
+
+#### Refactor
+- Replace @folder/xdg with xdg-basedir (e14103a)
+
+### Misc
+- Migrate to Bun and update dependencies (3d66d0e)
+
+## v1.5.0 (2026-01-20)
+
+#### Features
+- Refactor vulnerability scanning to prevent duplicate slack messages (4f01512)
+- Add html-entities dependency (25c3a91)
+- Refactor scanVulnerabilities to process vulns (404d732)
+- Add vulnerability type definitions (ce7d567)
+- Add slackHook to config schema (078bfd5)
+- Add cache for WordPress vulnerabilities (b0692db)
+- Add functions for Slack and WP vulnerabilities (a3d4279)
+- Plugin list cache and processing (f725cf8)
+- Enforce Node.js version in package.json (08fc5ee)
+- Add dummy function for vulnerability check. WIP (196dc5e)
+- Add function to fetch plugins from site. (8ffb565)
+
+#### Bug Fixes
+- Refactor plugin caching and vulnerability processing (f220571)
+- Improve vulnerability caching and schema validation (5d1ea33)
+
+### v1.4.9 (2026-01-16)
+
+### v1.4.8 (2026-01-16)
+
+#### Documentation
+- Replace conventional-changelog with auto-changelog (22ecdaf)
+
+### Misc
+- Add description and keywords to package.json (3c5031f)
+
+### v1.4.7 (2026-01-16)
+
+#### Documentation
+- Add README.md with project documentation (9f6a8c5)
+
+### v1.4.6 (2026-01-16)
+
+### Misc
+- Add repository field to package.json (4af0a89)
+
+### v1.4.5 (2026-01-16)
+
+#### Bug Fixes
+- Remove unnecessary permissions from build job (0d21c83)
+
+### v1.4.4 (2026-01-16)
+
+#### Continuous Integration
+- Added paermission settings (c6befb3)
+
+### v1.4.3 (2026-01-16)
+
+#### Continuous Integration
+- Configure NPM publish in CI (badbdc8)
+
+### v1.4.2 (2026-01-16)
+
+### v1.4.1 (2026-01-16)
+
+#### Refactor
+- build scripts to use npm run commands (6332adc)
+
+## v1.4.0 (2026-01-15)
+
+#### Features
+- Add NPM publish to CI and bin entry (7f89d29)
+- Add getErrorMessage utility function (b398e39)
+
+### v1.3.3 (2026-01-12)
+
+#### Refactor
+- Make command functions async and update fetchData usage (e2dd188)
+
+### v1.3.2 (2026-01-12)
+
+#### Refactor
+- command handling and add fetchData, listData helpers (c64b3ed)
+- command handlers into separate commands module (8801adc)
+
+### v1.3.1 (2025-11-21)
+
+#### Bug Fixes
+- Remove faulty import. Improve plugin install error handling and usage messages (d57891f)
+
+## v1.3.0 (2025-11-21)
+
+#### Features
+- Add plugin install command and support for repo plugin URLs (fc1be7d)
+
+## v1.2.0 (2025-11-06)
+
+#### Features
+- file mods command (7ec9b80)
+- MainWP user password reset and refactor command handlers (c7b93e3)
+
+### v1.1.1 (2025-11-04)
+
+#### Refactor
+- command parsing and handling logic (bf1ecfa)
+
+## v1.1.0 (2025-11-03)
+
+#### Features
+- Add inactive command to list sites without active MainWP (f0a764d)
+
+#### Bug Fixes
+- Handle user cancellation in promptSearch without throwing (897bade)
+
+## v1.0.0 (2025-10-31)
+
+#### Bug Fixes
+- Remove unused API_MAINWP_URL import from constants (2986f9c)
+
+### Misc
+- BREAKING CHANGE: Change config format. Add MainWP install command and update config handling (9e34ce9)
+- Refactor alias creation and site search logic (60ae2a2)
+- Add @topcli/prompts and implement interactive site search (783b674)
+- Add WP CLI integration and site search utilities (e3153fa)
+
+### v0.1.3 (2025-10-28)
+
+#### Bug Fixes
+- Update version script and improve error logging (1757b3d)
+
+### v0.1.2 (2025-10-28)
+
+#### Build System
+- Update build target to use dist/jman instead of bin/jman (7ae467a)
+
+### v0.1.1 (2025-10-28)
+
+#### Continuous Integration
+- Use make to build instead of pnpm in CI workflow (0d68d22)
+
+## v0.1.0 (2025-10-28)
+
+#### Features
+- Implement caching for servers and sites (f9308e4)
+- Implement basic site listing (efa73ad)
+
+### Misc
+- Add GitHub Actions build workflow and clean up files (15dd88b)
+- Add alias generation and command parsing utilities (6c5b719)
+- Basic server fetch (9f29cd8)
 
