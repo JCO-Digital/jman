@@ -1,6 +1,15 @@
 # Changelog
 
-### 1.3.2 (2026-03-23)
+## 1.4.0 (2026-03-23)
+
+#### Features
+- router: add query params for pagination (dd95dd4)
+- data: Add enrichedSites computed property (af3ccd0)
+
+#### Bug Fixes
+- data: Display server name or "Unknown Server" (69aae28)
+
+### v1.3.2 (2026-03-23)
 
 #### Bug Fixes
 - types: remove unused vue-router import (1a6bda5)
