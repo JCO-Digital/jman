@@ -114,7 +114,7 @@ func installPlugin(site models.CliSite, pluginName string) error {
 
 func listPlugins(site models.CliSite) error {
 	verb.Printf(verb.Verbose, "Listing plugins on %s (%s)...\n", verb.Blue(site.Name), site.ServerName)
-	plugins, err := wpcli.GetPlugins(site)
+	plugins, err := wpcli.GetPlugins(site, false)
 	if err != nil {
 		return err
 	}
@@ -185,7 +185,7 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 
 func getPluginUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 	var updateList []models.WPPlugin
-	plugins, err := wpcli.GetPlugins(site)
+	plugins, err := wpcli.GetPlugins(site, false)
 	if err != nil {
 		return updateList, err
 	}

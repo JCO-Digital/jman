@@ -10,8 +10,8 @@ import (
 )
 
 // GetPlugins returns a list of installed plugins on the target site.
-func GetPlugins(site models.CliSite) ([]models.WPPlugin, error) {
-	res, err := RunWP(site.SSH, site.Path, false, "plugin", "list", "--format=json")
+func GetPlugins(site models.CliSite, skip bool) ([]models.WPPlugin, error) {
+	res, err := RunWP(site.SSH, site.Path, skip, "plugin", "list", "--format=json")
 	if err != nil {
 		return nil, err
 	}
