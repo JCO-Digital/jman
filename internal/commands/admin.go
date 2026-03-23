@@ -37,9 +37,9 @@ var adminCmd = &cobra.Command{
 			}
 
 			if password != "" {
-				verb.Printf(verb.Verbose, "Successfully created user '%s' with password: %s\n", username, password)
+				verb.Printf(verb.Normal, "Successfully created user '%s' with password: %s\n", username, password)
 			} else {
-				verb.Printf(verb.Verbose, "User '%s' may already exist or creation failed without a returned password.\n", username)
+				verb.Printf(verb.Normal, "User '%s' may already exist or creation failed without a returned password.\n", username)
 			}
 		}
 

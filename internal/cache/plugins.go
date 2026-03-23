@@ -49,7 +49,7 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 		wg.Go(func() {
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			sitePlugins, err := wpcli.GetPlugins(site)
+			sitePlugins, err := wpcli.GetPlugins(site, true)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Warning: failed to fetch plugins for site %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 				return
