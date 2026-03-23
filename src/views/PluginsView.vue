@@ -1,7 +1,12 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+
+const props = defineProps<{
+	page?: number;
+	rowsPerPage?: number;
+}>();
 
 const router = useRouter();
 const dataStore = useDataStore();
@@ -9,8 +14,32 @@ const dataStore = useDataStore();
 const searchQuery = ref("");
 const sortKey = ref<"name" | "count" | "version" | "author">("name");
 const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(1);
-const rowsPerPage = ref(50);
+const currentPage = ref(props.page || 1);
+const rowsPerPage = ref(props.rowsPerPage || 50);
+
+watch(
+	() => props.page,
+	(newVal) => {
+		currentPage.value = newVal || 1;
+	},
+);
+
+watch(
+	() => props.rowsPerPage,
+	(newVal) => {
+		rowsPerPage.value = newVal || 50;
+	},
+);
+
+const updateRoute = (page: number, rpp: number) => {
+	router.push({
+		name: "plugins",
+		params: {
+			page: page.toString(),
+			rowsPerPage: rpp.toString(),
+		},
+	});
+};
 
 const handleSort = (key: "name" | "count" | "version" | "author") => {
 	if (sortKey.value === key) {
@@ -62,11 +91,15 @@ const paginatedPlugins = computed(() => {
 });
 
 const prevPage = () => {
-	if (currentPage.value > 1) currentPage.value--;
+	if (currentPage.value > 1) {
+		updateRoute(currentPage.value - 1, rowsPerPage.value);
+	}
 };
 
 const nextPage = () => {
-	if (currentPage.value < totalPages.value) currentPage.value++;
+	if (currentPage.value < totalPages.value) {
+		updateRoute(currentPage.value + 1, rowsPerPage.value);
+	}
 };
 
 const goToPlugin = (name: string) => {
@@ -107,7 +140,7 @@ const goToPlugin = (name: string) => {
 				placeholder="Search plugins by name..."
 				class="search-input"
 				v-model="searchQuery"
-				@input="currentPage = 1"
+				@input="updateRoute(1, rowsPerPage)"
 			/>
 		</div>
 
@@ -181,7 +214,7 @@ const goToPlugin = (name: string) => {
 					<select
 						id="per-page"
 						v-model.number="rowsPerPage"
-						@change="currentPage = 1"
+						@change="updateRoute(1, rowsPerPage)"
 					>
 						<option value="50">50</option>
 						<option value="100">100</option>

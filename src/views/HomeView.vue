@@ -1,8 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import type { Site } from "../types";
+
+const props = defineProps<{
+	page?: number;
+	rowsPerPage?: number;
+}>();
 
 const router = useRouter();
 const dataStore = useDataStore();
@@ -10,8 +15,32 @@ const dataStore = useDataStore();
 const searchQuery = ref("");
 const sortKey = ref<keyof Site | "server" | "plugins">("domain");
 const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(1);
-const rowsPerPage = ref(50);
+const currentPage = ref(props.page || 1);
+const rowsPerPage = ref(props.rowsPerPage || 50);
+
+watch(
+	() => props.page,
+	(newVal) => {
+		currentPage.value = newVal || 1;
+	},
+);
+
+watch(
+	() => props.rowsPerPage,
+	(newVal) => {
+		rowsPerPage.value = newVal || 50;
+	},
+);
+
+const updateRoute = (page: number, rpp: number) => {
+	router.push({
+		name: "home",
+		params: {
+			page: page.toString(),
+			rowsPerPage: rpp.toString(),
+		},
+	});
+};
 
 const handleSort = (key: string) => {
 	if (sortKey.value === key) {
@@ -66,11 +95,15 @@ const paginatedSites = computed(() => {
 });
 
 const prevPage = () => {
-	if (currentPage.value > 1) currentPage.value--;
+	if (currentPage.value > 1) {
+		updateRoute(currentPage.value - 1, rowsPerPage.value);
+	}
 };
 
 const nextPage = () => {
-	if (currentPage.value < totalPages.value) currentPage.value++;
+	if (currentPage.value < totalPages.value) {
+		updateRoute(currentPage.value + 1, rowsPerPage.value);
+	}
 };
 
 const goToSite = (id: number) => {
@@ -171,7 +204,7 @@ const goToSite = (id: number) => {
 					<select
 						id="per-page"
 						v-model.number="rowsPerPage"
-						@change="currentPage = 1"
+						@change="updateRoute(1, rowsPerPage)"
 					>
 						<option value="50">50</option>
 						<option value="100">100</option>
