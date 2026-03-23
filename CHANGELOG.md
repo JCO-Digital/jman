@@ -1,3 +1,13 @@
+## [4.14.1](https://github.com/JCO-Digital/jman/compare/v4.14.0...v4.14.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* **admin:** Use normal verbosity for user creation messages ([d9219bc](https://github.com/JCO-Digital/jman/commit/d9219bc1416824cf2a2b71527f7d0748dc53fc53))
+* **wpcli:** Pass skip parameter to GetPlugins ([230b8c6](https://github.com/JCO-Digital/jman/commit/230b8c65097ebeb73d3f232a79b902f3bddb00f1))
+
+
+
 # [4.14.0](https://github.com/JCO-Digital/jman/compare/v4.13.0...v4.14.0) (2026-03-22)
 
 
@@ -51,20 +61,6 @@
 
 * **plugin:** Add plugin alias support ([7d2aeda](https://github.com/JCO-Digital/jman/commit/7d2aeda1d87dcc2a586e964dd72a9645f339755b))
 * **plugin:** colorize site names in output ([d1d6a52](https://github.com/JCO-Digital/jman/commit/d1d6a528efb8bd9664694ccade36b5f2409615a4))
-
-
-
-# [4.11.0](https://github.com/JCO-Digital/jman/compare/v4.10.1...v4.11.0) (2026-03-19)
-
-
-### Bug Fixes
-
-* **wpcli:** Return structured data from UpdateCore ([b7769c1](https://github.com/JCO-Digital/jman/commit/b7769c1e52dcd0e468eecfbe476c8d51037d1dc6))
-
-
-### Features
-
-* **wpcli:** Return new version and language from UpdateCore ([a6fc4bb](https://github.com/JCO-Digital/jman/commit/a6fc4bbb2898bb676aa9a3a558db7c258b4b8023))
 
 
 
