@@ -52,6 +52,16 @@ export const useDataStore = defineStore("data", () => {
 		});
 	});
 
+	const enrichedSites = computed(() => {
+		return sites.value.map((site) => {
+			return {
+				...site,
+				server: servers.value.find((s) => s.id === site.server_id),
+				plugins: plugins.value.filter((p) => p.site_id === site.id),
+			};
+		});
+	});
+
 	// Actions
 	function loadFromCache(): boolean {
 		try {
@@ -188,6 +198,7 @@ export const useDataStore = defineStore("data", () => {
 		error,
 		// Getters
 		enrichedPlugins,
+		enrichedSites,
 		getSiteById,
 		getServerById,
 		getPluginsBySiteId,

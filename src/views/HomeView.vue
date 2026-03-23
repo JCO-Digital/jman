@@ -32,7 +32,7 @@ const handleSort = (key: string) => {
 };
 
 const filteredAndSortedSites = computed(() => {
-	let result = dataStore.sites;
+	let result = dataStore.enrichedSites;
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
@@ -46,11 +46,11 @@ const filteredAndSortedSites = computed(() => {
 		let valB: any = b[sortKey.value as keyof Site];
 
 		if (sortKey.value === "server") {
-			valA = getServerName(a.server_id).toLowerCase();
-			valB = getServerName(b.server_id).toLowerCase();
+			valA = a.server?.name.toLowerCase();
+			valB = b.server?.name.toLowerCase();
 		} else if (sortKey.value === "plugins") {
-			valA = getPluginCount(a.id);
-			valB = getPluginCount(b.id);
+			valA = a.plugins.length;
+			valB = b.plugins.length;
 		} else if (typeof valA === "string") {
 			valA = valA.toLowerCase();
 			valB = valB.toLowerCase();
@@ -166,8 +166,10 @@ const goToSite = (id: number) => {
 						@click="goToSite(site.id)"
 					>
 						<td>{{ site.domain }}</td>
-						<td>{{ getServerName(site.server_id) }}</td>
-						<td>{{ getPluginCount(site.id) }}</td>
+						<td>{{ site.server?.name || "Unknown Server" }}</td>
+						<td>
+							{{ site.is_wordpress ? site.plugins.length : "Not WordPress" }}
+						</td>
 					</tr>
 				</tbody>
 			</table>
