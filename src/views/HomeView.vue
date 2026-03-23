@@ -13,15 +13,6 @@ const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(1);
 const rowsPerPage = ref(50);
 
-const getServerName = (serverId: number) => {
-	const server = dataStore.servers.find((s) => s.id === serverId);
-	return server ? server.name : "Unknown";
-};
-
-const getPluginCount = (siteId: number) => {
-	return dataStore.plugins.filter((p) => p.site_id === siteId).length;
-};
-
 const handleSort = (key: string) => {
 	if (sortKey.value === key) {
 		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
@@ -46,8 +37,8 @@ const filteredAndSortedSites = computed(() => {
 		let valB: any = b[sortKey.value as keyof Site];
 
 		if (sortKey.value === "server") {
-			valA = a.server?.name.toLowerCase();
-			valB = b.server?.name.toLowerCase();
+			valA = a.server.toLowerCase();
+			valB = b.server.toLowerCase();
 		} else if (sortKey.value === "plugins") {
 			valA = a.plugins.length;
 			valB = b.plugins.length;
@@ -166,9 +157,9 @@ const goToSite = (id: number) => {
 						@click="goToSite(site.id)"
 					>
 						<td>{{ site.domain }}</td>
-						<td>{{ site.server?.name || "Unknown Server" }}</td>
+						<td>{{ site.server }}</td>
 						<td>
-							{{ site.is_wordpress ? site.plugins.length : "Not WordPress" }}
+							{{ site.is_wordpress ? site.plugins.length : "Not WP" }}
 						</td>
 					</tr>
 				</tbody>
