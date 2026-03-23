@@ -54,6 +54,12 @@ If you prefer building locally, clone the repository and build with the projectâ
 
 If you don't use `make install`, the compiled binary will be generated at `./bin/jman`.
 
+### Prerequisites
+
+- SSH access configured for your SpinupWP servers.
+- `wp-cli` available locally and on the target servers.
+- Go (needed if building from source, v1.25 or later recommended)
+
 ## Configuration
 
 `jman` uses a TOML configuration file located in your XDG config directory (typically `~/.config/jman/config.toml` on Linux and macOS).
