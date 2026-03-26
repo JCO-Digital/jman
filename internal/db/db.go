@@ -82,7 +82,43 @@ func initSchema() error {
 		homepage TEXT,
 		fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS slack_messages (
+		hash TEXT PRIMARY KEY,
+		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+		channel TEXT
+	);
+
+	CREATE TABLE IF NOT EXISTS monitor_status (
+		domain TEXT PRIMARY KEY,
+		is_down BOOLEAN DEFAULT 0,
+		failure_count INTEGER DEFAULT 0,
+		last_alert_time DATETIME,
+		last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
+
+	CREATE TABLE IF NOT EXISTS monitor_history (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		domain TEXT,
+		status TEXT,
+		error_code INTEGER,
+		first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+		count INTEGER DEFAULT 1
+	);
+
+	CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);
 	`
-	_, err := dbInstance.Exec(query)
-	return err
+	if _, err := dbInstance.Exec(query); err != nil {
+		return err
+	}
+
+	// Check if channel column exists in slack_messages (for migration from older versions)
+	var hasChannel bool
+	err := dbInstance.QueryRow("SELECT count(*) FROM pragma_table_info('slack_messages') WHERE name='channel'").Scan(&hasChannel)
+	if err == nil && !hasChannel {
+		_, _ = dbInstance.Exec("ALTER TABLE slack_messages ADD COLUMN channel TEXT")
+	}
+
+	return nil
 }
