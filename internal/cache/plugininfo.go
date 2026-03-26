@@ -46,7 +46,9 @@ func migrateIfNecessary() {
 			// Note: We can't easily preserve the exact 'FetchedAt' via the simple SavePluginInfo
 			// because it defaults to CURRENT_TIMESTAMP, but for a one-time migration
 			// this is acceptable as it just resets the 24h TTL.
-			if err := db.SavePluginInfo(entry.Info); err == nil {
+			info := entry.Info
+			sanitizePluginInfo(&info)
+			if err := db.SavePluginInfo(info); err == nil {
 				count++
 			}
 		}
@@ -140,9 +142,13 @@ func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
 		}
 	}
 
-	if updated {
-		sanitizePluginInfo(existing)
+	// Always sanitize to ensure any legacy uncleaned data is fixed.
+	oldName, oldAuthor := existing.Name, existing.Author
+	sanitizePluginInfo(existing)
+
+	if updated || existing.Name != oldName || existing.Author != oldAuthor {
 		_ = db.SavePluginInfo(*existing)
+		updated = true
 	}
 
 	return updated
@@ -160,6 +166,12 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 
 	existing, fetchedAt, err := db.GetPluginInfo(slug)
 	if err == nil && existing != nil && t > 0 && time.Since(fetchedAt) < t {
+		// Ensure data is sanitized even if it's already in the cache.
+		oldName, oldAuthor := existing.Name, existing.Author
+		sanitizePluginInfo(existing)
+		if existing.Name != oldName || existing.Author != oldAuthor {
+			_ = db.SavePluginInfo(*existing)
+		}
 		return existing
 	}
 
@@ -195,8 +207,15 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 	sem := make(chan struct{}, 24)
 
 	for _, slug := range slugs {
-		_, fetchedAt, err := db.GetPluginInfo(slug)
+		existing, fetchedAt, err := db.GetPluginInfo(slug)
 		if err == nil && !fetchedAt.IsZero() && t > 0 && time.Since(fetchedAt) < t {
+			if existing != nil {
+				oldName, oldAuthor := existing.Name, existing.Author
+				sanitizePluginInfo(existing)
+				if existing.Name != oldName || existing.Author != oldAuthor {
+					_ = db.SavePluginInfo(*existing)
+				}
+			}
 			continue
 		}
 
