@@ -10,6 +10,13 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 )
 
+const (
+	// DefaultTTL is the default cache expiry for normal operations (48 hours).
+	DefaultTTL = 48 * time.Hour
+	// FetchTTL is the default cache expiry for the fetch command (30 minutes).
+	FetchTTL = 30 * time.Minute
+)
+
 func getCacheFilePath(filename string) string {
 	return filepath.Join(config.RunData.CacheDir, filename+".json")
 }
@@ -19,9 +26,10 @@ func getDataFilePath(filename string) string {
 }
 
 // ReadJSONCache reads a JSON file from the cache directory and unmarshals it into dest.
-// If ttlHours > 0 and the file is older than ttlHours, it returns an error.
-// If ttlHours is 0, the cache never expires.
-func ReadJSONCache(filename string, dest any, ttlHours int) error {
+// If ttl > 0 and the file is older than ttl, it returns an error.
+// If ttl is 0, the cache is considered expired (useful for force refreshing).
+// If ttl is -1, the cache never expires.
+func ReadJSONCache(filename string, dest any, ttl time.Duration) error {
 	filePath := getCacheFilePath(filename)
 
 	info, err := os.Stat(filePath)
@@ -32,8 +40,11 @@ func ReadJSONCache(filename string, dest any, ttlHours int) error {
 		return err
 	}
 
-	if ttlHours > 0 {
-		ttl := time.Duration(ttlHours) * time.Hour
+	if ttl == 0 {
+		return fmt.Errorf("cache file %s is forced to expire", filename)
+	}
+
+	if ttl > 0 {
 		if time.Since(info.ModTime()) > ttl {
 			return fmt.Errorf("cache file %s is expired", filename)
 		}

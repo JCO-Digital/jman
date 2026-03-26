@@ -1,239 +1,202 @@
 package cache
 
 import (
-	"html"
-	"regexp"
-	"strings"
+	"fmt"
+	"os"
 	"sync"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/fetch/wporg"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/hashicorp/go-version"
 )
 
-// PluginInfoCache is the on-disk structure for plugin_info.json.
+var (
+	migrationOnce sync.Once
+)
+
+// migrateIfNecessary checks if the legacy JSON cache exists and migrates it to SQLite.
+func migrateIfNecessary() {
+	migrationOnce.Do(func() {
+		filename := "plugin_info"
+		legacyPath := getCacheFilePath(filename)
+
+		if _, err := os.Stat(legacyPath); os.IsNotExist(err) {
+			return
+		}
+
+		verb.Printf(verb.Verbose, "Migrating legacy plugin info cache to SQLite...\n")
+
+		cache := &PluginInfoCache{
+			Plugins: make(map[string]PluginInfoEntry),
+		}
+
+		// Read the old JSON file
+		if err := ReadJSONCache(filename, cache, -1); err != nil {
+			verb.PrintErrorf(verb.Verbose, "Warning: failed to read legacy cache for migration: %v\n", err)
+			return
+		}
+
+		// Insert into SQLite
+		count := 0
+		for _, entry := range cache.Plugins {
+			// Note: We can't easily preserve the exact 'FetchedAt' via the simple SavePluginInfo
+			// because it defaults to CURRENT_TIMESTAMP, but for a one-time migration
+			// this is acceptable as it just resets the 24h TTL.
+			if err := db.SavePluginInfo(entry.Info); err == nil {
+				count++
+			}
+		}
+
+		verb.Printf(verb.Verbose, "Migrated %d entries. Removing legacy file: %s\n", count, legacyPath)
+
+		// Backup/Remove the old file
+		_ = os.Rename(legacyPath, legacyPath+".bak")
+	})
+}
+
+// PluginInfoCache and PluginInfoEntry are kept for legacy migration support.
 type PluginInfoCache struct {
 	Plugins   map[string]PluginInfoEntry `json:"plugins"`
 	UpdatedAt time.Time                  `json:"updated_at"`
 }
 
-// PluginInfoEntry wraps a single plugin's info with its own fetch timestamp.
 type PluginInfoEntry struct {
 	Info      models.PluginInfo `json:"info"`
 	FetchedAt time.Time         `json:"fetched_at"`
 }
 
-var (
-	pluginInfoCacheInstance *PluginInfoCache
-	pluginInfoMutex         sync.RWMutex
-	htmlTagRe               = regexp.MustCompile(`<[^>]*>`)
-)
-
-// loadPluginInfoCache ensures the cache is loaded from disk.
-func loadPluginInfoCache() *PluginInfoCache {
-	pluginInfoMutex.Lock()
-	defer pluginInfoMutex.Unlock()
-
-	if pluginInfoCacheInstance != nil {
-		return pluginInfoCacheInstance
-	}
-
-	cache := &PluginInfoCache{
-		Plugins: make(map[string]PluginInfoEntry),
-	}
-
-	// We use ReadJSONCache which handles TTL, but for this specific cache
-	// we manage TTL per-entry. However, the helper is still useful for loading.
-	_ = ReadJSONCache("plugin_info", cache, 0)
-
-	if cache.Plugins == nil {
-		cache.Plugins = make(map[string]PluginInfoEntry)
-	}
-
-	pluginInfoCacheInstance = cache
-	return pluginInfoCacheInstance
-}
-
-// SavePluginInfoCache writes the current cache instance to disk.
-func SavePluginInfoCache() error {
-	pluginInfoMutex.RLock()
-	defer pluginInfoMutex.RUnlock()
-
-	if pluginInfoCacheInstance == nil {
-		return nil
-	}
-
-	pluginInfoCacheInstance.UpdatedAt = time.Now()
-	return WriteJSONCache("plugin_info", pluginInfoCacheInstance)
-}
-
 // GetPluginName returns the human-readable name for a plugin slug.
-// It checks the cache first, fetches from the API if stale/missing,
-// and falls back to returning the slug itself on any failure.
 func GetPluginName(slug string) string {
-	info := GetPluginInfo(slug)
+	info := GetPluginInfo(slug, DefaultTTL)
 	if info != nil && info.Name != "" {
 		return info.Name
 	}
 	return slug
 }
 
-// sanitizePluginInfo normalizes fields before writing to cache.
+// sanitizePluginInfo normalizes fields before writing to DB.
 func sanitizePluginInfo(info *models.PluginInfo) {
 	if info == nil {
 		return
 	}
 
-	// Decode numeric/named HTML entities in plugin name.
-	// Example: "My Plugin &#8211; Lite" -> "My Plugin – Lite"
-	info.Name = strings.TrimSpace(html.UnescapeString(info.Name))
-
-	// Strip HTML tags from author field and decode entities.
-	// Example: "<a href='...'>Jane Doe</a>" -> "Jane Doe"
-	info.Author = strings.TrimSpace(
-		html.UnescapeString(
-			htmlTagRe.ReplaceAllString(info.Author, ""),
-		),
-	)
+	info.Name = utils.CleanHTML(info.Name)
+	info.Author = utils.CleanHTML(info.Author)
 }
 
-// updatePluginInfoInternal handles the actual cache update logic.
-func updatePluginInfoInternal(info *models.PluginInfo, isFull bool) bool {
-	if info == nil || info.Slug == "" {
-		return false
+// UpdatePluginInfo updates or creates a plugin info entry with new data.
+func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
+	migrateIfNecessary()
+
+	isFull := false
+	if len(fullFetch) > 0 && fullFetch[0] {
+		isFull = true
 	}
 
-	sanitizePluginInfo(info)
+	existing, _, err := db.GetPluginInfo(slug)
+	if err != nil {
+		verb.PrintErrorf(verb.Debug, "DB Error: %v\n", err)
+	}
 
-	cache := loadPluginInfoCache()
-	pluginInfoMutex.Lock()
-	defer pluginInfoMutex.Unlock()
+	info := &models.PluginInfo{
+		Slug:    slug,
+		Name:    name,
+		Version: ver,
+	}
 
-	entry, exists := cache.Plugins[info.Slug]
+	if existing == nil {
+		if info.Name == "" {
+			info.Name = slug
+		}
+		sanitizePluginInfo(info)
+		_ = db.SavePluginInfo(*info)
+		return true
+	}
+
 	updated := false
+	if isFull {
+		sanitizePluginInfo(info)
+		_ = db.SavePluginInfo(*info)
+		return true
+	}
 
-	if !exists {
-		entry = PluginInfoEntry{
-			Info: *info,
-		}
-		if isFull {
-			entry.FetchedAt = time.Now()
-		}
-		if entry.Info.Name == "" {
-			entry.Info.Name = info.Slug
-		}
+	// Partial update logic
+	if info.Name != "" && (existing.Name == "" || existing.Name == slug) {
+		existing.Name = info.Name
 		updated = true
-	} else {
-		if isFull {
-			entry.FetchedAt = time.Now()
-			entry.Info = *info
+	}
+
+	if info.Version != "" && info.Version != existing.Version {
+		vNew, errNew := version.NewVersion(info.Version)
+		vOld, errOld := version.NewVersion(existing.Version)
+
+		if errNew == nil && (errOld != nil || vNew.GreaterThan(vOld)) {
+			existing.Version = info.Version
 			updated = true
-		} else {
-			// Update name if we have a better one
-			if info.Name != "" && (entry.Info.Name == "" || entry.Info.Name == info.Slug) {
-				entry.Info.Name = info.Name
-				updated = true
-			}
-
-			// Update version if the new one is higher
-			if info.Version != "" && info.Version != entry.Info.Version {
-				vNew, errNew := version.NewVersion(info.Version)
-				vOld, errOld := version.NewVersion(entry.Info.Version)
-
-				if errNew == nil && (errOld != nil || vNew.GreaterThan(vOld)) {
-					entry.Info.Version = info.Version
-					updated = true
-				}
-			}
 		}
 	}
 
 	if updated {
-		cache.Plugins[info.Slug] = entry
+		sanitizePluginInfo(existing)
+		_ = db.SavePluginInfo(*existing)
 	}
 
 	return updated
 }
 
-// UpdatePluginInfo updates or creates a plugin info entry with new data.
-// If fullFetch is true, it also updates the FetchAt timestamp.
-// It returns true if the cache was modified.
-func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
-	isFull := false
-	if len(fullFetch) > 0 && fullFetch[0] {
-		isFull = true
-	}
-	return updatePluginInfoInternal(&models.PluginInfo{
-		Slug:    slug,
-		Name:    name,
-		Version: ver,
-	}, isFull)
-}
-
 // GetPluginInfo returns the full cached PluginInfo for a slug,
 // fetching from the API if stale or missing.
-func GetPluginInfo(slug string) *models.PluginInfo {
-	cache := loadPluginInfoCache()
+func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
+	migrateIfNecessary()
 
-	pluginInfoMutex.RLock()
-	entry, exists := cache.Plugins[slug]
-	pluginInfoMutex.RUnlock()
-
-	// If found and fresh (less than 24h old)
-	if exists && time.Since(entry.FetchedAt) < 24*time.Hour {
-		return &entry.Info
+	t := DefaultTTL
+	if len(ttl) > 0 {
+		t = ttl[0]
 	}
 
-	// If not found or stale, try to fetch
+	existing, fetchedAt, err := db.GetPluginInfo(slug)
+	if err == nil && existing != nil && t > 0 && time.Since(fetchedAt) < t {
+		return existing
+	}
+
+	// Fetch from API
 	info, err := wporg.GetPluginInfo(slug)
 	if err != nil {
 		verb.PrintErrorf(verb.Verbose, "Warning: failed to fetch plugin info for %s: %v\n", slug, err)
-		if exists {
-			return &entry.Info // Return stale info on failure
-		}
-		return nil
+		return existing // Fallback to stale
 	}
 
-	// If API returned nothing (not in repo)
 	if info == nil {
-		if exists {
-			return &entry.Info
-		}
-		return nil
+		return existing
 	}
 
-	// Update cache using the version-aware helper, marking as full fetch
-	if updatePluginInfoInternal(info, true) {
-		_ = SavePluginInfoCache()
+	sanitizePluginInfo(info)
+	if err := db.SavePluginInfo(*info); err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to save plugin info for %s: %v\n", slug, err)
 	}
 
-	// Fetch again to get the merged result
-	pluginInfoMutex.RLock()
-	entry, _ = cache.Plugins[slug]
-	pluginInfoMutex.RUnlock()
-
-	return &entry.Info
+	return info
 }
 
-// RefreshPluginInfoCache fetches info for all given slugs concurrently,
-// updating the cache. Uses a semaphore to limit concurrency.
-func RefreshPluginInfoCache(slugs []string) error {
-	cache := loadPluginInfoCache()
+// RefreshPluginInfoCache fetches info for all given slugs concurrently.
+func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
+	migrateIfNecessary()
+
+	t := DefaultTTL
+	if len(ttl) > 0 {
+		t = ttl[0]
+	}
 
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 24)
-	var mu sync.Mutex
-	updated := false
 
 	for _, slug := range slugs {
-		pluginInfoMutex.RLock()
-		entry, exists := cache.Plugins[slug]
-		pluginInfoMutex.RUnlock()
-
-		// Skip if fresh
-		if exists && time.Since(entry.FetchedAt) < 24*time.Hour {
+		_, fetchedAt, err := db.GetPluginInfo(slug)
+		if err == nil && !fetchedAt.IsZero() && t > 0 && time.Since(fetchedAt) < t {
 			continue
 		}
 
@@ -243,26 +206,38 @@ func RefreshPluginInfoCache(slugs []string) error {
 			defer func() { <-sem }()
 
 			info, err := wporg.GetPluginInfo(slug)
-			if err != nil {
-				verb.PrintErrorf(verb.Verbose, "Warning: failed to refresh plugin info for %s: %v\n", slug, err)
+			if err != nil || info == nil {
 				return
 			}
 
-			if info != nil {
-				mu.Lock()
-				if updatePluginInfoInternal(info, true) {
-					updated = true
-				}
-				mu.Unlock()
-			}
+			sanitizePluginInfo(info)
+			_ = db.SavePluginInfo(*info)
 		})
 	}
 
 	wg.Wait()
+	return nil
+}
 
-	if updated {
-		return SavePluginInfoCache()
+func DisplayPluginName(slug string, truncate, color bool) string {
+	name := GetPluginName(slug)
+	if name != slug {
+		name = utils.CleanHTML(name)
+
+		if truncate {
+			name = utils.ShowFirstPart(name)
+		}
+
+		if color {
+			name = verb.Yellow(name)
+			slug = verb.Cyan(slug)
+		}
+
+		return fmt.Sprintf("%s (%s)", name, slug)
+	}
+	if color {
+		slug = verb.Yellow(slug)
 	}
 
-	return nil
+	return slug
 }

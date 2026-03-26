@@ -200,7 +200,7 @@ func ProcessVulnerabilities() ([]models.VulnReport, error) {
 
 	for _, plugin := range pluginData {
 		verb.Printf(verb.Verbose, "Processing plugin: %s\n", plugin.Name)
-		vulnResponse, err := cache.GetCachedVulnerabilities(plugin.Name, false)
+		vulnResponse, err := cache.GetCachedVulnerabilities(plugin.Name)
 		if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 			// Missing or invalid vulnerability cache for this plugin; skip it.
 			continue

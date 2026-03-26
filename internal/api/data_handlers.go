@@ -7,13 +7,14 @@ import (
 	"sort"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
 // PluginsHandler returns the list of cached WordPress plugins.
 func PluginsHandler(w http.ResponseWriter, r *http.Request) {
 	var plugins []models.WPPlugin
-	if err := cache.ReadJSONCache("plugins", &plugins, 0); err != nil {
+	if err := cache.ReadJSONCache("plugins", &plugins, cache.DefaultTTL); err != nil {
 		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch plugins' to fetch data.", err))
 		return
 	}
@@ -31,16 +32,15 @@ func PluginsHandler(w http.ResponseWriter, r *http.Request) {
 
 // PluginInfoHandler returns the list of cached WordPress plugin information.
 func PluginInfoHandler(w http.ResponseWriter, r *http.Request) {
-	var pluginCache cache.PluginInfoCache
-	if err := cache.ReadJSONCache("plugin_info", &pluginCache, 0); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch info' to fetch data.", err))
+	plugins, err := db.GetAllPluginInfo()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
 	}
 
-	// Flatten the map into a slice for the API response.
-	var plugins []models.PluginInfo
-	for _, entry := range pluginCache.Plugins {
-		plugins = append(plugins, entry.Info)
+	if len(plugins) == 0 {
+		WriteError(w, http.StatusNotFound, "No plugin info found in database. Run 'jman fetch info' to fetch data.")
+		return
 	}
 
 	// Sort by slug for deterministic output.
@@ -54,7 +54,7 @@ func PluginInfoHandler(w http.ResponseWriter, r *http.Request) {
 // ServersHandler returns the list of cached servers.
 func ServersHandler(w http.ResponseWriter, r *http.Request) {
 	var servers []models.Server
-	if err := cache.ReadJSONCache("servers", &servers, 0); err != nil {
+	if err := cache.ReadJSONCache("servers", &servers, cache.DefaultTTL); err != nil {
 		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch servers' to fetch data.", err))
 		return
 	}
@@ -70,7 +70,7 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 // SitesHandler returns the list of cached sites.
 func SitesHandler(w http.ResponseWriter, r *http.Request) {
 	var sites []models.Site
-	if err := cache.ReadJSONCache("sites", &sites, 0); err != nil {
+	if err := cache.ReadJSONCache("sites", &sites, cache.DefaultTTL); err != nil {
 		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch sites' to fetch data.", err))
 		return
 	}
@@ -101,7 +101,7 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 
 	var vulnData models.VulnResponse
 	filename := fmt.Sprintf("vulnerabilities/%s", plugin)
-	if err := cache.ReadJSONCache(filename, &vulnData, 0); err != nil {
+	if err := cache.ReadJSONCache(filename, &vulnData, cache.DefaultTTL); err != nil {
 		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired for plugin %q: %v. Run 'jman vuln %s' to fetch data.", plugin, err, plugin))
 		return
 	}

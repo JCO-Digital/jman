@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/fetch/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -11,12 +12,17 @@ import (
 )
 
 // GetCachedPlugins retrieves all installed plugins across all cached sites.
-// If force is true, it fetches from the sites again.
-func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
+func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
+	t := DefaultTTL
+	if len(ttl) > 0 {
+		t = ttl[0]
+	}
+
 	var plugins []models.WPPlugin
 
+	force := t == 0
 	if !force {
-		ReadJSONCache("plugins", &plugins, 6)
+		_ = ReadJSONCache("plugins", &plugins, t)
 	}
 
 	sites, err := GetSiteList()
@@ -65,15 +71,12 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 
 	wg.Wait()
 
-	infoUpdated := false
 	for _, p := range plugins {
 		bestVer := p.Version
 		if p.Update != "" {
 			bestVer = p.Update
 		}
-		if UpdatePluginInfo(p.Name, "", bestVer) {
-			infoUpdated = true
-		}
+		UpdatePluginInfo(p.Name, "", bestVer)
 	}
 
 	if updated {
@@ -82,16 +85,12 @@ func GetCachedPlugins(force bool) ([]models.WPPlugin, error) {
 		}
 	}
 
-	if infoUpdated {
-		_ = SavePluginInfoCache()
-	}
-
 	return plugins, nil
 }
 
 // GetCachedPluginData groups all active plugins into WPPluginData structures for easier scanning.
 func GetCachedPluginData() ([]models.WPPluginData, error) {
-	plugins, err := GetCachedPlugins(false)
+	plugins, err := GetCachedPlugins(DefaultTTL)
 	if err != nil {
 		return nil, err
 	}
@@ -128,12 +127,17 @@ func GetCachedPluginData() ([]models.WPPluginData, error) {
 }
 
 // GetCachedVulnerabilities fetches vulnerability data for a specific plugin from the cache or the WPVulnerability API.
-func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, error) {
+func GetCachedVulnerabilities(plugin string, ttl ...time.Duration) (*models.VulnResponse, error) {
+	t := DefaultTTL
+	if len(ttl) > 0 {
+		t = ttl[0]
+	}
+
 	filename := fmt.Sprintf("vulnerabilities/%s", plugin)
 
 	var vulnData models.VulnResponse
-	if !force {
-		err := ReadJSONCache(filename, &vulnData, 6)
+	if t > 0 {
+		err := ReadJSONCache(filename, &vulnData, t)
 		if err == nil && vulnData.Error == 0 {
 			return &vulnData, nil
 		}
@@ -151,9 +155,7 @@ func GetCachedVulnerabilities(plugin string, force bool) (*models.VulnResponse, 
 			name = *newVulnData.Data.Name
 		}
 		latest := ""
-		if UpdatePluginInfo(plugin, name, latest) {
-			_ = SavePluginInfoCache()
-		}
+		UpdatePluginInfo(plugin, name, latest)
 	}
 
 	if err := WriteJSONCache(filename, newVulnData); err != nil {
