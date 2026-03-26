@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -16,6 +18,12 @@ var (
 	dbMutex    sync.Mutex
 )
 
+// TableDefinition represents the desired state of a database table.
+type TableDefinition struct {
+	Name    string
+	Columns map[string]string // Column name -> SQL type and constraints
+}
+
 // Init initializes the SQLite database.
 // It creates the database file in the data directory if it doesn't exist.
 func Init() error {
@@ -24,7 +32,6 @@ func Init() error {
 		dbPath := filepath.Join(config.RunData.DataDir, "jman.db")
 
 		// Open the database connection.
-		// Use _pragma=foreign_keys=ON if we need foreign key support later.
 		db, openErr := sql.Open("sqlite", dbPath)
 		if openErr != nil {
 			err = fmt.Errorf("failed to open database: %w", openErr)
@@ -39,7 +46,7 @@ func Init() error {
 
 		dbInstance = db
 
-		// Initialize schemas
+		// Initialize schemas with migration support
 		if schemaErr := initSchema(); schemaErr != nil {
 			err = fmt.Errorf("failed to initialize schema: %w", schemaErr)
 			return
@@ -67,58 +74,180 @@ func Close() error {
 	return nil
 }
 
-// initSchema creates the necessary tables if they don't exist.
+// initSchema creates the necessary tables and migrates them if they've changed.
 func initSchema() error {
-	query := `
-	CREATE TABLE IF NOT EXISTS plugin_info (
-		slug TEXT PRIMARY KEY,
-		name TEXT,
-		version TEXT,
-		author TEXT,
-		author_profile TEXT,
-		requires TEXT,
-		tested TEXT,
-		last_updated TEXT,
-		homepage TEXT,
-		fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
+	tables := []TableDefinition{
+		{
+			Name: "plugin_info",
+			Columns: map[string]string{
+				"slug":           "TEXT PRIMARY KEY",
+				"name":           "TEXT",
+				"version":        "TEXT",
+				"author":         "TEXT",
+				"author_profile": "TEXT",
+				"requires":       "TEXT",
+				"tested":         "TEXT",
+				"last_updated":   "TEXT",
+				"homepage":       "TEXT",
+				"fetched_at":     "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			Name: "slack_messages",
+			Columns: map[string]string{
+				"hash":      "TEXT PRIMARY KEY",
+				"timestamp": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"channel":   "TEXT",
+			},
+		},
+		{
+			Name: "monitor_status",
+			Columns: map[string]string{
+				"domain":          "TEXT PRIMARY KEY",
+				"is_down":         "BOOLEAN DEFAULT 0",
+				"failure_count":   "INTEGER DEFAULT 0",
+				"last_alert_time": "DATETIME",
+				"last_checked":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			Name: "monitor_history",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"domain":     "TEXT",
+				"status":     "TEXT",
+				"error_code": "INTEGER",
+				"first_seen": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"last_seen":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"count":      "INTEGER DEFAULT 1",
+			},
+		},
+	}
 
-	CREATE TABLE IF NOT EXISTS slack_messages (
-		hash TEXT PRIMARY KEY,
-		timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-		channel TEXT
-	);
+	for _, table := range tables {
+		if err := migrateTable(table); err != nil {
+			return fmt.Errorf("failed to migrate table %s: %w", table.Name, err)
+		}
+	}
 
-	CREATE TABLE IF NOT EXISTS monitor_status (
-		domain TEXT PRIMARY KEY,
-		is_down BOOLEAN DEFAULT 0,
-		failure_count INTEGER DEFAULT 0,
-		last_alert_time DATETIME,
-		last_checked DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
+	// Manual index management
+	_, err := dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);")
+	return err
+}
 
-	CREATE TABLE IF NOT EXISTS monitor_history (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		domain TEXT,
-		status TEXT,
-		error_code INTEGER,
-		first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
-		count INTEGER DEFAULT 1
-	);
+// migrateTable compares the current database table schema with the desired definition.
+// SQLite has restrictions on ALTER TABLE (e.g., adding columns with non-constant defaults like CURRENT_TIMESTAMP).
+// To be robust, this implementation uses the "recreate and copy" pattern if changes are detected.
+func migrateTable(def TableDefinition) error {
+	tx, err := dbInstance.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-	CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);
-	`
-	if _, err := dbInstance.Exec(query); err != nil {
+	// 1. Check if the table exists
+	var exists bool
+	query := fmt.Sprintf("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='%s'", def.Name)
+	err = tx.QueryRow(query).Scan(&exists)
+	if err != nil {
 		return err
 	}
 
-	// Check if channel column exists in slack_messages (for migration from older versions)
-	var hasChannel bool
-	err := dbInstance.QueryRow("SELECT count(*) FROM pragma_table_info('slack_messages') WHERE name='channel'").Scan(&hasChannel)
-	if err == nil && !hasChannel {
-		_, _ = dbInstance.Exec("ALTER TABLE slack_messages ADD COLUMN channel TEXT")
+	// Prepare column strings for the desired state (sorted for deterministic output)
+	colNames := make([]string, 0, len(def.Columns))
+	for name := range def.Columns {
+		colNames = append(colNames, name)
+	}
+	sort.Strings(colNames)
+
+	newColsList := make([]string, 0, len(colNames))
+	for _, name := range colNames {
+		newColsList = append(newColsList, fmt.Sprintf("%s %s", name, def.Columns[name]))
+	}
+	newColsSQL := strings.Join(newColsList, ", ")
+
+	if !exists {
+		createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", def.Name, newColsSQL)
+		if _, err := tx.Exec(createSQL); err != nil {
+			return err
+		}
+		return tx.Commit()
 	}
 
-	return nil
+	// 2. Table exists, fetch current columns
+	rows, err := tx.Query(fmt.Sprintf("PRAGMA table_info('%s')", def.Name))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	currentCols := make(map[string]bool)
+	for rows.Next() {
+		var cid int
+		var name, typeName string
+		var notnull, pk int
+		var dfltValue any
+		if err := rows.Scan(&cid, &name, &typeName, &notnull, &dfltValue, &pk); err != nil {
+			return err
+		}
+		currentCols[name] = true
+	}
+
+	// 3. Determine if migration is needed (missing or extra columns)
+	needsMigration := false
+	if len(currentCols) != len(def.Columns) {
+		needsMigration = true
+	} else {
+		for name := range def.Columns {
+			if !currentCols[name] {
+				needsMigration = true
+				break
+			}
+		}
+	}
+
+	if !needsMigration {
+		return tx.Commit()
+	}
+
+	// 4. Perform robust migration using a temporary table
+	// This handles non-constant defaults and dropped columns safely.
+	tempTableName := fmt.Sprintf("_%s_old", def.Name)
+
+	// Drop temp table if it somehow exists
+	_, _ = tx.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tempTableName))
+
+	// Rename current table to temp
+	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", def.Name, tempTableName)); err != nil {
+		return fmt.Errorf("failed to rename table for migration: %w", err)
+	}
+
+	// Create new table with desired schema
+	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", def.Name, newColsSQL)
+	if _, err := tx.Exec(createSQL); err != nil {
+		return fmt.Errorf("failed to create new table schema: %w", err)
+	}
+
+	// Identify columns that exist in both old and new schemas to copy data
+	commonCols := []string{}
+	for _, name := range colNames {
+		if currentCols[name] {
+			commonCols = append(commonCols, name)
+		}
+	}
+
+	if len(commonCols) > 0 {
+		colsCSV := strings.Join(commonCols, ", ")
+		copySQL := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", def.Name, colsCSV, colsCSV, tempTableName)
+		if _, err := tx.Exec(copySQL); err != nil {
+			return fmt.Errorf("failed to copy data to new table: %w", err)
+		}
+	}
+
+	// Drop the temporary table
+	if _, err := tx.Exec(fmt.Sprintf("DROP TABLE %s", tempTableName)); err != nil {
+		return fmt.Errorf("failed to drop temporary table: %w", err)
+	}
+
+	return tx.Commit()
 }
