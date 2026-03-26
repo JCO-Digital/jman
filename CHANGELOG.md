@@ -1,6 +1,11 @@
 # Changelog
 
-## 1.4.0 (2026-03-23)
+## 1.5.0 (2026-03-26)
+
+#### Features
+- router: Introduce Dashboard and Sites views (7de3123)
+
+## v1.4.0 (2026-03-23)
 
 #### Features
 - router: add query params for pagination (dd95dd4)
