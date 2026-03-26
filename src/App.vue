@@ -39,7 +39,16 @@ const handleLogout = () => {
 						to="/"
 						class="nav-item"
 						:class="{
-							active: route.name === 'home' || route.name === 'site-detail',
+							active: route.name === 'home',
+						}"
+					>
+						Dashboard
+					</RouterLink>
+					<RouterLink
+						to="/sites"
+						class="nav-item"
+						:class="{
+							active: route.name === 'sites' || route.name === 'site-detail',
 						}"
 					>
 						Sites
