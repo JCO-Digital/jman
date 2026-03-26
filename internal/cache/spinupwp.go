@@ -3,6 +3,7 @@ package cache
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/fetch/spinupwp"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -10,19 +11,27 @@ import (
 )
 
 // GetCachedServers retrieves servers from the cache or fetches them from the API if expired/missing.
-func GetCachedServers() ([]models.Server, error) {
-	var servers []models.Server
-	err := ReadJSONCache("servers", &servers, 6)
-	if err != nil || len(servers) == 0 {
-		return RefreshCachedServers()
+func GetCachedServers(ttl ...time.Duration) ([]models.Server, error) {
+	t := DefaultTTL
+	if len(ttl) > 0 {
+		t = ttl[0]
 	}
-	return servers, nil
+	return RefreshCachedServers(t)
 }
 
 // RefreshCachedServers fetches servers from the API and updates the cache.
-func RefreshCachedServers() ([]models.Server, error) {
+// If a ttl is provided and the cache is still valid, it returns the cached data.
+func RefreshCachedServers(ttl ...time.Duration) ([]models.Server, error) {
+	var servers []models.Server
+	if len(ttl) > 0 && ttl[0] > 0 {
+		if err := ReadJSONCache("servers", &servers, ttl[0]); err == nil && len(servers) > 0 {
+			return servers, nil
+		}
+	}
+
 	verb.PrintErrorln(verb.Normal, "Fetching servers from SpinupWP API...")
-	servers, err := spinupwp.GetServers()
+	var err error
+	servers, err = spinupwp.GetServers()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch servers: %w", err)
 	}
@@ -35,19 +44,27 @@ func RefreshCachedServers() ([]models.Server, error) {
 }
 
 // GetCachedSites retrieves sites from the cache or fetches them from the API if expired/missing.
-func GetCachedSites() ([]models.Site, error) {
-	var sites []models.Site
-	err := ReadJSONCache("sites", &sites, 6)
-	if err != nil || len(sites) == 0 {
-		return RefreshCachedSites()
+func GetCachedSites(ttl ...time.Duration) ([]models.Site, error) {
+	t := DefaultTTL
+	if len(ttl) > 0 {
+		t = ttl[0]
 	}
-	return sites, nil
+	return RefreshCachedSites(t)
 }
 
 // RefreshCachedSites fetches sites from the API and updates the cache.
-func RefreshCachedSites() ([]models.Site, error) {
+// If a ttl is provided and the cache is still valid, it returns the cached data.
+func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
+	var sites []models.Site
+	if len(ttl) > 0 && ttl[0] > 0 {
+		if err := ReadJSONCache("sites", &sites, ttl[0]); err == nil && len(sites) > 0 {
+			return sites, nil
+		}
+	}
+
 	verb.PrintErrorln(verb.Normal, "Fetching sites from SpinupWP API...")
-	sites, err := spinupwp.GetSites()
+	var err error
+	sites, err = spinupwp.GetSites()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch sites: %w", err)
 	}

@@ -62,34 +62,34 @@ func Run() error {
 
 			verb.LogPrintf(verb.Debug, "Checking %s...\n", domain)
 
-			req, err := http.NewRequest(http.MethodGet, "https://"+domain, nil)
-			if err != nil {
-				mu.Lock()
-				status := state.GetStatus(domain)
-				status.FailureCount++
-				mu.Unlock()
-				return
-			}
-			req.Header.Set("User-Agent", "JMan Uptime Monitoring/1.0")
-			resp, err := client.Do(req)
 			isUp := false
 			statusMsg := ""
+			errorCode := 0
 
+			req, err := http.NewRequest(http.MethodGet, "https://"+domain, nil)
 			if err == nil {
-				if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-					isUp = true
+				req.Header.Set("User-Agent", "JMan Uptime Monitoring/1.0")
+				resp, errDo := client.Do(req)
+				if errDo == nil {
+					errorCode = resp.StatusCode
+					if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+						isUp = true
+					} else {
+						statusMsg = fmt.Sprintf("HTTP %d", resp.StatusCode)
+					}
+					resp.Body.Close()
 				} else {
-					statusMsg = fmt.Sprintf("HTTP %d", resp.StatusCode)
+					statusMsg = fmt.Sprintf("Error: %v", errDo)
 				}
-				resp.Body.Close()
 			} else {
-				statusMsg = fmt.Sprintf("Error: %v", err)
+				statusMsg = fmt.Sprintf("Request Error: %v", err)
 			}
 
 			mu.Lock()
 			defer mu.Unlock()
 
 			status := state.GetStatus(domain)
+			state.RecordHistory(domain, isUp, statusMsg, errorCode)
 
 			if isUp {
 				if status.IsDown {

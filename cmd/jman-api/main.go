@@ -8,6 +8,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/api"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +20,10 @@ var rootCmd = &cobra.Command{
 Run without a subcommand to start the API server.
 Use subcommands (useradd, hashpw, totp-setup) to manage users and credentials.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return config.Init()
+		if err := config.Init(); err != nil {
+			return err
+		}
+		return db.Init()
 	},
 	RunE: runServe,
 }
@@ -53,6 +57,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 }
 
 func main() {
+	defer db.Close()
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

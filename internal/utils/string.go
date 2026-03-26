@@ -8,6 +8,7 @@ import (
 
 // htmlTagRegexp matches basic HTML tags for removal in CleanHTML.
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
+var unifyHyphens = regexp.MustCompile(`[-–—]+`)
 
 // CleanHTML removes HTML tags, decodes HTML entities, and trims surrounding whitespace.
 // This normalizes text from external feeds (like WordPress.org or vulnerability databases)
@@ -15,11 +16,13 @@ var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 func CleanHTML(s string) string {
 	s = htmlTagRegexp.ReplaceAllString(s, "")
 	s = html.UnescapeString(s)
+	s = unifyHyphens.ReplaceAllString(s, "-")
 	return strings.TrimSpace(s)
 }
 
-// Show the first part of the string up to " – ".
+// Show the first part of the string up to " - ".
 func ShowFirstPart(s string) string {
-	parts := strings.SplitN(s, " – ", 2)
+	s = unifyHyphens.ReplaceAllString(s, "-")
+	parts := strings.SplitN(s, " - ", 2)
 	return parts[0]
 }
