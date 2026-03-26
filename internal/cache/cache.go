@@ -21,7 +21,7 @@ func getCacheFilePath(filename string) string {
 	return filepath.Join(config.RunData.CacheDir, filename+".json")
 }
 
-func getDataFilePath(filename string) string {
+func GetDataFilePath(filename string) string {
 	return filepath.Join(config.RunData.DataDir, filename+".json")
 }
 
@@ -78,7 +78,7 @@ func WriteJSONCache(filename string, data any) error {
 // ReadJSONData reads a JSON file from the data directory.
 // Unlike the cache directory, data files do not expire.
 func ReadJSONData(filename string, dest any) error {
-	filePath := getDataFilePath(filename)
+	filePath := GetDataFilePath(filename)
 
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -90,7 +90,7 @@ func ReadJSONData(filename string, dest any) error {
 
 // WriteJSONData marshals data into JSON and writes it to the data directory.
 func WriteJSONData(filename string, data any) error {
-	filePath := getDataFilePath(filename)
+	filePath := GetDataFilePath(filename)
 
 	dir := filepath.Dir(filePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
