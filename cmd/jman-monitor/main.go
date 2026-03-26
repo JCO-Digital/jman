@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/monitor"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
@@ -37,6 +38,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
 		os.Exit(1)
 	}
+
+	// Initialize database
+	if err := db.Init(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+		os.Exit(1)
+	}
+	defer db.Close()
 
 	// Run monitor
 	if err := monitor.Run(); err != nil {

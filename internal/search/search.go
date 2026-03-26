@@ -33,7 +33,7 @@ func SearchSites(query string) ([]models.CliSite, error) {
 
 // SearchPlugins filters the plugin list based on the provided query string
 func SearchPlugins(query string) ([]models.WPPluginData, error) {
-	plugins, err := cache.GetCachedPlugins(false)
+	plugins, err := cache.GetCachedPlugins()
 	if err != nil {
 		return nil, err
 	}
