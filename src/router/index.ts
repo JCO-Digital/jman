@@ -36,9 +36,9 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/:page(\\d+)?/:rowsPerPage(\\d+)?",
-			name: "home",
-			component: () => import("../views/HomeView.vue"),
+			path: "/sites/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			name: "sites",
+			component: () => import("../views/SitesView.vue"),
 			props: (route) => ({
 				page: route.params.page
 					? parseInt(route.params.page as string, 10)
@@ -47,6 +47,11 @@ const router = createRouter({
 					? parseInt(route.params.rowsPerPage as string, 10)
 					: undefined,
 			}),
+		},
+		{
+			path: "/",
+			name: "home",
+			component: () => import("../views/DashboardView.vue"),
 		},
 	],
 });

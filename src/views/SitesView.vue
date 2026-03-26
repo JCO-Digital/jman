@@ -34,7 +34,7 @@ watch(
 
 const updateRoute = (page: number, rpp: number) => {
 	router.push({
-		name: "home",
+		name: "sites",
 		params: {
 			page: page.toString(),
 			rowsPerPage: rpp.toString(),

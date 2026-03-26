@@ -18,7 +18,7 @@ const server = computed(() =>
 const sitePlugins = computed(() => dataStore.getPluginsBySiteId(siteId));
 
 const goBack = () => {
-	router.push({ name: "home" });
+	router.push({ name: "sites" });
 };
 
 const goToPlugin = (name: string) => {
