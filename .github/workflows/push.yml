@@ -42,53 +42,6 @@ jobs:
           name: ${{ steps.changelog.outputs.tag }}
           body: ${{ steps.changelog.outputs.clean_changelog }}
 
-      - name: Collect release commits
-        if: steps.changelog.outputs.skipped == 'false'
-        id: release_commits
-        shell: sh
-        run: |
-          git fetch --tags --force
-
-          CURRENT_TAG="${{ steps.changelog.outputs.tag }}"
-          PREV_TAG="$(git tag --sort=-v:refname | grep -Fxv "$CURRENT_TAG" | head -n 1)"
-          MAX_COMMITS=25
-
-          if [ -z "$PREV_TAG" ]; then
-            RANGE="$CURRENT_TAG"
-          else
-            RANGE="${PREV_TAG}..${CURRENT_TAG}"
-          fi
-
-          TOTAL_COMMITS="$(git rev-list --count "$RANGE" 2>/dev/null || echo 0)"
-
-          # If we have a range (i.e. not the first release), skip the most recent commit (the tag commit)
-          if [ -n "$PREV_TAG" ]; then
-            COMMITS="$(git log "$RANGE" \
-              --pretty=format:'- %s (%h) — %an, %ad' \
-              --date=format:'%Y-%m-%d' \
-              -n "$((MAX_COMMITS + 1))" 2>/dev/null | tail -n +2 || true)"
-          else
-            COMMITS="$(git log "$RANGE" \
-              --pretty=format:'- %s (%h) — %an, %ad' \
-              --date=format:'%Y-%m-%d' \
-              -n "$MAX_COMMITS" 2>/dev/null || true)"
-          fi
-
-          if [ -z "$COMMITS" ]; then
-            COMMITS="- No commit messages found for this release range."
-          elif [ "$TOTAL_COMMITS" -gt "$MAX_COMMITS" ]; then
-            REMAINING=$((TOTAL_COMMITS - MAX_COMMITS))
-            COMMITS="$(printf "%s\n...and %d more commits." "$COMMITS" "$REMAINING")"
-          fi
-
-          {
-            echo "previous_tag=${PREV_TAG}"
-            echo "total_commits=${TOTAL_COMMITS}"
-            echo "commits<<EOF"
-            echo "$COMMITS"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Slack notification (success)
         if: success() && steps.changelog.outputs.skipped == 'false'
         uses: slackapi/slack-github-action@v2
@@ -96,8 +49,8 @@ jobs:
           MSG: |-
             ✅ jman release ${{ steps.changelog.outputs.tag }} by ${{ github.actor }} succeeded.
 
-            Commit messages:
-            ${{ steps.release_commits.outputs.commits }}
+            Changelog:
+            ${{ steps.changelog.outputs.clean_changelog }}
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
