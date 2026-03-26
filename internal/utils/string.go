@@ -15,8 +15,8 @@ var unifyHyphens = regexp.MustCompile(`[-–—]+`)
 // for CLI or Slack output.
 func CleanHTML(s string) string {
 	s = htmlTagRegexp.ReplaceAllString(s, "")
-	s = unifyHyphens.ReplaceAllString(s, "-")
 	s = html.UnescapeString(s)
+	s = unifyHyphens.ReplaceAllString(s, "-")
 	return strings.TrimSpace(s)
 }
 

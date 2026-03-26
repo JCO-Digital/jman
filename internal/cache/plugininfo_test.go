@@ -15,7 +15,7 @@ func TestSanitizePluginInfo_DecodesNameAndStripsAuthorHTML(t *testing.T) {
 
 	sanitizePluginInfo(info)
 
-	if got, want := info.Name, "My Plugin – Lite"; got != want {
+	if got, want := info.Name, "My Plugin - Lite"; got != want {
 		t.Fatalf("unexpected sanitized name: got %q, want %q", got, want)
 	}
 
