@@ -1,3 +1,15 @@
+# [4.16.0](https://github.com/JCO-Digital/jman/compare/v4.15.0...v4.16.0) (2026-03-26)
+
+
+### Features
+
+* **cache:** Sanitize plugin info on all reads and writes ([424b86c](https://github.com/JCO-Digital/jman/commit/424b86c357872cb7420f6e6f9986fb94052b802a))
+* **db:** Add monitor and slack tables and migration ([18dea2e](https://github.com/JCO-Digital/jman/commit/18dea2eff0d2ae802b02caf0d358f3542a99f1b1))
+* **db:** Implement robust database schema migration ([c06423c](https://github.com/JCO-Digital/jman/commit/c06423c5e2b2ab165e7608315cd8597d83be8b9f))
+* **db:** Introduce SQLite database for plugin information ([bd337b4](https://github.com/JCO-Digital/jman/commit/bd337b4ebdce36f8e9e63676ae168cd66ae301b0))
+
+
+
 # [4.15.0](https://github.com/JCO-Digital/jman/compare/v4.14.1...v4.15.0) (2026-03-23)
 
 
@@ -47,15 +59,6 @@
 
 * **api:** Implement JWT authentication and rate limiting ([5f14d56](https://github.com/JCO-Digital/jman/commit/5f14d56d989f5d38a29757cfa6336740bcd137eb))
 * **cmd:** Add CLI tools for user and credential management ([ebcd5c7](https://github.com/JCO-Digital/jman/commit/ebcd5c7136b4c7b61e3e3155aabeedc814842a17))
-
-
-
-## [4.12.1](https://github.com/JCO-Digital/jman/compare/v4.12.0...v4.12.1) (2026-03-20)
-
-
-### Bug Fixes
-
-* **update:** Use AppVersion for current version check ([218093b](https://github.com/JCO-Digital/jman/commit/218093bbb3d10023a10dd566da740a5d0726ae58))
 
 
 
