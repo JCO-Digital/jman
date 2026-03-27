@@ -115,3 +115,34 @@ func RemovePlugin(ssh, path, plugin string) (bool, error) {
 	}
 	return strings.Contains(res.Output, "Success: Uninstalled"), nil
 }
+
+func GetPluginInfo(ssh, path, plugin string) (*models.PluginInfo, error) {
+	res, err := RunWP(CliOptions{SSH: ssh, Path: path, IncludePlugins: true}, "plugin", "get", plugin, "--format=json")
+	if err != nil {
+		if strings.Contains(res.Error, "plugin could not be found.") {
+			return nil, fmt.Errorf("plugin %s not found", plugin)
+		}
+		return nil, err
+	}
+
+	type rawInfo struct {
+		Slug        string `json:"name"`
+		Name        string `json:"title"`
+		Version     string `json:"version"`
+		Description string `json:"description"`
+		Author      string `json:"author"`
+		Status      string `json:"status"`
+	}
+
+	var info rawInfo
+	if err := json.Unmarshal([]byte(res.Output), &info); err != nil {
+		return nil, fmt.Errorf("failed to parse plugin info JSON: %w", err)
+	}
+
+	return &models.PluginInfo{
+		Name:    info.Name,
+		Slug:    info.Slug,
+		Version: info.Version,
+		Author:  info.Author,
+	}, nil
+}
