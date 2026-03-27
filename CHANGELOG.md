@@ -1,3 +1,12 @@
+# [4.17.0](https://github.com/JCO-Digital/jman/compare/v4.16.0...v4.17.0) (2026-03-27)
+
+
+### Features
+
+* **plugin:** Add info subcommand to get plugin details ([fc78e7d](https://github.com/JCO-Digital/jman/commit/fc78e7d641ff6d601ca6c52530fe099425294b5f))
+
+
+
 # [4.16.0](https://github.com/JCO-Digital/jman/compare/v4.15.0...v4.16.0) (2026-03-26)
 
 
@@ -49,16 +58,6 @@
 * **cache:** Add plugin info caching and fetching ([f6d4003](https://github.com/JCO-Digital/jman/commit/f6d4003329aa4da956bef93e40f5e115da52ba83))
 * **cache:** Add version comparison for plugin updates ([0b070b8](https://github.com/JCO-Digital/jman/commit/0b070b89ee329349c378fe04722e35e4e1753259))
 * **cache:** Refactor plugin info update logic ([29b37fc](https://github.com/JCO-Digital/jman/commit/29b37fcbe01ead14b871cb939ffe81d293cf7920))
-
-
-
-# [4.13.0](https://github.com/JCO-Digital/jman/compare/v4.12.1...v4.13.0) (2026-03-20)
-
-
-### Features
-
-* **api:** Implement JWT authentication and rate limiting ([5f14d56](https://github.com/JCO-Digital/jman/commit/5f14d56d989f5d38a29757cfa6336740bcd137eb))
-* **cmd:** Add CLI tools for user and credential management ([ebcd5c7](https://github.com/JCO-Digital/jman/commit/ebcd5c7136b4c7b61e3e3155aabeedc814842a17))
 
 
 
