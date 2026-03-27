@@ -14,7 +14,7 @@ import (
 )
 
 var pluginCmd = &cobra.Command{
-	Use:   "plugin <target> [list|install|update|remove] <plugin-name>",
+	Use:   "plugin <target> [list|install|info|update|remove] <plugin-name>",
 	Short: "Plugin actions on target sites.",
 	Long:  "List, install, update or remove plugins on target sites. Supports WordPress.org slugs, custom repo URLs, or aliases defined in config (install only).",
 	Args:  cobra.MinimumNArgs(2),
@@ -28,8 +28,8 @@ func init() {
 func pluginCommand(cmd *cobra.Command, args []string) error {
 	target := args[0]
 	operation := args[1]
-	if operation != "list" && operation != "install" && operation != "update" && operation != "remove" {
-		return fmt.Errorf("invalid operation: %s. Use 'list', 'install', 'update', or 'remove'", operation)
+	if operation != "list" && operation != "install" && operation != "update" && operation != "remove" && operation != "info" {
+		return fmt.Errorf("invalid operation: %s. Use 'list', 'install', 'update', 'remove', or 'info'", operation)
 	}
 
 	pluginName := ""
@@ -42,7 +42,7 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 		if pluginName != "" {
 			verb.Printf(verb.Verbose, "Plugin name '%s' will be ignored for 'list' operation.\n", pluginName)
 		}
-	case "install", "remove":
+	case "install", "remove", "info":
 		if pluginName == "" {
 			return fmt.Errorf("plugin name is required for '%s' operation", operation)
 		}
@@ -88,6 +88,12 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 			err := installPlugin(site, pluginName)
 			if err != nil {
 				verb.Printf(verb.Normal, "Error installing plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
+				continue
+			}
+		case "info":
+			err := pluginInfo(site, pluginName)
+			if err != nil {
+				verb.Printf(verb.Normal, "Error fetching plugin info on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 				continue
 			}
 		}
@@ -211,5 +217,25 @@ func removePlugin(site models.CliSite, pluginName string) error {
 	} else {
 		verb.Printf(verb.Normal, "Failed to remove '%s' from %s. (It might not be installed)\n", verb.Yellow(pluginName), verb.Blue(site.Name))
 	}
+	return nil
+}
+
+func pluginInfo(site models.CliSite, pluginName string) error {
+	verb.Printf(verb.Verbose, "Fetching info for '%s' on %s (%s)...\n", verb.Yellow(pluginName), verb.Blue(site.Name), site.ServerName)
+	info, err := wpcli.GetPluginInfo(site.SSH, site.Path, pluginName)
+	if err != nil {
+		return err
+	}
+
+	if info == nil {
+		verb.Printf(verb.Normal, "Plugin '%s' not found on %s.\n", verb.Yellow(pluginName), verb.Blue(site.Name))
+		return nil
+	}
+
+	verb.Printf(verb.Normal, "Plugin info for '%s' on %s:\n", verb.Yellow(pluginName), verb.Blue(site.Name))
+	verb.Printf(verb.Normal, "- Name: %s\n", info.Name)
+	verb.Printf(verb.Normal, "- Slug: %s\n", info.Slug)
+	verb.Printf(verb.Normal, "- Version: %s\n", info.Version)
+	verb.Printf(verb.Normal, "- Author: %s\n", info.Author)
 	return nil
 }
