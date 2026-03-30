@@ -1,3 +1,12 @@
+## [4.17.1](https://github.com/JCO-Digital/jman/compare/v4.17.0...v4.17.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* fake commit to trigger release. ([9a9b374](https://github.com/JCO-Digital/jman/commit/9a9b374c348651bc64eee3ce65d666788bdd60af))
+
+
+
 # [4.17.0](https://github.com/JCO-Digital/jman/compare/v4.16.0...v4.17.0) (2026-03-27)
 
 
@@ -40,24 +49,6 @@
 
 * **admin:** Use normal verbosity for user creation messages ([d9219bc](https://github.com/JCO-Digital/jman/commit/d9219bc1416824cf2a2b71527f7d0748dc53fc53))
 * **wpcli:** Pass skip parameter to GetPlugins ([230b8c6](https://github.com/JCO-Digital/jman/commit/230b8c65097ebeb73d3f232a79b902f3bddb00f1))
-
-
-
-# [4.14.0](https://github.com/JCO-Digital/jman/compare/v4.13.0...v4.14.0) (2026-03-22)
-
-
-### Bug Fixes
-
-* **cache:** Remove Latest field update from WPVuln ([6854d95](https://github.com/JCO-Digital/jman/commit/6854d95c44a0970347067b35faefffd66b6e8c62))
-* **cache:** sanitize plugin metadata by decoding entities and stripping ([2593d75](https://github.com/JCO-Digital/jman/commit/2593d75d0244831c1976386ffc5b66fa0921847f))
-
-
-### Features
-
-* **api:** Refactor response handling and add plugin info endpoint ([1f4e1bb](https://github.com/JCO-Digital/jman/commit/1f4e1bbadc6aac9269c96d7330547de6dce978dd))
-* **cache:** Add plugin info caching and fetching ([f6d4003](https://github.com/JCO-Digital/jman/commit/f6d4003329aa4da956bef93e40f5e115da52ba83))
-* **cache:** Add version comparison for plugin updates ([0b070b8](https://github.com/JCO-Digital/jman/commit/0b070b89ee329349c378fe04722e35e4e1753259))
-* **cache:** Refactor plugin info update logic ([29b37fc](https://github.com/JCO-Digital/jman/commit/29b37fcbe01ead14b871cb939ffe81d293cf7920))
 
 
 
