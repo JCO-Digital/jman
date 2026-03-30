@@ -1,3 +1,9 @@
+//go:build !noupdate
+
+/*
+ * Remove this command from the external build to avoid including the update logic and its dependencies when building with -tags noupdate.
+ */
+
 package commands
 
 import (
