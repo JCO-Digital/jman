@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -47,10 +48,7 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("plugin name is required for '%s' operation", operation)
 		}
 		if operation == "install" {
-			if alias, ok := config.Cfg.PluginAliases[pluginName]; ok {
-				verb.Printf(verb.Verbose, "Using alias for '%s': %s\n", pluginName, alias)
-				pluginName = alias
-			}
+			resolvePluginAlias(&pluginName)
 		}
 	}
 
@@ -238,4 +236,30 @@ func pluginInfo(site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Normal, "- Version: %s\n", info.Version)
 	verb.Printf(verb.Normal, "- Author: %s\n", info.Author)
 	return nil
+}
+
+var satisRegex = regexp.MustCompile(`(https?):\/\/([^\/]+)\/satispress\/([^\/]+)\/([^\/\s?#]+)`)
+
+func resolvePluginAlias(pluginName *string) {
+	if alias, ok := config.Cfg.PluginAliases[*pluginName]; ok {
+		verb.Printf(verb.Verbose, "Using alias for '%s': %s\n", *pluginName, alias)
+		*pluginName = alias
+	}
+
+	if strings.HasSuffix(*pluginName, ".zip") {
+		return
+	}
+
+	if match := satisRegex.FindStringSubmatch(*pluginName); match != nil {
+		protocol := match[1]
+		baseURL := match[2]
+		slug := match[3]
+		version := strings.TrimSuffix(match[4], "/")
+
+		if alias, ok := config.Cfg.PluginAliases[strings.ReplaceAll(baseURL, ".", "_")]; ok {
+			*pluginName = fmt.Sprintf("%s://%s/%s/%s/%s-%s.zip", protocol, baseURL, strings.Trim(alias, "/"), slug, slug, version)
+			verb.Printf(verb.Verbose, "Resolved Satispress URL to ZIP: %s\n", *pluginName)
+		}
+
+	}
 }
