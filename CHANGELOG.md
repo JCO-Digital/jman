@@ -1,3 +1,12 @@
+# [4.18.0](https://github.com/JCO-Digital/jman/compare/v4.17.1...v4.18.0) (2026-04-01)
+
+
+### Features
+
+* **plugin:** Resolve Satispress aliases for plugin installation ([1c11f3f](https://github.com/JCO-Digital/jman/commit/1c11f3f1dd59b52b63ee946accf1f75cede7002c))
+
+
+
 ## [4.17.1](https://github.com/JCO-Digital/jman/compare/v4.17.0...v4.17.1) (2026-03-30)
 
 
@@ -39,16 +48,6 @@
 ### Features
 
 * **mods:** Add ability to enable/disable file mods ([4669dd5](https://github.com/JCO-Digital/jman/commit/4669dd545398a657008937fb3beddbf7a10e9284))
-
-
-
-## [4.14.1](https://github.com/JCO-Digital/jman/compare/v4.14.0...v4.14.1) (2026-03-23)
-
-
-### Bug Fixes
-
-* **admin:** Use normal verbosity for user creation messages ([d9219bc](https://github.com/JCO-Digital/jman/commit/d9219bc1416824cf2a2b71527f7d0748dc53fc53))
-* **wpcli:** Pass skip parameter to GetPlugins ([230b8c6](https://github.com/JCO-Digital/jman/commit/230b8c65097ebeb73d3f232a79b902f3bddb00f1))
 
 
 
