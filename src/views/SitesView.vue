@@ -3,6 +3,9 @@ import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import type { EnrichedSite } from "../types";
+import ViewHeader from "../components/ViewHeader.vue";
+import Pagination from "../components/Pagination.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const props = defineProps<{
 	page?: number;
@@ -109,6 +112,10 @@ const nextPage = () => {
 	}
 };
 
+const handleRowsPerPageUpdate = (newRpp: number) => {
+	updateRoute(1, newRpp);
+};
+
 const goToSite = (id: number) => {
 	router.push({ name: "site-detail", params: { id: id.toString() } });
 };
@@ -116,23 +123,7 @@ const goToSite = (id: number) => {
 
 <template>
 	<div class="view-container">
-		<header class="header">
-			<h1>Site Management</h1>
-			<button
-				class="btn btn-primary"
-				@click="dataStore.refreshData()"
-				:disabled="dataStore.isLoading"
-			>
-				<span
-					v-if="dataStore.isLoading"
-					class="spinner spinner-small"
-					style="margin-right: 8px; vertical-align: middle"
-				></span>
-				<span style="vertical-align: middle">{{
-					dataStore.isLoading ? "Refreshing..." : "Refresh Data"
-				}}</span>
-			</button>
-		</header>
+		<ViewHeader title="Site Management" show-refresh />
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
@@ -179,9 +170,8 @@ const goToSite = (id: number) => {
 				</thead>
 				<tbody>
 					<tr v-if="dataStore.isLoading && dataStore.sites.length === 0">
-						<td colspan="4" class="empty-state">
-							<div class="spinner" style="margin-bottom: 12px"></div>
-							<div>Loading data...</div>
+						<td colspan="4">
+							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
@@ -217,35 +207,18 @@ const goToSite = (id: number) => {
 				</tbody>
 			</table>
 
-			<div class="pagination">
-				<div class="rows-per-page">
-					<label for="per-page">Rows per page:</label>
-					<select
-						id="per-page"
-						v-model.number="rowsPerPage"
-						@change="updateRoute(1, rowsPerPage)"
-					>
-						<option value="50">50</option>
-						<option value="100">100</option>
-						<option value="150">150</option>
-						<option value="200">200</option>
-						<option value="250">250</option>
-					</select>
-				</div>
-				<div class="page-controls">
-					<button :disabled="currentPage === 1" @click="prevPage">
-						&laquo; Prev
-					</button>
-					<span>Page {{ currentPage }} of {{ totalPages }}</span>
-					<button :disabled="currentPage === totalPages" @click="nextPage">
-						Next &raquo;
-					</button>
-				</div>
-			</div>
+			<Pagination
+				:current-page="currentPage"
+				:total-pages="totalPages"
+				:rows-per-page="rowsPerPage"
+				@update:rows-per-page="handleRowsPerPageUpdate"
+				@prev="prevPage"
+				@next="nextPage"
+			/>
 		</main>
 	</div>
 </template>
 
 <style scoped>
-/* All generic styles moved to style.css */
+/* All specific styles moved to components or available in style.css */
 </style>

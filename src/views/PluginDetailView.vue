@@ -2,6 +2,10 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import ViewHeader from "../components/ViewHeader.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
+import PluginInfoCard from "../components/PluginInfoCard.vue";
+import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
 
 const props = defineProps<{
 	name: string;
@@ -44,77 +48,16 @@ const goToSite = (siteId: number) => {
 
 <template>
 	<div class="view-container">
-		<header class="header">
-			<div class="title-area">
-				<button class="back-btn" @click="goBack">&larr; Back to Plugins</button>
-				<h1>Plugin Details</h1>
-			</div>
-		</header>
+		<ViewHeader
+			title="Plugin Details"
+			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
+		/>
 
 		<main class="content" v-if="sitesWithPlugin.length > 0 || info">
-			<section class="card">
-				<h2>Plugin Information</h2>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Plugin Name:</span>
-						<span class="value">{{ info?.name }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Slug:</span>
-						<span class="value">{{ info.slug }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Author:</span>
-						<span class="value">
-							<a
-								v-if="info.author_profile"
-								:href="info.author_profile"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="link"
-							>
-								{{ info.author }}
-							</a>
-							<span v-else>{{ info.author }}</span>
-						</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Version:</span>
-						<span class="value">{{ info.version }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Requires:</span>
-						<span class="value">WP {{ info.requires }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Tested up to:</span>
-						<span class="value">WP {{ info.tested }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Last Updated:</span>
-						<span class="value">{{ info.last_updated }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Homepage:</span>
-						<span class="value">
-							<a
-								v-if="info.homepage"
-								:href="info.homepage"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="link"
-							>
-								View Plugin Page
-							</a>
-							<span v-else>-</span>
-						</span>
-					</div>
-					<div class="info-item">
-						<span class="label">Total Installations:</span>
-						<span class="value">{{ sitesWithPlugin.length }}</span>
-					</div>
-				</div>
-			</section>
+			<PluginInfoCard
+				:info="info"
+				:installation-count="sitesWithPlugin.length"
+			/>
 
 			<section class="card">
 				<h2>Installed on Sites</h2>
@@ -154,146 +97,18 @@ const goToSite = (siteId: number) => {
 				</div>
 			</section>
 
-			<section
-				class="card"
+			<PluginVulnerabilityList
 				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
-			>
-				<h2 style="color: #d32f2f">
-					Vulnerabilities Detected ({{ info.vulnerabilities.length }})
-				</h2>
-				<div class="vulnerabilities-list">
-					<details
-						v-for="item in info.vulnerabilities"
-						:key="item.vulnerability.uuid"
-						class="vuln-item"
-						style="
-							margin-bottom: 12px;
-							border: 1px solid var(--border-color);
-							border-radius: 8px;
-							overflow: hidden;
-						"
-					>
-						<summary
-							style="
-								display: flex;
-								justify-content: space-between;
-								align-items: center;
-								padding: 12px 16px;
-								cursor: pointer;
-								user-select: none;
-								list-style: none;
-							"
-						>
-							<div
-								style="
-									display: flex;
-									justify-content: space-between;
-									align-items: center;
-									width: 100%;
-									gap: 10px;
-								"
-							>
-								<h3 style="margin: 0; font-size: 1.1em">
-									{{ item.vulnerability.name }}
-								</h3>
-								<span
-									v-if="item.vulnerability.impact.cvss"
-									class="status-badge error"
-									style="white-space: nowrap"
-								>
-									{{ item.vulnerability.impact.cvss.severity }} ({{
-										item.vulnerability.impact.cvss.score
-									}})
-								</span>
-							</div>
-							<span class="expand-icon" style="margin-left: 12px; opacity: 0.5"
-								>▼</span
-							>
-						</summary>
-
-						<div
-							style="
-								padding: 0 16px 16px 16px;
-								border-top: 1px solid var(--border-color);
-							"
-						>
-							<div
-								v-for="source in item.vulnerability.source"
-								:key="source.id"
-								style="margin-top: 12px"
-							>
-								<p
-									v-if="source.description"
-									style="
-										margin: 8px 0;
-										line-height: 1.4;
-										color: var(--text-main);
-										font-size: 0.95em;
-									"
-								>
-									{{ source.description }}
-								</p>
-								<div
-									class="info-grid"
-									style="
-										grid-template-columns: repeat(
-											auto-fill,
-											minmax(200px, 1fr)
-										);
-										margin-top: 8px;
-										font-size: 0.85em;
-										background: var(--bg-body);
-										padding: 12px;
-										border-radius: 4px;
-									"
-								>
-									<div class="info-item">
-										<span class="label">Source:</span>
-										<span class="value">{{ source.name }}</span>
-									</div>
-									<div
-										class="info-item"
-										v-if="item.vulnerability.operator.max_version"
-									>
-										<span class="label">Max Version:</span>
-										<span class="value"
-											>{{ item.vulnerability.operator.max_operator }}
-											{{ item.vulnerability.operator.max_version }}</span
-										>
-									</div>
-									<div
-										class="info-item"
-										v-if="source.date && source.date !== '0000-00-00'"
-									>
-										<span class="label">Date:</span>
-										<span class="value">{{ source.date }}</span>
-									</div>
-									<div class="info-item">
-										<span class="label">Link:</span>
-										<span class="value">
-											<a
-												:href="source.link"
-												target="_blank"
-												rel="noopener noreferrer"
-												class="link"
-												>Reference</a
-											>
-										</span>
-									</div>
-								</div>
-							</div>
-						</div>
-					</details>
-				</div>
-			</section>
+				:vulnerabilities="info.vulnerabilities"
+			/>
 		</main>
 
 		<main class="content" v-else>
 			<div class="card">
-				<div v-if="dataStore.isLoading" class="empty-state">
-					<div class="spinner" style="margin-bottom: 12px"></div>
-					<div>Loading plugin details...</div>
-				</div>
+				<LoadingSpinner
+					v-if="dataStore.isLoading"
+					message="Loading plugin details..."
+				/>
 				<div v-else class="empty-state">
 					<p>Plugin details not found.</p>
 					<button class="back-btn" @click="goBack" style="margin-top: 16px">
@@ -306,30 +121,5 @@ const goToSite = (siteId: number) => {
 </template>
 
 <style scoped>
-/* All generic styles moved to style.css */
-.vuln-item summary::-webkit-details-marker {
-	display: none;
-}
-
-.vuln-item summary {
-	outline: none;
-	transition: background-color 0.2s ease;
-}
-
-.vuln-item summary:hover {
-	background-color: var(--bg-hover);
-}
-
-.vuln-item summary:focus-visible {
-	box-shadow: inset 0 0 0 2px var(--primary);
-}
-
-.vuln-item[open] .expand-icon {
-	transform: rotate(180deg);
-}
-
-.expand-icon {
-	transition: transform 0.2s ease;
-	font-size: 0.8em;
-}
+/* All specific styles moved to components or available in style.css */
 </style>

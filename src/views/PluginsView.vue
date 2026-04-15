@@ -2,6 +2,9 @@
 import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import ViewHeader from "../components/ViewHeader.vue";
+import Pagination from "../components/Pagination.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const props = defineProps<{
 	page?: number;
@@ -12,9 +15,9 @@ const router = useRouter();
 const dataStore = useDataStore();
 
 const searchQuery = ref("");
-const sortKey = ref<"name" | "count" | "version" | "author" | "vulnerabilities">(
-	"name",
-);
+const sortKey = ref<
+	"name" | "count" | "version" | "author" | "vulnerabilities"
+>("name");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(props.page || 1);
 const rowsPerPage = ref(props.rowsPerPage || 50);
@@ -111,6 +114,10 @@ const nextPage = () => {
 	}
 };
 
+const handleRowsPerPageUpdate = (newRpp: number) => {
+	updateRoute(1, newRpp);
+};
+
 const goToPlugin = (name: string) => {
 	router.push({
 		name: "plugin-detail",
@@ -121,23 +128,7 @@ const goToPlugin = (name: string) => {
 
 <template>
 	<div class="view-container">
-		<header class="header">
-			<h1>Plugins Management</h1>
-			<button
-				class="btn btn-primary"
-				@click="dataStore.refreshData()"
-				:disabled="dataStore.isLoading"
-			>
-				<span
-					v-if="dataStore.isLoading"
-					class="spinner spinner-small"
-					style="margin-right: 8px; vertical-align: middle"
-				></span>
-				<span style="vertical-align: middle">{{
-					dataStore.isLoading ? "Refreshing..." : "Refresh Data"
-				}}</span>
-			</button>
-		</header>
+		<ViewHeader title="Plugins Management" show-refresh />
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
@@ -191,9 +182,8 @@ const goToPlugin = (name: string) => {
 				</thead>
 				<tbody>
 					<tr v-if="dataStore.isLoading && dataStore.pluginInfo.length === 0">
-						<td colspan="5" class="empty-state">
-							<div class="spinner" style="margin-bottom: 12px"></div>
-							<div>Loading data...</div>
+						<td colspan="5">
+							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedPlugins.length === 0">
@@ -233,31 +223,18 @@ const goToPlugin = (name: string) => {
 				</tbody>
 			</table>
 
-			<div class="pagination">
-				<div class="rows-per-page">
-					<label for="per-page">Rows per page:</label>
-					<select
-						id="per-page"
-						v-model.number="rowsPerPage"
-						@change="updateRoute(1, rowsPerPage)"
-					>
-						<option value="50">50</option>
-						<option value="100">100</option>
-						<option value="150">150</option>
-						<option value="200">200</option>
-						<option value="250">250</option>
-					</select>
-				</div>
-				<div class="page-controls">
-					<button :disabled="currentPage === 1" @click="prevPage">
-						&laquo; Prev
-					</button>
-					<span>Page {{ currentPage }} of {{ totalPages }}</span>
-					<button :disabled="currentPage === totalPages" @click="nextPage">
-						Next &raquo;
-					</button>
-				</div>
-			</div>
+			<Pagination
+				:current-page="currentPage"
+				:total-pages="totalPages"
+				:rows-per-page="rowsPerPage"
+				@update:rows-per-page="handleRowsPerPageUpdate"
+				@prev="prevPage"
+				@next="nextPage"
+			/>
 		</main>
 	</div>
 </template>
+
+<style scoped>
+/* All specific styles moved to components or available in style.css */
+</style>

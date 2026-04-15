@@ -2,6 +2,7 @@
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const router = useRouter();
 const authStore = useAuthStore();
@@ -89,14 +90,8 @@ const handleLogin = async () => {
 				</div>
 
 				<button type="submit" class="login-btn" :disabled="isLoading">
-					<span
-						v-if="isLoading"
-						class="spinner spinner-small"
-						style="margin-right: 8px; vertical-align: middle"
-					></span>
-					<span style="vertical-align: middle">{{
-						isLoading ? "Signing in..." : "Sign In"
-					}}</span>
+					<LoadingSpinner v-if="isLoading" small message="Signing in..." />
+					<span v-else>Sign In</span>
 				</button>
 			</form>
 		</div>
