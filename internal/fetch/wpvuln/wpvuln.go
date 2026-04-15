@@ -16,7 +16,7 @@ func GetVulnerabilities(pluginName string) (*models.VulnResponse, error) {
 	if !utils.IsValidSlug(pluginName) {
 		msg := "Invalid WordPress plugin slug"
 		return &models.VulnResponse{
-			Error:   1,
+			Error:   0,
 			Message: &msg,
 			Data: &models.VulnData{
 				Plugin:        pluginName,
