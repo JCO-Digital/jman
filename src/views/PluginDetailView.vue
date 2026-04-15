@@ -23,10 +23,12 @@ const sitesWithPlugin = computed(() => {
 		info.value?.vulnerabilities.flatMap((v) => v.sites.map((s) => s.site_id)) ||
 			[],
 	);
-	return dataStore.plugins
-		.filter((p) => p.name === props.name)
+
+	const instances = dataStore.pluginsBySlugMap.get(props.name) || [];
+
+	return instances
 		.map((p) => {
-			const site = dataStore.sites.find((s) => s.id === p.site_id);
+			const site = dataStore.getSiteById(p.site_id);
 			return {
 				...p,
 				site_domain: site ? site.domain : "Unknown Site",
