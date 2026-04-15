@@ -95,6 +95,15 @@ func GetCachedPluginData() ([]models.WPPluginData, error) {
 		return nil, err
 	}
 
+	sites, err := GetSiteList()
+	if err != nil {
+		return nil, err
+	}
+	siteNames := make(map[int]string)
+	for _, s := range sites {
+		siteNames[s.ID] = s.Name
+	}
+
 	var pluginData []models.WPPluginData
 	pluginMap := make(map[string]*models.WPPluginData)
 
@@ -114,8 +123,9 @@ func GetCachedPluginData() ([]models.WPPluginData, error) {
 		}
 
 		data.Sites = append(data.Sites, models.PluginSite{
-			SiteID:  plugin.SiteID,
-			Version: plugin.Version,
+			SiteID:   plugin.SiteID,
+			SiteName: siteNames[plugin.SiteID],
+			Version:  plugin.Version,
 		})
 	}
 

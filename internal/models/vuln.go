@@ -58,12 +58,13 @@ type Operator struct {
 }
 
 type Vulnerability struct {
-	Uuid        string   `json:"uuid"`
-	Name        string   `json:"name"`
-	Description *string  `json:"description"`
-	Operator    Operator `json:"operator"`
-	Source      []Source `json:"source"`
-	Impact      *Impact  `json:"impact,omitempty"`
+	Uuid        string       `json:"uuid"`
+	Name        string       `json:"name"`
+	Description *string      `json:"description"`
+	Operator    Operator     `json:"operator"`
+	Source      []Source     `json:"source"`
+	Impact      *Impact      `json:"impact,omitempty"`
+	Sites       []PluginSite `json:"sites,omitempty"`
 }
 
 type VulnData struct {
@@ -83,11 +84,14 @@ type VulnResponse struct {
 
 type VulnReport struct {
 	Plugin        string        `json:"plugin"`
+	Slug          string        `json:"slug"`
+	PluginName    string        `json:"plugin_name"`
 	Vulnerability Vulnerability `json:"vulnerability"`
 	Sites         []PluginSite  `json:"sites"`
 }
 
 type VulnPlugin struct {
+	PluginName    string          `json:"plugin_name"`
 	Version       string          `json:"version"`
 	Cvss          *float64        `json:"cvss"`
 	Vulnerability []Vulnerability `json:"vulnerability"`
