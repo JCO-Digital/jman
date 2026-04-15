@@ -1,3 +1,17 @@
+# [4.20.0](https://github.com/JCO-Digital/jman/compare/v4.19.1...v4.20.0) (2026-04-15)
+
+
+### Bug Fixes
+
+* **wpcli:** add --force when installing zip plugins ([cef2aed](https://github.com/JCO-Digital/jman/commit/cef2aed1bb5295128a4a379b271896f038ec1f6f))
+
+
+### Features
+
+* **plugin:** support installing local .zip plugins by uploading to ([a529d1d](https://github.com/JCO-Digital/jman/commit/a529d1dcf57d1c47347a0a620898235c249b5b2f))
+
+
+
 ## [4.19.1](https://github.com/JCO-Digital/jman/compare/v4.19.0...v4.19.1) (2026-04-15)
 
 
@@ -33,15 +47,6 @@
 ### Bug Fixes
 
 * fake commit to trigger release. ([9a9b374](https://github.com/JCO-Digital/jman/commit/9a9b374c348651bc64eee3ce65d666788bdd60af))
-
-
-
-# [4.17.0](https://github.com/JCO-Digital/jman/compare/v4.16.0...v4.17.0) (2026-03-27)
-
-
-### Features
-
-* **plugin:** Add info subcommand to get plugin details ([fc78e7d](https://github.com/JCO-Digital/jman/commit/fc78e7d641ff6d601ca6c52530fe099425294b5f))
 
 
 
