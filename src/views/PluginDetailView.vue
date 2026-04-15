@@ -59,6 +59,11 @@ const goToSite = (siteId: number) => {
 				:installation-count="sitesWithPlugin.length"
 			/>
 
+			<PluginVulnerabilityList
+				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
+				:vulnerabilities="info.vulnerabilities"
+			/>
+
 			<section class="card">
 				<h2>Installed on Sites</h2>
 				<div class="table-container">
@@ -96,11 +101,6 @@ const goToSite = (siteId: number) => {
 					</table>
 				</div>
 			</section>
-
-			<PluginVulnerabilityList
-				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
-				:vulnerabilities="info.vulnerabilities"
-			/>
 		</main>
 
 		<main class="content" v-else>

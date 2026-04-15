@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { EnrichedPluginInfo } from "../types";
+import type { EnrichedPlugin } from "../types";
 
 defineProps<{
-	info: EnrichedPluginInfo | undefined;
+	info: EnrichedPlugin | undefined;
 	installationCount: number;
 }>();
 </script>
