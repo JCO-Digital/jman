@@ -204,7 +204,7 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 	}
 
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 24)
+	sem := make(chan struct{}, 12)
 
 	for _, slug := range slugs {
 		existing, fetchedAt, err := db.GetPluginInfo(slug)
