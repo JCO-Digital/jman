@@ -6,12 +6,25 @@ import (
 	"net/http"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 const WPVulnerabilityAPIURL = "https://www.wpvulnerability.net/plugin/"
 
 // GetVulnerabilities fetches vulnerability data for a specific WordPress plugin.
 func GetVulnerabilities(pluginName string) (*models.VulnResponse, error) {
+	if !utils.IsValidSlug(pluginName) {
+		msg := "Invalid WordPress plugin slug"
+		return &models.VulnResponse{
+			Error:   1,
+			Message: &msg,
+			Data: &models.VulnData{
+				Plugin:        pluginName,
+				Vulnerability: []models.Vulnerability{},
+			},
+		}, nil
+	}
+
 	endpoint := fmt.Sprintf("%s%s", WPVulnerabilityAPIURL, pluginName)
 
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)

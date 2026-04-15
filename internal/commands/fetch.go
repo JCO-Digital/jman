@@ -14,6 +14,7 @@ var (
 	fetchCmd   = &cobra.Command{
 		Use:   "fetch",
 		Short: "Fetch latest data from SpinupWP and update local cache.",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := "basic"
 			if len(args) > 0 {
