@@ -2,8 +2,11 @@ package commands
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
@@ -101,8 +104,38 @@ func pluginCommand(cmd *cobra.Command, args []string) error {
 }
 
 func installPlugin(site models.CliSite, pluginName string) error {
+	installSource := pluginName
+
+	// Check if pluginName is a local ZIP file
+	if strings.HasSuffix(strings.ToLower(pluginName), ".zip") {
+		if info, err := os.Stat(pluginName); err == nil && !info.IsDir() {
+			if site.SSH != "" {
+				// Remote site: upload the file
+				remoteTempPath := fmt.Sprintf("/tmp/jman-%d-%s", time.Now().Unix(), filepath.Base(pluginName))
+				verb.Printf(verb.Verbose, "Uploading %s to %s:%s...\n", pluginName, site.ServerName, remoteTempPath)
+
+				if err := wpcli.UploadFile(site.SSH, pluginName, remoteTempPath); err != nil {
+					return fmt.Errorf("failed to upload plugin: %w", err)
+				}
+
+				installSource = remoteTempPath
+				// Ensure cleanup on the remote server
+				defer func() {
+					verb.Printf(verb.Debug, "Cleaning up remote file %s...\n", remoteTempPath)
+					wpcli.RunSSH(site.SSH, "rm", remoteTempPath)
+				}()
+			} else {
+				// Local site: use absolute path
+				absPath, err := filepath.Abs(pluginName)
+				if err == nil {
+					installSource = absPath
+				}
+			}
+		}
+	}
+
 	verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, verb.Blue(site.Name), verb.Yellow(site.ServerName))
-	success, err := wpcli.AddPlugin(site.SSH, site.Path, pluginName, true)
+	success, err := wpcli.AddPlugin(site.SSH, site.Path, installSource, true)
 	if err != nil {
 		return err
 	}
