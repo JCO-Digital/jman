@@ -1,6 +1,20 @@
 # Changelog
 
-## 1.5.0 (2026-03-26)
+## 1.6.0 (2026-04-15)
+
+#### Features
+- components: add reusable UI components and integrate into views (7279d3f)
+- data: add vulnerabilities to enriched types and surface them in UI (8b7e921)
+- vulns: add vulnerability support to store and UI (5bedf9c)
+
+#### Performance Improvements
+- data: add computed lookup maps and replace repeated filters with map lookups (2313857)
+
+#### Refactor
+- vulnerabilities: move inline styles into scoped CSS classes in PluginVulnerabilityList.vue (9c5cf8e)
+- components: rename types, compress CSS, move vulnerability list in detail view (be3a1cd)
+
+## v1.5.0 (2026-03-26)
 
 #### Features
 - router: Introduce Dashboard and Sites views (7de3123)
