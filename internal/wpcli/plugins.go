@@ -55,6 +55,13 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 // AddPlugin installs and optionally activates a plugin.
 func AddPlugin(ssh, path, plugin string, activate bool) (bool, error) {
 	args := []string{"plugin", "install", plugin}
+
+	// If the plugin is a ZIP file (local or URL), add --force to allow updating.
+	lowerPlugin := strings.ToLower(plugin)
+	if strings.HasSuffix(lowerPlugin, ".zip") || strings.Contains(lowerPlugin, ".zip?") {
+		args = append(args, "--force")
+	}
+
 	if activate {
 		args = append(args, "--activate")
 	}
