@@ -84,11 +84,14 @@ type VulnResponse struct {
 
 type VulnReport struct {
 	Plugin        string        `json:"plugin"`
+	Slug          string        `json:"slug"`
+	PluginName    string        `json:"plugin_name"`
 	Vulnerability Vulnerability `json:"vulnerability"`
 	Sites         []PluginSite  `json:"sites"`
 }
 
 type VulnPlugin struct {
+	PluginName    string          `json:"plugin_name"`
 	Version       string          `json:"version"`
 	Cvss          *float64        `json:"cvss"`
 	Vulnerability []Vulnerability `json:"vulnerability"`
