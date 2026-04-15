@@ -104,3 +104,33 @@ func TestShowFirstPart(t *testing.T) {
 		})
 	}
 }
+
+func TestIsValidSlug(t *testing.T) {
+	tests := []struct {
+		slug     string
+		expected bool
+	}{
+		{"akismet", true},
+		{"jetpack", true},
+		{"contact-form-7", true},
+		{"wordpress-seo", true},
+		{"woocommerce", true},
+		{"my-plugin-123", true},
+		{"Invalid-Slug", false},
+		{"invalid_slug", false},
+		{"invalid/slug", false},
+		{"invalid.slug", false},
+		{"", false},
+		{"-starting-with-hyphen", true}, // WP allows this usually, though rare
+		{"ending-with-hyphen-", true},   // WP allows this usually, though rare
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.slug, func(t *testing.T) {
+			result := IsValidSlug(tt.slug)
+			if result != tt.expected {
+				t.Errorf("IsValidSlug(%q) = %v, want %v", tt.slug, result, tt.expected)
+			}
+		})
+	}
+}
