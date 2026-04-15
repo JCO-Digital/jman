@@ -90,8 +90,19 @@ var (
 					for plugin := range pluginList {
 						response, err := cache.GetCachedVulnerabilities(plugin, ttl)
 						if err != nil {
-							return fmt.Errorf("error fetching vulnerabilities: %w", err)
+							verb.PrintErrorf(verb.Normal, "Warning: failed to fetch vulnerabilities for %s: %v\n", plugin, err)
+							continue
 						}
+
+						if response.Error != 0 {
+							msg := "unknown error"
+							if response.Message != nil {
+								msg = *response.Message
+							}
+							verb.PrintErrorf(verb.Verbose, "Warning: API returned error for %s: %s\n", plugin, msg)
+							continue
+						}
+
 						verb.Printf(verb.Verbose, "Successfully fetched and cached %d vulnerabilities for %s (%s).\n", len(response.Data.Vulnerability), cache.GetPluginName(plugin), plugin)
 					}
 				}
