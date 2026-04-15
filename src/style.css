@@ -398,7 +398,8 @@ select {
 	}
 
 	&.inactive,
-	&.disabled {
+	&.disabled,
+	&.error {
 		background-color: var(--badge-inactive-bg);
 		color: var(--badge-inactive-text);
 	}

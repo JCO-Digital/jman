@@ -12,7 +12,9 @@ const router = useRouter();
 const dataStore = useDataStore();
 
 const searchQuery = ref("");
-const sortKey = ref<"name" | "count" | "version" | "author">("name");
+const sortKey = ref<"name" | "count" | "version" | "author" | "vulnerabilities">(
+	"name",
+);
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(props.page || 1);
 const rowsPerPage = ref(props.rowsPerPage || 50);
@@ -41,7 +43,9 @@ const updateRoute = (page: number, rpp: number) => {
 	});
 };
 
-const handleSort = (key: "name" | "count" | "version" | "author") => {
+const handleSort = (
+	key: "name" | "count" | "version" | "author" | "vulnerabilities",
+) => {
 	if (sortKey.value === key) {
 		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
 	} else {
@@ -66,6 +70,11 @@ const uniquePlugins = computed(() => {
 	filtered.sort((a, b) => {
 		let valA: any = (a as any)[sortKey.value];
 		let valB: any = (b as any)[sortKey.value];
+
+		if (sortKey.value === "vulnerabilities") {
+			valA = (valA as any[]).length;
+			valB = (valB as any[]).length;
+		}
 
 		if (typeof valA === "string") {
 			valA = valA.toLowerCase();
@@ -172,17 +181,23 @@ const goToPlugin = (name: string) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
+						<th @click="handleSort('vulnerabilities')">
+							Vulns
+							<span v-if="sortKey === 'vulnerabilities'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-if="dataStore.isLoading && dataStore.pluginInfo.length === 0">
-						<td colspan="4" class="empty-state">
+						<td colspan="5" class="empty-state">
 							<div class="spinner" style="margin-bottom: 12px"></div>
 							<div>Loading data...</div>
 						</td>
 					</tr>
 					<tr v-else-if="paginatedPlugins.length === 0">
-						<td colspan="4" class="empty-state">
+						<td colspan="5" class="empty-state">
 							<span v-if="searchQuery"
 								>No plugins found matching "{{ searchQuery }}".</span
 							>
@@ -204,6 +219,16 @@ const goToPlugin = (name: string) => {
 						<td>{{ plugin.version }}</td>
 						<td>{{ plugin.author }}</td>
 						<td>{{ plugin.count }}</td>
+						<td>
+							<span
+								v-if="plugin.vulnerabilities.length > 0"
+								class="status-badge error"
+								title="Vulnerabilities detected"
+							>
+								{{ plugin.vulnerabilities.length }}
+							</span>
+							<span v-else style="color: #999">—</span>
+						</td>
 					</tr>
 				</tbody>
 			</table>

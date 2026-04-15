@@ -1,12 +1,13 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
-import type { Server, Site, Plugin, PluginInfo } from "../types";
+import type { Server, Site, Plugin, PluginInfo, Vulnerability } from "../types";
 import { useAuthStore } from "./auth";
 
 const CACHE_KEY_SERVERS = "jman_servers";
 const CACHE_KEY_SITES = "jman_sites";
 const CACHE_KEY_PLUGINS = "jman_plugins";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
+const CACHE_KEY_VULNS = "jman_vulns";
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const useDataStore = defineStore("data", () => {
@@ -15,9 +16,11 @@ export const useDataStore = defineStore("data", () => {
 	const sites = ref<Site[]>([]);
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
+	const vulnerabilities = ref<Vulnerability[]>([]);
 
 	const isLoaded = ref(false);
 	const isLoading = ref(false);
+	const isVulnsLoading = ref(false);
 	const error = ref<string | null>(null);
 
 	// Getters
@@ -48,6 +51,9 @@ export const useDataStore = defineStore("data", () => {
 				version: info.version || "N/A",
 				author: info.author || "Unknown",
 				count,
+				vulnerabilities: vulnerabilities.value.filter(
+					(v) => v.slug === info.slug,
+				),
 			};
 		});
 	});
@@ -71,12 +77,16 @@ export const useDataStore = defineStore("data", () => {
 			const cachedSites = sessionStorage.getItem(CACHE_KEY_SITES);
 			const cachedPlugins = sessionStorage.getItem(CACHE_KEY_PLUGINS);
 			const cachedPluginInfo = sessionStorage.getItem(CACHE_KEY_PLUGIN_INFO);
+			const cachedVulns = sessionStorage.getItem(CACHE_KEY_VULNS);
 
 			if (cachedServers && cachedSites && cachedPlugins && cachedPluginInfo) {
 				servers.value = JSON.parse(cachedServers);
 				sites.value = JSON.parse(cachedSites);
 				plugins.value = JSON.parse(cachedPlugins);
 				pluginInfo.value = JSON.parse(cachedPluginInfo);
+				if (cachedVulns) {
+					vulnerabilities.value = JSON.parse(cachedVulns);
+				}
 				isLoaded.value = true;
 				return true;
 			}
@@ -91,10 +101,12 @@ export const useDataStore = defineStore("data", () => {
 		sessionStorage.removeItem(CACHE_KEY_SITES);
 		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGIN_INFO);
+		sessionStorage.removeItem(CACHE_KEY_VULNS);
 		servers.value = [];
 		sites.value = [];
 		plugins.value = [];
 		pluginInfo.value = [];
+		vulnerabilities.value = [];
 		isLoaded.value = false;
 	}
 
@@ -115,6 +127,23 @@ export const useDataStore = defineStore("data", () => {
 					fetch(`${BASE_URL}/plugins`, { headers }),
 					fetch(`${BASE_URL}/plugininfo`, { headers }),
 				]);
+
+			// Fetch vulnerabilities separately to not block primary data
+			isVulnsLoading.value = true;
+			fetch(`${BASE_URL}/vulns`, { headers })
+				.then(async (res) => {
+					if (res.ok) {
+						const data = await res.json();
+						vulnerabilities.value = data;
+						sessionStorage.setItem(CACHE_KEY_VULNS, JSON.stringify(data));
+					} else if (res.status !== 401) {
+						console.error("Failed to fetch vulnerabilities:", res.statusText);
+					}
+				})
+				.catch((err) => console.error("Failed to fetch vulnerabilities:", err))
+				.finally(() => {
+					isVulnsLoading.value = false;
+				});
 
 			// Handle 401 on any response — token is invalid or expired
 			if (
@@ -189,14 +218,20 @@ export const useDataStore = defineStore("data", () => {
 		return plugins.value.filter((p) => p.site_id === siteId);
 	}
 
+	function getVulnerabilitiesBySlug(slug: string) {
+		return vulnerabilities.value.filter((v) => v.slug === slug);
+	}
+
 	return {
 		// State
 		servers,
 		sites,
 		plugins,
 		pluginInfo,
+		vulnerabilities,
 		isLoaded,
 		isLoading,
+		isVulnsLoading,
 		error,
 		// Getters
 		enrichedPlugins,
@@ -204,6 +239,7 @@ export const useDataStore = defineStore("data", () => {
 		getSiteById,
 		getServerById,
 		getPluginsBySiteId,
+		getVulnerabilitiesBySlug,
 		// Actions
 		initData,
 		refreshData,
