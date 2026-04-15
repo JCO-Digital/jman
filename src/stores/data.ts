@@ -1,6 +1,14 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
-import type { Server, Site, Plugin, PluginInfo, Vulnerability } from "../types";
+import type {
+	Server,
+	Site,
+	Plugin,
+	PluginInfo,
+	Vulnerability,
+	EnrichedSite,
+	EnrichedPlugin,
+} from "../types";
 import { useAuthStore } from "./auth";
 
 const CACHE_KEY_SERVERS = "jman_servers";
@@ -24,7 +32,7 @@ export const useDataStore = defineStore("data", () => {
 	const error = ref<string | null>(null);
 
 	// Getters
-	const enrichedPlugins = computed(() => {
+	const enrichedPlugins = computed<EnrichedPlugin[]>(() => {
 		return pluginInfo.value.map((info) => {
 			const count = plugins.value.filter((p) => p.name === info.slug).length;
 			let name = info.name || info.slug || "Unknown Plugin";
@@ -58,7 +66,7 @@ export const useDataStore = defineStore("data", () => {
 		});
 	});
 
-	const enrichedSites = computed(() => {
+	const enrichedSites = computed<EnrichedSite[]>(() => {
 		return sites.value.map((site) => {
 			return {
 				...site,
@@ -66,6 +74,9 @@ export const useDataStore = defineStore("data", () => {
 					servers.value.find((s) => s.id === site.server_id)?.name ??
 					"Unknown Server",
 				plugins: plugins.value.filter((p) => p.site_id === site.id),
+				vulnerabilities: vulnerabilities.value.filter((v) =>
+					v.sites.some((s) => s.site_id === site.id),
+				),
 			};
 		});
 	});

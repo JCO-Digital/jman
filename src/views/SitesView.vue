@@ -2,7 +2,7 @@
 import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
-import type { Site } from "../types";
+import type { EnrichedSite } from "../types";
 
 const props = defineProps<{
 	page?: number;
@@ -13,7 +13,7 @@ const router = useRouter();
 const dataStore = useDataStore();
 
 const searchQuery = ref("");
-const sortKey = ref<keyof Site | "server" | "plugins">("domain");
+const sortKey = ref<keyof EnrichedSite>("domain");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(props.page || 1);
 const rowsPerPage = ref(props.rowsPerPage || 50);
@@ -42,11 +42,11 @@ const updateRoute = (page: number, rpp: number) => {
 	});
 };
 
-const handleSort = (key: string) => {
+const handleSort = (key: keyof EnrichedSite) => {
 	if (sortKey.value === key) {
 		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
 	} else {
-		sortKey.value = key as any;
+		sortKey.value = key;
 		sortOrder.value = "asc";
 	}
 };
@@ -62,8 +62,8 @@ const filteredAndSortedSites = computed(() => {
 	}
 
 	result = [...result].sort((a, b) => {
-		let valA: any = a[sortKey.value as keyof Site];
-		let valB: any = b[sortKey.value as keyof Site];
+		let valA: any = a[sortKey.value];
+		let valB: any = b[sortKey.value];
 
 		if (sortKey.value === "server") {
 			valA = a.server.toLowerCase();
@@ -71,6 +71,9 @@ const filteredAndSortedSites = computed(() => {
 		} else if (sortKey.value === "plugins") {
 			valA = a.plugins.length;
 			valB = b.plugins.length;
+		} else if (sortKey.value === "vulnerabilities") {
+			valA = a.vulnerabilities.length;
+			valB = b.vulnerabilities.length;
 		} else if (typeof valA === "string") {
 			valA = valA.toLowerCase();
 			valB = valB.toLowerCase();
@@ -166,17 +169,23 @@ const goToSite = (id: number) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
+						<th @click="handleSort('vulnerabilities')">
+							Vulns
+							<span v-if="sortKey === 'vulnerabilities'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-if="dataStore.isLoading && dataStore.sites.length === 0">
-						<td colspan="3" class="empty-state">
+						<td colspan="4" class="empty-state">
 							<div class="spinner" style="margin-bottom: 12px"></div>
 							<div>Loading data...</div>
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="3" class="empty-state">
+						<td colspan="4" class="empty-state">
 							<span v-if="searchQuery"
 								>No sites found matching "{{ searchQuery }}".</span
 							>
@@ -193,6 +202,16 @@ const goToSite = (id: number) => {
 						<td>{{ site.server }}</td>
 						<td>
 							{{ site.is_wordpress ? site.plugins.length : "Not WP" }}
+						</td>
+						<td>
+							<span
+								v-if="site.vulnerabilities.length > 0"
+								class="status-badge error"
+								title="Vulnerabilities detected"
+							>
+								{{ site.vulnerabilities.length }}
+							</span>
+							<span v-else style="color: #999">—</span>
 						</td>
 					</tr>
 				</tbody>
