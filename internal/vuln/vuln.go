@@ -160,14 +160,15 @@ func buildSiteList() (map[int]map[string]*models.VulnPlugin, error) {
 				sitesMap[site.SiteID] = currentSite
 			}
 
-			currentPlugin, ok := currentSite[report.Plugin]
+			currentPlugin, ok := currentSite[report.Slug]
 			if !ok {
 				currentPlugin = &models.VulnPlugin{
+					PluginName:    report.PluginName,
 					Version:       site.Version,
 					Cvss:          &cvss,
 					Vulnerability: []models.Vulnerability{},
 				}
-				currentSite[report.Plugin] = currentPlugin
+				currentSite[report.Slug] = currentPlugin
 			}
 
 			// Keep the maximum CVSS observed for this plugin on this site.
@@ -229,11 +230,13 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
 		report := models.VulnReport{
 			Plugin:        pluginName,
+			Slug:          pluginName,
+			PluginName:    pluginName,
 			Vulnerability: vulnerability,
 			Sites:         []models.PluginSite{},
 		}
 		if vulnResponse.Data.Name != nil {
-			report.Plugin = *vulnResponse.Data.Name
+			report.PluginName = *vulnResponse.Data.Name
 		}
 
 		// Add every site whose installed plugin version falls inside the affected range.
@@ -286,7 +289,7 @@ func formatReport(report models.VulnReport) (string, error) {
 	infoLink := ""
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Plugin: %s\n", utils.CleanHTML(report.Plugin))
+	fmt.Fprintf(&sb, "Plugin: %s\n", utils.CleanHTML(report.PluginName))
 
 	// Pull the first useful values from source metadata.
 	// Non-CVE names are preferred for readability when available.
@@ -345,9 +348,13 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) s
 	}
 	sort.Strings(keys)
 
-	for _, pluginName := range keys {
-		info := plugins[pluginName]
-		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(pluginName), info.Version)
+	for _, pluginSlug := range keys {
+		info := plugins[pluginSlug]
+		displayName := info.PluginName
+		if displayName == "" {
+			displayName = pluginSlug
+		}
+		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(displayName), info.Version)
 		fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
 		if info.Cvss != nil {
 			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
