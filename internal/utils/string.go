@@ -9,6 +9,12 @@ import (
 // htmlTagRegexp matches basic HTML tags for removal in CleanHTML.
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 var unifyHyphens = regexp.MustCompile(`[-–—]+`)
+var slugRegex = regexp.MustCompile(`^[a-z0-9-]+$`)
+
+// IsValidSlug checks if a plugin slug is valid according to WordPress standards.
+func IsValidSlug(slug string) bool {
+	return slugRegex.MatchString(slug)
+}
 
 // CleanHTML removes HTML tags, decodes HTML entities, and trims surrounding whitespace.
 // This normalizes text from external feeds (like WordPress.org or vulnerability databases)

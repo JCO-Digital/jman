@@ -6,12 +6,17 @@ import (
 	"net/http"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 const PluginInfoAPIURL = "https://api.wordpress.org/plugins/info/1.0/"
 
 // GetPluginInfo fetches metadata for a single plugin by slug from WordPress.org.
 func GetPluginInfo(slug string) (*models.PluginInfo, error) {
+	if !utils.IsValidSlug(slug) {
+		return nil, nil
+	}
+
 	endpoint := fmt.Sprintf("%s%s.json", PluginInfoAPIURL, slug)
 
 	resp, err := http.Get(endpoint)
