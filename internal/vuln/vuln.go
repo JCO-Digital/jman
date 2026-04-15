@@ -160,14 +160,15 @@ func buildSiteList() (map[int]map[string]*models.VulnPlugin, error) {
 				sitesMap[site.SiteID] = currentSite
 			}
 
-			currentPlugin, ok := currentSite[report.Plugin]
+			currentPlugin, ok := currentSite[report.Slug]
 			if !ok {
 				currentPlugin = &models.VulnPlugin{
+					PluginName:    report.PluginName,
 					Version:       site.Version,
 					Cvss:          &cvss,
 					Vulnerability: []models.Vulnerability{},
 				}
-				currentSite[report.Plugin] = currentPlugin
+				currentSite[report.Slug] = currentPlugin
 			}
 
 			// Keep the maximum CVSS observed for this plugin on this site.
@@ -182,14 +183,80 @@ func buildSiteList() (map[int]map[string]*models.VulnPlugin, error) {
 	return sitesMap, nil
 }
 
+// IsVersionAffected checks if a specific version is within the range defined by a vulnerability operator.
+func IsVersionAffected(ver string, op models.Operator) bool {
+	// Default bounds:
+	// - min: "0" (effectively no lower bound for semantic versions)
+	// - max: ""  (treated as unbounded upper range)
+	minVer := "0"
+	minOp := "ge"
+	if op.MinVersion != nil {
+		minVer = *op.MinVersion
+		if op.MinOperator != nil {
+			minOp = *op.MinOperator
+		}
+	}
+	maxVer := ""
+	maxOp := "le"
+	if op.MaxVersion != nil {
+		maxVer = *op.MaxVersion
+		if op.MaxOperator != nil {
+			maxOp = *op.MaxOperator
+		}
+	}
+
+	if maxVer != "" {
+		if maxTest, _ := versionCompare(ver, maxVer, maxOp); !maxTest {
+			return false
+		}
+	}
+	if minTest, _ := versionCompare(ver, minVer, minOp); !minTest {
+		return false
+	}
+
+	return true
+}
+
+// GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
+func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite) []models.VulnReport {
+	var reports []models.VulnReport
+
+	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
+	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
+		// Missing or invalid vulnerability cache for this plugin; skip it.
+		return nil
+	}
+
+	for _, vulnerability := range vulnResponse.Data.Vulnerability {
+		report := models.VulnReport{
+			Plugin:        pluginName,
+			Slug:          pluginName,
+			PluginName:    pluginName,
+			Vulnerability: vulnerability,
+			Sites:         []models.PluginSite{},
+		}
+		if vulnResponse.Data.Name != nil {
+			report.PluginName = *vulnResponse.Data.Name
+		}
+
+		// Add every site whose installed plugin version falls inside the affected range.
+		for _, site := range sites {
+			if IsVersionAffected(site.Version, vulnerability.Operator) {
+				report.Sites = append(report.Sites, site)
+			}
+		}
+
+		// Keep only vulnerabilities that affect at least one known site.
+		if len(report.Sites) > 0 {
+			reports = append(reports, report)
+		}
+	}
+
+	return reports
+}
+
 // ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
 // determines which sites are affected by which vulnerabilities based on version ranges.
-//
-// Matching rule per site:
-//   - site.Version <= vulnerability.maxVersion (or max version is unbounded), and
-//   - vulnerability.minVersion <= site.Version.
-//
-// For each vulnerability with at least one affected site, a models.VulnReport is emitted.
 func ProcessVulnerabilities() ([]models.VulnReport, error) {
 	var reports []models.VulnReport
 
@@ -200,58 +267,7 @@ func ProcessVulnerabilities() ([]models.VulnReport, error) {
 
 	for _, plugin := range pluginData {
 		verb.Printf(verb.Verbose, "Processing plugin: %s\n", plugin.Name)
-		vulnResponse, err := cache.GetCachedVulnerabilities(plugin.Name)
-		if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
-			// Missing or invalid vulnerability cache for this plugin; skip it.
-			continue
-		}
-
-		for _, vulnerability := range vulnResponse.Data.Vulnerability {
-			report := models.VulnReport{
-				Plugin:        *vulnResponse.Data.Name,
-				Vulnerability: vulnerability,
-				Sites:         []models.PluginSite{},
-			}
-
-			// Default bounds:
-			// - min: "0" (effectively no lower bound for semantic versions)
-			// - max: ""  (treated as unbounded upper range)
-			minVer := "0"
-			minOp := "ge"
-			if vulnerability.Operator.MinVersion != nil {
-				minVer = *vulnerability.Operator.MinVersion
-				if vulnerability.Operator.MinOperator != nil {
-					minOp = *vulnerability.Operator.MinOperator
-				}
-			}
-			maxVer := ""
-			maxOp := "le"
-			if vulnerability.Operator.MaxVersion != nil {
-				maxVer = *vulnerability.Operator.MaxVersion
-				if vulnerability.Operator.MaxOperator != nil {
-					maxOp = *vulnerability.Operator.MaxOperator
-				}
-			}
-
-			// Add every site whose installed plugin version falls inside [minVer, maxVer].
-			for _, site := range plugin.Sites {
-				if maxVer != "" {
-					if maxTest, _ := versionCompare(site.Version, maxVer, maxOp); !maxTest {
-						continue
-					}
-				}
-				if minTest, _ := versionCompare(site.Version, minVer, minOp); !minTest {
-					continue
-				}
-
-				report.Sites = append(report.Sites, site)
-			}
-
-			// Keep only vulnerabilities that affect at least one known site.
-			if len(report.Sites) > 0 {
-				reports = append(reports, report)
-			}
-		}
+		reports = append(reports, GetVulnerabilityReportsForPlugin(plugin.Name, plugin.Sites)...)
 	}
 
 	return reports, nil
@@ -273,7 +289,7 @@ func formatReport(report models.VulnReport) (string, error) {
 	infoLink := ""
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Plugin: %s\n", utils.CleanHTML(report.Plugin))
+	fmt.Fprintf(&sb, "Plugin: %s\n", utils.CleanHTML(report.PluginName))
 
 	// Pull the first useful values from source metadata.
 	// Non-CVE names are preferred for readability when available.
@@ -332,9 +348,13 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) s
 	}
 	sort.Strings(keys)
 
-	for _, pluginName := range keys {
-		info := plugins[pluginName]
-		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(pluginName), info.Version)
+	for _, pluginSlug := range keys {
+		info := plugins[pluginSlug]
+		displayName := info.PluginName
+		if displayName == "" {
+			displayName = pluginSlug
+		}
+		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(displayName), info.Version)
 		fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
 		if info.Cvss != nil {
 			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
