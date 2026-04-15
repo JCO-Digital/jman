@@ -119,3 +119,64 @@ export interface PluginInfo {
 	last_updated: string;
 	homepage: string;
 }
+
+export interface VulnerabilitySource {
+	id: string;
+	name: string;
+	link: string;
+	description: string;
+	date: string | null;
+}
+
+export interface VulnerabilityImpact {
+	cvss?: {
+		version: string;
+		vector: string;
+		score: string;
+		severity: string;
+	};
+	cwe?: Array<{
+		cwe: string;
+		name: string;
+		description: string;
+	}>;
+}
+
+export interface VulnerabilitySite {
+	site_id: number;
+	site_name: string;
+	version: string;
+}
+
+export interface Vulnerability {
+	plugin: string;
+	slug: string;
+	plugin_name: string;
+	vulnerability: {
+		uuid: string;
+		name: string;
+		description: string | null;
+		operator: {
+			max_version: string | null;
+			max_operator: string | null;
+			unfixed: string;
+			closed: string;
+		};
+		source: VulnerabilitySource[];
+		impact: VulnerabilityImpact;
+		sites: VulnerabilitySite[];
+	};
+	sites: VulnerabilitySite[];
+}
+
+export interface EnrichedSite extends Site {
+	server: string;
+	plugins: Plugin[];
+	vulnerabilities: Vulnerability[];
+}
+
+export interface EnrichedPlugin extends PluginInfo {
+	shortName: string;
+	count: number;
+	vulnerabilities: Vulnerability[];
+}

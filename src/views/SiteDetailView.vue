@@ -2,6 +2,9 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import ViewHeader from "../components/ViewHeader.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
+import InfoCard from "../components/InfoCard.vue";
 
 const props = defineProps<{
 	id: string;
@@ -15,7 +18,34 @@ const site = computed(() => dataStore.getSiteById(siteId));
 const server = computed(() =>
 	site.value ? dataStore.getServerById(site.value.server_id) : null,
 );
-const sitePlugins = computed(() => dataStore.getPluginsBySiteId(siteId));
+const sitePlugins = computed(() => {
+	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
+	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
+		const vulns = siteVulns.filter((v) => v.slug === plugin.name);
+		return {
+			...plugin,
+			vulnerabilities: vulns,
+		};
+	});
+});
+
+const siteInfoItems = computed(() => {
+	if (!site.value) return [];
+	return [
+		{ label: "Site ID", value: site.value.id },
+		{ label: "Domain", value: site.value.domain },
+		{ label: "PHP Version", value: site.value.php_version },
+		{ label: "Status", value: site.value.status },
+	];
+});
+
+const serverInfoItems = computed(() => {
+	if (!server.value) return [];
+	return [
+		{ label: "Server Name", value: server.value.name },
+		{ label: "IP Address", value: server.value.ip_address },
+	];
+});
 
 const goBack = () => {
 	router.push({ name: "sites" });
@@ -31,49 +61,19 @@ const goToPlugin = (name: string) => {
 
 <template>
 	<div class="view-container">
-		<header class="header">
-			<div class="title-area">
-				<button class="back-btn" @click="goBack">&larr; Back to Sites</button>
-				<h1>Site Details</h1>
-			</div>
-		</header>
+		<ViewHeader
+			title="Site Details"
+			:back-button="{ text: 'Back to Sites', onClick: goBack }"
+		/>
 
 		<main class="content" v-if="site">
-			<section class="card">
-				<h2>Site Information</h2>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Site ID:</span>
-						<span class="value">{{ site.id }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">Domain:</span>
-						<span class="value">{{ site.domain }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">PHP Version:</span>
-						<span class="value">{{ site.php_version }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">Status:</span>
-						<span class="value">{{ site.status }}</span>
-					</div>
-				</div>
-			</section>
+			<InfoCard title="Site Information" :items="siteInfoItems" />
 
-			<section class="card" v-if="server">
-				<h2>Server Information</h2>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Server Name:</span>
-						<span class="value">{{ server.name }}</span>
-					</div>
-					<div class="info-item">
-						<span class="label">IP Address:</span>
-						<span class="value">{{ server.ip_address }}</span>
-					</div>
-				</div>
-			</section>
+			<InfoCard
+				v-if="server"
+				title="Server Information"
+				:items="serverInfoItems"
+			/>
 
 			<section class="card">
 				<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
@@ -84,11 +84,12 @@ const goToPlugin = (name: string) => {
 								<th>Plugin Name</th>
 								<th>Version</th>
 								<th>Status</th>
+								<th>Vulns</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr v-if="sitePlugins.length === 0">
-								<td colspan="3" class="empty-state">No plugins found.</td>
+								<td colspan="4" class="empty-state">No plugins found.</td>
 							</tr>
 							<tr
 								v-for="plugin in sitePlugins"
@@ -103,6 +104,16 @@ const goToPlugin = (name: string) => {
 										{{ plugin.status }}
 									</span>
 								</td>
+								<td>
+									<span
+										v-if="plugin.vulnerabilities.length > 0"
+										class="status-badge error"
+										:title="`${plugin.vulnerabilities.length} vulnerabilities detected`"
+									>
+										{{ plugin.vulnerabilities.length }}
+									</span>
+									<span v-else style="color: #999">—</span>
+								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -111,10 +122,10 @@ const goToPlugin = (name: string) => {
 		</main>
 		<main class="content" v-else>
 			<div class="card">
-				<div v-if="dataStore.isLoading" class="empty-state">
-					<div class="spinner" style="margin-bottom: 12px"></div>
-					<div>Loading site details...</div>
-				</div>
+				<LoadingSpinner
+					v-if="dataStore.isLoading"
+					message="Loading site details..."
+				/>
 				<div v-else class="empty-state">
 					<p>Site not found.</p>
 					<button class="back-btn" @click="goBack" style="margin-top: 16px">
@@ -127,5 +138,5 @@ const goToPlugin = (name: string) => {
 </template>
 
 <style scoped>
-/* All generic styles moved to style.css */
+/* Specific styles can remain if needed, but standard table styles are in style.css */
 </style>

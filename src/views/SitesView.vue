@@ -2,7 +2,10 @@
 import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
-import type { Site } from "../types";
+import type { EnrichedSite } from "../types";
+import ViewHeader from "../components/ViewHeader.vue";
+import Pagination from "../components/Pagination.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const props = defineProps<{
 	page?: number;
@@ -13,7 +16,7 @@ const router = useRouter();
 const dataStore = useDataStore();
 
 const searchQuery = ref("");
-const sortKey = ref<keyof Site | "server" | "plugins">("domain");
+const sortKey = ref<keyof EnrichedSite>("domain");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(props.page || 1);
 const rowsPerPage = ref(props.rowsPerPage || 50);
@@ -42,11 +45,11 @@ const updateRoute = (page: number, rpp: number) => {
 	});
 };
 
-const handleSort = (key: string) => {
+const handleSort = (key: keyof EnrichedSite) => {
 	if (sortKey.value === key) {
 		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
 	} else {
-		sortKey.value = key as any;
+		sortKey.value = key;
 		sortOrder.value = "asc";
 	}
 };
@@ -62,8 +65,8 @@ const filteredAndSortedSites = computed(() => {
 	}
 
 	result = [...result].sort((a, b) => {
-		let valA: any = a[sortKey.value as keyof Site];
-		let valB: any = b[sortKey.value as keyof Site];
+		let valA: any = a[sortKey.value];
+		let valB: any = b[sortKey.value];
 
 		if (sortKey.value === "server") {
 			valA = a.server.toLowerCase();
@@ -71,6 +74,9 @@ const filteredAndSortedSites = computed(() => {
 		} else if (sortKey.value === "plugins") {
 			valA = a.plugins.length;
 			valB = b.plugins.length;
+		} else if (sortKey.value === "vulnerabilities") {
+			valA = a.vulnerabilities.length;
+			valB = b.vulnerabilities.length;
 		} else if (typeof valA === "string") {
 			valA = valA.toLowerCase();
 			valB = valB.toLowerCase();
@@ -106,6 +112,10 @@ const nextPage = () => {
 	}
 };
 
+const handleRowsPerPageUpdate = (newRpp: number) => {
+	updateRoute(1, newRpp);
+};
+
 const goToSite = (id: number) => {
 	router.push({ name: "site-detail", params: { id: id.toString() } });
 };
@@ -113,23 +123,7 @@ const goToSite = (id: number) => {
 
 <template>
 	<div class="view-container">
-		<header class="header">
-			<h1>Site Management</h1>
-			<button
-				class="btn btn-primary"
-				@click="dataStore.refreshData()"
-				:disabled="dataStore.isLoading"
-			>
-				<span
-					v-if="dataStore.isLoading"
-					class="spinner spinner-small"
-					style="margin-right: 8px; vertical-align: middle"
-				></span>
-				<span style="vertical-align: middle">{{
-					dataStore.isLoading ? "Refreshing..." : "Refresh Data"
-				}}</span>
-			</button>
-		</header>
+		<ViewHeader title="Site Management" show-refresh />
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
@@ -141,6 +135,7 @@ const goToSite = (id: number) => {
 				placeholder="Search sites by name or URL..."
 				class="search-input"
 				v-model="searchQuery"
+				@input="updateRoute(1, rowsPerPage)"
 			/>
 		</div>
 
@@ -166,17 +161,22 @@ const goToSite = (id: number) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
+						<th @click="handleSort('vulnerabilities')">
+							Vulns
+							<span v-if="sortKey === 'vulnerabilities'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-if="dataStore.isLoading && dataStore.sites.length === 0">
-						<td colspan="3" class="empty-state">
-							<div class="spinner" style="margin-bottom: 12px"></div>
-							<div>Loading data...</div>
+						<td colspan="4">
+							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="3" class="empty-state">
+						<td colspan="4" class="empty-state">
 							<span v-if="searchQuery"
 								>No sites found matching "{{ searchQuery }}".</span
 							>
@@ -194,39 +194,32 @@ const goToSite = (id: number) => {
 						<td>
 							{{ site.is_wordpress ? site.plugins.length : "Not WP" }}
 						</td>
+						<td>
+							<span
+								v-if="site.vulnerabilities.length > 0"
+								class="status-badge error"
+								title="Vulnerabilities detected"
+							>
+								{{ site.vulnerabilities.length }}
+							</span>
+							<span v-else style="color: #999">—</span>
+						</td>
 					</tr>
 				</tbody>
 			</table>
 
-			<div class="pagination">
-				<div class="rows-per-page">
-					<label for="per-page">Rows per page:</label>
-					<select
-						id="per-page"
-						v-model.number="rowsPerPage"
-						@change="updateRoute(1, rowsPerPage)"
-					>
-						<option value="50">50</option>
-						<option value="100">100</option>
-						<option value="150">150</option>
-						<option value="200">200</option>
-						<option value="250">250</option>
-					</select>
-				</div>
-				<div class="page-controls">
-					<button :disabled="currentPage === 1" @click="prevPage">
-						&laquo; Prev
-					</button>
-					<span>Page {{ currentPage }} of {{ totalPages }}</span>
-					<button :disabled="currentPage === totalPages" @click="nextPage">
-						Next &raquo;
-					</button>
-				</div>
-			</div>
+			<Pagination
+				:current-page="currentPage"
+				:total-pages="totalPages"
+				:rows-per-page="rowsPerPage"
+				@update:rows-per-page="handleRowsPerPageUpdate"
+				@prev="prevPage"
+				@next="nextPage"
+			/>
 		</main>
 	</div>
 </template>
 
 <style scoped>
-/* All generic styles moved to style.css */
+/* All specific styles moved to components or available in style.css */
 </style>
