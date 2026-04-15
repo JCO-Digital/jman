@@ -1,12 +1,21 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
-import type { Server, Site, Plugin, PluginInfo } from "../types";
+import type {
+	Server,
+	Site,
+	Plugin,
+	PluginInfo,
+	Vulnerability,
+	EnrichedSite,
+	EnrichedPlugin,
+} from "../types";
 import { useAuthStore } from "./auth";
 
 const CACHE_KEY_SERVERS = "jman_servers";
 const CACHE_KEY_SITES = "jman_sites";
 const CACHE_KEY_PLUGINS = "jman_plugins";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
+const CACHE_KEY_VULNS = "jman_vulns";
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const useDataStore = defineStore("data", () => {
@@ -15,15 +24,72 @@ export const useDataStore = defineStore("data", () => {
 	const sites = ref<Site[]>([]);
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
+	const vulnerabilities = ref<Vulnerability[]>([]);
 
 	const isLoaded = ref(false);
 	const isLoading = ref(false);
+	const isVulnsLoading = ref(false);
 	const error = ref<string | null>(null);
 
+	// Optimization Maps
+	const vulnerabilitiesBySlug = computed(() => {
+		const map = new Map<string, Vulnerability[]>();
+		for (const v of vulnerabilities.value) {
+			if (!map.has(v.slug)) map.set(v.slug, []);
+			map.get(v.slug)!.push(v);
+		}
+		return map;
+	});
+
+	const vulnerabilitiesBySiteId = computed(() => {
+		const map = new Map<number, Vulnerability[]>();
+		for (const v of vulnerabilities.value) {
+			for (const s of v.sites) {
+				if (!map.has(s.site_id)) map.set(s.site_id, []);
+				map.get(s.site_id)!.push(v);
+			}
+		}
+		return map;
+	});
+
+	const pluginsBySiteIdMap = computed(() => {
+		const map = new Map<number, Plugin[]>();
+		for (const p of plugins.value) {
+			if (!map.has(p.site_id)) map.set(p.site_id, []);
+			map.get(p.site_id)!.push(p);
+		}
+		return map;
+	});
+
+	const pluginsBySlugMap = computed(() => {
+		const map = new Map<string, Plugin[]>();
+		for (const p of plugins.value) {
+			if (!map.has(p.name)) map.set(p.name, []);
+			map.get(p.name)!.push(p);
+		}
+		return map;
+	});
+
+	const sitesByIdMap = computed(() => {
+		const map = new Map<number, Site>();
+		for (const s of sites.value) {
+			map.set(s.id, s);
+		}
+		return map;
+	});
+
+	const serversByIdMap = computed(() => {
+		const map = new Map<number, Server>();
+		for (const s of servers.value) {
+			map.set(s.id, s);
+		}
+		return map;
+	});
+
 	// Getters
-	const enrichedPlugins = computed(() => {
+	const enrichedPlugins = computed<EnrichedPlugin[]>(() => {
 		return pluginInfo.value.map((info) => {
-			const count = plugins.value.filter((p) => p.name === info.slug).length;
+			const count = pluginsBySlugMap.value.get(info.slug)?.length || 0;
 			let name = info.name || info.slug || "Unknown Plugin";
 			if (name === info.slug) {
 				// Turn "advanced-custom-fields-pro" into "Advanced Custom Fields Pro".
@@ -48,18 +114,19 @@ export const useDataStore = defineStore("data", () => {
 				version: info.version || "N/A",
 				author: info.author || "Unknown",
 				count,
+				vulnerabilities: vulnerabilitiesBySlug.value.get(info.slug) || [],
 			};
 		});
 	});
 
-	const enrichedSites = computed(() => {
+	const enrichedSites = computed<EnrichedSite[]>(() => {
 		return sites.value.map((site) => {
 			return {
 				...site,
 				server:
-					servers.value.find((s) => s.id === site.server_id)?.name ??
-					"Unknown Server",
-				plugins: plugins.value.filter((p) => p.site_id === site.id),
+					serversByIdMap.value.get(site.server_id)?.name ?? "Unknown Server",
+				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
+				vulnerabilities: vulnerabilitiesBySiteId.value.get(site.id) || [],
 			};
 		});
 	});
@@ -71,12 +138,16 @@ export const useDataStore = defineStore("data", () => {
 			const cachedSites = sessionStorage.getItem(CACHE_KEY_SITES);
 			const cachedPlugins = sessionStorage.getItem(CACHE_KEY_PLUGINS);
 			const cachedPluginInfo = sessionStorage.getItem(CACHE_KEY_PLUGIN_INFO);
+			const cachedVulns = sessionStorage.getItem(CACHE_KEY_VULNS);
 
 			if (cachedServers && cachedSites && cachedPlugins && cachedPluginInfo) {
 				servers.value = JSON.parse(cachedServers);
 				sites.value = JSON.parse(cachedSites);
 				plugins.value = JSON.parse(cachedPlugins);
 				pluginInfo.value = JSON.parse(cachedPluginInfo);
+				if (cachedVulns) {
+					vulnerabilities.value = JSON.parse(cachedVulns);
+				}
 				isLoaded.value = true;
 				return true;
 			}
@@ -91,10 +162,12 @@ export const useDataStore = defineStore("data", () => {
 		sessionStorage.removeItem(CACHE_KEY_SITES);
 		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGIN_INFO);
+		sessionStorage.removeItem(CACHE_KEY_VULNS);
 		servers.value = [];
 		sites.value = [];
 		plugins.value = [];
 		pluginInfo.value = [];
+		vulnerabilities.value = [];
 		isLoaded.value = false;
 	}
 
@@ -115,6 +188,23 @@ export const useDataStore = defineStore("data", () => {
 					fetch(`${BASE_URL}/plugins`, { headers }),
 					fetch(`${BASE_URL}/plugininfo`, { headers }),
 				]);
+
+			// Fetch vulnerabilities separately to not block primary data
+			isVulnsLoading.value = true;
+			fetch(`${BASE_URL}/vulns`, { headers })
+				.then(async (res) => {
+					if (res.ok) {
+						const data = await res.json();
+						vulnerabilities.value = data;
+						sessionStorage.setItem(CACHE_KEY_VULNS, JSON.stringify(data));
+					} else if (res.status !== 401) {
+						console.error("Failed to fetch vulnerabilities:", res.statusText);
+					}
+				})
+				.catch((err) => console.error("Failed to fetch vulnerabilities:", err))
+				.finally(() => {
+					isVulnsLoading.value = false;
+				});
 
 			// Handle 401 on any response — token is invalid or expired
 			if (
@@ -178,15 +268,19 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function getSiteById(id: number) {
-		return sites.value.find((s) => s.id === id);
+		return sitesByIdMap.value.get(id);
 	}
 
 	function getServerById(id: number) {
-		return servers.value.find((s) => s.id === id);
+		return serversByIdMap.value.get(id);
 	}
 
 	function getPluginsBySiteId(siteId: number) {
-		return plugins.value.filter((p) => p.site_id === siteId);
+		return pluginsBySiteIdMap.value.get(siteId) || [];
+	}
+
+	function getVulnerabilitiesBySlug(slug: string) {
+		return vulnerabilitiesBySlug.value.get(slug) || [];
 	}
 
 	return {
@@ -195,15 +289,24 @@ export const useDataStore = defineStore("data", () => {
 		sites,
 		plugins,
 		pluginInfo,
+		vulnerabilities,
 		isLoaded,
 		isLoading,
+		isVulnsLoading,
 		error,
 		// Getters
 		enrichedPlugins,
 		enrichedSites,
+		vulnerabilitiesBySlug,
+		vulnerabilitiesBySiteId,
+		pluginsBySiteIdMap,
+		pluginsBySlugMap,
+		sitesByIdMap,
+		serversByIdMap,
 		getSiteById,
 		getServerById,
 		getPluginsBySiteId,
+		getVulnerabilitiesBySlug,
 		// Actions
 		initData,
 		refreshData,

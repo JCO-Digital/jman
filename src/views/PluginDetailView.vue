@@ -2,6 +2,10 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import ViewHeader from "../components/ViewHeader.vue";
+import LoadingSpinner from "../components/LoadingSpinner.vue";
+import PluginInfoCard from "../components/PluginInfoCard.vue";
+import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
 
 const props = defineProps<{
 	name: string;
@@ -15,14 +19,21 @@ const info = computed(() => {
 });
 
 const sitesWithPlugin = computed(() => {
-	return dataStore.plugins
-		.filter((p) => p.name === props.name)
+	const vulnerableSites = new Set(
+		info.value?.vulnerabilities.flatMap((v) => v.sites.map((s) => s.site_id)) ||
+			[],
+	);
+
+	const instances = dataStore.pluginsBySlugMap.get(props.name) || [];
+
+	return instances
 		.map((p) => {
-			const site = dataStore.sites.find((s) => s.id === p.site_id);
+			const site = dataStore.getSiteById(p.site_id);
 			return {
 				...p,
 				site_domain: site ? site.domain : "Unknown Site",
 				site_id: p.site_id,
+				isVulnerable: vulnerableSites.has(p.site_id),
 			};
 		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
@@ -39,77 +50,21 @@ const goToSite = (siteId: number) => {
 
 <template>
 	<div class="view-container">
-		<header class="header">
-			<div class="title-area">
-				<button class="back-btn" @click="goBack">&larr; Back to Plugins</button>
-				<h1>Plugin Details</h1>
-			</div>
-		</header>
+		<ViewHeader
+			title="Plugin Details"
+			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
+		/>
 
 		<main class="content" v-if="sitesWithPlugin.length > 0 || info">
-			<section class="card">
-				<h2>Plugin Information</h2>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Plugin Name:</span>
-						<span class="value">{{ info?.name }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Slug:</span>
-						<span class="value">{{ info.slug }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Author:</span>
-						<span class="value">
-							<a
-								v-if="info.author_profile"
-								:href="info.author_profile"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="link"
-							>
-								{{ info.author }}
-							</a>
-							<span v-else>{{ info.author }}</span>
-						</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Version:</span>
-						<span class="value">{{ info.version }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Requires:</span>
-						<span class="value">WP {{ info.requires }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Tested up to:</span>
-						<span class="value">WP {{ info.tested }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Last Updated:</span>
-						<span class="value">{{ info.last_updated }}</span>
-					</div>
-					<div class="info-item" v-if="info">
-						<span class="label">Homepage:</span>
-						<span class="value">
-							<a
-								v-if="info.homepage"
-								:href="info.homepage"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="link"
-							>
-								View Plugin Page
-							</a>
-							<span v-else>-</span>
-						</span>
-					</div>
-					<div class="info-item">
-						<span class="label">Total Installations:</span>
-						<span class="value">{{ sitesWithPlugin.length }}</span>
-					</div>
-				</div>
-			</section>
+			<PluginInfoCard
+				:info="info"
+				:installation-count="sitesWithPlugin.length"
+			/>
+
+			<PluginVulnerabilityList
+				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
+				:vulnerabilities="info.vulnerabilities"
+			/>
 
 			<section class="card">
 				<h2>Installed on Sites</h2>
@@ -120,6 +75,7 @@ const goToSite = (siteId: number) => {
 								<th>Site Domain</th>
 								<th>Version</th>
 								<th>Status</th>
+								<th>Vuln</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -136,6 +92,12 @@ const goToSite = (siteId: number) => {
 										{{ item.status }}
 									</span>
 								</td>
+								<td>
+									<span v-if="item.isVulnerable" class="status-badge error">
+										Yes
+									</span>
+									<span v-else style="color: #999">—</span>
+								</td>
 							</tr>
 						</tbody>
 					</table>
@@ -145,10 +107,10 @@ const goToSite = (siteId: number) => {
 
 		<main class="content" v-else>
 			<div class="card">
-				<div v-if="dataStore.isLoading" class="empty-state">
-					<div class="spinner" style="margin-bottom: 12px"></div>
-					<div>Loading plugin details...</div>
-				</div>
+				<LoadingSpinner
+					v-if="dataStore.isLoading"
+					message="Loading plugin details..."
+				/>
 				<div v-else class="empty-state">
 					<p>Plugin details not found.</p>
 					<button class="back-btn" @click="goBack" style="margin-top: 16px">
@@ -161,5 +123,5 @@ const goToSite = (siteId: number) => {
 </template>
 
 <style scoped>
-/* All generic styles moved to style.css */
+/* All specific styles moved to components or available in style.css */
 </style>
