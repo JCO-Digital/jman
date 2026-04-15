@@ -1,3 +1,13 @@
+## [4.19.1](https://github.com/JCO-Digital/jman/compare/v4.19.0...v4.19.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **fetch:** validate plugin slugs before fetching ([c29f830](https://github.com/JCO-Digital/jman/commit/c29f830e925f20556669a3dd1c29563b93ca46af))
+* **wpvuln:** return Error 0 for invalid plugin slug ([7716ba3](https://github.com/JCO-Digital/jman/commit/7716ba3e94313299490a97ade13307a59d19381e))
+
+
+
 # [4.19.0](https://github.com/JCO-Digital/jman/compare/v4.18.0...v4.19.0) (2026-04-15)
 
 
@@ -32,18 +42,6 @@
 ### Features
 
 * **plugin:** Add info subcommand to get plugin details ([fc78e7d](https://github.com/JCO-Digital/jman/commit/fc78e7d641ff6d601ca6c52530fe099425294b5f))
-
-
-
-# [4.16.0](https://github.com/JCO-Digital/jman/compare/v4.15.0...v4.16.0) (2026-03-26)
-
-
-### Features
-
-* **cache:** Sanitize plugin info on all reads and writes ([424b86c](https://github.com/JCO-Digital/jman/commit/424b86c357872cb7420f6e6f9986fb94052b802a))
-* **db:** Add monitor and slack tables and migration ([18dea2e](https://github.com/JCO-Digital/jman/commit/18dea2eff0d2ae802b02caf0d358f3542a99f1b1))
-* **db:** Implement robust database schema migration ([c06423c](https://github.com/JCO-Digital/jman/commit/c06423c5e2b2ab165e7608315cd8597d83be8b9f))
-* **db:** Introduce SQLite database for plugin information ([bd337b4](https://github.com/JCO-Digital/jman/commit/bd337b4ebdce36f8e9e63676ae168cd66ae301b0))
 
 
 
