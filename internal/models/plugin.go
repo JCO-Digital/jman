@@ -12,8 +12,9 @@ type WPPlugin struct {
 
 // PluginSite represents a specific site where a plugin is installed and its version.
 type PluginSite struct {
-	SiteID  int    `json:"site_id"`
-	Version string `json:"version"`
+	SiteID   int    `json:"site_id"`
+	SiteName string `json:"site_name,omitempty"`
+	Version  string `json:"version"`
 }
 
 // WPPluginData groups sites by a specific plugin.
