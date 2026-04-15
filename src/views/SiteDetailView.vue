@@ -15,7 +15,17 @@ const site = computed(() => dataStore.getSiteById(siteId));
 const server = computed(() =>
 	site.value ? dataStore.getServerById(site.value.server_id) : null,
 );
-const sitePlugins = computed(() => dataStore.getPluginsBySiteId(siteId));
+const sitePlugins = computed(() => {
+	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
+		const vulns = dataStore.getVulnerabilitiesBySlug(plugin.name).filter((v) =>
+			v.sites.some((s) => s.site_id === siteId),
+		);
+		return {
+			...plugin,
+			vulnerabilities: vulns,
+		};
+	});
+});
 
 const goBack = () => {
 	router.push({ name: "sites" });
@@ -84,11 +94,12 @@ const goToPlugin = (name: string) => {
 								<th>Plugin Name</th>
 								<th>Version</th>
 								<th>Status</th>
+								<th>Vulns</th>
 							</tr>
 						</thead>
 						<tbody>
 							<tr v-if="sitePlugins.length === 0">
-								<td colspan="3" class="empty-state">No plugins found.</td>
+								<td colspan="4" class="empty-state">No plugins found.</td>
 							</tr>
 							<tr
 								v-for="plugin in sitePlugins"
@@ -102,6 +113,16 @@ const goToPlugin = (name: string) => {
 									<span :class="['status-badge', plugin.status.toLowerCase()]">
 										{{ plugin.status }}
 									</span>
+								</td>
+								<td>
+									<span
+										v-if="plugin.vulnerabilities.length > 0"
+										class="status-badge error"
+										:title="`${plugin.vulnerabilities.length} vulnerabilities detected`"
+									>
+										{{ plugin.vulnerabilities.length }}
+									</span>
+									<span v-else style="color: #999">—</span>
 								</td>
 							</tr>
 						</tbody>

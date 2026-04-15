@@ -15,6 +15,10 @@ const info = computed(() => {
 });
 
 const sitesWithPlugin = computed(() => {
+	const vulnerableSites = new Set(
+		info.value?.vulnerabilities.flatMap((v) => v.sites.map((s) => s.site_id)) ||
+			[],
+	);
 	return dataStore.plugins
 		.filter((p) => p.name === props.name)
 		.map((p) => {
@@ -23,6 +27,7 @@ const sitesWithPlugin = computed(() => {
 				...p,
 				site_domain: site ? site.domain : "Unknown Site",
 				site_id: p.site_id,
+				isVulnerable: vulnerableSites.has(p.site_id),
 			};
 		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
@@ -111,6 +116,51 @@ const goToSite = (siteId: number) => {
 				</div>
 			</section>
 
+			<section class="card" v-if="info?.vulnerabilities && info.vulnerabilities.length > 0">
+				<h2 style="color: #d32f2f;">Vulnerabilities Detected</h2>
+				<div class="vulnerabilities-list">
+					<div
+						v-for="item in info.vulnerabilities"
+						:key="item.vulnerability.uuid"
+						class="vuln-item"
+						style="margin-bottom: 24px; padding-bottom: 20px; border-bottom: 1px solid var(--border-color);"
+					>
+						<div style="display: flex; justify-content: space-between; align-items: start; gap: 10px;">
+							<h3 style="margin: 0; font-size: 1.1em;">{{ item.vulnerability.name }}</h3>
+							<span v-if="item.vulnerability.impact.cvss" class="status-badge error" style="white-space: nowrap;">
+								{{ item.vulnerability.impact.cvss.severity }} ({{ item.vulnerability.impact.cvss.score }})
+							</span>
+						</div>
+
+						<div v-for="source in item.vulnerability.source" :key="source.id" style="margin-top: 12px;">
+							<p v-if="source.description" style="margin: 8px 0; line-height: 1.4; color: var(--text-main); font-size: 0.95em;">
+								{{ source.description }}
+							</p>
+							<div class="info-grid" style="grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); margin-top: 8px; font-size: 0.85em; background: var(--bg-body); padding: 12px; border-radius: 4px;">
+								<div class="info-item">
+									<span class="label">Source:</span>
+									<span class="value">{{ source.name }}</span>
+								</div>
+								<div class="info-item" v-if="item.vulnerability.operator.max_version">
+									<span class="label">Max Version:</span>
+									<span class="value">{{ item.vulnerability.operator.max_operator }} {{ item.vulnerability.operator.max_version }}</span>
+								</div>
+								<div class="info-item" v-if="source.date && source.date !== '0000-00-00'">
+									<span class="label">Date:</span>
+									<span class="value">{{ source.date }}</span>
+								</div>
+								<div class="info-item">
+									<span class="label">Link:</span>
+									<span class="value">
+										<a :href="source.link" target="_blank" rel="noopener noreferrer" class="link">Reference</a>
+									</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
 			<section class="card">
 				<h2>Installed on Sites</h2>
 				<div class="table-container">
@@ -120,6 +170,7 @@ const goToSite = (siteId: number) => {
 								<th>Site Domain</th>
 								<th>Version</th>
 								<th>Status</th>
+								<th>Vuln</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -135,6 +186,12 @@ const goToSite = (siteId: number) => {
 									<span :class="['status-badge', item.status.toLowerCase()]">
 										{{ item.status }}
 									</span>
+								</td>
+								<td>
+									<span v-if="item.isVulnerable" class="status-badge error">
+										Yes
+									</span>
+									<span v-else style="color: #999">—</span>
 								</td>
 							</tr>
 						</tbody>

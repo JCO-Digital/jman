@@ -44,6 +44,20 @@ const dataStore = useDataStore();
 				</div>
 				<p class="stat-label">Unique plugins in cache</p>
 			</div>
+
+			<div class="card">
+				<h3>Vulnerabilities</h3>
+				<div
+					class="stat-value"
+					:style="{
+						color: dataStore.vulnerabilities.length > 0 ? '#d32f2f' : 'inherit',
+					}"
+				>
+					<span v-if="dataStore.isVulnsLoading" class="spinner"></span>
+					<span v-else>{{ dataStore.vulnerabilities.length }}</span>
+				</div>
+				<p class="stat-label">Active vulnerabilities detected</p>
+			</div>
 		</main>
 	</div>
 </template>
