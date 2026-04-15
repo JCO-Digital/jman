@@ -168,3 +168,15 @@ export interface Vulnerability {
 	};
 	sites: VulnerabilitySite[];
 }
+
+export interface EnrichedSite extends Site {
+	server: string;
+	plugins: Plugin[];
+	vulnerabilities: Vulnerability[];
+}
+
+export interface EnrichedPlugin extends PluginInfo {
+	shortName: string;
+	count: number;
+	vulnerabilities: Vulnerability[];
+}
