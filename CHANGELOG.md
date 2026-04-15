@@ -1,3 +1,17 @@
+## [4.20.1](https://github.com/JCO-Digital/jman/compare/v4.20.0...v4.20.1) (2026-04-15)
+
+
+### Bug Fixes
+
+* **fetch:** handle API errors and non-JSON responses when fetching ([99832a2](https://github.com/JCO-Digital/jman/commit/99832a28825a232332481d1d8d7390a2438dc0bb))
+
+
+### Performance Improvements
+
+* **cache:** reduce concurrency limit for plugin cache refresh to 12 ([21c8b26](https://github.com/JCO-Digital/jman/commit/21c8b26e6b85252c4df10a106d728c600fba8b55))
+
+
+
 # [4.20.0](https://github.com/JCO-Digital/jman/compare/v4.19.1...v4.20.0) (2026-04-15)
 
 
@@ -38,15 +52,6 @@
 ### Features
 
 * **plugin:** Resolve Satispress aliases for plugin installation ([1c11f3f](https://github.com/JCO-Digital/jman/commit/1c11f3f1dd59b52b63ee946accf1f75cede7002c))
-
-
-
-## [4.17.1](https://github.com/JCO-Digital/jman/compare/v4.17.0...v4.17.1) (2026-03-30)
-
-
-### Bug Fixes
-
-* fake commit to trigger release. ([9a9b374](https://github.com/JCO-Digital/jman/commit/9a9b374c348651bc64eee3ce65d666788bdd60af))
 
 
 
