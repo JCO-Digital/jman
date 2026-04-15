@@ -33,7 +33,7 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	updated := false
 	var mu sync.Mutex
 	var wg sync.WaitGroup
-	sem := make(chan struct{}, 24)
+	sem := make(chan struct{}, 12)
 
 	for _, site := range sites {
 		mu.Lock()
