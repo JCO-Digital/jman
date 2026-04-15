@@ -9,6 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/vuln"
 )
 
 // PluginsHandler returns the list of cached WordPress plugins.
@@ -83,27 +84,67 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, sites)
 }
 
-// VulnsHandler returns the cached vulnerability data for a specific plugin.
+// VulnsHandler returns the filtered and enriched vulnerability data for managed plugins.
+// If a "plugin" query parameter is provided, it returns vulnerabilities for that plugin.
+// Otherwise, it returns all active vulnerabilities across all managed sites.
 func VulnsHandler(w http.ResponseWriter, r *http.Request) {
-	plugin := r.URL.Query().Get("plugin")
-	if plugin == "" {
-		WriteError(w, http.StatusBadRequest, "Missing required query parameter: plugin")
+	pluginName := r.URL.Query().Get("plugin")
+	if pluginName == "" {
+		reports, err := vuln.ProcessVulnerabilities()
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to process vulnerabilities: %v", err))
+			return
+		}
+
+		// Enrich each vulnerability with its affected sites for UI convenience.
+		for i := range reports {
+			reports[i].Vulnerability.Sites = reports[i].Sites
+		}
+
+		WriteJSON(w, http.StatusOK, reports)
 		return
 	}
 
 	// Sanitize the plugin name to prevent path traversal.
-	// We only want the base filename.
-	plugin = filepath.Base(plugin)
-	if plugin == "." || plugin == ".." || plugin == "/" {
+	pluginName = filepath.Base(pluginName)
+	if pluginName == "." || pluginName == ".." || pluginName == "/" {
 		WriteError(w, http.StatusBadRequest, "Invalid plugin name")
 		return
 	}
 
-	var vulnData models.VulnResponse
-	filename := fmt.Sprintf("vulnerabilities/%s", plugin)
-	if err := cache.ReadJSONCache(filename, &vulnData, cache.DefaultTTL); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired for plugin %q: %v. Run 'jman vuln %s' to fetch data.", plugin, err, plugin))
+	// Get vulnerability data first to get metadata.
+	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
+	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Vulnerability data not found for plugin %q.", pluginName))
 		return
 	}
-	WriteJSON(w, http.StatusOK, vulnData)
+
+	pluginData, err := cache.GetCachedPluginData()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get plugin data: %v", err))
+		return
+	}
+
+	var targetSites []models.PluginSite
+	for _, p := range pluginData {
+		if p.Name == pluginName {
+			targetSites = p.Sites
+			break
+		}
+	}
+
+	reports := vuln.GetVulnerabilityReportsForPlugin(pluginName, targetSites)
+
+	// Prepare the response data based on the original structure but filtered.
+	// We return a copy of VulnData with filtered and enriched vulnerabilities.
+	response := *vulnResponse.Data
+	response.Vulnerability = []models.Vulnerability{}
+
+	for _, report := range reports {
+		v := report.Vulnerability
+		v.Sites = report.Sites
+		response.Vulnerability = append(response.Vulnerability, v)
+	}
+
+	WriteJSON(w, http.StatusOK, response)
 }
