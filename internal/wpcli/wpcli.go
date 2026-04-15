@@ -112,3 +112,47 @@ func SetDisallowFileMods(ssh, path string, value bool) error {
 	_, err := RunWP(CliOptions{SSH: ssh, Path: path}, "config", "set", "--raw", "DISALLOW_FILE_MODS", valStr)
 	return err
 }
+
+// RunSSH executes an arbitrary command via SSH on the target server.
+func RunSSH(ssh string, args ...string) (RunResult, error) {
+	if ssh == "" {
+		return RunResult{}, fmt.Errorf("ssh connection string is required")
+	}
+
+	cmdArgs := append([]string{ssh}, args...)
+	cmd := exec.Command("ssh", cmdArgs...)
+
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	err := cmd.Run()
+	res := RunResult{
+		Output: outBuf.String(),
+		Error:  errBuf.String(),
+	}
+
+	verb.Printf(verb.Debug, "SSH Command output:\n%s\n\nError output:\n%s", res.Output, res.Error)
+
+	return res, err
+}
+
+// UploadFile transfers a local file to a remote path via SCP.
+func UploadFile(ssh, localPath, remotePath string) error {
+	if ssh == "" {
+		return fmt.Errorf("ssh connection string is required for upload")
+	}
+
+	// Format scp destination: user@host:path
+	destination := fmt.Sprintf("%s:%s", ssh, remotePath)
+	cmd := exec.Command("scp", localPath, destination)
+
+	var errBuf bytes.Buffer
+	cmd.Stderr = &errBuf
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to upload file via scp: %w (stderr: %s)", err, errBuf.String())
+	}
+
+	return nil
+}
