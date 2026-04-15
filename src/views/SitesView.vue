@@ -135,6 +135,7 @@ const goToSite = (id: number) => {
 				placeholder="Search sites by name or URL..."
 				class="search-input"
 				v-model="searchQuery"
+				@input="updateRoute(1, rowsPerPage)"
 			/>
 		</div>
 

@@ -31,10 +31,65 @@ export const useDataStore = defineStore("data", () => {
 	const isVulnsLoading = ref(false);
 	const error = ref<string | null>(null);
 
+	// Optimization Maps
+	const vulnerabilitiesBySlug = computed(() => {
+		const map = new Map<string, Vulnerability[]>();
+		for (const v of vulnerabilities.value) {
+			if (!map.has(v.slug)) map.set(v.slug, []);
+			map.get(v.slug)!.push(v);
+		}
+		return map;
+	});
+
+	const vulnerabilitiesBySiteId = computed(() => {
+		const map = new Map<number, Vulnerability[]>();
+		for (const v of vulnerabilities.value) {
+			for (const s of v.sites) {
+				if (!map.has(s.site_id)) map.set(s.site_id, []);
+				map.get(s.site_id)!.push(v);
+			}
+		}
+		return map;
+	});
+
+	const pluginsBySiteIdMap = computed(() => {
+		const map = new Map<number, Plugin[]>();
+		for (const p of plugins.value) {
+			if (!map.has(p.site_id)) map.set(p.site_id, []);
+			map.get(p.site_id)!.push(p);
+		}
+		return map;
+	});
+
+	const pluginsBySlugMap = computed(() => {
+		const map = new Map<string, Plugin[]>();
+		for (const p of plugins.value) {
+			if (!map.has(p.name)) map.set(p.name, []);
+			map.get(p.name)!.push(p);
+		}
+		return map;
+	});
+
+	const sitesByIdMap = computed(() => {
+		const map = new Map<number, Site>();
+		for (const s of sites.value) {
+			map.set(s.id, s);
+		}
+		return map;
+	});
+
+	const serversByIdMap = computed(() => {
+		const map = new Map<number, Server>();
+		for (const s of servers.value) {
+			map.set(s.id, s);
+		}
+		return map;
+	});
+
 	// Getters
 	const enrichedPlugins = computed<EnrichedPlugin[]>(() => {
 		return pluginInfo.value.map((info) => {
-			const count = plugins.value.filter((p) => p.name === info.slug).length;
+			const count = pluginsBySlugMap.value.get(info.slug)?.length || 0;
 			let name = info.name || info.slug || "Unknown Plugin";
 			if (name === info.slug) {
 				// Turn "advanced-custom-fields-pro" into "Advanced Custom Fields Pro".
@@ -59,9 +114,7 @@ export const useDataStore = defineStore("data", () => {
 				version: info.version || "N/A",
 				author: info.author || "Unknown",
 				count,
-				vulnerabilities: vulnerabilities.value.filter(
-					(v) => v.slug === info.slug,
-				),
+				vulnerabilities: vulnerabilitiesBySlug.value.get(info.slug) || [],
 			};
 		});
 	});
@@ -71,12 +124,9 @@ export const useDataStore = defineStore("data", () => {
 			return {
 				...site,
 				server:
-					servers.value.find((s) => s.id === site.server_id)?.name ??
-					"Unknown Server",
-				plugins: plugins.value.filter((p) => p.site_id === site.id),
-				vulnerabilities: vulnerabilities.value.filter((v) =>
-					v.sites.some((s) => s.site_id === site.id),
-				),
+					serversByIdMap.value.get(site.server_id)?.name ?? "Unknown Server",
+				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
+				vulnerabilities: vulnerabilitiesBySiteId.value.get(site.id) || [],
 			};
 		});
 	});
@@ -218,19 +268,19 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function getSiteById(id: number) {
-		return sites.value.find((s) => s.id === id);
+		return sitesByIdMap.value.get(id);
 	}
 
 	function getServerById(id: number) {
-		return servers.value.find((s) => s.id === id);
+		return serversByIdMap.value.get(id);
 	}
 
 	function getPluginsBySiteId(siteId: number) {
-		return plugins.value.filter((p) => p.site_id === siteId);
+		return pluginsBySiteIdMap.value.get(siteId) || [];
 	}
 
 	function getVulnerabilitiesBySlug(slug: string) {
-		return vulnerabilities.value.filter((v) => v.slug === slug);
+		return vulnerabilitiesBySlug.value.get(slug) || [];
 	}
 
 	return {
@@ -247,6 +297,12 @@ export const useDataStore = defineStore("data", () => {
 		// Getters
 		enrichedPlugins,
 		enrichedSites,
+		vulnerabilitiesBySlug,
+		vulnerabilitiesBySiteId,
+		pluginsBySiteIdMap,
+		pluginsBySlugMap,
+		sitesByIdMap,
+		serversByIdMap,
 		getSiteById,
 		getServerById,
 		getPluginsBySiteId,

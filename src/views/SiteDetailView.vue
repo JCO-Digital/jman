@@ -19,10 +19,9 @@ const server = computed(() =>
 	site.value ? dataStore.getServerById(site.value.server_id) : null,
 );
 const sitePlugins = computed(() => {
+	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
 	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
-		const vulns = dataStore
-			.getVulnerabilitiesBySlug(plugin.name)
-			.filter((v) => v.sites.some((s) => s.site_id === siteId));
+		const vulns = siteVulns.filter((v) => v.slug === plugin.name);
 		return {
 			...plugin,
 			vulnerabilities: vulns,
