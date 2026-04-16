@@ -1,3 +1,12 @@
+## [4.20.2](https://github.com/JCO-Digital/jman/compare/v4.20.1...v4.20.2) (2026-04-16)
+
+
+### Bug Fixes
+
+* set SQLite pragmas and avoid holding lock while sending Slack ([cfa6a66](https://github.com/JCO-Digital/jman/commit/cfa6a6602186d19aeadaea7d9b76bebe6aa73580))
+
+
+
 ## [4.20.1](https://github.com/JCO-Digital/jman/compare/v4.20.0...v4.20.1) (2026-04-15)
 
 
@@ -43,15 +52,6 @@
 
 * **api:** Add slug and name fields to the vuln API. ([8162c75](https://github.com/JCO-Digital/jman/commit/8162c7512c65764ef335bb9c2917cbb18e7eb58e))
 * **vuln:** enrich and filter vulnerability reports by affected sites ([c56c906](https://github.com/JCO-Digital/jman/commit/c56c906e39f84152b476acd4b33d2e326f489218))
-
-
-
-# [4.18.0](https://github.com/JCO-Digital/jman/compare/v4.17.1...v4.18.0) (2026-04-01)
-
-
-### Features
-
-* **plugin:** Resolve Satispress aliases for plugin installation ([1c11f3f](https://github.com/JCO-Digital/jman/commit/1c11f3f1dd59b52b63ee946accf1f75cede7002c))
 
 
 
