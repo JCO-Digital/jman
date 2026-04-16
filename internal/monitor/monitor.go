@@ -86,17 +86,17 @@ func Run() error {
 			}
 
 			mu.Lock()
-			defer mu.Unlock()
-
 			status := state.GetStatus(domain)
 			state.RecordHistory(domain, isUp, statusMsg, errorCode)
+
+			var msgToSend string
+			var isRecovery bool
 
 			if isUp {
 				if status.IsDown {
 					// Site came back up
-					msg := fmt.Sprintf("✅ Site %s is back up.", domain)
-					verb.LogPrintf(verb.Normal, "%s\n", msg)
-					_ = slack.SendMessageToChannel(msg, slackChannel, true)
+					msgToSend = fmt.Sprintf("✅ Site %s is back up.", domain)
+					isRecovery = true
 				}
 				state.RemoveStatus(domain)
 			} else {
@@ -106,17 +106,24 @@ func Run() error {
 				if status.FailureCount >= config.Cfg.MonitorThreshold {
 					// Check if we should send an alert (not sent in last hour or never sent)
 					if status.LastAlertTime.IsZero() || time.Since(status.LastAlertTime) > time.Hour {
-						msg := fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", domain, statusMsg)
-						verb.LogPrintf(verb.Normal, "%s\n", msg)
-
-						err := slack.SendMessageToChannel(msg, slackChannel, true)
-						if err == nil {
-							status.LastAlertTime = time.Now()
-							status.IsDown = true
-						} else {
-							verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", domain, err)
-						}
+						msgToSend = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", domain, statusMsg)
 					}
+				}
+			}
+			mu.Unlock()
+
+			if msgToSend != "" {
+				verb.LogPrintf(verb.Normal, "%s\n", msgToSend)
+				err := slack.SendMessageToChannel(msgToSend, slackChannel, true)
+
+				if err != nil {
+					verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", domain, err)
+				} else if !isRecovery {
+					mu.Lock()
+					status = state.GetStatus(domain)
+					status.LastAlertTime = time.Now()
+					status.IsDown = true
+					mu.Unlock()
 				}
 			}
 		}(site.Domain)

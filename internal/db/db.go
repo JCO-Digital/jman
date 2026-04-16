@@ -38,6 +38,22 @@ func Init() error {
 			return
 		}
 
+		// Set pragmas for better concurrency and reliability.
+		// WAL mode allows multiple readers and one writer simultaneously.
+		// Busy timeout ensures it retries before failing with SQLITE_BUSY.
+		pragmas := []string{
+			"PRAGMA journal_mode=WAL",
+			"PRAGMA synchronous=NORMAL",
+			"PRAGMA busy_timeout=5000",
+		}
+
+		for _, p := range pragmas {
+			if _, pragmaErr := db.Exec(p); pragmaErr != nil {
+				err = fmt.Errorf("failed to set pragma %q: %w", p, pragmaErr)
+				return
+			}
+		}
+
 		// Check connection
 		if pingErr := db.Ping(); pingErr != nil {
 			err = fmt.Errorf("failed to ping database: %w", pingErr)
