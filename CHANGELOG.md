@@ -1,6 +1,11 @@
 # Changelog
 
-## 1.6.0 (2026-04-15)
+## 1.7.0 (2026-04-17)
+
+#### Features
+- components: add refresh button to AppNav and copy-to-clipboard in InfoCard (e45fa5a)
+
+## v1.6.0 (2026-04-15)
 
 #### Features
 - components: add reusable UI components and integrate into views (7279d3f)
