@@ -33,7 +33,15 @@ const siteInfoItems = computed(() => {
 	if (!site.value) return [];
 	return [
 		{ label: "Site ID", value: site.value.id },
-		{ label: "Domain", value: site.value.domain },
+		{
+			label: "Domain",
+			value: site.value.domain,
+			copyable: true,
+			isLink: true,
+			href: site.value.domain.startsWith("http")
+				? site.value.domain
+				: `https://${site.value.domain}`,
+		},
 		{ label: "PHP Version", value: site.value.php_version },
 		{ label: "Status", value: site.value.status },
 	];
@@ -42,8 +50,8 @@ const siteInfoItems = computed(() => {
 const serverInfoItems = computed(() => {
 	if (!server.value) return [];
 	return [
-		{ label: "Server Name", value: server.value.name },
-		{ label: "IP Address", value: server.value.ip_address },
+		{ label: "Server Name", value: server.value.name, copyable: true },
+		{ label: "IP Address", value: server.value.ip_address, copyable: true },
 	];
 });
 
