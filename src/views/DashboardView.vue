@@ -8,7 +8,7 @@ const dataStore = useDataStore();
 
 <template>
 	<div class="view-container">
-		<ViewHeader title="Dashboard" show-refresh />
+		<ViewHeader title="Dashboard" />
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>

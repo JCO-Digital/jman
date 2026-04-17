@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { RouterLink, useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
+import { useDataStore } from "../stores/data";
+import LoadingSpinner from "./LoadingSpinner.vue";
 
 const route = useRoute();
 const authStore = useAuthStore();
+const dataStore = useDataStore();
 
 const emit = defineEmits<{
 	(e: "logout"): void;
@@ -11,6 +14,10 @@ const emit = defineEmits<{
 
 const handleLogout = () => {
 	emit("logout");
+};
+
+const handleRefresh = () => {
+	dataStore.refreshData();
 };
 </script>
 
@@ -40,18 +47,44 @@ const handleLogout = () => {
 					to="/plugins"
 					class="nav-item"
 					:class="{
-						active:
-							route.name === 'plugins' || route.name === 'plugin-detail',
+						active: route.name === 'plugins' || route.name === 'plugin-detail',
 					}"
 				>
 					Plugins
 				</RouterLink>
 			</div>
-			<div class="nav-user">
-				<span v-if="authStore.user" class="user-display-name">
-					{{ authStore.user.displayName }}
-				</span>
-				<button class="logout-btn" @click="handleLogout">Logout</button>
+			<div class="nav-actions">
+				<button
+					class="icon-btn refresh-btn"
+					@click="handleRefresh"
+					:disabled="dataStore.isLoading"
+					title="Refresh data"
+				>
+					<svg
+						v-if="!dataStore.isLoading"
+						xmlns="http://www.w3.org/2000/svg"
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path d="M21 2v6h-6"></path>
+						<path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
+						<path d="M3 22v-6h6"></path>
+						<path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
+					</svg>
+					<LoadingSpinner v-else small />
+				</button>
+				<div class="nav-user">
+					<span v-if="authStore.user" class="user-display-name">
+						{{ authStore.user.displayName }}
+					</span>
+					<button class="logout-btn" @click="handleLogout">Logout</button>
+				</div>
 			</div>
 		</div>
 	</nav>
@@ -69,6 +102,12 @@ const handleLogout = () => {
 	gap: 24px;
 }
 
+.nav-actions {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+}
+
 .nav-user {
 	display: flex;
 	align-items: center;
@@ -79,6 +118,31 @@ const handleLogout = () => {
 	font-size: 14px;
 	color: var(--text-muted);
 	font-weight: 500;
+}
+
+.icon-btn {
+	background: none;
+	border: none;
+	padding: 8px;
+	cursor: pointer;
+	color: var(--text-muted);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	transition:
+		background-color 0.2s,
+		color 0.2s;
+}
+
+.icon-btn:hover:not(:disabled) {
+	background-color: var(--bg-hover);
+	color: var(--primary);
+}
+
+.icon-btn:disabled {
+	cursor: not-allowed;
+	opacity: 0.6;
 }
 
 .logout-btn {

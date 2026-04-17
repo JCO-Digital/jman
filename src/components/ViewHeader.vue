@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import { useDataStore } from "../stores/data";
-import LoadingSpinner from "./LoadingSpinner.vue";
-
 defineProps<{
 	title: string;
-	showRefresh?: boolean;
 	backButton?: {
 		text: string;
 		onClick: () => void;
 	};
 }>();
-
-const dataStore = useDataStore();
 </script>
 
 <template>
@@ -21,20 +15,6 @@ const dataStore = useDataStore();
 				&larr; {{ backButton.text }}
 			</button>
 			<h1>{{ title }}</h1>
-		</div>
-		<div v-if="showRefresh" class="actions">
-			<button
-				class="btn btn-primary"
-				@click="dataStore.refreshData()"
-				:disabled="dataStore.isLoading"
-			>
-				<LoadingSpinner
-					v-if="dataStore.isLoading"
-					small
-					message="Refreshing..."
-				/>
-				<span v-else>Refresh Data</span>
-			</button>
 		</div>
 	</header>
 </template>
@@ -76,24 +56,10 @@ h1 {
 	font-weight: 700;
 }
 
-.actions {
-	display: flex;
-	align-items: center;
-}
-
 @media (max-width: 600px) {
 	.header {
 		flex-direction: column;
 		align-items: flex-start;
-	}
-
-	.actions {
-		width: 100%;
-	}
-
-	.btn {
-		width: 100%;
-		justify-content: center;
 	}
 }
 </style>

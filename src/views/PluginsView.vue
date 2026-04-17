@@ -128,7 +128,7 @@ const goToPlugin = (name: string) => {
 
 <template>
 	<div class="view-container">
-		<ViewHeader title="Plugins Management" show-refresh />
+		<ViewHeader title="Plugins Management" />
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>

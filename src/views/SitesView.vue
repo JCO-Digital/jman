@@ -123,7 +123,7 @@ const goToSite = (id: number) => {
 
 <template>
 	<div class="view-container">
-		<ViewHeader title="Site Management" show-refresh />
+		<ViewHeader title="Site Management" />
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
