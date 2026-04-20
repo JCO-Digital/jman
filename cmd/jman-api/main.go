@@ -47,8 +47,10 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Wrap mux with middleware
 	handler := api.LoggingMiddleware(
-		api.CorsMiddleware(
-			api.JsonMiddleware(mux),
+		api.SecurityHeadersMiddleware(
+			api.CorsMiddleware(
+				api.JsonMiddleware(mux),
+			),
 		),
 	)
 

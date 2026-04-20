@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
@@ -19,7 +20,10 @@ func GetPluginInfo(slug string) (*models.PluginInfo, error) {
 
 	endpoint := fmt.Sprintf("%s%s.json", PluginInfoAPIURL, slug)
 
-	resp, err := http.Get(endpoint)
+	client := &http.Client{
+		Timeout: 15 * time.Second,
+	}
+	resp, err := client.Get(endpoint)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch plugin info for %s: %w", slug, err)
 	}

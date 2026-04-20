@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -42,7 +43,9 @@ func makeRequest[T any](endpoint string) ([]T, *Pagination, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+config.Cfg.TokenSpinup)
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("request failed: %w", err)
