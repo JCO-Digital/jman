@@ -162,6 +162,10 @@ func migrateTable(def TableDefinition) error {
 	defer tx.Rollback()
 
 	// 1. Check if the table exists
+	if !config.IsSafeIdentifier(def.Name) {
+		return fmt.Errorf("invalid table name: %s", def.Name)
+	}
+
 	var exists bool
 	query := fmt.Sprintf("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='%s'", def.Name)
 	err = tx.QueryRow(query).Scan(&exists)
@@ -172,6 +176,9 @@ func migrateTable(def TableDefinition) error {
 	// Prepare column strings for the desired state (sorted for deterministic output)
 	colNames := make([]string, 0, len(def.Columns))
 	for name := range def.Columns {
+		if !config.IsSafeIdentifier(name) {
+			return fmt.Errorf("invalid column name: %s", name)
+		}
 		colNames = append(colNames, name)
 	}
 	sort.Strings(colNames)

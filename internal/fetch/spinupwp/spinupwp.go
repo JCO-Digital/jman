@@ -9,6 +9,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -43,9 +44,8 @@ func makeRequest[T any](endpoint string) ([]T, *Pagination, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+config.Cfg.TokenSpinup)
 
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	client := utils.NewHTTPClient(30 * time.Second)
+	utils.SetStandardHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("request failed: %w", err)
