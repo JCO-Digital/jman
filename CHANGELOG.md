@@ -1,3 +1,12 @@
+## [4.21.1](https://github.com/JCO-Digital/jman/compare/v4.21.0...v4.21.1) (2026-04-20)
+
+
+### Bug Fixes
+
+* **update:** treat empty response as yes and show [Y/n] prompts ([77b3d75](https://github.com/JCO-Digital/jman/commit/77b3d756335a83788d33a696722f28ff1982b4d9))
+
+
+
 # [4.21.0](https://github.com/JCO-Digital/jman/compare/v4.20.2...v4.21.0) (2026-04-20)
 
 
@@ -46,16 +55,6 @@
 ### Features
 
 * **plugin:** support installing local .zip plugins by uploading to ([a529d1d](https://github.com/JCO-Digital/jman/commit/a529d1dcf57d1c47347a0a620898235c249b5b2f))
-
-
-
-## [4.19.1](https://github.com/JCO-Digital/jman/compare/v4.19.0...v4.19.1) (2026-04-15)
-
-
-### Bug Fixes
-
-* **fetch:** validate plugin slugs before fetching ([c29f830](https://github.com/JCO-Digital/jman/commit/c29f830e925f20556669a3dd1c29563b93ca46af))
-* **wpvuln:** return Error 0 for invalid plugin slug ([7716ba3](https://github.com/JCO-Digital/jman/commit/7716ba3e94313299490a97ade13307a59d19381e))
 
 
 
