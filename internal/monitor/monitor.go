@@ -10,6 +10,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/slack"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -42,9 +43,7 @@ func Run() error {
 		slackChannel = config.Cfg.SlackChannel
 	}
 
-	client := &http.Client{
-		Timeout: time.Duration(config.Cfg.MonitorTimeout) * time.Second,
-	}
+	client := utils.NewHTTPClient(time.Duration(config.Cfg.MonitorTimeout) * time.Second)
 
 	for _, site := range sites {
 		// Check if site is ignored
@@ -68,7 +67,7 @@ func Run() error {
 
 			req, err := http.NewRequest(http.MethodGet, "https://"+domain, nil)
 			if err == nil {
-				req.Header.Set("User-Agent", "JMan Uptime Monitoring/1.0")
+				utils.SetStandardHeaders(req)
 				resp, errDo := client.Do(req)
 				if errDo == nil {
 					errorCode = resp.StatusCode
