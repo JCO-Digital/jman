@@ -32,6 +32,7 @@ type AppConfig struct {
 	MonitorTimeout      int               `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
 	IgnoreSites         []string          `toml:"ignoreSites" mapstructure:"ignoreSites"`
 	PluginAliases       map[string]string `toml:"pluginAliases" mapstructure:"pluginAliases"`
 }
@@ -68,6 +69,7 @@ func loadConfig() error {
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
+	viper.SetDefault("allowedOrigins", []string{"*"})
 	viper.SetDefault("ignoreSites", []string{})
 	viper.SetDefault("pluginAliases", map[string]string{})
 
@@ -92,6 +94,7 @@ func loadConfig() error {
 		"monitorTimeout":      "MONITORTIMEOUT",
 		"cvssThreshold":       "CVSSTHRESHOLD",
 		"vulnThreshold":       "VULNTHRESHOLD",
+		"allowedOrigins":      "ALLOWEDORIGINS",
 		"ignoreSites":         "IGNORESITES",
 	}
 

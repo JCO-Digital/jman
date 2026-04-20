@@ -49,6 +49,10 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 		return UsersConfig{}, fmt.Errorf("jwtSecret is required in users.toml")
 	}
 
+	if cfg.JWTSecret == "your_64_char_hex_string_here" {
+		return UsersConfig{}, fmt.Errorf("jwtSecret is still set to the placeholder value")
+	}
+
 	if len(cfg.JWTSecret) < 32 {
 		return UsersConfig{}, fmt.Errorf("jwtSecret must be at least 32 characters long")
 	}
@@ -97,4 +101,18 @@ func FindUser(cfg *UsersConfig, username string) *UserEntry {
 		}
 	}
 	return nil
+}
+
+// IsSafeIdentifier checks if a string is a safe SQL identifier (table or column name).
+// It only allows alphanumeric characters and underscores.
+func IsSafeIdentifier(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_') {
+			return false
+		}
+	}
+	return true
 }

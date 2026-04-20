@@ -20,10 +20,14 @@ func GetPluginInfo(slug string) (*models.PluginInfo, error) {
 
 	endpoint := fmt.Sprintf("%s%s.json", PluginInfoAPIURL, slug)
 
-	client := &http.Client{
-		Timeout: 15 * time.Second,
+	client := utils.NewHTTPClient(15 * time.Second)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for %s: %w", slug, err)
 	}
-	resp, err := client.Get(endpoint)
+	utils.SetStandardHeaders(req)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch plugin info for %s: %w", slug, err)
 	}

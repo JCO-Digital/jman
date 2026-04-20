@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -29,14 +30,35 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// corsMiddleware adds basic CORS headers
+// CorsMiddleware adds CORS headers based on allowed origins in configuration.
 func CorsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		allowedOrigins := config.Cfg.AllowedOrigins
+
+		allow := false
+		if len(allowedOrigins) == 1 && allowedOrigins[0] == "*" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+			allow = true
+		} else if origin != "" {
+			w.Header().Add("Vary", "Origin")
+			for _, o := range allowedOrigins {
+				if o == origin {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					allow = true
+					break
+				}
+			}
+		}
+
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == "OPTIONS" {
+			if !allow && origin != "" && len(allowedOrigins) > 0 && allowedOrigins[0] != "*" {
+				w.WriteHeader(http.StatusForbidden)
+				return
+			}
 			w.WriteHeader(http.StatusOK)
 			return
 		}

@@ -36,9 +36,8 @@ func GetVulnerabilities(pluginName string) (*models.VulnResponse, error) {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	client := &http.Client{
-		Timeout: 15 * time.Second,
-	}
+	client := utils.NewHTTPClient(15 * time.Second)
+	utils.SetStandardHeaders(req)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch vulnerabilities for %s: %w", pluginName, err)
