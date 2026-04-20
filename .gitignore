@@ -1,3 +1,10 @@
 /bin/
 node_modules
 PLAN.md
+
+# Config and secret files
+config.toml
+users.toml
+jman.db
+jman.db-wal
+jman.db-shm
