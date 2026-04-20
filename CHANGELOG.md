@@ -1,3 +1,17 @@
+# [4.21.0](https://github.com/JCO-Digital/jman/compare/v4.20.2...v4.21.0) (2026-04-20)
+
+
+### Bug Fixes
+
+* **api:** add security headers middleware and add timeouts to HTTP ([dacfa29](https://github.com/JCO-Digital/jman/commit/dacfa293d1560413d208be9dfdfafef8f6918e17))
+
+
+### Features
+
+* add configurable CORS, HTTP client utils, and SQL identifier ([1b7376c](https://github.com/JCO-Digital/jman/commit/1b7376c54347acf08c528d3ff5ac6e8cb876d5dc))
+
+
+
 ## [4.20.2](https://github.com/JCO-Digital/jman/compare/v4.20.1...v4.20.2) (2026-04-16)
 
 
@@ -42,16 +56,6 @@
 
 * **fetch:** validate plugin slugs before fetching ([c29f830](https://github.com/JCO-Digital/jman/commit/c29f830e925f20556669a3dd1c29563b93ca46af))
 * **wpvuln:** return Error 0 for invalid plugin slug ([7716ba3](https://github.com/JCO-Digital/jman/commit/7716ba3e94313299490a97ade13307a59d19381e))
-
-
-
-# [4.19.0](https://github.com/JCO-Digital/jman/compare/v4.18.0...v4.19.0) (2026-04-15)
-
-
-### Features
-
-* **api:** Add slug and name fields to the vuln API. ([8162c75](https://github.com/JCO-Digital/jman/commit/8162c7512c65764ef335bb9c2917cbb18e7eb58e))
-* **vuln:** enrich and filter vulnerability reports by affected sites ([c56c906](https://github.com/JCO-Digital/jman/commit/c56c906e39f84152b476acd4b33d2e326f489218))
 
 
 
