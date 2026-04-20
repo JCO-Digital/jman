@@ -63,11 +63,11 @@ var updateCmd = &cobra.Command{
 			}
 
 			verb.Printf(verb.Normal, "\nA new version of jman is available: %s\n", verb.Green(latestVersion))
-			verb.Printf(verb.Quiet, "\n%s? [y/N]: ", verb.Bold("Would you like to download and install it"))
+			verb.Printf(verb.Quiet, "\n%s? [Y/n]: ", verb.Bold("Would you like to download and install it"))
 
 			var response string
 			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
+			if response != "y" && response != "Y" && response != "" {
 				return nil
 			}
 		} else {
@@ -79,11 +79,11 @@ var updateCmd = &cobra.Command{
 			binDir := filepath.Dir(execPath)
 			fmt.Printf("\nLatest version of %s is %s.\n", verb.Blue(component), verb.Green(latestVersion))
 			fmt.Printf("This will download %s to %s and overwrite any existing version.\n", verb.Blue(component), verb.Gray(binDir))
-			fmt.Printf("%s? [y/N]: ", verb.Bold("Proceed"))
+			fmt.Printf("%s? [Y/n]: ", verb.Bold("Proceed"))
 
 			var response string
 			fmt.Scanln(&response)
-			if response != "y" && response != "Y" {
+			if response != "y" && response != "Y" && response != "" {
 				return nil
 			}
 		}
