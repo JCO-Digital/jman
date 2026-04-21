@@ -138,6 +138,24 @@ func initSchema() error {
 				"count":      "INTEGER DEFAULT 1",
 			},
 		},
+		{
+			Name: "monitor_ignored_sites",
+			Columns: map[string]string{
+				"domain":     "TEXT PRIMARY KEY",
+				"reason":     "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			Name: "monitor_ignored_history",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"domain":     "TEXT",
+				"action":     "TEXT",
+				"reason":     "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
 	}
 
 	for _, table := range tables {

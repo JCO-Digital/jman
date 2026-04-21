@@ -3,12 +3,12 @@ package monitor
 import (
 	"fmt"
 	"net/http"
-	"slices"
 	"sync"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -45,10 +45,31 @@ func Run() error {
 
 	client := utils.NewHTTPClient(time.Duration(config.Cfg.MonitorTimeout) * time.Second)
 
+	// Fetch ignored sites from DB
+	ignoredDomains, err := db.GetIgnoredDomains()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites from database: %v\n", err)
+		ignoredDomains = make(map[string]bool)
+	}
+
+	// Migrate from config if necessary
+	if len(config.Cfg.IgnoreSites) > 0 {
+		verb.LogPrintf(verb.Normal, "Migrating ignored sites from config to database...\n")
+		for _, domain := range config.Cfg.IgnoreSites {
+			if !ignoredDomains[domain] {
+				if err := db.IgnoreSite(domain, "Migrated from config.toml"); err != nil {
+					verb.LogPrintf(verb.Normal, "Warning: failed to migrate site %s: %v\n", domain, err)
+				} else {
+					ignoredDomains[domain] = true
+				}
+			}
+		}
+		verb.LogPrintf(verb.Normal, "Migration complete. You can now remove 'ignoreSites' from your config.toml.\n")
+	}
+
 	for _, site := range sites {
 		// Check if site is ignored
-		isIgnored := slices.Contains(config.Cfg.IgnoreSites, site.Domain)
-		if isIgnored {
+		if ignoredDomains[site.Domain] {
 			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}

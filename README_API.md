@@ -1,6 +1,6 @@
 # jman-api
 
-`jman-api` is a lightweight, read-only REST API that serves the data cached by the `jman` CLI. This is useful for building dashboards or exposing your SpinupWP/Plugin data to other local services without needing to re-fetch from external APIs.
+`jman-api` is a lightweight REST API that serves the data cached by the `jman` CLI and provides management endpoints for site monitoring. This is useful for building dashboards or exposing your SpinupWP/Plugin data to other local services without needing to re-fetch from external APIs.
 
 All data endpoints require JWT authentication. The API will refuse to start unless a valid `users.toml` configuration file is present.
 
@@ -227,6 +227,14 @@ Authorization: Bearer <token>
 - `GET /api/servers` — Returns cached SpinupWP servers.
 - `GET /api/sites` — Returns cached SpinupWP sites.
 - `GET /api/vulns?plugin=<slug>` — Returns cached vulnerability data for a specific plugin.
+
+### Monitoring Endpoints
+
+- `GET /api/monitor/history?hours=48` — Returns aggregated status history for all sites.
+- `GET /api/monitor/status?domain=...` — Returns current status for a specific site (or all sites if domain is omitted).
+- `GET /api/monitor/ignored` — Returns a list of currently ignored sites.
+- `POST /api/monitor/ignored` — Adds a site to the ignore list. Requires JSON body: `{"domain": "example.com", "reason": "Maintenance"}`.
+- `DELETE /api/monitor/ignored/{domain}` — Removes a site from the ignore list.
 
 **Authentication error responses:**
 

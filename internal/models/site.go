@@ -72,6 +72,12 @@ type Site struct {
 	Status            string             `json:"status"`
 }
 
+type IgnoredSite struct {
+	Domain    string `json:"domain"`
+	Reason    string `json:"reason"`
+	CreatedAt string `json:"created_at"`
+}
+
 type CliSite struct {
 	ID         int    `json:"id"`
 	Name       string `json:"name"`
