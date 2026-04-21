@@ -1,30 +1,86 @@
 <script setup lang="ts">
-import { watch } from "vue";
+import { watch, onUnmounted } from "vue";
 import { RouterView } from "vue-router";
 import { useDataStore } from "./stores/data";
 import { useAuthStore } from "./stores/auth";
+import { useSettingsStore } from "./stores/settings";
+import { useMonitorStore } from "./stores/monitor";
 import AppNav from "./components/AppNav.vue";
 import packageInfo from "../package.json";
 
 const dataStore = useDataStore();
 const authStore = useAuthStore();
+const settingsStore = useSettingsStore();
 
 authStore.initialize();
+settingsStore.initialize();
 
-// Load data whenever the user becomes authenticated
+const monitorStore = useMonitorStore();
+
+let monitorIntervalId: ReturnType<typeof setInterval> | null = null;
+let dataIntervalId: ReturnType<typeof setInterval> | null = null;
+
+const startIntervals = () => {
+	stopIntervals();
+	if (!authStore.isAuthenticated) return;
+
+	// Monitor history refresh
+	monitorIntervalId = setInterval(() => {
+		monitorStore.fetchHistory();
+	}, settingsStore.monitorRefreshInterval * 1000);
+
+	// General data refresh (sites, servers, plugins, etc.)
+	dataIntervalId = setInterval(() => {
+		dataStore.refreshData();
+	}, settingsStore.dataRefreshInterval * 1000);
+};
+
+const stopIntervals = () => {
+	if (monitorIntervalId) {
+		clearInterval(monitorIntervalId);
+		monitorIntervalId = null;
+	}
+	if (dataIntervalId) {
+		clearInterval(dataIntervalId);
+		dataIntervalId = null;
+	}
+};
+
+// Load data whenever the user becomes authenticated and handle intervals
 watch(
 	() => authStore.isAuthenticated,
 	(authenticated) => {
 		if (authenticated) {
 			dataStore.initData();
+			startIntervals();
+		} else {
+			stopIntervals();
 		}
 	},
 	{ immediate: true },
 );
 
+// Restart intervals if interval settings change
+watch(
+	[
+		() => settingsStore.monitorRefreshInterval,
+		() => settingsStore.dataRefreshInterval,
+	],
+	() => {
+		if (authStore.isAuthenticated) {
+			startIntervals();
+		}
+	},
+);
+
+onUnmounted(() => {
+	stopIntervals();
+});
+
 const version = packageInfo.version;
 
 const handleLogout = () => {
+	stopIntervals();
 	dataStore.clearCache();
 	authStore.logout();
 };
