@@ -169,10 +169,29 @@ export interface Vulnerability {
 	sites: VulnerabilitySite[];
 }
 
+export interface MonitorHistory {
+	id: number;
+	domain: string;
+	status: string;
+	error_code: number;
+	first_seen: string;
+	last_seen: string;
+	count: number;
+}
+
+export interface MonitorStatus {
+	domain: string;
+	is_down: boolean;
+	failure_count: number;
+	last_checked: string;
+}
+
 export interface EnrichedSite extends Site {
 	server: string;
 	plugins: Plugin[];
 	vulnerabilities: Vulnerability[];
+	monitorHistory?: MonitorHistory[];
+	monitorStatus?: MonitorStatus;
 }
 
 export interface EnrichedPlugin extends PluginInfo {
