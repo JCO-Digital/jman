@@ -186,6 +186,12 @@ export interface MonitorStatus {
 	last_checked: string;
 }
 
+export interface IgnoredSite {
+	domain: string;
+	reason: string;
+	created_at: string;
+}
+
 export interface EnrichedSite extends Site {
 	server: string;
 	plugins: Plugin[];

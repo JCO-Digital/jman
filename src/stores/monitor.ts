@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
-import type { MonitorHistory, MonitorStatus } from "../types";
+import type { MonitorHistory, MonitorStatus, IgnoredSite } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -10,7 +10,9 @@ export const useMonitorStore = defineStore("monitor", () => {
 
 	const history = ref<MonitorHistory[]>([]);
 	const currentStatus = ref<Record<string, MonitorStatus>>({});
+	const ignoredDomains = ref<IgnoredSite[]>([]);
 	const isLoadingHistory = ref(false);
+	const isLoadingIgnored = ref(false);
 
 	const historyByDomain = computed(() => {
 		const map = new Map<string, MonitorHistory[]>();
@@ -78,16 +80,20 @@ export const useMonitorStore = defineStore("monitor", () => {
 	 * Returns a list of currently ignored sites.
 	 */
 	async function fetchIgnored() {
+		isLoadingIgnored.value = true;
 		try {
 			const res = await fetch(`${BASE_URL}/monitor/ignored`, {
 				headers: authStore.authHeader,
 			});
 			const data = await res.json();
 			console.log("Ignored sites:", data);
+			ignoredDomains.value = data;
 			return data;
 		} catch (error) {
 			console.error("Failed to fetch ignored sites:", error);
 			throw error;
+		} finally {
+			isLoadingIgnored.value = false;
 		}
 	}
 
@@ -106,8 +112,14 @@ export const useMonitorStore = defineStore("monitor", () => {
 				},
 				body: JSON.stringify({ domain, reason }),
 			});
+
+			if (!res.ok) {
+				throw new Error("Failed to add site to ignore list");
+			}
+
 			const data = await res.json();
 			console.log("Added to ignore list:", data);
+			await fetchIgnored();
 			return data;
 		} catch (error) {
 			console.error(`Failed to ignore site ${domain}:`, error);
@@ -126,6 +138,10 @@ export const useMonitorStore = defineStore("monitor", () => {
 				headers: authStore.authHeader,
 			});
 
+			if (!res.ok) {
+				throw new Error("Failed to remove site from ignore list");
+			}
+
 			// Check if response is empty or JSON
 			const contentType = res.headers.get("content-type");
 			let data = null;
@@ -136,6 +152,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 			}
 
 			console.log(`Removed ${domain} from ignore list:`, data);
+			await fetchIgnored();
 			return data;
 		} catch (error) {
 			console.error(`Failed to remove site ${domain} from ignore list:`, error);
@@ -147,7 +164,9 @@ export const useMonitorStore = defineStore("monitor", () => {
 		history,
 		historyByDomain,
 		currentStatus,
+		ignoredDomains,
 		isLoadingHistory,
+		isLoadingIgnored,
 		fetchHistory,
 		ensureHistory,
 		fetchStatus,
