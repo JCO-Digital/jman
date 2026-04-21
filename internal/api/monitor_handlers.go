@@ -41,7 +41,14 @@ func MonitorStatusHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if status == nil {
-			WriteError(w, http.StatusNotFound, fmt.Sprintf("No monitor status found for domain %q", domain))
+			// If site exists in cache but hasn't been checked yet, return a pending status
+			WriteJSON(w, http.StatusOK, map[string]interface{}{
+				"domain":         domain,
+				"is_down":        false,
+				"failure_count":  0,
+				"last_checked":   nil,
+				"status_message": "Pending first check",
+			})
 			return
 		}
 		WriteJSON(w, http.StatusOK, status)
