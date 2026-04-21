@@ -12,43 +12,105 @@ const props = defineProps<{
 
 const monitorStore = useMonitorStore();
 
+const TOTAL_MINUTES = 1440; // 24 hours
+const MS_PER_MINUTE = 60000;
+
 const isIgnored = computed(() => {
 	if (!props.domain) return false;
 	return monitorStore.ignoredDomains.some((d) => d.domain === props.domain);
 });
+
 const liveStatus = computed(() =>
 	props.domain ? monitorStore.currentStatus[props.domain] : null,
 );
 
 /**
- * We want to show a series of blocks representing the status.
- * Since the backend provides aggregated history, we'll sort them by date.
+ * Process history into a 24h timeline.
+ * We calculate the duration of each status and map it to a percentage of the 1440 minute period.
  */
-const sortedHistory = computed(() => {
-	return [...props.history].sort(
+const timelineData = computed(() => {
+	if (props.history.length === 0) return [];
+
+	const now = new Date();
+	const startTime = new Date(now.getTime() - TOTAL_MINUTES * MS_PER_MINUTE);
+
+	// Sort history by date
+	const sorted = [...props.history].sort(
 		(a, b) =>
 			new Date(a.first_seen).getTime() - new Date(b.first_seen).getTime(),
 	);
+
+	return sorted
+		.map((item) => {
+			const first = new Date(item.first_seen);
+			const last = new Date(item.last_seen);
+
+			// Clip to 24h window
+			const effectiveFirst = first < startTime ? startTime : first;
+			const effectiveLast = last < startTime ? startTime : last;
+
+			// If the entire record is older than 24h, it has 0 duration in our view
+			if (last < startTime) return null;
+
+			// Duration in minutes
+			const durationMs = Math.max(
+				0,
+				effectiveLast.getTime() - effectiveFirst.getTime(),
+			);
+			let durationMinutes = durationMs / MS_PER_MINUTE;
+
+			// Minimum visible size (approx 1.5 pixels on a standard container)
+			// if the record is within the 24h window
+			if (durationMinutes > 0 && durationMinutes < 2) {
+				durationMinutes = 2;
+			}
+
+			return {
+				...item,
+				width: (durationMinutes / TOTAL_MINUTES) * 100,
+				effectiveFirst,
+				effectiveLast,
+			};
+		})
+		.filter(
+			(item): item is NonNullable<typeof item> =>
+				item !== null && item.width > 0,
+		);
 });
 
 const uptimePercentage = computed(() => {
-	if (props.history.length === 0) return 0;
-	const upCount = props.history.filter((h) => h.status === "UP").length;
-	return Math.round((upCount / props.history.length) * 100);
+	if (timelineData.value.length === 0) return 100;
+
+	const totalWidth = timelineData.value.reduce(
+		(acc, item) => acc + item.width,
+		0,
+	);
+	const upWidth = timelineData.value
+		.filter((item) => item.status === "UP")
+		.reduce((acc, item) => acc + item.width, 0);
+
+	if (totalWidth === 0) return 100;
+	return Math.min(100, Math.round((upWidth / totalWidth) * 100));
 });
 
 const getStatusClass = (status: string) => {
 	return status.toLowerCase() === "up" ? "status-up" : "status-down";
 };
 
-const formatDate = (dateStr: string) => {
-	return new Date(dateStr).toLocaleString(undefined, {
+const formatDate = (date: string | Date | null) => {
+	if (!date) return "";
+	return new Date(date).toLocaleString(undefined, {
 		month: "short",
 		day: "numeric",
 		hour: "2-digit",
 		minute: "2-digit",
 	});
 };
+
+const startTimeLabel = computed(() => {
+	const date = new Date(Date.now() - TOTAL_MINUTES * MS_PER_MINUTE);
+	return formatDate(date);
+});
 </script>
 
 <template>
@@ -79,8 +141,8 @@ const formatDate = (dateStr: string) => {
 					{{ liveStatus.last_checked ? "Live" : "Pending" }}
 				</div>
 			</div>
-			<div v-if="history.length > 0 && !isIgnored" class="uptime-stat">
-				<span class="label">Uptime (Last 48h):</span>
+			<div v-if="!isIgnored" class="uptime-stat">
+				<span class="label">Uptime (Scale: 24h):</span>
 				<span
 					class="value"
 					:class="{
@@ -105,27 +167,26 @@ const formatDate = (dateStr: string) => {
 			</RouterLink>
 		</div>
 
-		<div class="history-container" v-else-if="history.length > 0">
+		<div class="history-container" v-else-if="timelineData.length > 0">
 			<div class="status-timeline">
 				<div
-					v-for="item in sortedHistory"
+					v-for="item in timelineData"
 					:key="item.id"
 					class="status-block"
 					:class="getStatusClass(item.status)"
-					:title="`${formatDate(item.first_seen)} - ${item.status} (${item.error_code})`"
+					:style="{ width: item.width + '%' }"
+					:title="`${formatDate(item.first_seen)} - ${formatDate(item.last_seen)}: ${item.status} (${item.error_code})`"
 				></div>
 			</div>
 
 			<div class="timeline-labels">
-				<span v-if="sortedHistory.length > 0">
-					{{ formatDate(sortedHistory[0]?.first_seen ?? "") }}
-				</span>
+				<span>{{ startTimeLabel }}</span>
 				<span>Latest</span>
 			</div>
 		</div>
 
 		<div v-else-if="!monitorStore.isLoadingHistory" class="empty-state">
-			<p>No monitor history available for this domain.</p>
+			<p>No monitor history available for this domain in the last 24h.</p>
 		</div>
 	</section>
 </template>
@@ -144,6 +205,22 @@ const formatDate = (dateStr: string) => {
 	margin: 0;
 	border-bottom: none;
 	padding-bottom: 0;
+}
+
+.title-with-status {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.ignored-badge {
+	font-size: 0.75em;
+	font-weight: 600;
+	text-transform: uppercase;
+	color: var(--badge-inactive-text);
+	background: var(--badge-inactive-bg);
+	padding: 2px 8px;
+	border-radius: 4px;
 }
 
 .uptime-stat {
@@ -167,28 +244,52 @@ const formatDate = (dateStr: string) => {
 	margin-top: 8px;
 }
 
-.loading-container {
+.loading-container,
+.ignored-container,
+.empty-state {
 	padding: 20px;
+	text-align: center;
+	color: var(--text-muted);
 	display: flex;
+	flex-direction: column;
+	align-items: center;
 	justify-content: center;
+}
+
+.settings-link {
+	display: inline-block;
+	margin-top: 8px;
+	color: var(--primary);
+	text-decoration: none;
+	font-size: 0.9em;
+	font-weight: 500;
+}
+
+.settings-link:hover {
+	text-decoration: underline;
 }
 
 .status-timeline {
 	display: flex;
-	gap: 2px;
 	height: 32px;
 	width: 100%;
+	background-color: var(--bg-body);
+	border-radius: 4px;
+	overflow: hidden;
 }
 
 .status-block {
-	flex: 1;
-	border-radius: 2px;
-	min-width: 4px;
-	transition: transform 0.1s ease;
+	height: 100%;
+	transition: opacity 0.1s ease;
+	border-right: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.status-block:last-child {
+	border-right: none;
 }
 
 .status-block:hover {
-	transform: scaleY(1.2);
+	opacity: 0.8;
 }
 
 .status-up {
@@ -217,41 +318,6 @@ const formatDate = (dateStr: string) => {
 
 .text-error {
 	color: var(--badge-inactive-text);
-}
-
-.title-with-status {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.ignored-badge {
-	font-size: 0.75em;
-	font-weight: 600;
-	text-transform: uppercase;
-	color: var(--badge-inactive-text);
-	background: var(--badge-inactive-bg);
-	padding: 2px 8px;
-	border-radius: 4px;
-}
-
-.ignored-container {
-	padding: 20px;
-	text-align: center;
-	color: var(--text-muted);
-}
-
-.settings-link {
-	display: inline-block;
-	margin-top: 8px;
-	color: var(--primary);
-	text-decoration: none;
-	font-size: 0.9em;
-	font-weight: 500;
-}
-
-.settings-link:hover {
-	text-decoration: underline;
 }
 
 .live-status-indicator {
@@ -335,11 +401,5 @@ const formatDate = (dateStr: string) => {
 		transform: scale(0.95);
 		box-shadow: 0 0 0 0 rgba(156, 163, 175, 0);
 	}
-}
-
-.empty-state {
-	text-align: center;
-	padding: 20px;
-	color: var(--text-muted);
 }
 </style>
