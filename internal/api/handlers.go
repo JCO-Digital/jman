@@ -27,6 +27,13 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/servers", auth(ServersHandler))
 	mux.Handle("GET /api/sites", auth(SitesHandler))
 	mux.Handle("GET /api/vulns", auth(VulnsHandler))
+
+	// --- Monitoring routes ---
+	mux.Handle("GET /api/monitor/history", auth(MonitorHistoryHandler))
+	mux.Handle("GET /api/monitor/status", auth(MonitorStatusHandler))
+	mux.Handle("GET /api/monitor/ignored", auth(IgnoredSitesHandler))
+	mux.Handle("POST /api/monitor/ignored", auth(IgnoredSitesHandler))
+	mux.Handle("DELETE /api/monitor/ignored/{domain}", auth(UnignoreSiteHandler))
 }
 
 // HealthHandler returns a simple health check response.
