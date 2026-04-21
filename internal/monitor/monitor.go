@@ -67,7 +67,10 @@ func Run() error {
 		verb.LogPrintf(verb.Normal, "Migration complete. You can now remove 'ignoreSites' from your config.toml.\n")
 	}
 
+	activeSites := make(map[string]bool)
 	for _, site := range sites {
+		activeSites[site.Domain] = true
+
 		// Check if site is ignored
 		if ignoredDomains[site.Domain] {
 			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
@@ -118,7 +121,8 @@ func Run() error {
 					msgToSend = fmt.Sprintf("✅ Site %s is back up.", domain)
 					isRecovery = true
 				}
-				state.RemoveStatus(domain)
+				status.IsDown = false
+				status.FailureCount = 0
 			} else {
 				status.FailureCount++
 				verb.LogPrintf(verb.Verbose, "Site %s failure count: %d (%s)\n", domain, status.FailureCount, statusMsg)
@@ -150,6 +154,14 @@ func Run() error {
 	}
 
 	wg.Wait()
+
+	// Cleanup stale sites (those in status state but no longer in the cache)
+	for domain := range state.Sites {
+		if !activeSites[domain] {
+			verb.LogPrintf(verb.Debug, "Removing stale site status: %s\n", domain)
+			state.RemoveStatus(domain)
+		}
+	}
 
 	// Save updated state
 	if err := state.SaveState(); err != nil {
