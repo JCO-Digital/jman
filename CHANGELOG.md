@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.8.1 (2026-04-21)
+## 1.9.0 (2026-04-21)
+
+#### Features
+
+- monitor: render 24h proportional status timeline and update uptime calc (eeb4ae5)
+
+### v1.8.1 (2026-04-21)
 
 #### Bug Fixes
 
