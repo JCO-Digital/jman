@@ -95,8 +95,10 @@ const uptimePercentage = computed(() => {
 	return Math.min(100, Math.round((upWidth / totalWidth) * 100));
 });
 
-const getStatusClass = (status: string) => {
-	return status.toUpperCase() === "UP" ? "status-up" : "status-down";
+const getStatusClass = (status: string, errorCode: number) => {
+	if (status.toUpperCase() === "UP") return "status-up";
+	if (errorCode === 0) return "status-unknown";
+	return "status-down";
 };
 
 const formatDate = (date: string | Date | null) => {
@@ -175,7 +177,7 @@ const startTimeLabel = computed(() => {
 					v-for="item in timelineData"
 					:key="item.id"
 					class="status-block"
-					:class="getStatusClass(item.status)"
+					:class="getStatusClass(item.status, item.error_code)"
 					:style="{ width: item.width + '%' }"
 					:title="`${formatDate(item.first_seen)} - ${formatDate(item.last_seen)}: ${item.status} (${item.error_code})`"
 				></div>
@@ -300,6 +302,10 @@ const startTimeLabel = computed(() => {
 
 .status-down {
 	background-color: var(--badge-inactive-bg);
+}
+
+.status-unknown {
+	background-color: var(--text-muted);
 }
 
 .timeline-labels {
