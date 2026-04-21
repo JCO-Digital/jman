@@ -183,7 +183,8 @@ export interface MonitorStatus {
 	domain: string;
 	is_down: boolean;
 	failure_count: number;
-	last_checked: string;
+	last_checked: string | null;
+	status_message?: string;
 }
 
 export interface IgnoredSite {
