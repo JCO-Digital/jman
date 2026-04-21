@@ -26,7 +26,7 @@ const liveStatus = computed(() =>
 
 /**
  * Process history into a 24h timeline.
- * We calculate the duration of each status and map it to a percentage of the 1440 minute period.
+ * We calculate the duration of each status and map it to a duration-based flex-grow.
  */
 const timelineData = computed(() => {
 	if (props.history.length === 0) return [];
@@ -52,47 +52,39 @@ const timelineData = computed(() => {
 			// If the entire record is older than 24h, it has 0 duration in our view
 			if (last < startTime) return null;
 
-			// Duration in minutes
+			// Actual math duration in minutes (minimum 1 minute for any recorded event)
 			const durationMs = Math.max(
 				0,
 				effectiveLast.getTime() - effectiveFirst.getTime(),
 			);
-			let durationMinutes = durationMs / MS_PER_MINUTE;
-
-			// Minimum visible size (approx a few pixels on most screens)
-			// if the record is within the 24h window.
-			// We give at least 5 minutes even to single-event records (0 duration)
-			// to ensure they are visible on the timeline.
-			if (durationMinutes < 5) {
-				durationMinutes = 5;
-			}
+			const durationMinutes = Math.max(durationMs / MS_PER_MINUTE, 1);
 
 			return {
 				...item,
-				width: (durationMinutes / TOTAL_MINUTES) * 100,
+				duration: durationMinutes,
 				effectiveFirst,
 				effectiveLast,
 			};
 		})
 		.filter(
 			(item): item is NonNullable<typeof item> =>
-				item !== null && item.width > 0,
+				item !== null && item.duration > 0,
 		);
 });
 
 const uptimePercentage = computed(() => {
 	if (timelineData.value.length === 0) return 100;
 
-	const totalWidth = timelineData.value.reduce(
-		(acc, item) => acc + item.width,
+	const totalDuration = timelineData.value.reduce(
+		(acc, item) => acc + item.duration,
 		0,
 	);
-	const upWidth = timelineData.value
+	const upDuration = timelineData.value
 		.filter((item) => item.status.toUpperCase() === "UP")
-		.reduce((acc, item) => acc + item.width, 0);
+		.reduce((acc, item) => acc + item.duration, 0);
 
-	if (totalWidth === 0) return 100;
-	return Math.min(100, (upWidth / totalWidth) * 100);
+	if (totalDuration === 0) return 100;
+	return Math.min(100, (upDuration / totalDuration) * 100);
 });
 
 const getStatusClass = (status: string, errorCode: number) => {
@@ -178,7 +170,7 @@ const startTimeLabel = computed(() => {
 					:key="item.id"
 					class="status-block"
 					:class="getStatusClass(item.status, item.error_code)"
-					:style="{ width: item.width + '%' }"
+					:style="{ flex: item.duration + ' 0 auto' }"
 					:title="`${formatDate(item.first_seen)} - ${formatDate(item.last_seen)}: ${item.status} (${item.error_code})`"
 				></div>
 			</div>
@@ -284,6 +276,7 @@ const startTimeLabel = computed(() => {
 
 .status-block {
 	height: 100%;
+	min-width: 3px; /* Ensures even 1-minute outages are visible */
 	transition: opacity 0.1s ease;
 	border-right: 1px solid rgba(0, 0, 0, 0.05);
 }
