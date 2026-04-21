@@ -1,6 +1,13 @@
 # Changelog
 
-### 1.9.1 (2026-04-21)
+### 1.9.2 (2026-04-21)
+
+#### Bug Fixes
+
+- components: preserve fractional uptime percentage and format to two decimals (b532903)
+- monitor-history-card: treat error_code 0 as unknown and add status-unknown style (b0213d2)
+
+### v1.9.1 (2026-04-21)
 
 #### Bug Fixes
 
