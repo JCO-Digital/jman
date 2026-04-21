@@ -92,7 +92,7 @@ const uptimePercentage = computed(() => {
 		.reduce((acc, item) => acc + item.width, 0);
 
 	if (totalWidth === 0) return 100;
-	return Math.min(100, Math.round((upWidth / totalWidth) * 100));
+	return Math.min(100, (upWidth / totalWidth) * 100);
 });
 
 const getStatusClass = (status: string, errorCode: number) => {
@@ -155,7 +155,7 @@ const startTimeLabel = computed(() => {
 						'text-error': uptimePercentage <= 80,
 					}"
 				>
-					{{ uptimePercentage }}%
+					{{ uptimePercentage.toFixed(2) }}%
 				</span>
 			</div>
 		</div>
