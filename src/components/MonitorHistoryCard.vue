@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { RouterLink } from "vue-router";
 import type { MonitorHistory } from "../types";
 import { useMonitorStore } from "../stores/monitor";
 import LoadingSpinner from "./LoadingSpinner.vue";
@@ -10,6 +11,11 @@ const props = defineProps<{
 }>();
 
 const monitorStore = useMonitorStore();
+
+const isIgnored = computed(() => {
+	if (!props.domain) return false;
+	return monitorStore.ignoredDomains.some((d) => d.domain === props.domain);
+});
 const liveStatus = computed(() =>
 	props.domain ? monitorStore.currentStatus[props.domain] : null,
 );
@@ -50,19 +56,30 @@ const formatDate = (dateStr: string) => {
 		<div class="card-header">
 			<div class="title-with-status">
 				<h2>Uptime History</h2>
+				<div v-if="isIgnored" class="ignored-badge">Ignored</div>
 				<div
-					v-if="liveStatus"
+					v-else-if="liveStatus"
 					class="live-status-indicator"
-					:title="`Last checked: ${formatDate(liveStatus.last_checked)}${liveStatus.failure_count > 0 ? ` (${liveStatus.failure_count} failures)` : ''}`"
+					:title="
+						liveStatus.last_checked
+							? `Last checked: ${formatDate(liveStatus.last_checked)}${liveStatus.failure_count > 0 ? ` (${liveStatus.failure_count} failures)` : ''}`
+							: liveStatus.status_message || 'Pending check'
+					"
 				>
 					<span
 						class="pulse-icon"
-						:class="!liveStatus.is_down ? 'bg-success' : 'bg-error'"
+						:class="
+							liveStatus.last_checked
+								? !liveStatus.is_down
+									? 'bg-success'
+									: 'bg-error'
+								: 'bg-pending'
+						"
 					></span>
-					Live
+					{{ liveStatus.last_checked ? "Live" : "Pending" }}
 				</div>
 			</div>
-			<div v-if="history.length > 0" class="uptime-stat">
+			<div v-if="history.length > 0 && !isIgnored" class="uptime-stat">
 				<span class="label">Uptime (Last 48h):</span>
 				<span
 					class="value"
@@ -79,6 +96,13 @@ const formatDate = (dateStr: string) => {
 
 		<div v-if="monitorStore.isLoadingHistory" class="loading-container">
 			<LoadingSpinner message="Loading history..." />
+		</div>
+
+		<div v-else-if="isIgnored" class="ignored-container">
+			<p>Monitoring is disabled for this domain.</p>
+			<RouterLink to="/settings" class="settings-link">
+				Manage ignored sites in Settings
+			</RouterLink>
 		</div>
 
 		<div class="history-container" v-else-if="history.length > 0">
@@ -199,6 +223,35 @@ const formatDate = (dateStr: string) => {
 	gap: 12px;
 }
 
+.ignored-badge {
+	font-size: 0.75em;
+	font-weight: 600;
+	text-transform: uppercase;
+	color: var(--badge-inactive-text);
+	background: var(--badge-inactive-bg);
+	padding: 2px 8px;
+	border-radius: 4px;
+}
+
+.ignored-container {
+	padding: 20px;
+	text-align: center;
+	color: var(--text-muted);
+}
+
+.settings-link {
+	display: inline-block;
+	margin-top: 8px;
+	color: var(--primary);
+	text-decoration: none;
+	font-size: 0.9em;
+	font-weight: 500;
+}
+
+.settings-link:hover {
+	text-decoration: underline;
+}
+
 .live-status-indicator {
 	display: flex;
 	align-items: center;
@@ -231,6 +284,12 @@ const formatDate = (dateStr: string) => {
 	animation: pulse-red 2s infinite;
 }
 
+.bg-pending {
+	background-color: var(--text-muted);
+	box-shadow: 0 0 0 0 rgba(156, 163, 175, 0.7);
+	animation: pulse-gray 2s infinite;
+}
+
 @keyframes pulse-green {
 	0% {
 		transform: scale(0.95);
@@ -258,6 +317,21 @@ const formatDate = (dateStr: string) => {
 	100% {
 		transform: scale(0.95);
 		box-shadow: 0 0 0 0 rgba(248, 113, 113, 0);
+	}
+}
+
+@keyframes pulse-gray {
+	0% {
+		transform: scale(0.95);
+		box-shadow: 0 0 0 0 rgba(156, 163, 175, 0.7);
+	}
+	70% {
+		transform: scale(1);
+		box-shadow: 0 0 0 4px rgba(156, 163, 175, 0);
+	}
+	100% {
+		transform: scale(0.95);
+		box-shadow: 0 0 0 0 rgba(156, 163, 175, 0);
 	}
 }
 
