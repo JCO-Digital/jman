@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard from "../components/InfoCard.vue";
+import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
+import { useMonitorStore } from "../stores/monitor";
 
 const props = defineProps<{
 	id: string;
@@ -12,11 +14,25 @@ const props = defineProps<{
 
 const router = useRouter();
 const dataStore = useDataStore();
+const monitorStore = useMonitorStore();
 
 const siteId = parseInt(props.id, 10);
 const site = computed(() => dataStore.getSiteById(siteId));
+
+watch(
+	() => site.value?.domain,
+	(domain) => {
+		if (domain) {
+			monitorStore.fetchStatus(domain);
+		}
+	},
+	{ immediate: true },
+);
 const server = computed(() =>
 	site.value ? dataStore.getServerById(site.value.server_id) : null,
+);
+const history = computed(() =>
+	site.value ? monitorStore.historyByDomain.get(site.value.domain) || [] : [],
 );
 const sitePlugins = computed(() => {
 	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
@@ -82,6 +98,8 @@ const goToPlugin = (name: string) => {
 				title="Server Information"
 				:items="serverInfoItems"
 			/>
+
+			<MonitorHistoryCard :history="history" :domain="site.domain" />
 
 			<section class="card">
 				<h2>Installed Plugins ({{ sitePlugins.length }})</h2>

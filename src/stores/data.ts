@@ -10,6 +10,7 @@ import type {
 	EnrichedPlugin,
 } from "../types";
 import { useAuthStore } from "./auth";
+import { useMonitorStore } from "./monitor";
 
 const CACHE_KEY_SERVERS = "jman_servers";
 const CACHE_KEY_SITES = "jman_sites";
@@ -120,6 +121,7 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const enrichedSites = computed<EnrichedSite[]>(() => {
+		const monitorStore = useMonitorStore();
 		return sites.value.map((site) => {
 			return {
 				...site,
@@ -127,6 +129,7 @@ export const useDataStore = defineStore("data", () => {
 					serversByIdMap.value.get(site.server_id)?.name ?? "Unknown Server",
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
 				vulnerabilities: vulnerabilitiesBySiteId.value.get(site.id) || [],
+				monitorHistory: monitorStore.historyByDomain.get(site.domain) || [],
 			};
 		});
 	});
@@ -181,12 +184,15 @@ export const useDataStore = defineStore("data", () => {
 				...authStore.authHeader,
 			};
 
+			const monitorStore = useMonitorStore();
+
 			const [serversRes, sitesRes, pluginsRes, pluginInfoRes] =
 				await Promise.all([
 					fetch(`${BASE_URL}/servers`, { headers }),
 					fetch(`${BASE_URL}/sites`, { headers }),
 					fetch(`${BASE_URL}/plugins`, { headers }),
 					fetch(`${BASE_URL}/plugininfo`, { headers }),
+					monitorStore.fetchHistory(),
 				]);
 
 			// Fetch vulnerabilities separately to not block primary data
@@ -259,6 +265,9 @@ export const useDataStore = defineStore("data", () => {
 			const hasCache = loadFromCache();
 			if (!hasCache) {
 				await fetchFromApi();
+			} else {
+				const monitorStore = useMonitorStore();
+				await monitorStore.ensureHistory();
 			}
 		}
 	}
@@ -268,6 +277,8 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function getSiteById(id: number) {
+		const monitorStore = useMonitorStore();
+		monitorStore.ensureHistory();
 		return sitesByIdMap.value.get(id);
 	}
 
