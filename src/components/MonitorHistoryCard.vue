@@ -117,7 +117,9 @@ const formatDate = (dateStr: string) => {
 			</div>
 
 			<div class="timeline-labels">
-				<span>{{ formatDate(sortedHistory[0].first_seen) }}</span>
+				<span v-if="sortedHistory.length > 0">
+					{{ formatDate(sortedHistory[0]?.first_seen ?? "") }}
+				</span>
 				<span>Latest</span>
 			</div>
 		</div>
