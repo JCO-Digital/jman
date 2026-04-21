@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.9.2 (2026-04-21)
+### 1.9.3 (2026-04-21)
+
+#### Bug Fixes
+
+- timeline: render history blocks using duration-based flex-grow and ensure visibility (47fc639)
+
+### v1.9.2 (2026-04-21)
 
 #### Bug Fixes
 
