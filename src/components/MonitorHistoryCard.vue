@@ -59,10 +59,12 @@ const timelineData = computed(() => {
 			);
 			let durationMinutes = durationMs / MS_PER_MINUTE;
 
-			// Minimum visible size (approx 1.5 pixels on a standard container)
-			// if the record is within the 24h window
-			if (durationMinutes > 0 && durationMinutes < 2) {
-				durationMinutes = 2;
+			// Minimum visible size (approx a few pixels on most screens)
+			// if the record is within the 24h window.
+			// We give at least 5 minutes even to single-event records (0 duration)
+			// to ensure they are visible on the timeline.
+			if (durationMinutes < 5) {
+				durationMinutes = 5;
 			}
 
 			return {
@@ -86,7 +88,7 @@ const uptimePercentage = computed(() => {
 		0,
 	);
 	const upWidth = timelineData.value
-		.filter((item) => item.status === "UP")
+		.filter((item) => item.status.toUpperCase() === "UP")
 		.reduce((acc, item) => acc + item.width, 0);
 
 	if (totalWidth === 0) return 100;
@@ -94,7 +96,7 @@ const uptimePercentage = computed(() => {
 });
 
 const getStatusClass = (status: string) => {
-	return status.toLowerCase() === "up" ? "status-up" : "status-down";
+	return status.toUpperCase() === "UP" ? "status-up" : "status-down";
 };
 
 const formatDate = (date: string | Date | null) => {
