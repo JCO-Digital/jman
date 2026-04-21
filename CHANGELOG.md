@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.9.0 (2026-04-21)
+### 1.9.1 (2026-04-21)
+
+#### Bug Fixes
+
+- monitor: show tiny/zero-duration timeline items and make status checks case-insensitive (2b54626)
+
+## v1.9.0 (2026-04-21)
 
 #### Features
 
