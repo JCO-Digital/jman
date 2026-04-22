@@ -4,13 +4,19 @@
 
 ## How it Works
 
-The monitor reads the list of sites from the local `jman` cache. For each site, it:
+`jman-monitor` uses an intelligent state machine to balance low server load with high responsiveness to downtime.
 
-1. Performs an HTTP GET request to the site's domain.
-2. Tracks the success or failure of the request.
-3. Increments a failure counter if the site is unreachable or returns a non-2xx status code.
-4. Sends a Slack alert if the failure count reaches a configured threshold.
-5. Tracks state (failures and alert times) in the local SQLite database to avoid spamming alerts and provide historical data.
+### Monitoring States
+
+Each site exists in one of three modes:
+
+- **Normal Mode**: Sites are checked every 5 minutes. This is the default state.
+- **Investigation Mode**: Triggered by a single failure. The site is checked every minute until there are either 3 consecutive failures (transition to Alert) or 3 consecutive successes (transition to Normal).
+- **Alert Mode**: Triggered after 3 consecutive failures. The site is checked every minute to detect recovery as fast as possible. Slack alerts are sent at specific intervals (30-120 mins) while the site remains down.
+
+### Load Spreading
+
+When running in service mode, the monitor staggers (jitters) the initial checks for all sites over a 5-minute window on startup. This prevents "thundering herd" spikes where hundreds of sites are hit at the exact same second.
 
 ## Installation
 
@@ -23,18 +29,29 @@ make build
 
 ## Usage
 
-You can run a single check manually:
+### Service Mode (Recommended)
+
+To run as a continuous background process with the internal scheduler:
+
+```bash
+./bin/jman-monitor --service
+```
+
+This mode handles its own scheduling, staggering, and state transitions.
+
+### One-off Mode
+
+You can run a single check of all sites manually (useful for testing or legacy cron setups):
 
 ```bash
 ./bin/jman-monitor
 ```
 
-For continuous monitoring, it is recommended to run `jman-monitor` as a cron job or a systemd timer (e.g., every 5-15 minutes).
-
 ### Flags
 
-- `-v`, `--verbose`: Enable verbose output (shows failure counts and individual check results).
-- `-d`, `--debug`: Enable debug output (shows every site being checked).
+- `-s`, `--service`: Run as a continuous background service.
+- `-v`, `--verbose`: Enable verbose output (shows mode transitions and check results).
+- `-d`, `--debug`: Enable debug output (shows every request being made).
 
 ## Configuration
 
@@ -60,9 +77,26 @@ monitorTimeout = 15
 
 ## Alerting Logic
 
-- **Down Alert**: Sent when a site exceeds the `monitorThreshold`. After the initial alert, it will only re-alert once per hour if the site remains down.
-- **Recovery Alert**: Sent as soon as a site that was previously marked as "down" returns a successful 2xx status code.
-- **Concurrency**: The monitor checks up to 24 sites in parallel to ensure fast execution even for large site lists.
+- **Down Alert**: Sent when a site enters **Alert Mode** (after 3 consecutive failures).
+- **Repeated Alerts**: While a site is in Alert Mode, Slack notifications are repeated to prevent them from being forgotten:
+  - **500 Errors**: Every 30 minutes.
+  - **400 Errors**: Every 60 minutes.
+  - **Other Errors**: Every 120 minutes.
+- **Recovery Alert**: Sent as soon as a site in Alert Mode returns a successful 2xx status code. The site then transitions back to **Normal Mode**.
+- **Concurrency**: The monitor uses a worker pool of up to 24 concurrent goroutines to process checks.
+
+## Running as a Service (systemd)
+
+A systemd service file is provided in the repository. To install it:
+
+1. Copy the binary to `/usr/local/bin/jman-monitor`.
+2. Copy `jman-monitor.service` to `/etc/systemd/system/`.
+3. Reload and start:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl enable jman-monitor
+   sudo systemctl start jman-monitor
+   ```
 
 ## Ignored Sites Management
 

@@ -12,24 +12,35 @@ import (
 	"github.com/JCO-Digital/jman/internal/db"
 )
 
+const (
+	ModeNormal        = "normal"
+	ModeInvestigation = "investigation"
+	ModeAlert         = "alert"
+)
+
 const monitorStateFile = "monitor_state"
 
 var migrationOnce sync.Once
 
 // SiteStatus tracks the monitoring state for an individual site.
 type SiteStatus struct {
-	FailureCount  int       `json:"failure_count"`
-	LastAlertTime time.Time `json:"last_alert_time"`
-	IsDown        bool      `json:"is_down"`
-	Domain        string    `json:"-"`
+	Domain               string    `json:"domain"`
+	IsDown               bool      `json:"is_down"`
+	FailureCount         int       `json:"failure_count"`
+	ConsecutiveSuccesses int       `json:"consecutive_successes"`
+	CurrentMode          string    `json:"current_mode"`
+	LastAlertTime        time.Time `json:"last_alert_time"`
+	LastChecked          time.Time `json:"last_checked"`
+	NextCheckAt          time.Time `json:"next_check_at"`
 }
 
 // State represents the overall monitoring state for all sites.
 type State struct {
+	Mu    sync.RWMutex
 	Sites map[string]*SiteStatus `json:"sites"`
 }
 
-// LoadState reads the monitor state from the database, migrating from JSON if necessary.
+// LoadState reads the monitor state from the database.
 func LoadState() (*State, error) {
 	database := db.GetDB()
 	if database == nil {
@@ -44,7 +55,7 @@ func LoadState() (*State, error) {
 		Sites: make(map[string]*SiteStatus),
 	}
 
-	rows, err := database.Query("SELECT domain, failure_count, last_alert_time, is_down FROM monitor_status")
+	rows, err := database.Query("SELECT domain, is_down, failure_count, consecutive_successes, current_mode, last_alert_time, last_checked, next_check_at FROM monitor_status")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load monitor status: %w", err)
 	}
@@ -52,9 +63,18 @@ func LoadState() (*State, error) {
 
 	for rows.Next() {
 		var domain string
-		var lastAlertTime sql.NullTime
+		var lastAlertTime, lastChecked, nextCheckAt sql.NullTime
 		status := &SiteStatus{}
-		err := rows.Scan(&domain, &status.FailureCount, &lastAlertTime, &status.IsDown)
+		err := rows.Scan(
+			&domain,
+			&status.IsDown,
+			&status.FailureCount,
+			&status.ConsecutiveSuccesses,
+			&status.CurrentMode,
+			&lastAlertTime,
+			&lastChecked,
+			&nextCheckAt,
+		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
 		}
@@ -62,68 +82,105 @@ func LoadState() (*State, error) {
 		if lastAlertTime.Valid {
 			status.LastAlertTime = lastAlertTime.Time
 		}
+		if lastChecked.Valid {
+			status.LastChecked = lastChecked.Time
+		}
+		if nextCheckAt.Valid {
+			status.NextCheckAt = nextCheckAt.Time
+		}
 		state.Sites[domain] = status
 	}
 
 	return state, nil
 }
 
-// SaveState writes the current monitor state to the database.
+// SaveState writes the entire current monitor state to the database.
+// Note: In a long-running daemon, it is usually better to use SaveSiteStatus for incremental updates.
 func (s *State) SaveState() error {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	for _, status := range s.Sites {
+		if err := SaveSiteStatus(status); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SaveSiteStatus updates or inserts the status for a single site in the database.
+func SaveSiteStatus(status *SiteStatus) error {
 	database := db.GetDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	tx, err := database.Begin()
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
+	query := `
+		INSERT INTO monitor_status (
+			domain, is_down, failure_count, consecutive_successes,
+			current_mode, last_alert_time, last_checked, next_check_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(domain) DO UPDATE SET
+			is_down = excluded.is_down,
+			failure_count = excluded.failure_count,
+			consecutive_successes = excluded.consecutive_successes,
+			current_mode = excluded.current_mode,
+			last_alert_time = excluded.last_alert_time,
+			last_checked = excluded.last_checked,
+			next_check_at = excluded.next_check_at
+	`
 
-	// Sync the map to the database by clearing and re-inserting
-	_, err = tx.Exec("DELETE FROM monitor_status")
-	if err != nil {
-		return err
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO monitor_status (domain, failure_count, last_alert_time, is_down, last_checked) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	for domain, status := range s.Sites {
-		var lastAlertTime interface{}
-		if !status.LastAlertTime.IsZero() {
-			lastAlertTime = status.LastAlertTime
-		}
-		_, err = stmt.Exec(domain, status.FailureCount, lastAlertTime, status.IsDown)
-		if err != nil {
-			return err
-		}
+	var lastAlertTime interface{}
+	if !status.LastAlertTime.IsZero() {
+		lastAlertTime = status.LastAlertTime
 	}
 
-	return tx.Commit()
+	_, err := database.Exec(query,
+		status.Domain,
+		status.IsDown,
+		status.FailureCount,
+		status.ConsecutiveSuccesses,
+		status.CurrentMode,
+		lastAlertTime,
+		status.LastChecked,
+		status.NextCheckAt,
+	)
+
+	return err
 }
 
 // GetStatus returns the status for a given domain, creating it if it doesn't exist.
 func (s *State) GetStatus(domain string) *SiteStatus {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
 	if status, ok := s.Sites[domain]; ok {
 		return status
 	}
-	status := &SiteStatus{Domain: domain}
+	status := &SiteStatus{
+		Domain:      domain,
+		CurrentMode: ModeNormal,
+		NextCheckAt: time.Now(),
+	}
 	s.Sites[domain] = status
 	return status
 }
 
-// RemoveStatus deletes the status for a given domain.
+// RemoveStatus deletes the status for a given domain from both the state map and database.
 func (s *State) RemoveStatus(domain string) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
 	delete(s.Sites, domain)
+
+	database := db.GetDB()
+	if database != nil {
+		_, _ = database.Exec("DELETE FROM monitor_status WHERE domain = ?", domain)
+	}
 }
 
 // RecordHistory updates the history table with the current check result.
-func (s *State) RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
+func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
 	database := db.GetDB()
 	if database == nil {
 		return
@@ -159,9 +216,14 @@ func (s *State) RecordHistory(domain string, isUp bool, statusMsg string, errorC
 	}
 }
 
+// migrateMonitorState migrates from the old JSON state file if it exists.
 func migrateMonitorState(database *sql.DB) {
 	var state struct {
-		Sites map[string]*SiteStatus `json:"sites"`
+		Sites map[string]struct {
+			FailureCount  int       `json:"failure_count"`
+			LastAlertTime time.Time `json:"last_alert_time"`
+			IsDown        bool      `json:"is_down"`
+		} `json:"sites"`
 	}
 	err := cache.ReadJSONData(monitorStateFile, &state)
 	if err != nil {
@@ -170,15 +232,20 @@ func migrateMonitorState(database *sql.DB) {
 
 	log.Printf("Migrating monitor state to database...\n")
 
-	for domain, status := range state.Sites {
-		var lastAlertTime interface{}
-		if !status.LastAlertTime.IsZero() {
-			lastAlertTime = status.LastAlertTime
+	for domain, oldStatus := range state.Sites {
+		status := &SiteStatus{
+			Domain:        domain,
+			IsDown:        oldStatus.IsDown,
+			FailureCount:  oldStatus.FailureCount,
+			LastAlertTime: oldStatus.LastAlertTime,
+			CurrentMode:   ModeNormal,
+			NextCheckAt:   time.Now(),
 		}
-		_, err := database.Exec(
-			"INSERT OR REPLACE INTO monitor_status (domain, failure_count, last_alert_time, is_down) VALUES (?, ?, ?, ?)",
-			domain, status.FailureCount, lastAlertTime, status.IsDown,
-		)
+		if status.IsDown {
+			status.CurrentMode = ModeAlert
+		}
+
+		err := SaveSiteStatus(status)
 		if err != nil {
 			log.Printf("Warning: failed to migrate monitor status for %s: %v\n", domain, err)
 		}
