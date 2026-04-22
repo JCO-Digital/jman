@@ -6,6 +6,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/monitor"
 	"github.com/spf13/cobra"
 )
 
@@ -49,6 +50,9 @@ var monitorIgnoreCmd = &cobra.Command{
 		if len(args) > 1 {
 			reason = args[1]
 		}
+
+		// Check if the site is currently alerting and notify Slack
+		monitor.NotifyIfAlertingSiteIgnored(domain, reason)
 
 		if err := db.IgnoreSite(domain, reason); err != nil {
 			return err

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/monitor"
 )
 
 // MonitorHistoryHandler returns aggregated history from monitor_history.
@@ -87,6 +88,9 @@ func IgnoredSitesHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusBadRequest, "Domain is required")
 			return
 		}
+
+		// Check if the site is currently alerting and notify Slack
+		monitor.NotifyIfAlertingSiteIgnored(req.Domain, req.Reason)
 
 		if err := db.IgnoreSite(req.Domain, req.Reason); err != nil {
 			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to ignore site: %v", err))
