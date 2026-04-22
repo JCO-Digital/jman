@@ -20,7 +20,10 @@ const (
 
 const monitorStateFile = "monitor_state"
 
-var migrationOnce sync.Once
+var (
+	migrationOnce sync.Once
+	writeMu       sync.Mutex
+)
 
 // SiteStatus tracks the monitoring state for an individual site.
 type SiteStatus struct {
@@ -110,6 +113,9 @@ func (s *State) SaveState() error {
 
 // SaveSiteStatus updates or inserts the status for a single site in the database.
 func SaveSiteStatus(status *SiteStatus) error {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+
 	database := db.GetDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
@@ -175,12 +181,17 @@ func (s *State) RemoveStatus(domain string) {
 
 	database := db.GetDB()
 	if database != nil {
+		writeMu.Lock()
+		defer writeMu.Unlock()
 		_, _ = database.Exec("DELETE FROM monitor_status WHERE domain = ?", domain)
 	}
 }
 
 // RecordHistory updates the history table with the current check result.
 func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
+	writeMu.Lock()
+	defer writeMu.Unlock()
+
 	database := db.GetDB()
 	if database == nil {
 		return

@@ -38,6 +38,10 @@ func Init() error {
 			return
 		}
 
+		// Limit to a single connection to avoid "database is locked" errors.
+		// SQLite works best with a single connection when performing concurrent writes.
+		db.SetMaxOpenConns(1)
+
 		// Set pragmas for better concurrency and reliability.
 		// WAL mode allows multiple readers and one writer simultaneously.
 		// Busy timeout ensures it retries before failing with SQLITE_BUSY.
