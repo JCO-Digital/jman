@@ -2,13 +2,31 @@ package monitor
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
+
+// NotifyIfAlertingSiteIgnored sends a Slack message if a site that is in Alert Mode is ignored.
+func NotifyIfAlertingSiteIgnored(domain, reason string) {
+	inAlert, err := db.IsSiteInAlertMode(domain)
+	if err != nil || !inAlert {
+		return
+	}
+
+	slackChannel := config.Cfg.SlackMonitorChannel
+	if slackChannel == "" {
+		slackChannel = config.Cfg.SlackChannel
+	}
+
+	msg := fmt.Sprintf("⏸️ Monitoring for site %s has been PAUSED (site was in Alert Mode). Reason: %s", domain, reason)
+	_ = slack.SendMessageToChannel(msg, slackChannel, true)
+}
 
 // Run is the legacy entry point that performs a one-off check.
 // In the future, this might be changed to start the service depending on flags.
