@@ -119,11 +119,14 @@ func initSchema() error {
 		{
 			Name: "monitor_status",
 			Columns: map[string]string{
-				"domain":          "TEXT PRIMARY KEY",
-				"is_down":         "BOOLEAN DEFAULT 0",
-				"failure_count":   "INTEGER DEFAULT 0",
-				"last_alert_time": "DATETIME",
-				"last_checked":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"domain":                "TEXT PRIMARY KEY",
+				"is_down":               "BOOLEAN DEFAULT 0",
+				"failure_count":         "INTEGER DEFAULT 0",
+				"consecutive_successes": "INTEGER DEFAULT 0",
+				"current_mode":          "TEXT DEFAULT 'normal'",
+				"last_alert_time":       "DATETIME",
+				"last_checked":          "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"next_check_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
 		{

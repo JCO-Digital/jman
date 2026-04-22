@@ -1,9 +1,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -14,6 +17,7 @@ import (
 var (
 	flagVerbose bool
 	flagDebug   bool
+	flagService bool
 )
 
 func main() {
@@ -22,6 +26,8 @@ func main() {
 	flag.BoolVar(&flagVerbose, "v", false, "Enable verbose output (shorthand)")
 	flag.BoolVar(&flagDebug, "debug", false, "Enable debug output")
 	flag.BoolVar(&flagDebug, "d", false, "Enable debug output (shorthand)")
+	flag.BoolVar(&flagService, "service", false, "Run as a continuous service")
+	flag.BoolVar(&flagService, "s", false, "Run as a continuous service (shorthand)")
 	flag.Parse()
 
 	// Set verbosity
@@ -46,9 +52,22 @@ func main() {
 	}
 	defer db.Close()
 
-	// Run monitor
-	if err := monitor.Run(); err != nil {
-		verb.Printf(verb.Normal, "%v\n", err)
-		os.Exit(1)
+	if flagService {
+		// Run as service with graceful shutdown
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+
+		verb.LogPrintf(verb.Normal, "jman-monitor service starting...\n")
+		if err := monitor.RunService(ctx); err != nil && err != context.Canceled {
+			verb.Printf(verb.Normal, "Service error: %v\n", err)
+			os.Exit(1)
+		}
+		verb.LogPrintf(verb.Normal, "jman-monitor service stopped.\n")
+	} else {
+		// Run once (legacy/manual mode)
+		if err := monitor.RunOnce(); err != nil {
+			verb.Printf(verb.Normal, "%v\n", err)
+			os.Exit(1)
+		}
 	}
 }
