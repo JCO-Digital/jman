@@ -48,7 +48,12 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 	statusMsg := ""
 	errorCode := 0
 
-	req, err := http.NewRequest(http.MethodGet, "https://"+domain, nil)
+	url := "https://" + domain
+	if config.Cfg.MonitorCacheBypass {
+		url += fmt.Sprintf("?jman_cache_bypass=%d", time.Now().UnixNano())
+	}
+
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err == nil {
 		utils.SetStandardHeaders(req)
 		resp, errDo := e.client.Do(req)

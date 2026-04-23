@@ -57,13 +57,14 @@ You can run a single check of all sites manually (useful for testing or legacy c
 
 `jman-monitor` shares the configuration file with `jman` (typically `~/.config/jman/config.toml`).
 
-| Key                   | Default        | Description                                             |
-| :-------------------- | :------------- | :------------------------------------------------------ |
-| `slackToken`          | -              | Your Slack Bot User OAuth Token.                        |
-| `slackMonitorChannel` | `slackChannel` | The Slack channel to send monitoring alerts to.         |
-| `monitorThreshold`    | `3`            | Number of consecutive failures before sending an alert. |
-| `monitorTimeout`      | `10`           | Timeout in seconds for each HTTP check.                 |
-| `ignoreSites`         | `[]`           | (Deprecated) List of domains to skip. Migrated to DB.   |
+| Key                   | Default        | Description                                                   |
+| :-------------------- | :------------- | :------------------------------------------------------------ |
+| `slackToken`          | -              | Your Slack Bot User OAuth Token.                              |
+| `slackMonitorChannel` | `slackChannel` | The Slack channel to send monitoring alerts to.               |
+| `monitorThreshold`    | `3`            | Number of consecutive failures before sending an alert.       |
+| `monitorTimeout`      | `10`           | Timeout in seconds for each HTTP check.                       |
+| `monitorCacheBypass`  | `false`        | Enable frontend cache bypass (adds a random query parameter). |
+| `ignoreSites`         | `[]`           | (Deprecated) List of domains to skip. Migrated to DB.         |
 
 Example `config.toml` snippet:
 
@@ -72,6 +73,7 @@ slackToken = "xoxb-your-token"
 slackMonitorChannel = "#ops-alerts"
 monitorThreshold = 5
 monitorTimeout = 15
+monitorCacheBypass = true
 # ignoreSites = ["dev.example.com", "staging.example.com"] # Now managed via CLI/API
 ```
 

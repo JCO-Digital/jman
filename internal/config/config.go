@@ -30,6 +30,7 @@ type AppConfig struct {
 	SlackMonitorChannel string            `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
 	MonitorThreshold    int               `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
 	MonitorTimeout      int               `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
+	MonitorCacheBypass  bool              `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
 	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
@@ -67,6 +68,7 @@ func loadConfig() error {
 	viper.SetDefault("slackChannel", "#testing")
 	viper.SetDefault("monitorThreshold", 3)
 	viper.SetDefault("monitorTimeout", 10)
+	viper.SetDefault("monitorCacheBypass", false)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
 	viper.SetDefault("allowedOrigins", []string{"*"})
@@ -92,6 +94,7 @@ func loadConfig() error {
 		"slackMonitorChannel": "SLACKMONITORCHANNEL",
 		"monitorThreshold":    "MONITORTHRESHOLD",
 		"monitorTimeout":      "MONITORTIMEOUT",
+		"monitorCacheBypass":  "MONITORCACHEBYPASS",
 		"cvssThreshold":       "CVSSTHRESHOLD",
 		"vulnThreshold":       "VULNTHRESHOLD",
 		"allowedOrigins":      "ALLOWEDORIGINS",
