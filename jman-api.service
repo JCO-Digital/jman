@@ -1,0 +1,26 @@
+[Unit]
+Description=jman REST API Service
+After=network.target
+
+[Service]
+Type=simple
+# Ensure the path matches your installation location
+ExecStart=/usr/local/bin/jman-api
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Configuration via Environment Variables
+# Environment=JMAN_API_PORT=8080
+# Environment=JMAN_TOKENSPINUP=your_token_here
+
+# Optional: Run as a specific user
+# User=jman
+# Group=jman
+
+# Optional: Set working directory if needed for config loading
+# WorkingDirectory=/opt/jman
+
+[Install]
+WantedBy=multi-user.target
