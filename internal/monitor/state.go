@@ -87,6 +87,13 @@ func LoadState() (*State, error) {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
 		}
 		status.Domain = domain
+
+		// Normalize mode based on is_down status to ensure continuity after migration.
+		// If a site is marked as down, it must be in Alert mode.
+		if status.IsDown && status.CurrentMode != ModeAlert {
+			status.CurrentMode = ModeAlert
+		}
+
 		if lastAlertTime.Valid {
 			status.LastAlertTime = lastAlertTime.Time
 		}
