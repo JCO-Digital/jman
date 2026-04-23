@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -64,6 +65,13 @@ func RunOnce() error {
 		return err
 	}
 
+	// Fetch ignored domains
+	ignoredDomains, err := db.GetIgnoredDomains()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites from database: %v\n", err)
+		ignoredDomains = make(map[string]bool)
+	}
+
 	verb.LogPrintf(verb.Normal, "Monitoring %d sites (one-off mode)...\n", len(sites))
 
 	var wg sync.WaitGroup
@@ -74,6 +82,12 @@ func RunOnce() error {
 
 	for _, site := range sites {
 		activeDomains[site.Domain] = true
+
+		if ignoredDomains[strings.ToLower(site.Domain)] {
+			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
+			continue
+		}
+
 		status := state.GetStatus(site.Domain)
 
 		wg.Add(1)
