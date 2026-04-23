@@ -1,3 +1,12 @@
+# [4.24.0](https://github.com/JCO-Digital/jman/compare/v4.23.1...v4.24.0) (2026-04-23)
+
+
+### Features
+
+* **monitor:** add monitorCacheBypass option to bypass frontend caches ([3322275](https://github.com/JCO-Digital/jman/commit/3322275d8c2d7f4128c6637fef2fe44ec07ba744))
+
+
+
 ## [4.23.1](https://github.com/JCO-Digital/jman/compare/v4.23.0...v4.23.1) (2026-04-23)
 
 
@@ -45,20 +54,6 @@
 ### Bug Fixes
 
 * **update:** treat empty response as yes and show [Y/n] prompts ([77b3d75](https://github.com/JCO-Digital/jman/commit/77b3d756335a83788d33a696722f28ff1982b4d9))
-
-
-
-# [4.21.0](https://github.com/JCO-Digital/jman/compare/v4.20.2...v4.21.0) (2026-04-20)
-
-
-### Bug Fixes
-
-* **api:** add security headers middleware and add timeouts to HTTP ([dacfa29](https://github.com/JCO-Digital/jman/commit/dacfa293d1560413d208be9dfdfafef8f6918e17))
-
-
-### Features
-
-* add configurable CORS, HTTP client utils, and SQL identifier ([1b7376c](https://github.com/JCO-Digital/jman/commit/1b7376c54347acf08c528d3ff5ac6e8cb876d5dc))
 
 
 
