@@ -13,7 +13,7 @@ func GetSiteMode(domain string) (string, error) {
 	}
 
 	var mode string
-	query := `SELECT current_mode FROM monitor_status WHERE domain = ?`
+	query := `SELECT current_mode FROM monitor_status WHERE domain = LOWER(?)`
 	err := db.QueryRow(query, domain).Scan(&mode)
 	if err != nil {
 		if err == sql.ErrNoRows {

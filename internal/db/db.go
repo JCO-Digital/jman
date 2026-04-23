@@ -123,7 +123,7 @@ func initSchema() error {
 		{
 			Name: "monitor_status",
 			Columns: map[string]string{
-				"domain":                "TEXT PRIMARY KEY",
+				"domain":                "TEXT PRIMARY KEY COLLATE NOCASE",
 				"is_down":               "BOOLEAN DEFAULT 0",
 				"failure_count":         "INTEGER DEFAULT 0",
 				"consecutive_successes": "INTEGER DEFAULT 0",
@@ -137,7 +137,7 @@ func initSchema() error {
 			Name: "monitor_history",
 			Columns: map[string]string{
 				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"domain":     "TEXT",
+				"domain":     "TEXT COLLATE NOCASE",
 				"status":     "TEXT",
 				"error_code": "INTEGER",
 				"first_seen": "DATETIME DEFAULT CURRENT_TIMESTAMP",
@@ -148,7 +148,7 @@ func initSchema() error {
 		{
 			Name: "monitor_ignored_sites",
 			Columns: map[string]string{
-				"domain":     "TEXT PRIMARY KEY",
+				"domain":     "TEXT PRIMARY KEY COLLATE NOCASE",
 				"reason":     "TEXT",
 				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
@@ -157,7 +157,7 @@ func initSchema() error {
 			Name: "monitor_ignored_history",
 			Columns: map[string]string{
 				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"domain":     "TEXT",
+				"domain":     "TEXT COLLATE NOCASE",
 				"action":     "TEXT",
 				"reason":     "TEXT",
 				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",

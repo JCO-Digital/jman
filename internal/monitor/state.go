@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,7 +133,7 @@ func SaveSiteStatus(status *SiteStatus) error {
 
 	// Lock the status to get a consistent snapshot of the data
 	status.Mu.Lock()
-	domain := status.Domain
+	domain := strings.ToLower(status.Domain)
 	isDown := status.IsDown
 	failureCount := status.FailureCount
 	consecutiveSuccesses := status.ConsecutiveSuccesses
@@ -182,6 +183,7 @@ func SaveSiteStatus(status *SiteStatus) error {
 
 // GetStatus returns the status for a given domain, creating it if it doesn't exist.
 func (s *State) GetStatus(domain string) *SiteStatus {
+	domain = strings.ToLower(domain)
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
@@ -199,6 +201,7 @@ func (s *State) GetStatus(domain string) *SiteStatus {
 
 // RemoveStatus deletes the status for a given domain from both the state map and database.
 func (s *State) RemoveStatus(domain string) {
+	domain = strings.ToLower(domain)
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
@@ -214,6 +217,7 @@ func (s *State) RemoveStatus(domain string) {
 
 // RecordHistory updates the history table with the current check result.
 func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
+	domain = strings.ToLower(domain)
 	database := db.GetDB()
 	if database == nil {
 		return

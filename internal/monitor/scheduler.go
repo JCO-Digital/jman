@@ -3,6 +3,7 @@ package monitor
 import (
 	"context"
 	"math/rand"
+	"strings"
 	"sync"
 	"time"
 
@@ -100,7 +101,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 			now := time.Now()
 			s.state.Mu.RLock()
 			for _, status := range s.state.Sites {
-				if ignoredDomains[status.Domain] {
+				if ignoredDomains[strings.ToLower(status.Domain)] {
 					continue
 				}
 

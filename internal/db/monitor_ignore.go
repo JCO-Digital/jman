@@ -39,7 +39,7 @@ func IsSiteIgnored(domain string) (bool, error) {
 	}
 
 	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM monitor_ignored_sites WHERE domain = ?)`
+	query := `SELECT EXISTS(SELECT 1 FROM monitor_ignored_sites WHERE domain = LOWER(?))`
 	err := db.QueryRow(query, domain).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("failed to check if site is ignored: %w", err)
@@ -54,7 +54,7 @@ func GetIgnoredDomains() (map[string]bool, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT domain FROM monitor_ignored_sites`
+	query := `SELECT LOWER(domain) FROM monitor_ignored_sites`
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query ignored domains: %w", err)
@@ -88,7 +88,7 @@ func IgnoreSite(domain, reason string) error {
 	// Insert or update the ignored site
 	_, err = tx.Exec(`
 		INSERT INTO monitor_ignored_sites (domain, reason)
-		VALUES (?, ?)
+		VALUES (LOWER(?), ?)
 		ON CONFLICT(domain) DO UPDATE SET
 			reason = excluded.reason,
 			created_at = CURRENT_TIMESTAMP
@@ -123,7 +123,7 @@ func UnignoreSite(domain string) error {
 	defer tx.Rollback()
 
 	// Delete from ignored sites
-	res, err := tx.Exec(`DELETE FROM monitor_ignored_sites WHERE domain = ?`, domain)
+	res, err := tx.Exec(`DELETE FROM monitor_ignored_sites WHERE domain = LOWER(?)`, domain)
 	if err != nil {
 		return fmt.Errorf("failed to unignore site %s: %w", domain, err)
 	}
