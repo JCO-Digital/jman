@@ -64,6 +64,11 @@ func (s *Scheduler) Run(ctx context.Context) error {
 					if err := s.engine.CheckSite(status); err != nil {
 						verb.LogPrintf(verb.Normal, "Error checking site %s: %v\n", status.Domain, err)
 					}
+
+					// Clear in-flight status after processing
+					status.Mu.Lock()
+					status.InFlight = false
+					status.Mu.Unlock()
 				}
 			}
 		}()
@@ -99,13 +104,24 @@ func (s *Scheduler) Run(ctx context.Context) error {
 					continue
 				}
 
-				if now.After(status.NextCheckAt) {
+				status.Mu.Lock()
+				isDue := now.After(status.NextCheckAt)
+				alreadyInFlight := status.InFlight
+				if isDue && !alreadyInFlight {
+					status.InFlight = true
+				}
+				status.Mu.Unlock()
+
+				if isDue && !alreadyInFlight {
 					// Queue the check if the worker pool is not full
 					select {
 					case jobs <- status:
 						// Site queued for check
 					default:
-						// Pool is busy; it will be tried again in the next tick
+						// Pool is busy; reset in-flight status so it can be tried again
+						status.Mu.Lock()
+						status.InFlight = false
+						status.Mu.Unlock()
 						verb.LogPrintf(verb.Debug, "Worker pool full, skipping %s for this tick\n", status.Domain)
 					}
 				}
@@ -129,11 +145,13 @@ func (s *Scheduler) refreshSites(applyJitter bool) error {
 		status := s.state.GetStatus(site.Domain)
 
 		// Jitter check times on startup or for new sites
+		status.Mu.Lock()
 		if applyJitter || status.NextCheckAt.IsZero() {
 			// Spread initial checks over a 5-minute window
 			jitter := time.Duration(rand.Intn(300)) * time.Second
 			status.NextCheckAt = time.Now().Add(jitter)
 		}
+		status.Mu.Unlock()
 	}
 
 	// Cleanup stale sites (those in status state but no longer in the cache)

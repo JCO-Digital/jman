@@ -37,8 +37,12 @@ func NewEngine() *Engine {
 
 // CheckSite performs a health check on a single site and updates its status based on the state machine logic.
 func (e *Engine) CheckSite(status *SiteStatus) error {
+	status.Mu.Lock()
 	domain := status.Domain
-	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", domain, status.CurrentMode)
+	currentMode := status.CurrentMode
+	status.Mu.Unlock()
+
+	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", domain, currentMode)
 
 	isUp := false
 	statusMsg := ""
@@ -67,6 +71,7 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 	RecordHistory(domain, isUp, statusMsg, errorCode)
 
 	// State transition logic
+	status.Mu.Lock()
 	oldMode := status.CurrentMode
 	status.LastChecked = time.Now()
 
@@ -130,28 +135,31 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 	}
 
 	status.NextCheckAt = time.Now().Add(nextInterval)
+	newMode := status.CurrentMode
+	status.Mu.Unlock()
 
 	if msgToSend != "" {
 		verb.LogPrintf(verb.Normal, "%s\n", msgToSend)
 		err := slack.SendMessageToChannel(msgToSend, e.slackChannel, true)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", domain, err)
-		} else {
-			// Update alert time if we sent an alert message
-			if !isUp {
-				status.LastAlertTime = time.Now()
-			}
+		} else if !isUp {
+			// Update alert time if we sent an alert message and site is down
+			status.Mu.Lock()
+			status.LastAlertTime = time.Now()
+			status.Mu.Unlock()
 		}
 	}
 
-	if oldMode != status.CurrentMode {
-		verb.LogPrintf(verb.Verbose, "Site %s transitioned from %s to %s\n", domain, oldMode, status.CurrentMode)
+	if oldMode != newMode {
+		verb.LogPrintf(verb.Verbose, "Site %s transitioned from %s to %s\n", domain, oldMode, newMode)
 	}
 
 	return SaveSiteStatus(status)
 }
 
 // shouldRepeatAlert determines if enough time has passed to send another alert for a down site.
+// Note: This is called within CheckSite while status.Mu is held.
 func (e *Engine) shouldRepeatAlert(status *SiteStatus, errorCode int) bool {
 	if status.LastAlertTime.IsZero() {
 		return true

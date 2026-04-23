@@ -22,11 +22,16 @@ const monitorStateFile = "monitor_state"
 
 var (
 	migrationOnce sync.Once
-	writeMu       sync.Mutex
+	// globalWriteMu ensures that only one database write operation happens at a time,
+	// which is critical for SQLite stability in concurrent environments.
+	globalWriteMu sync.Mutex
 )
 
 // SiteStatus tracks the monitoring state for an individual site.
 type SiteStatus struct {
+	Mu       sync.Mutex `json:"-"`
+	InFlight bool       `json:"-"`
+
 	Domain               string    `json:"domain"`
 	IsDown               bool      `json:"is_down"`
 	FailureCount         int       `json:"failure_count"`
@@ -98,7 +103,6 @@ func LoadState() (*State, error) {
 }
 
 // SaveState writes the entire current monitor state to the database.
-// Note: In a long-running daemon, it is usually better to use SaveSiteStatus for incremental updates.
 func (s *State) SaveState() error {
 	s.Mu.RLock()
 	defer s.Mu.RUnlock()
@@ -112,13 +116,28 @@ func (s *State) SaveState() error {
 }
 
 // SaveSiteStatus updates or inserts the status for a single site in the database.
+// It handles its own synchronization for both the SiteStatus object and the database.
 func SaveSiteStatus(status *SiteStatus) error {
-	writeMu.Lock()
-	defer writeMu.Unlock()
-
 	database := db.GetDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
+	}
+
+	// Lock the status to get a consistent snapshot of the data
+	status.Mu.Lock()
+	domain := status.Domain
+	isDown := status.IsDown
+	failureCount := status.FailureCount
+	consecutiveSuccesses := status.ConsecutiveSuccesses
+	currentMode := status.CurrentMode
+	lastAlertTimeVal := status.LastAlertTime
+	lastChecked := status.LastChecked
+	nextCheckAt := status.NextCheckAt
+	status.Mu.Unlock()
+
+	var lastAlertTime interface{}
+	if !lastAlertTimeVal.IsZero() {
+		lastAlertTime = lastAlertTimeVal
 	}
 
 	query := `
@@ -136,20 +155,19 @@ func SaveSiteStatus(status *SiteStatus) error {
 			next_check_at = excluded.next_check_at
 	`
 
-	var lastAlertTime interface{}
-	if !status.LastAlertTime.IsZero() {
-		lastAlertTime = status.LastAlertTime
-	}
+	// Ensure serialized writes to the database
+	globalWriteMu.Lock()
+	defer globalWriteMu.Unlock()
 
 	_, err := database.Exec(query,
-		status.Domain,
-		status.IsDown,
-		status.FailureCount,
-		status.ConsecutiveSuccesses,
-		status.CurrentMode,
+		domain,
+		isDown,
+		failureCount,
+		consecutiveSuccesses,
+		currentMode,
 		lastAlertTime,
-		status.LastChecked,
-		status.NextCheckAt,
+		lastChecked,
+		nextCheckAt,
 	)
 
 	return err
@@ -181,17 +199,14 @@ func (s *State) RemoveStatus(domain string) {
 
 	database := db.GetDB()
 	if database != nil {
-		writeMu.Lock()
-		defer writeMu.Unlock()
+		globalWriteMu.Lock()
+		defer globalWriteMu.Unlock()
 		_, _ = database.Exec("DELETE FROM monitor_status WHERE domain = ?", domain)
 	}
 }
 
 // RecordHistory updates the history table with the current check result.
 func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
-	writeMu.Lock()
-	defer writeMu.Unlock()
-
 	database := db.GetDB()
 	if database == nil {
 		return
@@ -205,6 +220,9 @@ func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
 			statusText = "DOWN"
 		}
 	}
+
+	globalWriteMu.Lock()
+	defer globalWriteMu.Unlock()
 
 	// Check latest history record for this domain
 	var lastID int
