@@ -25,7 +25,9 @@ func NotifyIfAlertingSiteIgnored(domain, reason string) {
 	}
 
 	msg := fmt.Sprintf("⏸️ Monitoring for site %s has been PAUSED (site was in Alert Mode). Reason: %s", domain, reason)
-	_ = slack.SendMessageToChannel(msg, slackChannel, true)
+	if err := slack.SendMessageToChannel(msg, slackChannel, true); err != nil {
+		verb.LogPrintf(verb.Debug, "Failed to send ignored alerting site notification for %s to Slack channel %s: %v\n", domain, slackChannel, err)
+	}
 }
 
 // Run is the legacy entry point that performs a one-off check.
