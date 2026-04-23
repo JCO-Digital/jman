@@ -1,3 +1,12 @@
+## [4.23.1](https://github.com/JCO-Digital/jman/compare/v4.23.0...v4.23.1) (2026-04-23)
+
+
+### Bug Fixes
+
+* **db:** enforce case-insensitive domain handling ([0e3f8f5](https://github.com/JCO-Digital/jman/commit/0e3f8f53ce82c72f9799a7f30efa153eec8e160a))
+
+
+
 # [4.23.0](https://github.com/JCO-Digital/jman/compare/v4.22.0...v4.23.0) (2026-04-23)
 
 
@@ -50,15 +59,6 @@
 ### Features
 
 * add configurable CORS, HTTP client utils, and SQL identifier ([1b7376c](https://github.com/JCO-Digital/jman/commit/1b7376c54347acf08c528d3ff5ac6e8cb876d5dc))
-
-
-
-## [4.20.2](https://github.com/JCO-Digital/jman/compare/v4.20.1...v4.20.2) (2026-04-16)
-
-
-### Bug Fixes
-
-* set SQLite pragmas and avoid holding lock while sending Slack ([cfa6a66](https://github.com/JCO-Digital/jman/commit/cfa6a6602186d19aeadaea7d9b76bebe6aa73580))
 
 
 
