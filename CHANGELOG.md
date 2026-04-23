@@ -1,3 +1,21 @@
+# [4.23.0](https://github.com/JCO-Digital/jman/compare/v4.22.0...v4.23.0) (2026-04-23)
+
+
+### Bug Fixes
+
+* **db:** limit SQLite connections and serialize writes to avoid ([84fdf62](https://github.com/JCO-Digital/jman/commit/84fdf62ba73d24b38d747a6993d87d8417a4bd24))
+* **monitor:** add synchronization and in-flight tracking for site checks ([8934a61](https://github.com/JCO-Digital/jman/commit/8934a61f53955836699d8e328b5c4282b33440ba))
+* **monitor:** Log error on failed slack send. ([2a4f4ea](https://github.com/JCO-Digital/jman/commit/2a4f4ea21936e96d1ca181e8315ae8dbef6d0432))
+* **monitor:** normalize mode to Alert for sites marked down on load ([abeddae](https://github.com/JCO-Digital/jman/commit/abeddae797e82444bec0fa5e871f9abfafe8fef8))
+
+
+### Features
+
+* **monitor:** add stateful monitoring engine, scheduler, and systemd ([c1ef84e](https://github.com/JCO-Digital/jman/commit/c1ef84e5d92068d40bf48c863004ac4d5dec2287))
+* **monitor:** notify Slack when ignoring a site in alert mode ([15d36c5](https://github.com/JCO-Digital/jman/commit/15d36c549f3f76b6dfeb5257113be57466d74800))
+
+
+
 # [4.22.0](https://github.com/JCO-Digital/jman/compare/v4.21.1...v4.22.0) (2026-04-21)
 
 
@@ -41,20 +59,6 @@
 ### Bug Fixes
 
 * set SQLite pragmas and avoid holding lock while sending Slack ([cfa6a66](https://github.com/JCO-Digital/jman/commit/cfa6a6602186d19aeadaea7d9b76bebe6aa73580))
-
-
-
-## [4.20.1](https://github.com/JCO-Digital/jman/compare/v4.20.0...v4.20.1) (2026-04-15)
-
-
-### Bug Fixes
-
-* **fetch:** handle API errors and non-JSON responses when fetching ([99832a2](https://github.com/JCO-Digital/jman/commit/99832a28825a232332481d1d8d7390a2438dc0bb))
-
-
-### Performance Improvements
-
-* **cache:** reduce concurrency limit for plugin cache refresh to 12 ([21c8b26](https://github.com/JCO-Digital/jman/commit/21c8b26e6b85252c4df10a106d728c600fba8b55))
 
 
 
