@@ -1,3 +1,12 @@
+# [4.25.0](https://github.com/JCO-Digital/jman/compare/v4.24.0...v4.25.0) (2026-04-24)
+
+
+### Features
+
+* **update:** add signed releases and client-side signature verification ([3b6e8b1](https://github.com/JCO-Digital/jman/commit/3b6e8b15ef6339c76b85df4d90462bbf27d6807c))
+
+
+
 # [4.24.0](https://github.com/JCO-Digital/jman/compare/v4.23.1...v4.24.0) (2026-04-23)
 
 
@@ -45,15 +54,6 @@
 ### Features
 
 * **monitor:** add DB-backed monitoring API, ignore list, and CLI ([30624b3](https://github.com/JCO-Digital/jman/commit/30624b3af275a54f75f95c0c75f7e4a7a3594985))
-
-
-
-## [4.21.1](https://github.com/JCO-Digital/jman/compare/v4.21.0...v4.21.1) (2026-04-20)
-
-
-### Bug Fixes
-
-* **update:** treat empty response as yes and show [Y/n] prompts ([77b3d75](https://github.com/JCO-Digital/jman/commit/77b3d756335a83788d33a696722f28ff1982b4d9))
 
 
 
