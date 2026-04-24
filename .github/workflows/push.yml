@@ -33,11 +33,17 @@ jobs:
         if: steps.changelog.outputs.skipped == 'false'
         run: make build
 
+      - name: Sign Binaries
+        if: steps.changelog.outputs.skipped == 'false'
+        env:
+          MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
+        run: go run cmd/sign-binaries/main.go bin/jman bin/jman-api bin/jman-monitor
+
       - name: Create Release
         if: steps.changelog.outputs.skipped == 'false'
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "bin/jman,bin/jman-api,bin/jman-monitor"
+          artifacts: "bin/jman,bin/jman-api,bin/jman-monitor,bin/jman.minisig,bin/jman-api.minisig,bin/jman-monitor.minisig"
           tag: ${{ steps.changelog.outputs.tag }}
           name: ${{ steps.changelog.outputs.tag }}
           body: ${{ steps.changelog.outputs.clean_changelog }}
