@@ -12,7 +12,7 @@ import (
 var (
 	forceFetch bool
 	fetchCmd   = &cobra.Command{
-		Use:   "fetch",
+		Use:   "fetch [servers|sites|plugins|vulns|info|basic|all]",
 		Short: "Fetch latest data from SpinupWP and update local cache.",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
