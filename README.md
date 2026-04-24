@@ -54,6 +54,19 @@ If you prefer building locally, clone the repository and build with the projectâ
 
 If you don't use `make install`, the compiled binary will be generated at `./bin/jman`.
 
+## Security & Updates
+
+To ensure the integrity of the tool, all official `jman` releases and sidecar binaries are signed using Ed25519 signatures.
+
+When you run `jman update`, the tool automatically:
+
+1. Checks for a new version and its corresponding signature file (`.minisig`).
+2. Downloads the new binary to a temporary location.
+3. Verifies the signature against a hardcoded public key.
+4. Only replaces the current binary if the signature is valid.
+
+This prevents unauthorized or tampered binaries from being installed via the update mechanism.
+
 ### Prerequisites
 
 - SSH access configured for your SpinupWP servers.
@@ -112,6 +125,7 @@ jman fetch
 | `inactive` | List sites that don't have an active MainWP Child connection.                   |
 | `mainwp`   | Install and configure MainWP on sites.                                          |
 | `vuln`     | Scan for plugin vulnerabilities across all sites.                               |
+| `update`   | Check for and install updates for `jman` or its sidecar binaries.               |
 
 ### Examples
 
