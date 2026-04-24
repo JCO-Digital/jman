@@ -19,7 +19,7 @@ var coreCmd = &cobra.Command{
 			return []string{"check", "update", "version"}, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			sites, err := search.SearchSites(toComplete)
+			sites, err := search.SearchSitesFast(toComplete)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
