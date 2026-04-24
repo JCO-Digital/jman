@@ -43,7 +43,7 @@ var updateCmd = &cobra.Command{
 			checkVersion = "v0.0.0"
 		}
 
-		latestVersion, releaseURL, available, err := update.CheckForUpdate(checkVersion, component)
+		latestVersion, releaseURL, sigURL, available, err := update.CheckForUpdate(checkVersion, component)
 		if err != nil {
 			return fmt.Errorf("failed to check for updates: %w", err)
 		}
@@ -89,7 +89,7 @@ var updateCmd = &cobra.Command{
 		}
 
 		fmt.Printf("\n%s...\n", verb.Cyan("Downloading"))
-		if err := update.DownloadAndReplace(releaseURL, component); err != nil {
+		if err := update.DownloadAndReplace(releaseURL, sigURL, component); err != nil {
 			return fmt.Errorf("update failed: %w", err)
 		}
 

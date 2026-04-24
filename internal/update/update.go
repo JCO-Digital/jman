@@ -1,12 +1,15 @@
 package update
 
 import (
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -77,59 +80,62 @@ type Asset struct {
 }
 
 // CheckForUpdate checks if a newer version of the CLI is available.
-// It returns the latest version string, the release URL for the specified component, and a boolean indicating if an update is available.
-func CheckForUpdate(currentVersion string, component string) (string, string, bool, error) {
-
+// It returns the latest version string, the download URL, the signature URL, and a boolean indicating if an update is available.
+func CheckForUpdate(currentVersion string, component string) (string, string, string, bool, error) {
 	client := &http.Client{
-		Timeout: 5 * time.Second,
+		Timeout: 10 * time.Second,
 	}
 
 	resp, err := client.Get(LatestReleaseURL)
 	if err != nil {
-		return "", "", false, fmt.Errorf("failed to check for updates: %w", err)
+		return "", "", "", false, fmt.Errorf("failed to check for updates: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", false, fmt.Errorf("failed to check for updates: received status code %d", resp.StatusCode)
+		return "", "", "", false, fmt.Errorf("failed to check for updates: received status code %d", resp.StatusCode)
 	}
 
 	var release Release
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", "", false, fmt.Errorf("failed to decode release data: %w", err)
+		return "", "", "", false, fmt.Errorf("failed to decode release data: %w", err)
 	}
 
 	downloadURL := ""
+	sigURL := ""
+	sigName := component + ".minisig"
+
 	for _, asset := range release.Assets {
 		if asset.Name == component {
 			downloadURL = asset.BrowserDownloadURL
-			break
+		} else if asset.Name == sigName {
+			sigURL = asset.BrowserDownloadURL
 		}
 	}
 
 	vCurrent, err := version.NewVersion(currentVersion)
 	if err != nil {
-		// If current version is not semver (and not "dev"), we can't reliably compare.
-		return "", "", false, nil
+		// If current version is not semver, we can't reliably compare.
+		return release.TagName, downloadURL, sigURL, false, nil
 	}
 
 	vLatest, err := version.NewVersion(release.TagName)
 	if err != nil {
-		return "", "", false, fmt.Errorf("failed to parse latest version %s: %w", release.TagName, err)
+		return "", "", "", false, fmt.Errorf("failed to parse latest version %s: %w", release.TagName, err)
 	}
 
 	if vLatest.GreaterThan(vCurrent) && downloadURL != "" {
-		return release.TagName, downloadURL, true, nil
+		return release.TagName, downloadURL, sigURL, true, nil
 	}
 
-	return release.TagName, downloadURL, false, nil
+	return release.TagName, downloadURL, sigURL, false, nil
 }
 
 // DownloadAndReplace downloads the binary from downloadURL, writes it to a
 // temporary file, and then replaces the target component binary with it.
 // If component is "jman", it replaces the currently running executable.
 // Otherwise, it looks for the component in the same directory as the jman binary.
-func DownloadAndReplace(downloadURL string, component string) error {
+func DownloadAndReplace(downloadURL, sigURL, component string) error {
 	// Resolve the path of the currently running jman executable (follow symlinks).
 	jmanPath, err := os.Executable()
 	if err != nil {
@@ -186,6 +192,32 @@ func DownloadAndReplace(downloadURL string, component string) error {
 		return fmt.Errorf("failed to write update to temporary file: %w", err)
 	}
 	progress.finish()
+
+	if err := tmpFile.Sync(); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to sync temporary file: %w", err)
+	}
+
+	// Verify signature if available
+	if sigURL != "" {
+		if _, err := tmpFile.Seek(0, 0); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("failed to seek temporary file: %w", err)
+		}
+		content, err := io.ReadAll(tmpFile)
+		if err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("failed to read temporary file for verification: %w", err)
+		}
+		if err := verifySignature(content, sigURL); err != nil {
+			tmpFile.Close()
+			return fmt.Errorf("signature verification failed: %w", err)
+		}
+		verb.Printf(verb.Verbose, "  Signature verified successfully\n")
+	} else {
+		verb.Printf(verb.Normal, "  Warning: skipping signature verification (no signature URL)\n")
+	}
+
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temporary file: %w", err)
 	}
@@ -198,6 +230,40 @@ func DownloadAndReplace(downloadURL string, component string) error {
 	// Replace the old binary. os.Rename is atomic on the same filesystem.
 	if err := os.Rename(tmpPath, targetPath); err != nil {
 		return fmt.Errorf("failed to replace binary %s (do you have write permission?): %w", component, err)
+	}
+
+	return nil
+}
+
+func verifySignature(content []byte, sigURL string) error {
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(sigURL)
+	if err != nil {
+		return fmt.Errorf("failed to download signature: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download signature: received status code %d", resp.StatusCode)
+	}
+
+	sigBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read signature: %w", err)
+	}
+
+	signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sigBytes)))
+	if err != nil {
+		return fmt.Errorf("failed to decode signature: %w", err)
+	}
+
+	pubKeyBytes, err := base64.StdEncoding.DecodeString(PublicKey)
+	if err != nil {
+		return fmt.Errorf("failed to decode public key: %w", err)
+	}
+
+	if !ed25519.Verify(ed25519.PublicKey(pubKeyBytes), content, signature) {
+		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
