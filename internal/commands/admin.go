@@ -13,6 +13,23 @@ var adminCmd = &cobra.Command{
 	Use:   "admin <target> <username> <email>",
 	Short: "Create a new administrator user on target sites.",
 	Args:  cobra.ExactArgs(3),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			sites, err := search.SearchSites(toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			var completions []string
+			for _, site := range sites {
+				completions = append(completions, fmt.Sprintf("%s\t%s", site.Name, site.ServerName))
+				if site.Name != site.ServerName && site.ServerName != "" {
+					completions = append(completions, fmt.Sprintf("%s\t%s", site.ServerName, site.Name))
+				}
+			}
+			return completions, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target := args[0]
 		username := args[1]

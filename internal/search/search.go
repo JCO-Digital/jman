@@ -21,11 +21,22 @@ func SearchSites(query string) ([]models.CliSite, error) {
 	}
 
 	var matched []models.CliSite
+	var exact []models.CliSite
 	query = strings.ToLower(query)
+
 	for _, site := range sites {
-		if strings.Contains(strings.ToLower(site.Name), query) || strings.Contains(strings.ToLower(site.ServerName), query) {
+		name := strings.ToLower(site.Name)
+		server := strings.ToLower(site.ServerName)
+		if name == query || server == query {
+			exact = append(exact, site)
+		}
+		if strings.Contains(name, query) || strings.Contains(server, query) {
 			matched = append(matched, site)
 		}
+	}
+
+	if len(exact) > 0 {
+		return exact, nil
 	}
 
 	return matched, nil
@@ -86,13 +97,29 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 		return nil, fmt.Errorf("no sites found")
 	}
 
+	reader := bufio.NewReader(os.Stdin)
+
+	if len(sites) == 1 {
+		site := sites[0]
+		verb.PrintErrorf(verb.Quiet, "Found site: %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+		verb.PrintErrorf(verb.Quiet, "Do you want to run the command on this site? [Y/n]: ")
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response == "n" || response == "no" {
+			return []models.CliSite{}, nil
+		}
+		return sites, nil
+	}
+
 	verb.PrintErrorln(verb.Normal, "Found sites:")
 	for i, site := range sites {
 		verb.PrintErrorf(verb.Quiet, "[%d] %s %s\n", i+1, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 	}
 
 	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", verb.Bold("Enter numbers separated by space"))
-	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, err
