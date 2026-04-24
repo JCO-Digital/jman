@@ -27,7 +27,7 @@ var pluginCmd = &cobra.Command{
 			return []string{"list", "install", "info", "update", "remove"}, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			sites, err := search.SearchSites(toComplete)
+			sites, err := search.SearchSitesFast(toComplete)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -41,18 +41,24 @@ var pluginCmd = &cobra.Command{
 			return completions, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 2 {
-			// For install and update, suggest plugin names from cache
-			if args[0] == "install" || args[0] == "update" || args[0] == "info" || args[0] == "remove" {
-				plugins, err := cache.GetCachedPlugins()
-				if err != nil {
-					return nil, cobra.ShellCompDirectiveError
-				}
-				var completions []string
-				for _, plugin := range plugins {
-					completions = append(completions, fmt.Sprintf("%s\t%s", plugin.Name, plugin.Name))
-				}
-				return completions, cobra.ShellCompDirectiveDefault
+			operation := args[0]
+			if operation == "list" {
+				return nil, cobra.ShellCompDirectiveNoFileComp
 			}
+
+			plugins, err := search.SearchPluginsFast(toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			var names []string
+			for _, p := range plugins {
+				names = append(names, p.Name)
+			}
+
+			if operation == "install" {
+				return names, cobra.ShellCompDirectiveDefault
+			}
+			return names, cobra.ShellCompDirectiveNoFileComp
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

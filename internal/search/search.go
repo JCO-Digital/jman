@@ -19,7 +19,19 @@ func SearchSites(query string) ([]models.CliSite, error) {
 	if err != nil {
 		return nil, err
 	}
+	return filterSites(sites, query)
+}
 
+// SearchSitesFast filters the site list from cache without checking expiry or refreshing
+func SearchSitesFast(query string) ([]models.CliSite, error) {
+	sites, err := cache.GetFastSiteList()
+	if err != nil {
+		return nil, nil
+	}
+	return filterSites(sites, query)
+}
+
+func filterSites(sites []models.CliSite, query string) ([]models.CliSite, error) {
 	var matched []models.CliSite
 	var exact []models.CliSite
 	query = strings.ToLower(query)
@@ -44,35 +56,30 @@ func SearchSites(query string) ([]models.CliSite, error) {
 
 // SearchPlugins filters the plugin list based on the provided query string
 func SearchPlugins(query string) ([]models.WPPluginData, error) {
-	plugins, err := cache.GetCachedPlugins()
+	plugins, err := cache.GetCachedPluginData()
 	if err != nil {
 		return nil, err
 	}
+	return filterPlugins(plugins, query)
+}
 
-	pluginMap := make(map[string]*models.WPPluginData)
+// SearchPluginsFast filters the plugin list from cache without checking expiry or refreshing
+func SearchPluginsFast(query string) ([]models.WPPluginData, error) {
+	plugins, err := cache.GetFastCachedPluginData()
+	if err != nil {
+		return nil, nil
+	}
+	return filterPlugins(plugins, query)
+}
+
+func filterPlugins(plugins []models.WPPluginData, query string) ([]models.WPPluginData, error) {
+	var matched []models.WPPluginData
 	query = strings.ToLower(query)
 
 	for _, p := range plugins {
 		if strings.Contains(strings.ToLower(p.Name), query) {
-			data, exists := pluginMap[p.Name]
-			if !exists {
-				newData := &models.WPPluginData{
-					Name:  p.Name,
-					Sites: []models.PluginSite{},
-				}
-				pluginMap[p.Name] = newData
-				data = newData
-			}
-			data.Sites = append(data.Sites, models.PluginSite{
-				SiteID:  p.SiteID,
-				Version: p.Version,
-			})
+			matched = append(matched, p)
 		}
-	}
-
-	var matched []models.WPPluginData
-	for _, data := range pluginMap {
-		matched = append(matched, *data)
 	}
 
 	sort.Slice(matched, func(i, j int) bool {
