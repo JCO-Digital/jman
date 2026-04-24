@@ -40,6 +40,20 @@ var pluginCmd = &cobra.Command{
 			}
 			return completions, cobra.ShellCompDirectiveNoFileComp
 		}
+		if len(args) == 2 {
+			// For install and update, suggest plugin names from cache
+			if args[0] == "install" || args[0] == "update" || args[0] == "info" || args[0] == "remove" {
+				plugins, err := cache.GetCachedPlugins()
+				if err != nil {
+					return nil, cobra.ShellCompDirectiveError
+				}
+				var completions []string
+				for _, plugin := range plugins {
+					completions = append(completions, fmt.Sprintf("%s\t%s", plugin.Name, plugin.Name))
+				}
+				return completions, cobra.ShellCompDirectiveDefault
+			}
+		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: pluginCommand,
