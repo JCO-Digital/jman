@@ -19,13 +19,36 @@ func SearchSites(query string) ([]models.CliSite, error) {
 	if err != nil {
 		return nil, err
 	}
+	return filterSites(sites, query)
+}
 
+// SearchSitesFast filters the site list from cache without checking expiry or refreshing
+func SearchSitesFast(query string) ([]models.CliSite, error) {
+	sites, err := cache.GetFastSiteList()
+	if err != nil {
+		return nil, nil
+	}
+	return filterSites(sites, query)
+}
+
+func filterSites(sites []models.CliSite, query string) ([]models.CliSite, error) {
 	var matched []models.CliSite
+	var exact []models.CliSite
 	query = strings.ToLower(query)
+
 	for _, site := range sites {
-		if strings.Contains(strings.ToLower(site.Name), query) || strings.Contains(strings.ToLower(site.ServerName), query) {
+		name := strings.ToLower(site.Name)
+		server := strings.ToLower(site.ServerName)
+		if name == query || server == query {
+			exact = append(exact, site)
+		}
+		if strings.Contains(name, query) || strings.Contains(server, query) {
 			matched = append(matched, site)
 		}
+	}
+
+	if len(exact) > 0 {
+		return exact, nil
 	}
 
 	return matched, nil
@@ -33,35 +56,30 @@ func SearchSites(query string) ([]models.CliSite, error) {
 
 // SearchPlugins filters the plugin list based on the provided query string
 func SearchPlugins(query string) ([]models.WPPluginData, error) {
-	plugins, err := cache.GetCachedPlugins()
+	plugins, err := cache.GetCachedPluginData()
 	if err != nil {
 		return nil, err
 	}
+	return filterPlugins(plugins, query)
+}
 
-	pluginMap := make(map[string]*models.WPPluginData)
+// SearchPluginsFast filters the plugin list from cache without checking expiry or refreshing
+func SearchPluginsFast(query string) ([]models.WPPluginData, error) {
+	plugins, err := cache.GetFastCachedPluginData()
+	if err != nil {
+		return nil, nil
+	}
+	return filterPlugins(plugins, query)
+}
+
+func filterPlugins(plugins []models.WPPluginData, query string) ([]models.WPPluginData, error) {
+	var matched []models.WPPluginData
 	query = strings.ToLower(query)
 
 	for _, p := range plugins {
 		if strings.Contains(strings.ToLower(p.Name), query) {
-			data, exists := pluginMap[p.Name]
-			if !exists {
-				newData := &models.WPPluginData{
-					Name:  p.Name,
-					Sites: []models.PluginSite{},
-				}
-				pluginMap[p.Name] = newData
-				data = newData
-			}
-			data.Sites = append(data.Sites, models.PluginSite{
-				SiteID:  p.SiteID,
-				Version: p.Version,
-			})
+			matched = append(matched, p)
 		}
-	}
-
-	var matched []models.WPPluginData
-	for _, data := range pluginMap {
-		matched = append(matched, *data)
 	}
 
 	sort.Slice(matched, func(i, j int) bool {
@@ -86,13 +104,29 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 		return nil, fmt.Errorf("no sites found")
 	}
 
+	reader := bufio.NewReader(os.Stdin)
+
+	if len(sites) == 1 {
+		site := sites[0]
+		verb.PrintErrorf(verb.Quiet, "Found site: %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+		verb.PrintErrorf(verb.Quiet, "Do you want to run the command on this site? [Y/n]: ")
+		response, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response == "n" || response == "no" {
+			return []models.CliSite{}, nil
+		}
+		return sites, nil
+	}
+
 	verb.PrintErrorln(verb.Normal, "Found sites:")
 	for i, site := range sites {
 		verb.PrintErrorf(verb.Quiet, "[%d] %s %s\n", i+1, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 	}
 
 	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", verb.Bold("Enter numbers separated by space"))
-	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, err
