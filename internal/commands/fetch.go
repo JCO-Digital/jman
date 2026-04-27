@@ -12,13 +12,21 @@ import (
 var (
 	forceFetch bool
 	fetchCmd   = &cobra.Command{
-		Use:   "fetch",
-		Short: "Fetch latest data from SpinupWP and update local cache.",
-		Args:  cobra.MaximumNArgs(1),
+		Use:           "fetch [servers|sites|plugins|vulns|info|basic|all]",
+		Short:         "Fetch latest data from SpinupWP and update local cache.",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			if len(args) == 0 {
+				return []string{"servers", "sites", "plugins", "vulns", "info", "basic", "all"}, cobra.ShellCompDirectiveNoFileComp
+			}
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			target := "basic"
+			operation := "basic"
 			if len(args) > 0 {
-				target = args[0]
+				operation = args[0]
 			}
 
 			ttl := cache.FetchTTL
@@ -26,11 +34,11 @@ var (
 				ttl = 0
 			}
 
-			if slices.Contains([]string{"servers", "sites", "basic", "all"}, target) {
+			if slices.Contains([]string{"servers", "sites", "basic", "all"}, operation) {
 				verb.PrintErrorln(verb.Normal, "Fetching latest data from SpinupWP...")
 			}
 
-			if slices.Contains([]string{"servers", "basic", "all"}, target) {
+			if slices.Contains([]string{"servers", "basic", "all"}, operation) {
 				servers, err := cache.RefreshCachedServers(ttl)
 				if err != nil {
 					return fmt.Errorf("error fetching servers: %w", err)
@@ -38,7 +46,7 @@ var (
 				verb.PrintErrorf(verb.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
 			}
 
-			if slices.Contains([]string{"sites", "basic", "all"}, target) {
+			if slices.Contains([]string{"sites", "basic", "all"}, operation) {
 				sites, err := cache.RefreshCachedSites(ttl)
 				if err != nil {
 					return fmt.Errorf("error fetching sites: %w", err)
@@ -46,9 +54,9 @@ var (
 				verb.Printf(verb.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
 			}
 
-			fetchPlugins := slices.Contains([]string{"plugins", "all"}, target)
-			fetchVulns := slices.Contains([]string{"vulns", "all"}, target)
-			fetchInfo := slices.Contains([]string{"info", "plugins", "all"}, target)
+			fetchPlugins := slices.Contains([]string{"plugins", "all"}, operation)
+			fetchVulns := slices.Contains([]string{"vulns", "all"}, operation)
+			fetchInfo := slices.Contains([]string{"info", "plugins", "all"}, operation)
 
 			if fetchPlugins || fetchVulns || fetchInfo {
 				pTTL := ttl

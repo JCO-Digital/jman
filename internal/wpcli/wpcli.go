@@ -103,6 +103,15 @@ func ResetUserPassword(ssh, path, username string) (string, error) {
 	return strings.TrimSpace(res.Output), nil
 }
 
+// GetWPCommandDump returns a JSON string representing the WP-CLI command structure.
+func GetWPCommandDump(ssh, path string) (string, error) {
+	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "cli", "cmd-dump", "--format=json")
+	if err != nil {
+		return "", fmt.Errorf("failed to get wp-cli command dump: %w (stderr: %s)", err, res.Error)
+	}
+	return res.Output, nil
+}
+
 // SetDisallowFileMods updates the DISALLOW_FILE_MODS constant in wp-config.php.
 func SetDisallowFileMods(ssh, path string, value bool) error {
 	valStr := "false"

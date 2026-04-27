@@ -136,6 +136,64 @@ func GetCachedPluginData() ([]models.WPPluginData, error) {
 	return pluginData, nil
 }
 
+// GetFastCachedPluginData retrieves plugin data from cache without checking expiry.
+func GetFastCachedPluginData() ([]models.WPPluginData, error) {
+	plugins, err := GetFastCachedPlugins()
+	if err != nil {
+		return nil, err
+	}
+
+	sites, err := GetFastSiteList()
+	if err != nil {
+		return nil, err
+	}
+
+	siteNames := make(map[int]string)
+	for _, s := range sites {
+		siteNames[s.ID] = s.Name
+	}
+
+	var pluginData []models.WPPluginData
+	pluginMap := make(map[string]*models.WPPluginData)
+
+	for _, plugin := range plugins {
+		if plugin.Status != "active" {
+			continue
+		}
+
+		data, exists := pluginMap[plugin.Name]
+		if !exists {
+			newData := models.WPPluginData{
+				Name:  plugin.Name,
+				Sites: []models.PluginSite{},
+			}
+			pluginMap[plugin.Name] = &newData
+			data = &newData
+		}
+
+		data.Sites = append(data.Sites, models.PluginSite{
+			SiteID:   plugin.SiteID,
+			SiteName: siteNames[plugin.SiteID],
+			Version:  plugin.Version,
+		})
+	}
+
+	for _, data := range pluginMap {
+		pluginData = append(pluginData, *data)
+	}
+
+	return pluginData, nil
+}
+
+// GetFastCachedPlugins retrieves plugins from the cache without checking expiry.
+func GetFastCachedPlugins() ([]models.WPPlugin, error) {
+	var plugins []models.WPPlugin
+	if err := ReadJSONCache("plugins", &plugins, -1); err != nil {
+		return nil, err
+	}
+	return plugins, nil
+}
+
 // GetCachedVulnerabilities fetches vulnerability data for a specific plugin from the cache or the WPVulnerability API.
 func GetCachedVulnerabilities(plugin string, ttl ...time.Duration) (*models.VulnResponse, error) {
 	t := DefaultTTL

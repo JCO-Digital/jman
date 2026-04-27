@@ -10,11 +10,33 @@ import (
 )
 
 var coreCmd = &cobra.Command{
-	Use:   "core <target> [check|update|version]",
-	Short: "Manage WordPress core.",
-	Long:  "Check core version, update core to latest version, or display current core version on target sites.",
-	Args:  cobra.MinimumNArgs(2),
-	RunE:  coreCommand,
+	Use:           "core [check|update|version] <target>",
+	Short:         "Manage WordPress core.",
+	Long:          "Check core version, update core to latest version, or display current core version on target sites.",
+	Args:          cobra.MinimumNArgs(2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return []string{"check", "update", "version"}, cobra.ShellCompDirectiveNoFileComp
+		}
+		if len(args) == 1 {
+			sites, err := search.SearchSitesFast(toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			var completions []string
+			for _, site := range sites {
+				completions = append(completions, fmt.Sprintf("%s\t%s", site.Name, site.ServerName))
+				if site.Name != site.ServerName && site.ServerName != "" {
+					completions = append(completions, fmt.Sprintf("%s\t%s", site.ServerName, site.Name))
+				}
+			}
+			return completions, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
+	RunE: coreCommand,
 }
 
 func init() {
@@ -22,8 +44,8 @@ func init() {
 }
 
 func coreCommand(cmd *cobra.Command, args []string) error {
-	target := args[0]
-	operation := args[1]
+	operation := args[0]
+	target := args[1]
 	if operation != "check" && operation != "update" && operation != "version" {
 		return fmt.Errorf("invalid operation: %s. Use 'check', 'update', or 'version'", operation)
 	}
