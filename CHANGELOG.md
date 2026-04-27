@@ -1,3 +1,12 @@
+# [4.27.0](https://github.com/JCO-Digital/jman/compare/v4.26.0...v4.27.0) (2026-04-27)
+
+
+### Features
+
+* Release new version ([66362a2](https://github.com/JCO-Digital/jman/commit/66362a253069fd3f295ca942724900faa3e4bb03))
+
+
+
 # [4.26.0](https://github.com/JCO-Digital/jman/compare/v4.25.0...v4.26.0) (2026-04-27)
 
 
@@ -46,24 +55,6 @@
 ### Bug Fixes
 
 * **db:** enforce case-insensitive domain handling ([0e3f8f5](https://github.com/JCO-Digital/jman/commit/0e3f8f53ce82c72f9799a7f30efa153eec8e160a))
-
-
-
-# [4.23.0](https://github.com/JCO-Digital/jman/compare/v4.22.0...v4.23.0) (2026-04-23)
-
-
-### Bug Fixes
-
-* **db:** limit SQLite connections and serialize writes to avoid ([84fdf62](https://github.com/JCO-Digital/jman/commit/84fdf62ba73d24b38d747a6993d87d8417a4bd24))
-* **monitor:** add synchronization and in-flight tracking for site checks ([8934a61](https://github.com/JCO-Digital/jman/commit/8934a61f53955836699d8e328b5c4282b33440ba))
-* **monitor:** Log error on failed slack send. ([2a4f4ea](https://github.com/JCO-Digital/jman/commit/2a4f4ea21936e96d1ca181e8315ae8dbef6d0432))
-* **monitor:** normalize mode to Alert for sites marked down on load ([abeddae](https://github.com/JCO-Digital/jman/commit/abeddae797e82444bec0fa5e871f9abfafe8fef8))
-
-
-### Features
-
-* **monitor:** add stateful monitoring engine, scheduler, and systemd ([c1ef84e](https://github.com/JCO-Digital/jman/commit/c1ef84e5d92068d40bf48c863004ac4d5dec2287))
-* **monitor:** notify Slack when ignoring a site in alert mode ([15d36c5](https://github.com/JCO-Digital/jman/commit/15d36c549f3f76b6dfeb5257113be57466d74800))
 
 
 
