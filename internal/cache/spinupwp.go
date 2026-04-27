@@ -76,10 +76,41 @@ func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
 	return sites, nil
 }
 
+// GetFastCachedServers retrieves servers from the cache without checking expiry.
+func GetFastCachedServers() ([]models.Server, error) {
+	var servers []models.Server
+	if err := ReadJSONCache("servers", &servers, -1); err != nil {
+		return nil, err
+	}
+	return servers, nil
+}
+
+// GetFastCachedSites retrieves sites from the cache without checking expiry.
+func GetFastCachedSites() ([]models.Site, error) {
+	var sites []models.Site
+	if err := ReadJSONCache("sites", &sites, -1); err != nil {
+		return nil, err
+	}
+	return sites, nil
+}
+
 // GetServerMap returns a map of server IDs to server names
 func GetServerMap() (map[int]string, error) {
 	serverMap := make(map[int]string)
 	servers, err := GetCachedServers()
+	if err != nil {
+		return nil, err
+	}
+	for _, server := range servers {
+		serverMap[server.ID] = server.Name
+	}
+	return serverMap, nil
+}
+
+// GetFastServerMap returns a map of server IDs to server names from cache without checking expiry.
+func GetFastServerMap() (map[int]string, error) {
+	serverMap := make(map[int]string)
+	servers, err := GetFastCachedServers()
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +129,44 @@ func GetSiteList() ([]models.CliSite, error) {
 	}
 
 	sites, err := GetCachedSites()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, site := range sites {
+		if !site.IsWordpress {
+			continue
+		}
+
+		if serverNameFull, ok := serverMap[site.ServerID]; ok {
+			serverNameParts := strings.Split(serverNameFull, ".")
+			serverName := serverNameParts[0]
+
+			cliSite := models.CliSite{
+				ID:         site.ID,
+				Name:       site.Domain,
+				ServerID:   site.ServerID,
+				ServerName: serverName,
+				SSH:        fmt.Sprintf("%s@%s", site.SiteUser, serverNameFull),
+				Path:       "files",
+			}
+
+			cliSites = append(cliSites, cliSite)
+		}
+	}
+
+	return cliSites, nil
+}
+
+// GetFastSiteList retrieves sites from cache without checking expiry.
+func GetFastSiteList() ([]models.CliSite, error) {
+	var cliSites []models.CliSite
+	serverMap, err := GetFastServerMap()
+	if err != nil {
+		return nil, err
+	}
+
+	sites, err := GetFastCachedSites()
 	if err != nil {
 		return nil, err
 	}

@@ -1,3 +1,36 @@
+# [4.26.0](https://github.com/JCO-Digital/jman/compare/v4.25.0...v4.26.0) (2026-04-27)
+
+
+### Bug Fixes
+
+* **commands:** silence cobra usage and add operation validation ([67dec17](https://github.com/JCO-Digital/jman/commit/67dec17002e65a54fda6fdea22b688e5e9a9fd11))
+
+
+### Features
+
+* **commands:** accept action before target and add shell completion for ([7fa885e](https://github.com/JCO-Digital/jman/commit/7fa885e1413bf19a72a1d9c440990e70cfaa9777))
+* **commands:** add shell completion for monitor and wp commands ([48d846b](https://github.com/JCO-Digital/jman/commit/48d846b48bccb76dda4c5f1f98c970fa89159f78))
+* **commands:** add shell completion, reorder args, prefer exact site ([603c8cc](https://github.com/JCO-Digital/jman/commit/603c8cca1100d7a556b33de4945a0841e559d7f1))
+* **fetch:** add shell completion for fetch command and rename target to ([6ba12bd](https://github.com/JCO-Digital/jman/commit/6ba12bd242596e05c7e50d3b4683fd40fc1f3a7c))
+* **plugin:** suggest cached plugin names for subcommand argument ([8604125](https://github.com/JCO-Digital/jman/commit/8604125b082d4da6115fdf0f8dd609e85035b06d))
+* **search:** add fast cache-backed site/plugin search and fast cache ([4f0883f](https://github.com/JCO-Digital/jman/commit/4f0883ff7d3820ec8c602d7f7befe0885dfc9370))
+
+
+### Performance Improvements
+
+* **wp:** cache command dump and add timeout for completions ([c364171](https://github.com/JCO-Digital/jman/commit/c3641718b8d09ac10e27b150db5a2af9aca77fd3))
+
+
+
+# [4.25.0](https://github.com/JCO-Digital/jman/compare/v4.24.0...v4.25.0) (2026-04-24)
+
+
+### Features
+
+* **update:** add signed releases and client-side signature verification ([3b6e8b1](https://github.com/JCO-Digital/jman/commit/3b6e8b15ef6339c76b85df4d90462bbf27d6807c))
+
+
+
 # [4.24.0](https://github.com/JCO-Digital/jman/compare/v4.23.1...v4.24.0) (2026-04-23)
 
 
@@ -31,29 +64,6 @@
 
 * **monitor:** add stateful monitoring engine, scheduler, and systemd ([c1ef84e](https://github.com/JCO-Digital/jman/commit/c1ef84e5d92068d40bf48c863004ac4d5dec2287))
 * **monitor:** notify Slack when ignoring a site in alert mode ([15d36c5](https://github.com/JCO-Digital/jman/commit/15d36c549f3f76b6dfeb5257113be57466d74800))
-
-
-
-# [4.22.0](https://github.com/JCO-Digital/jman/compare/v4.21.1...v4.22.0) (2026-04-21)
-
-
-### Bug Fixes
-
-* **monitor:** return pending status for unchecked sites and clean up ([869563c](https://github.com/JCO-Digital/jman/commit/869563c617a63bfa53baea1fc6084b47df563302))
-
-
-### Features
-
-* **monitor:** add DB-backed monitoring API, ignore list, and CLI ([30624b3](https://github.com/JCO-Digital/jman/commit/30624b3af275a54f75f95c0c75f7e4a7a3594985))
-
-
-
-## [4.21.1](https://github.com/JCO-Digital/jman/compare/v4.21.0...v4.21.1) (2026-04-20)
-
-
-### Bug Fixes
-
-* **update:** treat empty response as yes and show [Y/n] prompts ([77b3d75](https://github.com/JCO-Digital/jman/commit/77b3d756335a83788d33a696722f28ff1982b4d9))
 
 
 
