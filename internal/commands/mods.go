@@ -10,15 +10,17 @@ import (
 )
 
 var modsCmd = &cobra.Command{
-	Use:   "mods [enable|disable|allow|disallow] <target>",
-	Short: "Set DISALLOW_FILE_MODS on target sites.",
-	Args:  cobra.ExactArgs(2),
+	Use:           "mods [enable|disable|allow|disallow] <target>",
+	Short:         "Set DISALLOW_FILE_MODS on target sites.",
+	Args:          cobra.ExactArgs(2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return []string{"enable", "disable", "allow", "disallow"}, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			sites, err := search.SearchSites(toComplete)
+			sites, err := search.SearchSitesFast(toComplete)
 			if err != nil {
 				return nil, cobra.ShellCompDirectiveError
 			}
@@ -42,7 +44,7 @@ var modsCmd = &cobra.Command{
 			case "disable", "disallow":
 				disallow = true
 			default:
-				return fmt.Errorf("invalid argument: %s. Use 'enable' or 'disable'.", args[1])
+				return fmt.Errorf("invalid operation: %s. Use 'enable', 'disable', 'allow' or 'disallow'.", args[0])
 			}
 		}
 		target := args[1]

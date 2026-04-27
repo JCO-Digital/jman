@@ -12,9 +12,11 @@ import (
 )
 
 var monitorCmd = &cobra.Command{
-	Use:   "monitor",
-	Short: "Manage site monitoring",
-	Long:  `Manage site monitoring, including the list of ignored domains.`,
+	Use:           "monitor",
+	Short:         "Manage site monitoring",
+	Long:          `Manage site monitoring, including the list of ignored domains.`,
+	SilenceErrors: true,
+	SilenceUsage:  true,
 }
 
 var monitorListIgnoredCmd = &cobra.Command{
@@ -45,9 +47,11 @@ var monitorListIgnoredCmd = &cobra.Command{
 }
 
 var monitorIgnoreCmd = &cobra.Command{
-	Use:   "ignore <domain> [reason]",
-	Short: "Add a site to the ignore list",
-	Args:  cobra.MinimumNArgs(1),
+	Use:           "ignore <domain> [reason]",
+	Short:         "Add a site to the ignore list",
+	Args:          cobra.MinimumNArgs(1),
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			sites, err := search.SearchSitesFast(toComplete)
@@ -85,9 +89,11 @@ var monitorIgnoreCmd = &cobra.Command{
 }
 
 var monitorUnignoreCmd = &cobra.Command{
-	Use:   "unignore <domain>",
-	Short: "Remove a site from the ignore list",
-	Args:  cobra.ExactArgs(1),
+	Use:           "unignore <domain>",
+	Short:         "Remove a site from the ignore list",
+	Args:          cobra.ExactArgs(1),
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			sites, err := db.GetIgnoredSites()
