@@ -7,6 +7,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/monitor"
+	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/spf13/cobra"
 )
 
@@ -19,6 +20,9 @@ var monitorCmd = &cobra.Command{
 var monitorListIgnoredCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all currently ignored sites",
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		sites, err := db.GetIgnoredSites()
 		if err != nil {
@@ -44,6 +48,23 @@ var monitorIgnoreCmd = &cobra.Command{
 	Use:   "ignore <domain> [reason]",
 	Short: "Add a site to the ignore list",
 	Args:  cobra.MinimumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			sites, err := search.SearchSitesFast(toComplete)
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			var completions []string
+			for _, site := range sites {
+				completions = append(completions, fmt.Sprintf("%s\t%s", site.Name, site.ServerName))
+				if site.Name != site.ServerName && site.ServerName != "" {
+					completions = append(completions, fmt.Sprintf("%s\t%s", site.ServerName, site.Name))
+				}
+			}
+			return completions, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain := args[0]
 		reason := "No reason provided"
@@ -67,6 +88,20 @@ var monitorUnignoreCmd = &cobra.Command{
 	Use:   "unignore <domain>",
 	Short: "Remove a site from the ignore list",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			sites, err := db.GetIgnoredSites()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveError
+			}
+			var completions []string
+			for _, s := range sites {
+				completions = append(completions, fmt.Sprintf("%s\t%s", s.Domain, s.Reason))
+			}
+			return completions, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		domain := args[0]
 
