@@ -1,9 +1,9 @@
-.PHONY: build build-pkg dev prepare install clean test format
+.PHONY: build build-pkg dev prepare install clean test format completions
 
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
 
-build: clean prepare bin/jman bin/jman-api bin/jman-monitor
+build: clean prepare bin/jman bin/jman-api bin/jman-monitor completions
 
 # Build without the built-in update command (for use with external package managers)
 build-pkg: clean prepare
@@ -42,3 +42,9 @@ test:
 
 format:
 	go fmt ./...
+
+completions: bin/jman
+	@mkdir -p bin/completions
+	bin/jman completion bash > bin/completions/jman.bash
+	bin/jman completion zsh > bin/completions/jman.zsh
+	bin/jman completion fish > bin/completions/jman.fish
