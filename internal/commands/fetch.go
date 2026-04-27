@@ -12,9 +12,11 @@ import (
 var (
 	forceFetch bool
 	fetchCmd   = &cobra.Command{
-		Use:   "fetch [servers|sites|plugins|vulns|info|basic|all]",
-		Short: "Fetch latest data from SpinupWP and update local cache.",
-		Args:  cobra.MaximumNArgs(1),
+		Use:           "fetch [servers|sites|plugins|vulns|info|basic|all]",
+		Short:         "Fetch latest data from SpinupWP and update local cache.",
+		Args:          cobra.MaximumNArgs(1),
+		SilenceErrors: true,
+		SilenceUsage:  true,
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			if len(args) == 0 {
 				return []string{"servers", "sites", "plugins", "vulns", "info", "basic", "all"}, cobra.ShellCompDirectiveNoFileComp

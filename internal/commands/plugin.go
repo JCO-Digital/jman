@@ -18,10 +18,12 @@ import (
 )
 
 var pluginCmd = &cobra.Command{
-	Use:   "plugin [list|install|info|update|remove] <target> <plugin-name>",
-	Short: "Plugin actions on target sites.",
-	Long:  "List, install, update or remove plugins on target sites. Supports WordPress.org slugs, custom repo URLs, or aliases defined in config (install only).",
-	Args:  cobra.MinimumNArgs(2),
+	Use:           "plugin [list|install|info|update|remove] <target> <plugin-name>",
+	Short:         "Plugin actions on target sites.",
+	Long:          "List, install, update or remove plugins on target sites. Supports WordPress.org slugs, custom repo URLs, or aliases defined in config (install only).",
+	Args:          cobra.MinimumNArgs(2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return []string{"list", "install", "info", "update", "remove"}, cobra.ShellCompDirectiveNoFileComp
@@ -72,6 +74,9 @@ func init() {
 func pluginCommand(cmd *cobra.Command, args []string) error {
 	operation := args[0]
 	target := args[1]
+	if operation != "list" && operation != "install" && operation != "update" && operation != "remove" && operation != "info" {
+		return fmt.Errorf("invalid operation: %s. Use 'list', 'install', 'update', 'remove', or 'info'", operation)
+	}
 
 	pluginName := ""
 	if len(args) > 2 {
