@@ -1,6 +1,16 @@
 # Changelog
 
-### 5.0.2 (2026-04-28)
+### 5.0.3 (2026-04-28)
+
+#### Build System
+
+- completions: move output directory to project root (37ca32b)
+
+#### Continuous Integration
+
+- aur: automate publishing to AUR (b6016c6)
+
+### v5.0.2 (2026-04-28)
 
 #### Refactor
 
