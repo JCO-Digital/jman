@@ -1,14 +1,11 @@
 # jman
 
-`jman` is a command-line utility designed to manage WordPress sites hosted on SpinupWP, with additional support for MainWP integration. It provides a streamlined way to fetch site data, run remote `wp-cli` commands, manage plugins, and create administrative users across multiple sites.
-
-_Note: `jman` was recently rewritten in Go for improved performance, concurrent operations, and to provide a statically linked binary._
+`jman` is a command-line utility designed to manage WordPress sites hosted on SpinupWP. It provides a streamlined way to fetch site data, run remote `wp-cli` commands, manage plugins, and create administrative users across multiple sites.
 
 ## Features
 
-- **SpinupWP Integration**: Fetch and list site/server data directly from the SpinupWP API.
+- **SpinupWP Integration**: Fetch and cache site/server data directly from the SpinupWP API.
 - **Remote WP-CLI**: Execute `wp-cli` commands on remote sites via SSH.
-- **MainWP Support**: Automated MainWP Child plugin installation and site management.
 - **Bulk Operations**: Perform actions like disabling file modifications or installing plugins across multiple sites.
 - **Site Aliases**: Generate YAML-based alias files for SSH and WP-CLI, supporting both individual sites and server-based groups.
 - **Local Caching**: Optimized performance by caching site and server metadata locally.
@@ -112,20 +109,19 @@ jman fetch
 
 ### Available Commands
 
-| Command    | Description                                                                     |
-| :--------- | :------------------------------------------------------------------------------ |
-| `fetch`    | Fetch latest data from SpinupWP and update local cache.                         |
-| `list`     | List cached data from SpinupWP (`servers`, `sites`, or `all`).                  |
-| `wp`       | Run a `wp-cli` command on a target site.                                        |
-| `search`   | Search for a specific term across sites.                                        |
-| `admin`    | Create a new administrator user on target sites.                                |
-| `plugin`   | Install a plugin on target sites. Supports slugs, repo URLs, or config aliases. |
-| `mods`     | Set `DISALLOW_FILE_MODS` to true on target sites.                               |
-| `alias`    | Create SSH/WP-CLI alias files for all sites or a filtered collection.           |
-| `inactive` | List sites that don't have an active MainWP Child connection.                   |
-| `mainwp`   | Install and configure MainWP on sites.                                          |
-| `vuln`     | Scan for plugin vulnerabilities across all sites.                               |
-| `update`   | Check for and install updates for `jman` or its sidecar binaries.               |
+| Command   | Description                                                           |
+| :-------- | :-------------------------------------------------------------------- |
+| `fetch`   | Fetch latest data from SpinupWP and update local cache.               |
+| `wp`      | Run a `wp-cli` command on a target site.                              |
+| `core`    | Manage WordPress core (check, update, version) on target sites.       |
+| `search`  | Search for sites or plugins matching a query.                         |
+| `admin`   | Create a new administrator user on target sites.                      |
+| `plugin`  | Plugin actions (list, install, update, remove, info) on target sites. |
+| `mods`    | Set `DISALLOW_FILE_MODS` to true on target sites.                     |
+| `alias`   | Create SSH/WP-CLI alias files for all sites or a filtered collection. |
+| `vuln`    | Scan for plugin vulnerabilities across all sites.                     |
+| `monitor` | Manage site monitoring (ignore/unignore domains).                     |
+| `update`  | Check for and install updates for `jman` or its sidecar binaries.     |
 
 ### Examples
 
@@ -147,6 +143,16 @@ jman plugin mysite.com install akismet
 jman admin mysite.com myusername user@example.com
 ```
 
+**Manage WordPress core:**
+
+```bash
+# Check for core updates
+jman core check mysite.com
+
+# Update core to latest version
+jman core update mysite.com
+```
+
 **Generate WP-CLI aliases for a server group:**
 
 ```bash
@@ -157,14 +163,17 @@ jman alias my-server-name > ~/.wp-cli/alias.yml
 **Scan for plugin vulnerabilities:**
 
 ```bash
-# Scan all plugins and display vulnerabilities
-jman vuln
+# Scan all plugins and display vulnerabilities (vulnerability-centric)
+jman vuln list
+
+# Scan all plugins and display vulnerabilities (site-centric)
+jman vuln sites
 
 # Filter by CVSS score (only show vulnerabilities with score >= 7.0)
-jman vuln cvss 7.0
+jman vuln list --cvss 7.0
 
 # Send vulnerability reports to Slack (requires Slack configuration)
-jman vuln slack
+jman vuln list --slack
 ```
 
 The `vuln` command checks all cached plugins against known vulnerability databases and reports:
@@ -173,7 +182,7 @@ The `vuln` command checks all cached plugins against known vulnerability databas
 - Vulnerability details and CVSS scores
 - List of sites running vulnerable plugin versions
 
-When using the `slack` target, the command tracks sent messages to avoid duplicates and only resends for high-severity vulnerabilities (based on configured CVSS threshold).
+When using the `--slack` flag, the command tracks sent messages to avoid duplicates and only resends for high-severity vulnerabilities (based on configured CVSS threshold).
 
 ## Sidecar Utilities
 

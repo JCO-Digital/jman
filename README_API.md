@@ -224,6 +224,7 @@ Authorization: Bearer <token>
 ```
 
 - `GET /api/plugins` — Returns all cached WordPress plugins across all sites.
+- `GET /api/plugininfo` — Returns enriched information for all cached plugins (author, description, etc.).
 - `GET /api/servers` — Returns cached SpinupWP servers.
 - `GET /api/sites` — Returns cached SpinupWP sites.
 - `GET /api/vulns?plugin=<slug>` — Returns cached vulnerability data for a specific plugin.

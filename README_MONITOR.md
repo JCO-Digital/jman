@@ -104,7 +104,7 @@ A systemd service file is provided in the repository. To install it:
 
 The list of ignored sites is now stored in the database. You can manage it using the `jman` CLI:
 
-- **List ignored sites**: `jman monitor list-ignored`
+- **List ignored sites**: `jman monitor list`
 - **Ignore a site**: `jman monitor ignore <domain> [reason]`
 - **Unignore a site**: `jman monitor unignore <domain>`
 
