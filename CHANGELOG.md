@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.0.5 (2026-04-28)
+### 5.0.6 (2026-04-28)
+
+#### Continuous Integration
+
+- aur: switch to KSXGitHub/github-actions-deploy-aur action (52ee39c)
+
+### v5.0.5 (2026-04-28)
 
 #### Documentation
 
