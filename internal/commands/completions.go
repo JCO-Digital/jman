@@ -2,22 +2,37 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/spf13/cobra"
 )
 
-func getSiteCompletions(toComplete string) ([]string, cobra.ShellCompDirective) {
-	sites, err := search.SearchSitesFast(toComplete)
+func getSiteCompletions() ([]string, cobra.ShellCompDirective) {
+	sites, err := cache.GetFastSiteList()
 	if err != nil {
 		return nil, cobra.ShellCompDirectiveError
 	}
+	servers, err := cache.GetFastCachedServers()
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+
 	var completions []string
+
+	for _, server := range servers {
+		shortName := strings.Split(server.Name, ".")[0]
+		completions = append(completions, fmt.Sprintf("%s\t%s", shortName, server.Name))
+	}
+
 	for _, site := range sites {
-		completions = append(completions, fmt.Sprintf("%s\t%s", site.Name, site.ServerName))
-		if site.Name != site.ServerName && site.ServerName != "" {
-			completions = append(completions, fmt.Sprintf("%s", site.ServerName))
+		name := site.Name
+		server := site.ServerName
+		if len(name) >= 4 && strings.HasPrefix(strings.ToLower(name), "www.") {
+			completions = append(completions, fmt.Sprintf("%s\t%s", name[4:], server))
 		}
+		completions = append(completions, fmt.Sprintf("%s\t%s", name, server))
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }

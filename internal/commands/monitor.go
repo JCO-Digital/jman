@@ -53,7 +53,7 @@ var monitorIgnoreCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

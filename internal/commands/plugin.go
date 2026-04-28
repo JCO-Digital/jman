@@ -31,7 +31,7 @@ var listPluginCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
@@ -66,7 +66,7 @@ var installPluginCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		if len(args) == 1 {
 			return getPluginCompletions(toComplete, true)
@@ -107,7 +107,7 @@ var updatePluginCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		if len(args) == 1 {
 			return getPluginCompletions(toComplete, false)
@@ -149,7 +149,7 @@ var removePluginCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		if len(args) == 1 {
 			return getPluginCompletions(toComplete, false)
@@ -188,7 +188,7 @@ var infoPluginCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		if len(args) == 1 {
 			return getPluginCompletions(toComplete, false)

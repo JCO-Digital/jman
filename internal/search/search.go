@@ -26,7 +26,7 @@ func SearchSites(query string) ([]models.CliSite, error) {
 func SearchSitesFast(query string) ([]models.CliSite, error) {
 	sites, err := cache.GetFastSiteList()
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	return filterSites(sites, query)
 }
@@ -67,7 +67,7 @@ func SearchPlugins(query string) ([]models.WPPluginData, error) {
 func SearchPluginsFast(query string) ([]models.WPPluginData, error) {
 	plugins, err := cache.GetFastCachedPluginData()
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	return filterPlugins(plugins, query)
 }
