@@ -18,120 +18,214 @@ import (
 )
 
 var pluginCmd = &cobra.Command{
-	Use:           "plugin [list|install|info|update|remove] <target> <plugin-name>",
-	Short:         "Plugin actions on target sites.",
-	Long:          "List, install, update or remove plugins on target sites. Supports WordPress.org slugs, custom repo URLs, or aliases defined in config (install only).",
-	Args:          cobra.MinimumNArgs(2),
+	Use:   "plugin",
+	Short: "Plugin actions on target sites.",
+	Long:  "List, install, update or remove plugins on target sites. Supports WordPress.org slugs, custom repo URLs, or aliases defined in config.",
+}
+
+var listPluginCmd = &cobra.Command{
+	Use:           "list <target>",
+	Short:         "List plugins on target sites.",
+	Args:          cobra.ExactArgs(1),
 	SilenceErrors: true,
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return []string{"list", "install", "info", "update", "remove"}, cobra.ShellCompDirectiveNoFileComp
-		}
-		if len(args) == 1 {
 			return getSiteCompletions(toComplete)
-		}
-		if len(args) == 2 {
-			operation := args[0]
-			if operation == "list" {
-				return nil, cobra.ShellCompDirectiveNoFileComp
-			}
-
-			plugins, err := search.SearchPluginsFast(toComplete)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveError
-			}
-			var names []string
-			for _, p := range plugins {
-				names = append(names, p.Name)
-			}
-
-			if operation == "install" {
-				return names, cobra.ShellCompDirectiveDefault
-			}
-			return names, cobra.ShellCompDirectiveNoFileComp
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
-	RunE: pluginCommand,
-}
-
-func init() {
-	rootCmd.AddCommand(pluginCmd)
-}
-
-func pluginCommand(cmd *cobra.Command, args []string) error {
-	operation := args[0]
-	target := args[1]
-	if operation != "list" && operation != "install" && operation != "update" && operation != "remove" && operation != "info" {
-		return fmt.Errorf("invalid operation: %s. Use 'list', 'install', 'update', 'remove', or 'info'", operation)
-	}
-
-	pluginName := ""
-	if len(args) > 2 {
-		pluginName = args[2]
-	}
-
-	switch operation {
-	case "list":
-		if pluginName != "" {
-			verb.Printf(verb.Verbose, "Plugin name '%s' will be ignored for 'list' operation.\n", pluginName)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := args[0]
+		sites, err := search.PromptSearch(target)
+		if err != nil {
+			return err
 		}
-	case "install", "remove", "info":
-		if pluginName == "" {
-			return fmt.Errorf("plugin name is required for '%s' operation", operation)
+
+		if len(sites) == 0 {
+			fmt.Println("Operation cancelled or no sites matched.")
+			return nil
 		}
-		if operation == "install" {
-			resolvePluginAlias(&pluginName)
-		}
-	}
 
-	sites, err := search.PromptSearch(target)
-	if err != nil {
-		return err
-	}
-
-	if len(sites) == 0 {
-		fmt.Println("Operation cancelled or no sites matched.")
-		return nil
-	}
-
-	for _, site := range sites {
-		switch operation {
-		case "list":
+		for _, site := range sites {
 			err := listPlugins(site)
 			if err != nil {
 				verb.Printf(verb.Normal, "Error listing plugins on %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
-				continue
 			}
-		case "update":
-			updateErr := updatePlugin(site, pluginName)
-			if updateErr != nil {
-				verb.Printf(verb.Normal, "Error updating plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(updateErr))
-				continue
-			}
-		case "remove":
-			err := removePlugin(site, pluginName)
-			if err != nil {
-				verb.Printf(verb.Normal, "Error removing plugin from %s: %v\n", verb.Blue(site.Name), verb.Red(err))
-				continue
-			}
-		case "install":
+		}
+		return nil
+	},
+}
+
+var installPluginCmd = &cobra.Command{
+	Use:           "install <target> <plugin-name>",
+	Short:         "Install a plugin on target sites.",
+	Long:          "Install a plugin on target sites. Supports WordPress.org slugs, custom repo URLs, local ZIP files, or aliases defined in config.",
+	Args:          cobra.ExactArgs(2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return getSiteCompletions(toComplete)
+		}
+		if len(args) == 1 {
+			return getPluginCompletions(toComplete, true)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := args[0]
+		pluginName := args[1]
+		resolvePluginAlias(&pluginName)
+
+		sites, err := search.PromptSearch(target)
+		if err != nil {
+			return err
+		}
+
+		if len(sites) == 0 {
+			fmt.Println("Operation cancelled or no sites matched.")
+			return nil
+		}
+
+		for _, site := range sites {
 			err := installPlugin(site, pluginName)
 			if err != nil {
 				verb.Printf(verb.Normal, "Error installing plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
-				continue
 			}
-		case "info":
+		}
+		return nil
+	},
+}
+
+var updatePluginCmd = &cobra.Command{
+	Use:           "update <target> [plugin-name]",
+	Short:         "Update plugins on target sites.",
+	Long:          "Update a specific plugin or all plugins if no plugin name is provided.",
+	Args:          cobra.RangeArgs(1, 2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return getSiteCompletions(toComplete)
+		}
+		if len(args) == 1 {
+			return getPluginCompletions(toComplete, false)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := args[0]
+		pluginName := ""
+		if len(args) > 1 {
+			pluginName = args[1]
+		}
+
+		sites, err := search.PromptSearch(target)
+		if err != nil {
+			return err
+		}
+
+		if len(sites) == 0 {
+			fmt.Println("Operation cancelled or no sites matched.")
+			return nil
+		}
+
+		for _, site := range sites {
+			updateErr := updatePlugin(site, pluginName)
+			if updateErr != nil {
+				verb.Printf(verb.Normal, "Error updating plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(updateErr))
+			}
+		}
+		return nil
+	},
+}
+
+var removePluginCmd = &cobra.Command{
+	Use:           "remove <target> <plugin-name>",
+	Short:         "Remove a plugin from target sites.",
+	Args:          cobra.ExactArgs(2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return getSiteCompletions(toComplete)
+		}
+		if len(args) == 1 {
+			return getPluginCompletions(toComplete, false)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := args[0]
+		pluginName := args[1]
+
+		sites, err := search.PromptSearch(target)
+		if err != nil {
+			return err
+		}
+
+		if len(sites) == 0 {
+			fmt.Println("Operation cancelled or no sites matched.")
+			return nil
+		}
+
+		for _, site := range sites {
+			err := removePlugin(site, pluginName)
+			if err != nil {
+				verb.Printf(verb.Normal, "Error removing plugin from %s: %v\n", verb.Blue(site.Name), verb.Red(err))
+			}
+		}
+		return nil
+	},
+}
+
+var infoPluginCmd = &cobra.Command{
+	Use:           "info <target> <plugin-name>",
+	Short:         "Get info for a plugin on target sites.",
+	Args:          cobra.ExactArgs(2),
+	SilenceErrors: true,
+	SilenceUsage:  true,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return getSiteCompletions(toComplete)
+		}
+		if len(args) == 1 {
+			return getPluginCompletions(toComplete, false)
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		target := args[0]
+		pluginName := args[1]
+
+		sites, err := search.PromptSearch(target)
+		if err != nil {
+			return err
+		}
+
+		if len(sites) == 0 {
+			fmt.Println("Operation cancelled or no sites matched.")
+			return nil
+		}
+
+		for _, site := range sites {
 			err := pluginInfo(site, pluginName)
 			if err != nil {
 				verb.Printf(verb.Normal, "Error fetching plugin info on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
-				continue
 			}
 		}
-	}
+		return nil
+	},
+}
 
-	return nil
+func init() {
+	pluginCmd.AddCommand(listPluginCmd)
+	pluginCmd.AddCommand(installPluginCmd)
+	pluginCmd.AddCommand(updatePluginCmd)
+	pluginCmd.AddCommand(removePluginCmd)
+	pluginCmd.AddCommand(infoPluginCmd)
+	rootCmd.AddCommand(pluginCmd)
 }
 
 func installPlugin(site models.CliSite, pluginName string) error {
@@ -239,12 +333,28 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 	}
 	verb.Printf(verb.Normal, "Updating %d plugins on %s...\n", len(toUpdate), verb.Blue(site.Name))
 
-	updated, err := wpcli.UpdatePlugin(site.SSH, site.Path, toUpdate)
+	var failed []string
+	updatedCount := 0
+	for _, p := range toUpdate {
+		count, err := wpcli.UpdatePlugin(site.SSH, site.Path, []string{p})
+		if err != nil {
+			failed = append(failed, p)
+		} else {
+			updatedCount += count
+		}
+	}
 
-	verb.Printf(verb.Verbose, "Updated %d plugins on %s.\n", updated, verb.Blue(site.Name))
+	if len(failed) > 0 {
+		verb.Printf(verb.Normal, "Failed to update %d plugins on %s: %s\n", len(failed), verb.Blue(site.Name), verb.Red(strings.Join(failed, ", ")))
+	}
 
-	if err != nil {
-		verb.Printf(verb.Normal, "Error updating plugins\n")
+	if updatedCount > 0 || len(failed) == 0 {
+		verb.Printf(verb.Normal, "Successfully updated %d plugins on %s.\n", updatedCount, verb.Blue(site.Name))
+	}
+
+	// Update cache after updates
+	if err := cache.UpdateSitePluginCache(site); err != nil {
+		verb.Printf(verb.Normal, "Warning: failed to update cache for site %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 	}
 
 	return nil

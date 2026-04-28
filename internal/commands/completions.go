@@ -21,3 +21,19 @@ func getSiteCompletions(toComplete string) ([]string, cobra.ShellCompDirective) 
 	}
 	return completions, cobra.ShellCompDirectiveNoFileComp
 }
+
+func getPluginCompletions(toComplete string, allowFiles bool) ([]string, cobra.ShellCompDirective) {
+	plugins, err := search.SearchPluginsFast(toComplete)
+	if err != nil {
+		return nil, cobra.ShellCompDirectiveError
+	}
+	var names []string
+	for _, p := range plugins {
+		names = append(names, p.Name)
+	}
+
+	if allowFiles {
+		return names, cobra.ShellCompDirectiveDefault
+	}
+	return names, cobra.ShellCompDirectiveNoFileComp
+}
