@@ -7,7 +7,6 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/monitor"
-	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/spf13/cobra"
 )
 
@@ -54,18 +53,7 @@ var monitorIgnoreCmd = &cobra.Command{
 	SilenceUsage:  true,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			sites, err := search.SearchSitesFast(toComplete)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveError
-			}
-			var completions []string
-			for _, site := range sites {
-				completions = append(completions, fmt.Sprintf("%s\t%s", site.Name, site.ServerName))
-				if site.Name != site.ServerName && site.ServerName != "" {
-					completions = append(completions, fmt.Sprintf("%s\t%s", site.ServerName, site.Name))
-				}
-			}
-			return completions, cobra.ShellCompDirectiveNoFileComp
+			return getSiteCompletions(toComplete)
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

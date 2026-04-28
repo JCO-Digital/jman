@@ -14,6 +14,9 @@ var searchCmd = &cobra.Command{
 	Use:   "search <query>",
 	Short: "Search for a specific term across sites.",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query := args[0]
 
