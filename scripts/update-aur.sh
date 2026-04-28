@@ -3,7 +3,7 @@
 # This script updates the PKGBUILD with the latest version and SHA256 sum.
 # It is intended to be run during the GitHub Action release workflow.
 
-set -e
+set -eo pipefail
 
 VERSION=$1
 if [ -z "$VERSION" ]; then
@@ -14,8 +14,10 @@ fi
 # Remove 'v' prefix if present
 VERSION=${VERSION#v}
 
-AUR_DIR="aur"
-PKGBUILD="${AUR_DIR}/PKGBUILD"
+# Find the project root directory to allow running from anywhere
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PKGBUILD="${PROJECT_ROOT}/aur/PKGBUILD"
 
 if [ ! -f "$PKGBUILD" ]; then
     echo "Error: PKGBUILD not found at $PKGBUILD"
@@ -27,10 +29,19 @@ SOURCE_URL="https://github.com/JCO-Digital/jman/archive/refs/tags/v${VERSION}.ta
 TEMP_FILE=$(mktemp)
 
 echo "Downloading ${SOURCE_URL}..."
-curl -sL "$SOURCE_URL" -o "$TEMP_FILE"
+if ! curl -sL "$SOURCE_URL" -o "$TEMP_FILE"; then
+    echo "Error: Failed to download source from $SOURCE_URL"
+    rm -f "$TEMP_FILE"
+    exit 1
+fi
 
 SHA256=$(sha256sum "$TEMP_FILE" | awk '{ print $1 }')
-rm "$TEMP_FILE"
+rm -f "$TEMP_FILE"
+
+if [ -z "$SHA256" ]; then
+    echo "Error: Failed to calculate SHA256 sum"
+    exit 1
+fi
 
 echo "Updating PKGBUILD to version ${VERSION} with SHA256 ${SHA256}"
 
