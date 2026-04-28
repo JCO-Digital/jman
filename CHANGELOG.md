@@ -1,6 +1,17 @@
 # Changelog
 
-### 5.0.4 (2026-04-28)
+### 5.0.5 (2026-04-28)
+
+#### Documentation
+
+- update documentation for CLI changes and remove MainWP (80dd831)
+
+#### Continuous Integration
+
+- aur: update deployment action and add .SRCINFO (7e2604a)
+- github: switch to shmew/aur-deploy action (f68c6c8)
+
+### v5.0.4 (2026-04-28)
 
 #### Continuous Integration
 
