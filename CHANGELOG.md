@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.0.1 (2026-04-28)
+### 5.0.2 (2026-04-28)
+
+#### Refactor
+
+- commands: unify site completions and rework vuln command (c11319e)
+
+### v5.0.1 (2026-04-28)
 
 #### Continuous Integration
 
