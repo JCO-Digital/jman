@@ -45,6 +45,6 @@ format:
 
 completions: bin/jman
 	@mkdir -p bin/completions
-	bin/jman completion bash > bin/completions/jman.bash
-	bin/jman completion zsh > bin/completions/jman.zsh
-	bin/jman completion fish > bin/completions/jman.fish
+	JMAN_TOKENSPINUP=placeholder bin/jman completion bash > bin/completions/jman.bash
+	JMAN_TOKENSPINUP=placeholder bin/jman completion zsh > bin/completions/jman.zsh
+	JMAN_TOKENSPINUP=placeholder bin/jman completion fish > bin/completions/jman.fish
