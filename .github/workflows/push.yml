@@ -29,7 +29,7 @@ jobs:
 
       - name: Run foonver
         id: foonver
-        uses: foonly/foonver@0.9.0
+        uses: foonly/foonver@v0.9.1
         with:
           command: "auto"
           changelog: "true"
