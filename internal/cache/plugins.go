@@ -11,6 +11,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
+var pluginsMu sync.Mutex
+
 // GetCachedPlugins retrieves all installed plugins across all cached sites.
 func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	t := DefaultTTL
@@ -22,7 +24,9 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 
 	force := t == 0
 	if !force {
+		pluginsMu.Lock()
 		_ = ReadJSONCache("plugins", &plugins, t)
+		pluginsMu.Unlock()
 	}
 
 	sites, err := GetSiteList()
@@ -31,12 +35,11 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	}
 
 	updated := false
-	var mu sync.Mutex
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 12)
 
 	for _, site := range sites {
-		mu.Lock()
+		pluginsMu.Lock()
 		// Skip if we already have plugins for this site
 		siteHasPlugins := false
 		for _, p := range plugins {
@@ -45,7 +48,7 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 				break
 			}
 		}
-		mu.Unlock()
+		pluginsMu.Unlock()
 
 		if siteHasPlugins && !force {
 			continue
@@ -60,12 +63,12 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 				verb.PrintErrorf(verb.Normal, "Warning: failed to fetch plugins for site %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 				return
 			}
-			verb.PrintErrorf(verb.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), verb.Blue(site.Name))
+			verb.Printf(verb.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), verb.Blue(site.Name))
 
-			mu.Lock()
+			pluginsMu.Lock()
 			plugins = append(plugins, sitePlugins...)
 			updated = true
-			mu.Unlock()
+			pluginsMu.Unlock()
 		})
 	}
 
@@ -80,12 +83,54 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	}
 
 	if updated {
+		pluginsMu.Lock()
 		if err := WriteJSONCache("plugins", plugins); err != nil {
 			verb.PrintErrorf(verb.Normal, "Warning: failed to write plugins cache: %v\n", err)
 		}
+		pluginsMu.Unlock()
 	}
 
 	return plugins, nil
+}
+
+// UpdateSitePluginCache fetches current plugins for a specific site and updates the cache.
+func UpdateSitePluginCache(site models.CliSite) error {
+	sitePlugins, err := wpcli.GetPlugins(site, true)
+	if err != nil {
+		return fmt.Errorf("failed to fetch plugins for site %s: %w", site.Name, err)
+	}
+
+	verb.Printf(verb.Verbose, "Fetched %d plugins for site %s to update cache\n", len(sitePlugins), verb.Blue(site.Name))
+
+	pluginsMu.Lock()
+	defer pluginsMu.Unlock()
+
+	var plugins []models.WPPlugin
+	_ = ReadJSONCache("plugins", &plugins, -1) // Load existing even if expired
+
+	// Filter out old entries for this site and replace with new ones
+	var updatedPlugins []models.WPPlugin
+	for _, p := range plugins {
+		if p.SiteID != site.ID {
+			updatedPlugins = append(updatedPlugins, p)
+		}
+	}
+	updatedPlugins = append(updatedPlugins, sitePlugins...)
+
+	for _, p := range sitePlugins {
+		bestVer := p.Version
+		if p.Update != "" {
+			bestVer = p.Update
+		}
+		UpdatePluginInfo(p.Name, "", bestVer)
+	}
+
+	if err := WriteJSONCache("plugins", updatedPlugins); err != nil {
+		return fmt.Errorf("failed to write plugins cache: %w", err)
+	}
+
+	verb.Printf(verb.Verbose, "Cache updated for site %s\n", verb.Blue(site.Name))
+	return nil
 }
 
 // GetCachedPluginData groups all active plugins into WPPluginData structures for easier scanning.
@@ -187,6 +232,9 @@ func GetFastCachedPluginData() ([]models.WPPluginData, error) {
 
 // GetFastCachedPlugins retrieves plugins from the cache without checking expiry.
 func GetFastCachedPlugins() ([]models.WPPlugin, error) {
+	pluginsMu.Lock()
+	defer pluginsMu.Unlock()
+
 	var plugins []models.WPPlugin
 	if err := ReadJSONCache("plugins", &plugins, -1); err != nil {
 		return nil, err
