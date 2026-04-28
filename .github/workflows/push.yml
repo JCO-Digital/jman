@@ -16,47 +16,57 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Conventional Changelog Action
-        id: changelog
-        uses: TriPSs/conventional-changelog-action@v6
-        with:
-          github-token: ${{ secrets.MASTER_PAT }}
-          version-file: "./version.json"
-
       - name: Setup Go
-        if: steps.changelog.outputs.skipped == 'false'
         uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
 
-      - name: Build
-        if: steps.changelog.outputs.skipped == 'false'
+      - name: Test
+        run: make test
+
+      - name: Verify Build
+        run: make build
+
+      - name: Run foonver
+        id: foonver
+        uses: foonly/foonver@0.9.0
+        with:
+          command: "auto"
+          changelog: "true"
+          push: "true"
+
+      - name: Build Release Binary
+        # Re-build now that the new tag exists, so the version is embedded correctly
+        if: steps.foonver.outputs.is_bumped == 'true'
         run: make build
 
       - name: Sign Binaries
-        if: steps.changelog.outputs.skipped == 'false'
+        if: steps.foonver.outputs.is_bumped == 'true'
         env:
           MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
         run: go run cmd/sign-binaries/main.go bin/jman bin/jman-api bin/jman-monitor
 
-      - name: Create Release
-        if: steps.changelog.outputs.skipped == 'false'
-        uses: ncipollo/release-action@v1
+      - name: Create GitHub Release
+        if: steps.foonver.outputs.is_bumped == 'true'
+        uses: softprops/action-gh-release@v2
         with:
-          artifacts: "bin/*"
-          tag: ${{ steps.changelog.outputs.tag }}
-          name: ${{ steps.changelog.outputs.tag }}
-          body: ${{ steps.changelog.outputs.clean_changelog }}
+          tag_name: ${{ steps.foonver.outputs.version }}
+          name: Release ${{ steps.foonver.outputs.version }}
+          body: ${{ steps.foonver.outputs.release_notes }}
+          draft: false
+          prerelease: false
+          files: |
+            bin/jman*
+            bin/completions/*
 
       - name: Slack notification (success)
-        if: success() && steps.changelog.outputs.skipped == 'false'
+        if: success() && steps.foonver.outputs.is_bumped == 'true'
         uses: slackapi/slack-github-action@v2
         env:
           MSG: |-
-            ✅ jman release ${{ steps.changelog.outputs.tag }} by ${{ github.actor }} succeeded.
+            ✅ jman release ${{ steps.foonver.outputs.version }} by ${{ github.actor }} succeeded.
 
-            Changelog:
-            ${{ steps.changelog.outputs.clean_changelog }}
+            ${{ steps.foonver.outputs.release_notes }}
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -67,7 +77,7 @@ jobs:
             }
 
       - name: Slack notification (failure)
-        if: failure() && steps.changelog.outputs.skipped == 'false'
+        if: failure()
         uses: slackapi/slack-github-action@v2
         with:
           method: chat.postMessage
@@ -75,5 +85,5 @@ jobs:
           payload: |
             {
               "channel": "C0ANZD53XAS",
-              "text": ${{ toJSON(format('❌ jman release {0} by {1} failed.', steps.changelog.outputs.tag, github.actor)) }}
+              "text": ${{ toJSON(format('❌ jman build/release {0} failed.', github.sha)) }}
             }
