@@ -29,18 +29,7 @@ var pluginCmd = &cobra.Command{
 			return []string{"list", "install", "info", "update", "remove"}, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			sites, err := search.SearchSitesFast(toComplete)
-			if err != nil {
-				return nil, cobra.ShellCompDirectiveError
-			}
-			var completions []string
-			for _, site := range sites {
-				completions = append(completions, fmt.Sprintf("%s\t%s", site.Name, site.ServerName))
-				if site.Name != site.ServerName && site.ServerName != "" {
-					completions = append(completions, fmt.Sprintf("%s\t%s", site.ServerName, site.Name))
-				}
-			}
-			return completions, cobra.ShellCompDirectiveNoFileComp
+			return getSiteCompletions(toComplete)
 		}
 		if len(args) == 2 {
 			operation := args[0]

@@ -2,7 +2,6 @@ package vuln
 
 import (
 	"fmt"
-
 	"slices"
 	"sort"
 	"strings"
@@ -16,39 +15,69 @@ import (
 	"github.com/hashicorp/go-version"
 )
 
-// ScanVulnerabilities runs vulnerability scanning and reporting for the selected target.
+// ScanOptions defines the parameters for a vulnerability scan.
+type ScanOptions struct {
+	Mode          string  // "list" or "sites"
+	Slack         bool    // whether to send reports to Slack
+	CVSSThreshold float64 // threshold for reporting (0 to disable)
+	SiteSearch    string  // filter by site name (case-insensitive)
+}
+
+// ScanVulnerabilities runs vulnerability scanning and reporting based on the provided options.
 //
-// Supported targets:
+// Supported modes:
+//   - "list": produce vulnerability-centric reports (vulnerability -> affected sites)
 //   - "sites": produce site-centric summaries (site -> vulnerable plugins/count/CVSS)
-//   - "cvss": produce vulnerability-centric reports filtered by CVSS threshold
-//   - "slack": produce vulnerability-centric reports and send them to Slack
 //
-// The args slice is interpreted by the selected mode:
-//   - sites mode: if "slack" is present, site summaries are also sent to Slack.
-//   - cvss mode: args[1], when present, is parsed as an override threshold.
-func ScanVulnerabilities(target string, args []string) error {
-	if target == "sites" {
-		return scanSites(args)
+// If SiteSearch is provided, the mode is effectively forced to site-centric and thresholds are ignored.
+func ScanVulnerabilities(opts ScanOptions) error {
+	if opts.Mode == "sites" || opts.SiteSearch != "" {
+		return scanSites(opts)
 	}
-	return scanReports(target, args)
+	return scanReports(opts)
 }
 
 // scanSites builds a site-indexed vulnerability view, applies configured thresholds,
 // prints matching site summaries, and optionally sends them to Slack.
 //
 // A site is reported when either:
-//   - its highest plugin CVSS exceeds config.Cfg.CVSSThreshold, or
-//   - its total vulnerability count exceeds config.Cfg.VulnThreshold.
+//   - its highest plugin CVSS meets or exceeds configured threshold, or
+//   - its total vulnerability count meets or exceeds config.Cfg.VulnThreshold.
 //
-// Site names listed in config.Cfg.IgnoreSites are skipped.
-func scanSites(args []string) error {
+// If SiteSearch is provided, thresholds are ignored and only matching sites are shown.
+// Site names listed in config.Cfg.IgnoreSites are skipped unless explicitly searched for.
+func scanSites(opts ScanOptions) error {
 	sitesMap, err := buildSiteList()
 	if err != nil {
 		return err
 	}
 
+	// Sort site IDs for consistent output.
+	siteIDs := make([]int, 0, len(sitesMap))
+	for siteID := range sitesMap {
+		siteIDs = append(siteIDs, siteID)
+	}
+	sort.Ints(siteIDs)
+
 	siteCount := 0
-	for siteID, plugins := range sitesMap {
+	for _, siteID := range siteIDs {
+		plugins := sitesMap[siteID]
+		siteName, err := getSiteName(siteID)
+		if err != nil {
+			// If a site cannot be resolved from cache, skip it and continue.
+			continue
+		}
+
+		// Apply site search filter if provided.
+		if opts.SiteSearch != "" && !strings.Contains(strings.ToLower(siteName), strings.ToLower(opts.SiteSearch)) {
+			continue
+		}
+
+		// Honor explicit site ignore list from config if NOT searching for a specific site.
+		if opts.SiteSearch == "" && slices.Contains(config.Cfg.IgnoreSites, siteName) {
+			continue
+		}
+
 		var maxCvss float64 = 0
 		var totalVulns int = 0
 
@@ -60,27 +89,30 @@ func scanSites(args []string) error {
 			}
 		}
 
-		// Report only sites that breach configured thresholds.
-		if maxCvss > config.Cfg.CVSSThreshold || float64(totalVulns) > config.Cfg.VulnThreshold {
-			siteName, err := getSiteName(siteID)
-			if err != nil {
-				// If a site cannot be resolved from cache, skip it and continue.
-				continue
-			}
+		// Threshold logic:
+		// If SiteSearch is provided, we show everything for matching sites.
+		// Otherwise, we apply CVSS or vulnerability count thresholds.
+		applyThresholds := opts.SiteSearch == ""
+		match := !applyThresholds
 
-			// Honor explicit site ignore list from config.
-			ignored := slices.Contains(config.Cfg.IgnoreSites, siteName)
-			if ignored {
-				continue
+		if applyThresholds {
+			cvssThreshold := opts.CVSSThreshold
+			if cvssThreshold <= 0 {
+				cvssThreshold = config.Cfg.CVSSThreshold
 			}
+			if maxCvss >= cvssThreshold || float64(totalVulns) >= config.Cfg.VulnThreshold {
+				match = true
+			}
+		}
 
+		if match {
 			siteCount++
-			message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", siteName, totalVulns), plugins)
+			detailed := opts.SiteSearch != ""
+			message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", siteName, totalVulns), plugins, detailed)
 			fmt.Println(message)
 
-			// If "slack" is in args, also send this site summary to Slack.
-			sendToSlack := slices.Contains(args, "slack")
-			if sendToSlack {
+			// If Slack is enabled, also send this site summary to Slack.
+			if opts.Slack {
 				slack.SendMessage(message, false)
 			}
 		}
@@ -90,15 +122,10 @@ func scanSites(args []string) error {
 	return nil
 }
 
-// scanReports generates vulnerability-centric reports and handles target-specific filtering/output.
-//
-// Behavior by target:
-//   - "cvss": filters reports by configured threshold, optionally overridden by args[1].
-//   - "slack": prints all reports and sends each one to Slack.
-//   - other: prints all reports without additional filtering.
+// scanReports generates vulnerability-centric reports and handles filtering and output.
 //
 // For Slack sending, "force" is enabled only when report CVSS is at/above the configured threshold.
-func scanReports(target string, args []string) error {
+func scanReports(opts ScanOptions) error {
 	reports, err := ProcessVulnerabilities()
 	if err != nil {
 		return err
@@ -107,14 +134,9 @@ func scanReports(target string, args []string) error {
 	for _, report := range reports {
 		cvss := getCvss(report)
 
-		if target == "cvss" {
-			cvssThreshold := config.Cfg.CVSSThreshold
-			if len(args) > 1 {
-				fmt.Sscanf(args[1], "%f", &cvssThreshold)
-			}
-			if cvss < cvssThreshold {
-				continue
-			}
+		// Filter by CVSS threshold if provided.
+		if opts.CVSSThreshold > 0 && cvss < opts.CVSSThreshold {
+			continue
 		}
 
 		message, err := formatReport(report)
@@ -125,7 +147,7 @@ func scanReports(target string, args []string) error {
 
 		fmt.Println(message)
 
-		if target == "slack" {
+		if opts.Slack {
 			force := cvss >= config.Cfg.CVSSThreshold
 			slack.SendMessage(message, force)
 		}
@@ -335,9 +357,10 @@ func formatReport(report models.VulnReport) (string, error) {
 	return sb.String(), nil
 }
 
-// formatSiteReport renders a compact site-centric summary showing each vulnerable plugin,
+// formatSiteReport renders a site-centric summary showing each vulnerable plugin,
 // number of matched vulnerabilities, and the plugin's highest CVSS at that site.
-func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) string {
+// If detailed is true, it also lists individual vulnerability names.
+func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin, detailed bool) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s\n", siteTitle)
 
@@ -355,7 +378,22 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin) s
 			displayName = pluginSlug
 		}
 		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(displayName), info.Version)
-		fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
+
+		if detailed {
+			for _, v := range info.Vulnerability {
+				vName := v.Name
+				for _, source := range v.Source {
+					if !strings.HasPrefix(source.Name, "CVE") {
+						vName = source.Name
+						break
+					}
+				}
+				fmt.Fprintf(&sb, "    - %s\n", utils.CleanHTML(vName))
+			}
+		} else {
+			fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
+		}
+
 		if info.Cvss != nil {
 			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
 		}
@@ -392,7 +430,7 @@ func getCvss(report models.VulnReport) float64 {
 
 // versionCompare compares v1 and v2 using semantic version parsing.
 //
-// If semantic parsing fails for either input, it falls back to lexicographic string compare.
+// If semantic parsing fails for either input, it returns an error.
 func versionCompare(v1, v2, op string) (bool, error) {
 	parsed1, err1 := version.NewVersion(v1)
 	parsed2, err2 := version.NewVersion(v2)
