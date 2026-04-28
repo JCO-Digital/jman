@@ -1,5 +1,13 @@
 # Changelog
 
+### 5.0.1 (2026-04-28)
+
+#### Continuous Integration
+
+- github: prefix release tag with v (d878287)
+
+## v5.0.0 (2026-04-28)
+
 ## 5.0.0 (2026-04-28)
 
 #### Features
@@ -23,6 +31,9 @@
 #### Maintenance
 
 - release: v4.27.0 [skip ci] (860ff21)
+
+### Misc
+- v5.0.0 (12c4ad1)
 
 ## v4.26.0 (2026-04-27)
 
