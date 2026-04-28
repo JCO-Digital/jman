@@ -79,26 +79,36 @@ type Asset struct {
 	BrowserDownloadURL string `json:"browser_download_url"`
 }
 
-// CheckForUpdate checks if a newer version of the CLI is available.
-// It returns the latest version string, the download URL, the signature URL, and a boolean indicating if an update is available.
-func CheckForUpdate(currentVersion string, component string) (string, string, string, bool, error) {
+// GetLatestRelease fetches the latest release from a GitHub repository URL.
+func GetLatestRelease(url string) (*Release, error) {
 	client := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	resp, err := client.Get(LatestReleaseURL)
+	resp, err := client.Get(url)
 	if err != nil {
-		return "", "", "", false, fmt.Errorf("failed to check for updates: %w", err)
+		return nil, fmt.Errorf("failed to fetch latest release: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return "", "", "", false, fmt.Errorf("failed to check for updates: received status code %d", resp.StatusCode)
+		return nil, fmt.Errorf("failed to fetch latest release: received status code %d", resp.StatusCode)
 	}
 
 	var release Release
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return "", "", "", false, fmt.Errorf("failed to decode release data: %w", err)
+		return nil, fmt.Errorf("failed to decode release data: %w", err)
+	}
+
+	return &release, nil
+}
+
+// CheckForUpdate checks if a newer version of the CLI is available.
+// It returns the latest version string, the download URL, the signature URL, and a boolean indicating if an update is available.
+func CheckForUpdate(currentVersion string, component string) (string, string, string, bool, error) {
+	release, err := GetLatestRelease(LatestReleaseURL)
+	if err != nil {
+		return "", "", "", false, fmt.Errorf("failed to check for updates: %w", err)
 	}
 
 	downloadURL := ""
