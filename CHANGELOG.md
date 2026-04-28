@@ -1,6 +1,20 @@
 # Changelog
 
-### 5.0.6 (2026-04-28)
+## 5.1.0 (2026-04-28)
+
+#### Features
+
+- setup: add command to install or update bojaco mu-plugin (a06de8b)
+
+#### Refactor
+
+- plugin: split plugin command into subcommands and add concurrency safety (055015a)
+
+#### Maintenance
+
+- aur: remove .SRCINFO file (1097d62)
+
+### v5.0.6 (2026-04-28)
 
 #### Continuous Integration
 
