@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.1.0 (2026-04-28)
+### 5.1.1 (2026-04-28)
+
+#### Refactor
+
+- completions: optimize and improve site completion logic (6daeb31)
+
+## v5.1.0 (2026-04-28)
 
 #### Features
 
