@@ -29,7 +29,7 @@ var vulnListCmd = &cobra.Command{
 	Long:  `Lists vulnerabilities and the sites they affect. If site-search is provided, it switches to a site-centric view for that site and ignores thresholds.`,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

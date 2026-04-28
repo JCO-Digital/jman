@@ -21,7 +21,7 @@ var coreCmd = &cobra.Command{
 			return []string{"check", "update", "version"}, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

@@ -20,7 +20,7 @@ var modsCmd = &cobra.Command{
 			return []string{"enable", "disable", "allow", "disallow"}, cobra.ShellCompDirectiveNoFileComp
 		}
 		if len(args) == 1 {
-			return getSiteCompletions(toComplete)
+			return getSiteCompletions()
 		}
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
