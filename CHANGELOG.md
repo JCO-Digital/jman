@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.0.3 (2026-04-28)
+### 5.0.4 (2026-04-28)
+
+#### Continuous Integration
+
+- aur: fix deployment action version and improve update script (c4120c5)
+
+### v5.0.3 (2026-04-28)
 
 #### Build System
 
