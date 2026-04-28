@@ -56,8 +56,8 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            bin/jman*
-            bin/completions/*
+            bin/*
+            completions/*
 
       - name: Slack notification (success)
         if: success() && steps.foonver.outputs.is_bumped == 'true'

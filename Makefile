@@ -44,7 +44,7 @@ format:
 	go fmt ./...
 
 completions: bin/jman
-	@mkdir -p bin/completions
-	JMAN_TOKENSPINUP=placeholder bin/jman completion bash > bin/completions/jman.bash
-	JMAN_TOKENSPINUP=placeholder bin/jman completion zsh > bin/completions/jman.zsh
-	JMAN_TOKENSPINUP=placeholder bin/jman completion fish > bin/completions/jman.fish
+	@mkdir -p completions
+	JMAN_TOKENSPINUP=placeholder bin/jman completion bash > completions/jman.bash
+	JMAN_TOKENSPINUP=placeholder bin/jman completion zsh > completions/jman.zsh
+	JMAN_TOKENSPINUP=placeholder bin/jman completion fish > completions/jman.fish
