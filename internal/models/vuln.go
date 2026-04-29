@@ -96,3 +96,10 @@ type VulnPlugin struct {
 	Cvss          *float64        `json:"cvss"`
 	Vulnerability []Vulnerability `json:"vulnerability"`
 }
+
+// IgnoredVuln represents a vulnerability UUID that has been added to the ignore list.
+type IgnoredVuln struct {
+	UUID      string `json:"uuid"`
+	Reason    string `json:"reason"`
+	CreatedAt string `json:"created_at"`
+}

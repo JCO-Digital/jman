@@ -163,6 +163,14 @@ func initSchema() error {
 				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
+		{
+			Name: "vuln_ignored",
+			Columns: map[string]string{
+				"uuid":       "TEXT PRIMARY KEY",
+				"reason":     "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
 	}
 
 	for _, table := range tables {
