@@ -8,6 +8,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
@@ -240,6 +241,7 @@ func IsVersionAffected(ver string, op models.Operator) bool {
 }
 
 // GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
+// Vulnerabilities whose UUID appears in the ignore list are silently skipped.
 func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite) []models.VulnReport {
 	var reports []models.VulnReport
 
@@ -249,7 +251,18 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 		return nil
 	}
 
+	ignoredMap, err := db.GetIgnoredVulnMap()
+	if err != nil {
+		verb.Printf(verb.Verbose, "Warning: could not load vuln ignore list: %v\n", err)
+		ignoredMap = map[string]bool{}
+	}
+
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
+		if ignoredMap[vulnerability.Uuid] {
+			verb.Printf(verb.Verbose, "Skipping ignored vulnerability: %s\n", vulnerability.Uuid)
+			continue
+		}
+
 		report := models.VulnReport{
 			Plugin:        pluginName,
 			Slug:          pluginName,
