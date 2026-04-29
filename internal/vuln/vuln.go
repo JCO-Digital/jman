@@ -30,9 +30,10 @@ type ScanOptions struct {
 //   - "list": produce vulnerability-centric reports (vulnerability -> affected sites)
 //   - "sites": produce site-centric summaries (site -> vulnerable plugins/count/CVSS)
 //
-// If SiteSearch is provided, the mode is effectively forced to site-centric and thresholds are ignored.
+// If SiteSearch is provided with mode "list", only vulnerabilities affecting the matching site
+// are shown in full list format, without applying thresholds.
 func ScanVulnerabilities(opts ScanOptions) error {
-	if opts.Mode == "sites" || opts.SiteSearch != "" {
+	if opts.Mode == "sites" {
 		return scanSites(opts)
 	}
 	return scanReports(opts)
@@ -45,8 +46,7 @@ func ScanVulnerabilities(opts ScanOptions) error {
 //   - its highest plugin CVSS meets or exceeds configured threshold, or
 //   - its total vulnerability count meets or exceeds config.Cfg.VulnThreshold.
 //
-// If SiteSearch is provided, thresholds are ignored and only matching sites are shown.
-// Site names listed in config.Cfg.IgnoreSites are skipped unless explicitly searched for.
+// Site names listed in config.Cfg.IgnoreSites are skipped.
 func scanSites(opts ScanOptions) error {
 	sitesMap, err := buildSiteList()
 	if err != nil {
@@ -69,13 +69,8 @@ func scanSites(opts ScanOptions) error {
 			continue
 		}
 
-		// Apply site search filter if provided.
-		if opts.SiteSearch != "" && !strings.Contains(strings.ToLower(siteName), strings.ToLower(opts.SiteSearch)) {
-			continue
-		}
-
-		// Honor explicit site ignore list from config if NOT searching for a specific site.
-		if opts.SiteSearch == "" && slices.Contains(config.Cfg.IgnoreSites, siteName) {
+		// Honor explicit site ignore list from config.
+		if slices.Contains(config.Cfg.IgnoreSites, siteName) {
 			continue
 		}
 
@@ -90,32 +85,21 @@ func scanSites(opts ScanOptions) error {
 			}
 		}
 
-		// Threshold logic:
-		// If SiteSearch is provided, we show everything for matching sites.
-		// Otherwise, we apply CVSS or vulnerability count thresholds.
-		applyThresholds := opts.SiteSearch == ""
-		match := !applyThresholds
-
-		if applyThresholds {
-			cvssThreshold := opts.CVSSThreshold
-			if cvssThreshold <= 0 {
-				cvssThreshold = config.Cfg.CVSSThreshold
-			}
-			if maxCvss >= cvssThreshold || float64(totalVulns) >= config.Cfg.VulnThreshold {
-				match = true
-			}
+		cvssThreshold := opts.CVSSThreshold
+		if cvssThreshold <= 0 {
+			cvssThreshold = config.Cfg.CVSSThreshold
+		}
+		if maxCvss < cvssThreshold && float64(totalVulns) < config.Cfg.VulnThreshold {
+			continue
 		}
 
-		if match {
-			siteCount++
-			detailed := opts.SiteSearch != ""
-			message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", siteName, totalVulns), plugins, detailed)
-			fmt.Println(message)
+		siteCount++
+		message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", siteName, totalVulns), plugins, false)
+		fmt.Println(message)
 
-			// If Slack is enabled, also send this site summary to Slack.
-			if opts.Slack {
-				slack.SendMessage(message, false)
-			}
+		// If Slack is enabled, also send this site summary to Slack.
+		if opts.Slack {
+			slack.SendMessage(message, false)
 		}
 	}
 
@@ -125,6 +109,8 @@ func scanSites(opts ScanOptions) error {
 
 // scanReports generates vulnerability-centric reports and handles filtering and output.
 //
+// If SiteSearch is provided, only reports where at least one site name matches are shown,
+// the Affected Sites list is trimmed to matching sites only, and thresholds are not applied.
 // For Slack sending, "force" is enabled only when report CVSS is at/above the configured threshold.
 func scanReports(opts ScanOptions) error {
 	reports, err := ProcessVulnerabilities()
@@ -135,9 +121,27 @@ func scanReports(opts ScanOptions) error {
 	for _, report := range reports {
 		cvss := getCvss(report)
 
-		// Filter by CVSS threshold if provided.
-		if opts.CVSSThreshold > 0 && cvss < opts.CVSSThreshold {
-			continue
+		if opts.SiteSearch != "" {
+			// Filter sites to those matching the search term.
+			var matched []models.PluginSite
+			for _, site := range report.Sites {
+				siteName, err := getSiteName(site.SiteID)
+				if err != nil {
+					continue
+				}
+				if strings.Contains(strings.ToLower(siteName), strings.ToLower(opts.SiteSearch)) {
+					matched = append(matched, site)
+				}
+			}
+			if len(matched) == 0 {
+				continue
+			}
+			report.Sites = matched
+		} else {
+			// Apply CVSS threshold filter only when not doing a site search.
+			if opts.CVSSThreshold > 0 && cvss < opts.CVSSThreshold {
+				continue
+			}
 		}
 
 		message, err := formatReport(report)
@@ -324,7 +328,7 @@ func formatReport(report models.VulnReport) (string, error) {
 	infoLink := ""
 
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "Plugin: %s\n", utils.CleanHTML(report.PluginName))
+	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Plugin:"), verb.Bold(utils.CleanHTML(report.PluginName)))
 
 	// Pull the first useful values from source metadata.
 	// Non-CVE names are preferred for readability when available.
@@ -347,24 +351,25 @@ func formatReport(report models.VulnReport) (string, error) {
 		infoName = report.Vulnerability.Name
 	}
 
-	fmt.Fprintf(&sb, "Vulnerability: %s\n", utils.CleanHTML(infoName))
+	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Vulnerability:"), verb.Yellow(utils.CleanHTML(infoName)))
+	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("UUID:"), verb.Cyan(report.Vulnerability.Uuid))
 	if infoDate != "" {
-		fmt.Fprintf(&sb, "Date: %s\n", infoDate)
+		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Date:"), infoDate)
 	}
 	if cvss > 0 {
-		fmt.Fprintf(&sb, "CVSS Score: %.1f\n", cvss)
+		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("CVSS Score:"), colorCvss(cvss))
 	}
 	if infoDesc != "" {
-		fmt.Fprintf(&sb, "Description: %s\n", utils.CleanHTML(infoDesc))
+		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Description:"), utils.CleanHTML(infoDesc))
 	}
 	if infoLink != "" {
-		fmt.Fprintf(&sb, "Link: %s\n", infoLink)
+		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Link:"), verb.Cyan(infoLink))
 	}
 
-	sb.WriteString("\nAffected Sites:\n")
+	fmt.Fprintf(&sb, "\n%s\n", verb.Bold("Affected Sites:"))
 	for _, site := range report.Sites {
 		siteName, _ := getSiteName(site.SiteID)
-		fmt.Fprintf(&sb, "  - %s (%s)\n", siteName, site.Version)
+		fmt.Fprintf(&sb, "  %s %s\n", verb.Green("→"), fmt.Sprintf("%s %s", siteName, verb.Gray("("+site.Version+")")))
 	}
 
 	return sb.String(), nil
@@ -375,7 +380,7 @@ func formatReport(report models.VulnReport) (string, error) {
 // If detailed is true, it also lists individual vulnerability names.
 func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin, detailed bool) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "%s\n", siteTitle)
+	fmt.Fprintf(&sb, "%s\n", verb.Bold(siteTitle))
 
 	// Extract keys and sort them for consistent output.
 	keys := make([]string, 0, len(plugins))
@@ -390,7 +395,7 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin, d
 		if displayName == "" {
 			displayName = pluginSlug
 		}
-		fmt.Fprintf(&sb, "  %s - %s\n", utils.CleanHTML(displayName), info.Version)
+		fmt.Fprintf(&sb, "  %s %s\n", verb.Yellow(utils.CleanHTML(displayName)), verb.Gray("("+info.Version+")"))
 
 		if detailed {
 			for _, v := range info.Vulnerability {
@@ -401,14 +406,14 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin, d
 						break
 					}
 				}
-				fmt.Fprintf(&sb, "    - %s\n", utils.CleanHTML(vName))
+				fmt.Fprintf(&sb, "    %s %s\n", verb.Gray("-"), utils.CleanHTML(vName))
 			}
 		} else {
-			fmt.Fprintf(&sb, "    Vulnerabilities: %d\n", len(info.Vulnerability))
+			fmt.Fprintf(&sb, "    %s %d\n", verb.Gray("Vulnerabilities:"), len(info.Vulnerability))
 		}
 
 		if info.Cvss != nil {
-			fmt.Fprintf(&sb, "    Highest CVSS: %.1f\n", *info.Cvss)
+			fmt.Fprintf(&sb, "    %s %s\n", verb.Gray("Highest CVSS:"), colorCvss(*info.Cvss))
 		}
 	}
 
@@ -439,6 +444,20 @@ func getCvss(report models.VulnReport) float64 {
 		return score
 	}
 	return 0
+}
+
+// colorCvss returns the CVSS score formatted and colored by severity:
+// red for high (≥7.0), yellow for medium (≥4.0), green for low (<4.0).
+func colorCvss(cvss float64) string {
+	s := fmt.Sprintf("%.1f", cvss)
+	switch {
+	case cvss >= 7.0:
+		return verb.Red(s)
+	case cvss >= 4.0:
+		return verb.Yellow(s)
+	default:
+		return verb.Green(s)
+	}
 }
 
 // versionCompare compares v1 and v2 using semantic version parsing.
