@@ -1,6 +1,16 @@
 # Changelog
 
-### 5.1.1 (2026-04-28)
+## 5.2.0 (2026-04-29)
+
+#### Features
+
+- vuln: add ignore list functionality (bbe686a)
+
+#### Refactor
+
+- vuln: update search logic and enhance terminal output styling (2129a6b)
+
+### v5.1.1 (2026-04-28)
 
 #### Refactor
 
