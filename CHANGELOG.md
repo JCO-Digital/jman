@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.2.0 (2026-04-29)
+### 5.2.1 (2026-04-30)
+
+#### Bug Fixes
+
+- slack: strip ANSI escape codes from messages before sending (2b2d4b4)
+
+## v5.2.0 (2026-04-29)
 
 #### Features
 
