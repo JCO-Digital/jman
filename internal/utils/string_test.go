@@ -134,3 +134,46 @@ func TestIsValidSlug(t *testing.T) {
 		})
 	}
 }
+
+func TestStripANSI(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "removes basic colors",
+			input:    "\033[31mRed Text\033[0m",
+			expected: "Red Text",
+		},
+		{
+			name:     "removes multiple styles",
+			input:    "\033[1;32mBold Green\033[0m and \033[34mBlue\033[0m",
+			expected: "Bold Green and Blue",
+		},
+		{
+			name:     "removes gray/bright black",
+			input:    "\033[90mGray Text\033[0m",
+			expected: "Gray Text",
+		},
+		{
+			name:     "no ansi codes",
+			input:    "Normal Text",
+			expected: "Normal Text",
+		},
+		{
+			name:     "empty string",
+			input:    "",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := StripANSI(tt.input)
+			if result != tt.expected {
+				t.Errorf("StripANSI() = %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}

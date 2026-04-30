@@ -10,6 +10,7 @@ import (
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 var unifyHyphens = regexp.MustCompile(`[-–—]+`)
 var slugRegex = regexp.MustCompile(`^[a-z0-9-]+$`)
+var ansiRegexp = regexp.MustCompile(`\x1B\[[0-?]*[ -/]*[@-~]`)
 
 // IsValidSlug checks if a plugin slug is valid according to WordPress standards.
 func IsValidSlug(slug string) bool {
@@ -19,6 +20,11 @@ func IsValidSlug(slug string) bool {
 // CleanHTML removes HTML tags, decodes HTML entities, and trims surrounding whitespace.
 // This normalizes text from external feeds (like WordPress.org or vulnerability databases)
 // for CLI or Slack output.
+// StripANSI removes ANSI escape codes from a string.
+func StripANSI(s string) string {
+	return ansiRegexp.ReplaceAllString(s, "")
+}
+
 func CleanHTML(s string) string {
 	s = htmlTagRegexp.ReplaceAllString(s, "")
 	s = html.UnescapeString(s)

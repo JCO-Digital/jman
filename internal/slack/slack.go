@@ -12,6 +12,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/slack-go/slack"
 )
 
@@ -35,6 +36,7 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 		channel = "#testing"
 	}
 
+	message = utils.StripANSI(message)
 	hash := hashMessage(message)
 	database := db.GetDB()
 
