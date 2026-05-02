@@ -37,8 +37,8 @@ export const useMonitorStore = defineStore("monitor", () => {
 			});
 			const data = await res.json();
 			console.log("Monitor history:", data);
-			history.value = data;
-			return data;
+			history.value = data || [];
+			return history.value;
 		} catch (error) {
 			console.error("Failed to fetch monitor history:", error);
 			throw error;

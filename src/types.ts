@@ -206,3 +206,29 @@ export interface EnrichedPlugin extends PluginInfo {
 	count: number;
 	vulnerabilities: Vulnerability[];
 }
+
+export interface Company {
+	id: number;
+	name: string;
+	vat_number: string | null;
+	info: string | null;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export type ContactType = "Main" | "Technical" | "Billing";
+
+export interface Contact {
+	id: number;
+	company_id: number;
+	name: string;
+	email: string | null;
+	phone: string | null;
+	type: ContactType;
+}
+
+export interface EnrichedCompany extends Company {
+	contacts: Contact[];
+}
