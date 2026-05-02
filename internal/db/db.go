@@ -49,6 +49,7 @@ func Init() error {
 			"PRAGMA journal_mode=WAL",
 			"PRAGMA synchronous=NORMAL",
 			"PRAGMA busy_timeout=5000",
+			"PRAGMA foreign_keys=ON",
 		}
 
 		for _, p := range pragmas {
@@ -171,6 +172,56 @@ func initSchema() error {
 				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
+		{
+			Name: "companies",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"name":       "TEXT NOT NULL",
+				"vat_number": "TEXT",
+				"info":       "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT",
+			},
+		},
+		{
+			Name: "contacts",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"company_id": "INTEGER REFERENCES companies(id) ON DELETE CASCADE",
+				"name":       "TEXT NOT NULL",
+				"email":      "TEXT",
+				"phone":      "TEXT",
+				"type":       "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT",
+			},
+		},
+		{
+			Name: "site_company_map",
+			Columns: map[string]string{
+				"site_id":    "INTEGER NOT NULL",
+				"company_id": "INTEGER REFERENCES companies(id) ON DELETE CASCADE",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT",
+			},
+		},
+		{
+			Name: "notes",
+			Columns: map[string]string{
+				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"parent_type": "TEXT",
+				"parent_id":   "INTEGER",
+				"content":     "TEXT",
+				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":  "TEXT",
+				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":  "TEXT",
+			},
+		},
 	}
 
 	for _, table := range tables {
@@ -181,6 +232,18 @@ func initSchema() error {
 
 	// Manual index management
 	_, err := dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_company_map ON site_company_map(site_id, company_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_company_id ON contacts(company_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_type, parent_id);")
 	return err
 }
 

@@ -19,7 +19,7 @@ func GetIgnoredVulns() ([]models.IgnoredVuln, error) {
 	}
 	defer rows.Close()
 
-	var vulns []models.IgnoredVuln
+	vulns := []models.IgnoredVuln{}
 	for rows.Next() {
 		var v models.IgnoredVuln
 		if err := rows.Scan(&v.UUID, &v.Reason, &v.CreatedAt); err != nil {

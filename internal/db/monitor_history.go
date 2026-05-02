@@ -27,7 +27,7 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 	}
 	defer rows.Close()
 
-	var history []models.MonitorHistory
+	history := []models.MonitorHistory{}
 	for rows.Next() {
 		var h models.MonitorHistory
 		err := rows.Scan(
@@ -103,7 +103,7 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 	}
 	defer rows.Close()
 
-	var statuses []models.MonitorStatus
+	statuses := []models.MonitorStatus{}
 	for rows.Next() {
 		var s models.MonitorStatus
 		var lastAlertTime sql.NullTime

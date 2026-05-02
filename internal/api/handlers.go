@@ -34,6 +34,28 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/monitor/ignored", auth(IgnoredSitesHandler))
 	mux.Handle("POST /api/monitor/ignored", auth(IgnoredSitesHandler))
 	mux.Handle("DELETE /api/monitor/ignored/{domain}", auth(UnignoreSiteHandler))
+
+	// --- Company & Contact routes ---
+	mux.Handle("GET /api/companies", auth(ListCompaniesHandler))
+	mux.Handle("POST /api/companies", auth(CreateCompanyHandler))
+	mux.Handle("GET /api/companies/{id}", auth(GetCompanyHandler))
+	mux.Handle("PATCH /api/companies/{id}", auth(UpdateCompanyHandler))
+	mux.Handle("DELETE /api/companies/{id}", auth(DeleteCompanyHandler))
+	mux.Handle("GET /api/companies/{id}/contacts", auth(ListContactsHandler))
+	mux.Handle("POST /api/contacts", auth(CreateContactHandler))
+	mux.Handle("PATCH /api/contacts/{id}", auth(UpdateContactHandler))
+	mux.Handle("DELETE /api/contacts/{id}", auth(DeleteContactHandler))
+
+	// --- Site linking routes ---
+	mux.Handle("GET /api/sites/{id}/company", auth(GetSiteCompanyHandler))
+	mux.Handle("POST /api/sites/{id}/link", auth(LinkSiteHandler))
+	mux.Handle("DELETE /api/sites/{id}/link", auth(UnlinkSiteHandler))
+
+	// --- Note routes ---
+	mux.Handle("GET /api/notes", auth(ListNotesHandler))
+	mux.Handle("POST /api/notes", auth(CreateNoteHandler))
+	mux.Handle("PATCH /api/notes/{id}", auth(UpdateNoteHandler))
+	mux.Handle("DELETE /api/notes/{id}", auth(DeleteNoteHandler))
 }
 
 // HealthHandler returns a simple health check response.
