@@ -8,7 +8,7 @@ import InfoCard from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import { useMonitorStore } from "../stores/monitor";
 import { useCompanyStore } from "../stores/company";
-import type { Company } from "../types";
+import type { Company, Contact } from "../types";
 
 const props = defineProps<{
 	id: string;
@@ -21,6 +21,7 @@ const companyStore = useCompanyStore();
 
 const siteId = parseInt(props.id, 10);
 const company = ref<Company | null>(null);
+const contacts = ref<Contact[]>([]);
 const site = computed(() => dataStore.getSiteById(siteId));
 
 watch(
@@ -39,6 +40,11 @@ watch(
 		if (id) {
 			try {
 				company.value = await companyStore.getCompanyForSite(id);
+				if (company.value) {
+					contacts.value = await companyStore.fetchCompanyContacts(
+						company.value.id,
+					);
+				}
 			} catch (e) {
 				console.error("Failed to fetch company for site", e);
 			}
@@ -108,6 +114,55 @@ const goToCompany = () => {
 		});
 	}
 };
+
+const showLinkModal = ref(false);
+const companySearchQuery = ref("");
+const searchResults = ref<Company[]>([]);
+const isSearching = ref(false);
+
+const handleSearch = async () => {
+	if (companySearchQuery.value.length < 2) {
+		searchResults.value = [];
+		return;
+	}
+	isSearching.value = true;
+	try {
+		await companyStore.fetchCompanies(companySearchQuery.value);
+		searchResults.value = companyStore.companies;
+	} catch (e) {
+		console.error("Search failed", e);
+	} finally {
+		isSearching.value = false;
+	}
+};
+
+const linkCompany = async (compId: number) => {
+	try {
+		await companyStore.linkSiteToCompany(siteId, compId);
+		await dataStore.refreshData();
+		company.value = await companyStore.getCompanyForSite(siteId);
+		if (company.value) {
+			contacts.value = await companyStore.fetchCompanyContacts(
+				company.value.id,
+			);
+		}
+		showLinkModal.value = false;
+	} catch (e: any) {
+		alert("Failed to link company: " + e.message);
+	}
+};
+
+const unlinkCompany = async () => {
+	if (!confirm("Are you sure you want to unlink this company?")) return;
+	try {
+		await companyStore.unlinkSite(siteId);
+		await dataStore.refreshData();
+		company.value = null;
+		contacts.value = [];
+	} catch (e: any) {
+		alert("Failed to unlink company: " + e.message);
+	}
+};
 </script>
 
 <template>
@@ -126,7 +181,7 @@ const goToCompany = () => {
 				:items="serverInfoItems"
 			/>
 
-			<section v-if="company" class="card">
+			<section class="card">
 				<div
 					style="
 						display: flex;
@@ -138,24 +193,74 @@ const goToCompany = () => {
 					"
 				>
 					<h2 style="margin: 0; border: none">Company Information</h2>
-					<button
-						class="back-btn"
-						@click="goToCompany"
-						style="padding: 4px 12px; font-size: 13px"
-					>
-						View Company
-					</button>
-				</div>
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Name:</span>
-						<span class="value">{{ company.name }}</span>
+					<div class="header-actions">
+						<button
+							v-if="company"
+							class="text-btn"
+							@click="unlinkCompany"
+							style="color: #ef4444"
+						>
+							Unlink
+						</button>
+						<button
+							v-if="company"
+							class="back-btn"
+							@click="goToCompany"
+							style="padding: 4px 12px; font-size: 13px"
+						>
+							View Company
+						</button>
+						<button
+							v-else
+							class="btn btn-primary btn-sm"
+							@click="showLinkModal = true"
+						>
+							Link Company
+						</button>
 					</div>
-					<div class="info-item" v-if="company.vat_number">
-						<span class="label">VAT Number:</span>
-						<span class="value">{{ company.vat_number }}</span>
+				</div>
+
+				<div v-if="company">
+					<div class="info-grid">
+						<div class="info-item">
+							<span class="label">Name:</span>
+							<span class="value">{{ company.name }}</span>
+						</div>
+						<div class="info-item" v-if="company.vat_number">
+							<span class="label">VAT Number:</span>
+							<span class="value">{{ company.vat_number }}</span>
+						</div>
+					</div>
+
+					<div class="contacts-preview" v-if="contacts.length > 0">
+						<h3>Contacts</h3>
+						<div class="table-container">
+							<table class="data-table">
+								<thead>
+									<tr>
+										<th>Name</th>
+										<th>Type</th>
+										<th>Email</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr v-for="contact in contacts" :key="contact.id">
+										<td>{{ contact.name }}</td>
+										<td>
+											<span
+												:class="['status-badge', contact.type.toLowerCase()]"
+											>
+												{{ contact.type }}
+											</span>
+										</td>
+										<td>{{ contact.email || "—" }}</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
 					</div>
 				</div>
+				<div v-else class="empty-state">No company linked to this site.</div>
 			</section>
 
 			<MonitorHistoryCard :history="history" :domain="site.domain" />
@@ -219,9 +324,204 @@ const goToCompany = () => {
 				</div>
 			</div>
 		</main>
+
+		<!-- Link Company Modal -->
+		<div
+			v-if="showLinkModal"
+			class="modal-overlay"
+			@click.self="showLinkModal = false"
+		>
+			<div class="modal-content card">
+				<h2>Link Company to Site</h2>
+				<div class="form-layout">
+					<div class="form-group">
+						<label for="comp-search">Search Company</label>
+						<input
+							id="comp-search"
+							v-model="companySearchQuery"
+							type="text"
+							placeholder="Type name or VAT..."
+							@input="handleSearch"
+						/>
+					</div>
+
+					<div class="search-results-list" v-if="searchResults.length > 0">
+						<div
+							v-for="res in searchResults"
+							:key="res.id"
+							class="search-result-item"
+							@click="linkCompany(res.id)"
+						>
+							<div class="res-name">{{ res.name }}</div>
+							<div class="res-vat" v-if="res.vat_number">
+								{{ res.vat_number }}
+							</div>
+						</div>
+					</div>
+					<div
+						v-else-if="companySearchQuery.length >= 2 && !isSearching"
+						class="empty-state"
+					>
+						No companies found.
+					</div>
+					<div v-else-if="isSearching" class="empty-state">Searching...</div>
+
+					<div class="form-actions">
+						<button class="back-btn" @click="showLinkModal = false">
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
 	</div>
 </template>
 
 <style scoped>
-/* Specific styles can remain if needed, but standard table styles are in style.css */
+.contacts-preview {
+	margin-top: 24px;
+}
+
+.contacts-preview h3 {
+	font-size: 0.95rem;
+	margin-bottom: 12px;
+	color: var(--text-muted);
+}
+
+.header-actions {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+}
+
+.text-btn {
+	background: none;
+	border: none;
+	font-weight: 600;
+	cursor: pointer;
+	padding: 4px 8px;
+	font-size: 0.9rem;
+	transition: opacity 0.2s;
+}
+
+.text-btn:hover {
+	opacity: 0.8;
+}
+
+/* Modal styles */
+.modal-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(2px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+}
+
+.modal-content {
+	width: 100%;
+	max-width: 500px;
+	padding: 24px;
+	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.modal-content h2 {
+	margin-top: 0;
+	margin-bottom: 20px;
+	font-size: 1.25rem;
+	border-bottom: none;
+	padding-bottom: 0;
+}
+
+.search-results-list {
+	margin-top: 12px;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	max-height: 250px;
+	overflow-y: auto;
+}
+
+.search-result-item {
+	padding: 10px 16px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.search-result-item:last-child {
+	border-bottom: none;
+}
+
+.search-result-item:hover {
+	background-color: var(--bg-hover);
+}
+
+.res-name {
+	font-weight: 600;
+	color: var(--text-main);
+}
+
+.res-vat {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+}
+
+.form-layout {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.form-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.form-group label {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--text-muted);
+}
+
+.form-group input {
+	padding: 10px 12px;
+	border: 1px solid var(--border-input);
+	border-radius: 6px;
+	background: var(--bg-body);
+	color: var(--text-main);
+	font-size: 0.95rem;
+}
+
+.form-actions {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 8px;
+}
+
+.btn-sm {
+	padding: 6px 12px;
+	font-size: 13px;
+}
+
+/* Status badges for contact types */
+.status-badge.main {
+	background-color: rgba(59, 130, 246, 0.1);
+	color: #3b82f6;
+}
+
+.status-badge.technical {
+	background-color: rgba(16, 185, 129, 0.1);
+	color: #10b981;
+}
+
+.status-badge.billing {
+	background-color: rgba(245, 158, 11, 0.1);
+	color: #f59e0b;
+}
 </style>

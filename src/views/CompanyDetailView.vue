@@ -2,7 +2,8 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useCompanyStore } from "../stores/company";
-import type { Company, Contact, ContactType } from "../types";
+import { useDataStore } from "../stores/data";
+import type { Company, Contact, ContactType, Site } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
@@ -13,10 +14,14 @@ const props = defineProps<{
 
 const router = useRouter();
 const companyStore = useCompanyStore();
+const dataStore = useDataStore();
 
 const companyId = parseInt(props.id, 10);
 const company = ref<Company | null>(null);
 const contacts = ref<Contact[]>([]);
+const linkedSites = computed(() =>
+	dataStore.sites.filter((s) => s.company_id === companyId),
+);
 const isLoading = ref(true);
 const error = ref<string | null>(null);
 
@@ -27,6 +32,7 @@ const loadData = async () => {
 		const [companyData, contactsData] = await Promise.all([
 			companyStore.getCompany(companyId),
 			companyStore.fetchCompanyContacts(companyId),
+			dataStore.refreshData(),
 		]);
 
 		if (companyData) {
@@ -164,6 +170,43 @@ const handleDeleteCompany = async () => {
 		alert("Failed to delete company: " + e.message);
 	}
 };
+
+const showLinkSiteModal = ref(false);
+const siteSearchQuery = ref("");
+
+const availableSites = computed(() => {
+	const query = siteSearchQuery.value.toLowerCase();
+	return dataStore.sites.filter((site) => {
+		const isNotLinked = !linkedSites.value.some((s) => s.id === site.id);
+		const matchesQuery = site.domain.toLowerCase().includes(query);
+		return isNotLinked && matchesQuery;
+	});
+});
+
+const handleLinkSite = async (siteId: number) => {
+	try {
+		await companyStore.linkSiteToCompany(siteId, companyId);
+		await dataStore.refreshData();
+		showLinkSiteModal.value = false;
+		siteSearchQuery.value = "";
+	} catch (e: any) {
+		alert("Failed to link site: " + e.message);
+	}
+};
+
+const handleUnlinkSite = async (siteId: number) => {
+	if (!confirm("Are you sure you want to unlink this site?")) return;
+	try {
+		await companyStore.unlinkSite(siteId);
+		await dataStore.refreshData();
+	} catch (e: any) {
+		alert("Failed to unlink site: " + e.message);
+	}
+};
+
+const goToSite = (siteId: number) => {
+	router.push({ name: "site-detail", params: { id: siteId.toString() } });
+};
 </script>
 
 <template>
@@ -284,6 +327,73 @@ const handleDeleteCompany = async () => {
 					</table>
 				</div>
 			</section>
+
+			<section class="card">
+				<div class="card-header">
+					<h2>Linked Sites ({{ linkedSites.length }})</h2>
+					<button
+						class="btn btn-primary btn-sm"
+						@click="showLinkSiteModal = true"
+					>
+						Link Site
+					</button>
+				</div>
+
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Domain</th>
+								<th>PHP</th>
+								<th class="actions-cell">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr v-if="linkedSites.length === 0">
+								<td colspan="3" class="empty-state">
+									No sites linked to this company.
+								</td>
+							</tr>
+							<tr v-for="site in linkedSites" :key="site.id">
+								<td>
+									<a
+										href="#"
+										@click.prevent="goToSite(site.id)"
+										class="site-link"
+									>
+										<strong>{{ site.domain }}</strong>
+									</a>
+								</td>
+								<td>{{ site.php_version }}</td>
+								<td class="actions-cell">
+									<div class="row-actions">
+										<button
+											class="icon-btn-sm delete"
+											@click="handleUnlinkSite(site.id)"
+											title="Unlink Site"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											>
+												<line x1="18" y1="6" x2="6" y2="18"></line>
+												<line x1="6" y1="6" x2="18" y2="18"></line>
+											</svg>
+										</button>
+									</div>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
 		</main>
 
 		<main class="content" v-else-if="isLoading">
@@ -360,10 +470,89 @@ const handleDeleteCompany = async () => {
 				</form>
 			</div>
 		</div>
+
+		<!-- Link Site Modal -->
+		<div
+			v-if="showLinkSiteModal"
+			class="modal-overlay"
+			@click.self="showLinkSiteModal = false"
+		>
+			<div class="modal-content card">
+				<h2>Link Site to Company</h2>
+				<div class="form-layout">
+					<div class="form-group">
+						<label for="s-search">Search Site Domain</label>
+						<input
+							id="s-search"
+							v-model="siteSearchQuery"
+							type="text"
+							placeholder="e.g. example.com"
+						/>
+					</div>
+
+					<div class="search-results-list" v-if="availableSites.length > 0">
+						<div
+							v-for="site in availableSites"
+							:key="site.id"
+							class="search-result-item"
+							@click="handleLinkSite(site.id)"
+						>
+							<div class="res-name">{{ site.domain }}</div>
+						</div>
+					</div>
+					<div v-else-if="siteSearchQuery.length > 0" class="empty-state">
+						No available sites found.
+					</div>
+
+					<div class="form-actions">
+						<button class="back-btn" @click="showLinkSiteModal = false">
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
 	</div>
 </template>
 
 <style scoped>
+.site-link {
+	color: var(--primary);
+	text-decoration: none;
+}
+
+.site-link:hover {
+	text-decoration: underline;
+}
+
+.search-results-list {
+	margin-top: 12px;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	max-height: 250px;
+	overflow-y: auto;
+}
+
+.search-result-item {
+	padding: 10px 16px;
+	cursor: pointer;
+	transition: background-color 0.2s;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.search-result-item:last-child {
+	border-bottom: none;
+}
+
+.search-result-item:hover {
+	background-color: var(--bg-hover);
+}
+
+.res-name {
+	font-weight: 600;
+	color: var(--text-main);
+}
+
 .card-header {
 	display: flex;
 	justify-content: space-between;

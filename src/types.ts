@@ -66,6 +66,7 @@ export interface Backups {
 export interface Site {
 	id: number;
 	server_id: number;
+	company_id?: number;
 	domain: string;
 	additional_domains: AdditionalDomain[];
 	site_user: string;
