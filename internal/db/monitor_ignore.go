@@ -20,7 +20,7 @@ func GetIgnoredSites() ([]models.IgnoredSite, error) {
 	}
 	defer rows.Close()
 
-	var sites []models.IgnoredSite
+	sites := []models.IgnoredSite{}
 	for rows.Next() {
 		var s models.IgnoredSite
 		if err := rows.Scan(&s.Domain, &s.Reason, &s.CreatedAt); err != nil {

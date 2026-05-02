@@ -17,7 +17,7 @@ import (
 func SearchSites(query string) ([]models.CliSite, error) {
 	sites, err := cache.GetSiteList()
 	if err != nil {
-		return nil, err
+		return []models.CliSite{}, err
 	}
 	return filterSites(sites, query)
 }
@@ -26,14 +26,14 @@ func SearchSites(query string) ([]models.CliSite, error) {
 func SearchSitesFast(query string) ([]models.CliSite, error) {
 	sites, err := cache.GetFastSiteList()
 	if err != nil {
-		return nil, err
+		return []models.CliSite{}, err
 	}
 	return filterSites(sites, query)
 }
 
 func filterSites(sites []models.CliSite, query string) ([]models.CliSite, error) {
-	var matched []models.CliSite
-	var exact []models.CliSite
+	matched := []models.CliSite{}
+	exact := []models.CliSite{}
 	query = strings.ToLower(query)
 
 	for _, site := range sites {
@@ -58,7 +58,7 @@ func filterSites(sites []models.CliSite, query string) ([]models.CliSite, error)
 func SearchPlugins(query string) ([]models.WPPluginData, error) {
 	plugins, err := cache.GetCachedPluginData()
 	if err != nil {
-		return nil, err
+		return []models.WPPluginData{}, err
 	}
 	return filterPlugins(plugins, query)
 }
@@ -67,13 +67,13 @@ func SearchPlugins(query string) ([]models.WPPluginData, error) {
 func SearchPluginsFast(query string) ([]models.WPPluginData, error) {
 	plugins, err := cache.GetFastCachedPluginData()
 	if err != nil {
-		return nil, err
+		return []models.WPPluginData{}, err
 	}
 	return filterPlugins(plugins, query)
 }
 
 func filterPlugins(plugins []models.WPPluginData, query string) ([]models.WPPluginData, error) {
-	var matched []models.WPPluginData
+	matched := []models.WPPluginData{}
 	query = strings.ToLower(query)
 
 	for _, p := range plugins {
@@ -92,16 +92,16 @@ func filterPlugins(plugins []models.WPPluginData, query string) ([]models.WPPlug
 // PromptSearch asks the user to confirm the list of filtered sites
 func PromptSearch(query string) ([]models.CliSite, error) {
 	if query == "" {
-		return nil, fmt.Errorf("no query provided")
+		return []models.CliSite{}, fmt.Errorf("no query provided")
 	}
 
 	sites, err := SearchSites(query)
 	if err != nil {
-		return nil, err
+		return []models.CliSite{}, err
 	}
 
 	if len(sites) == 0 {
-		return nil, fmt.Errorf("no sites found")
+		return []models.CliSite{}, fmt.Errorf("no sites found")
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -112,7 +112,7 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 		verb.PrintErrorf(verb.Quiet, "Do you want to run the command on this site? [Y/n]: ")
 		response, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, err
+			return []models.CliSite{}, err
 		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "n" || response == "no" {
@@ -129,7 +129,7 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", verb.Bold("Enter numbers separated by space"))
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		return nil, err
+		return []models.CliSite{}, err
 	}
 
 	response = strings.TrimSpace(strings.ToLower(response))
@@ -146,10 +146,10 @@ func PromptSearch(query string) ([]models.CliSite, error) {
 	for _, part := range parts {
 		idx, err := strconv.Atoi(part)
 		if err != nil {
-			return nil, fmt.Errorf("invalid selection: %s", part)
+			return []models.CliSite{}, fmt.Errorf("invalid selection: %s", part)
 		}
 		if idx < 1 || idx > len(sites) {
-			return nil, fmt.Errorf("selection out of range: %d", idx)
+			return []models.CliSite{}, fmt.Errorf("selection out of range: %d", idx)
 		}
 		selected = append(selected, sites[idx-1])
 	}
