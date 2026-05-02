@@ -49,6 +49,17 @@ const router = createRouter({
 			}),
 		},
 		{
+			path: "/companies",
+			name: "companies",
+			component: () => import("../views/CompaniesView.vue"),
+		},
+		{
+			path: "/company/:id",
+			name: "company-detail",
+			component: () => import("../views/CompanyDetailView.vue"),
+			props: true,
+		},
+		{
 			path: "/",
 			name: "home",
 			component: () => import("../views/DashboardView.vue"),

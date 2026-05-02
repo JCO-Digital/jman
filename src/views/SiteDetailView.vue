@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import ViewHeader from "../components/ViewHeader.vue";
@@ -7,6 +7,8 @@ import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import { useMonitorStore } from "../stores/monitor";
+import { useCompanyStore } from "../stores/company";
+import type { Company } from "../types";
 
 const props = defineProps<{
 	id: string;
@@ -15,8 +17,10 @@ const props = defineProps<{
 const router = useRouter();
 const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
+const companyStore = useCompanyStore();
 
 const siteId = parseInt(props.id, 10);
+const company = ref<Company | null>(null);
 const site = computed(() => dataStore.getSiteById(siteId));
 
 watch(
@@ -24,6 +28,20 @@ watch(
 	(domain) => {
 		if (domain) {
 			monitorStore.fetchStatus(domain);
+		}
+	},
+	{ immediate: true },
+);
+
+watch(
+	() => site.value?.id,
+	async (id) => {
+		if (id) {
+			try {
+				company.value = await companyStore.getCompanyForSite(id);
+			} catch (e) {
+				console.error("Failed to fetch company for site", e);
+			}
 		}
 	},
 	{ immediate: true },
@@ -81,6 +99,15 @@ const goToPlugin = (name: string) => {
 		params: { name },
 	});
 };
+
+const goToCompany = () => {
+	if (company.value) {
+		router.push({
+			name: "company-detail",
+			params: { id: company.value.id.toString() },
+		});
+	}
+};
 </script>
 
 <template>
@@ -98,6 +125,38 @@ const goToPlugin = (name: string) => {
 				title="Server Information"
 				:items="serverInfoItems"
 			/>
+
+			<section v-if="company" class="card">
+				<div
+					style="
+						display: flex;
+						justify-content: space-between;
+						align-items: center;
+						margin-bottom: 16px;
+						border-bottom: 1px solid var(--border-color);
+						padding-bottom: 8px;
+					"
+				>
+					<h2 style="margin: 0; border: none">Company Information</h2>
+					<button
+						class="back-btn"
+						@click="goToCompany"
+						style="padding: 4px 12px; font-size: 13px"
+					>
+						View Company
+					</button>
+				</div>
+				<div class="info-grid">
+					<div class="info-item">
+						<span class="label">Name:</span>
+						<span class="value">{{ company.name }}</span>
+					</div>
+					<div class="info-item" v-if="company.vat_number">
+						<span class="label">VAT Number:</span>
+						<span class="value">{{ company.vat_number }}</span>
+					</div>
+				</div>
+			</section>
 
 			<MonitorHistoryCard :history="history" :domain="site.domain" />
 
