@@ -43,7 +43,6 @@ export const useMonitorStore = defineStore("monitor", () => {
 			return history.value;
 		} catch (error) {
 			console.error("Failed to fetch monitor history:", error);
-			historyFetched.value = true;
 			throw error;
 		} finally {
 			isLoadingHistory.value = false;
