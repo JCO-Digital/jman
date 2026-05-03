@@ -12,7 +12,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
 
-	async function fetchOrganizations(search?: string) {
+	async function fetchOrganizations(search?: string, signal?: AbortSignal) {
 		isLoading.value = true;
 		error.value = null;
 		try {
@@ -23,6 +23,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 
 			const res = await fetch(url.toString(), {
 				headers: authStore.authHeader,
+				signal,
 			});
 
 			if (!res.ok) throw new Error("Failed to fetch organizations");
@@ -30,6 +31,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			const data = await res.json();
 			organizations.value = data;
 		} catch (e: any) {
+			if (e.name === "AbortError") return;
 			error.value = e.message;
 			console.error(e);
 		} finally {

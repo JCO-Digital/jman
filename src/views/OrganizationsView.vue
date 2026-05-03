@@ -9,13 +9,35 @@ const router = useRouter();
 const organizationStore = useOrganizationStore();
 
 const searchQuery = ref("");
+let searchTimeout: number | null = null;
+let abortController: AbortController | null = null;
 
 onMounted(() => {
 	organizationStore.fetchOrganizations();
 });
 
 const handleSearch = () => {
-	organizationStore.fetchOrganizations(searchQuery.value);
+	if (searchTimeout) {
+		clearTimeout(searchTimeout);
+	}
+
+	searchTimeout = window.setTimeout(async () => {
+		if (abortController) {
+			abortController.abort();
+		}
+		abortController = new AbortController();
+
+		try {
+			await organizationStore.fetchOrganizations(
+				searchQuery.value,
+				abortController.signal,
+			);
+		} catch (e: any) {
+			if (e.name !== "AbortError") {
+				console.error("Search failed", e);
+			}
+		}
+	}, 300);
 };
 
 const goToOrganization = (id: number) => {
