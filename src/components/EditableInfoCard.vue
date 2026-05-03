@@ -109,7 +109,7 @@ const copyToClipboard = async (value: any, index: number) => {
 						@click="item.copyable ? copyToClipboard(item.value, index) : null"
 						:title="item.copyable ? 'Click to copy' : ''"
 					>
-						{{ item.value || "—" }}
+						{{ item.value ?? "—" }}
 						<span v-if="copiedIndex === index" class="copy-feedback"
 							>Copied!</span
 						>
