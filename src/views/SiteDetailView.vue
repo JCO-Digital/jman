@@ -135,21 +135,47 @@ const showLinkModal = ref(false);
 const organizationSearchQuery = ref("");
 const searchResults = ref<Organization[]>([]);
 const isSearching = ref(false);
+let searchTimeout: number | null = null;
+let abortController: AbortController | null = null;
 
-const handleSearch = async () => {
+const handleSearch = () => {
+	if (searchTimeout) {
+		clearTimeout(searchTimeout);
+	}
+
 	if (organizationSearchQuery.value.length < 2) {
 		searchResults.value = [];
+		isSearching.value = false;
+		if (abortController) {
+			abortController.abort();
+			abortController = null;
+		}
 		return;
 	}
-	isSearching.value = true;
-	try {
-		await organizationStore.fetchOrganizations(organizationSearchQuery.value);
-		searchResults.value = organizationStore.organizations;
-	} catch (e) {
-		console.error("Search failed", e);
-	} finally {
-		isSearching.value = false;
-	}
+
+	searchTimeout = window.setTimeout(async () => {
+		if (abortController) {
+			abortController.abort();
+		}
+		abortController = new AbortController();
+		isSearching.value = true;
+
+		try {
+			await organizationStore.fetchOrganizations(
+				organizationSearchQuery.value,
+				abortController.signal,
+			);
+			searchResults.value = organizationStore.organizations;
+		} catch (e: any) {
+			if (e.name !== "AbortError") {
+				console.error("Search failed", e);
+			}
+		} finally {
+			if (!abortController?.signal.aborted) {
+				isSearching.value = false;
+			}
+		}
+	}, 300);
 };
 
 const linkOrganization = async (compId: number) => {
