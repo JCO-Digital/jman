@@ -35,20 +35,20 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/monitor/ignored", auth(IgnoredSitesHandler))
 	mux.Handle("DELETE /api/monitor/ignored/{domain}", auth(UnignoreSiteHandler))
 
-	// --- Company & Contact routes ---
-	mux.Handle("GET /api/companies", auth(ListCompaniesHandler))
-	mux.Handle("POST /api/companies", auth(CreateCompanyHandler))
-	mux.Handle("GET /api/companies/{id}", auth(GetCompanyHandler))
-	mux.Handle("PATCH /api/companies/{id}", auth(UpdateCompanyHandler))
-	mux.Handle("DELETE /api/companies/{id}", auth(DeleteCompanyHandler))
-	mux.Handle("GET /api/companies/{id}/contacts", auth(ListContactsHandler))
-	mux.Handle("GET /api/companies/{id}/sites", auth(ListCompanySitesHandler))
+	// --- Organization & Contact routes ---
+	mux.Handle("GET /api/organizations", auth(ListOrganizationsHandler))
+	mux.Handle("POST /api/organizations", auth(CreateOrganizationHandler))
+	mux.Handle("GET /api/organizations/{id}", auth(GetOrganizationHandler))
+	mux.Handle("PATCH /api/organizations/{id}", auth(UpdateOrganizationHandler))
+	mux.Handle("DELETE /api/organizations/{id}", auth(DeleteOrganizationHandler))
+	mux.Handle("GET /api/organizations/{id}/contacts", auth(ListContactsHandler))
+	mux.Handle("GET /api/organizations/{id}/sites", auth(ListOrganizationSitesHandler))
 	mux.Handle("POST /api/contacts", auth(CreateContactHandler))
 	mux.Handle("PATCH /api/contacts/{id}", auth(UpdateContactHandler))
 	mux.Handle("DELETE /api/contacts/{id}", auth(DeleteContactHandler))
 
 	// --- Site linking routes ---
-	mux.Handle("GET /api/sites/{id}/company", auth(GetSiteCompanyHandler))
+	mux.Handle("GET /api/sites/{id}/organization", auth(GetSiteOrganizationHandler))
 	mux.Handle("POST /api/sites/{id}/link", auth(LinkSiteHandler))
 	mux.Handle("DELETE /api/sites/{id}/link", auth(UnlinkSiteHandler))
 

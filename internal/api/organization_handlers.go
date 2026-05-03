@@ -20,41 +20,41 @@ func getUsername(r *http.Request) string {
 	return "system"
 }
 
-// --- Company Handlers ---
+// --- Organization Handlers ---
 
-// ListCompaniesHandler returns a list of all companies, with optional search.
-func ListCompaniesHandler(w http.ResponseWriter, r *http.Request) {
+// ListOrganizationsHandler returns a list of all organizations, with optional search.
+func ListOrganizationsHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
-	companies, err := db.GetAllCompanies(search)
+	organizations, err := db.GetAllOrganizations(search)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	WriteJSON(w, http.StatusOK, companies)
+	WriteJSON(w, http.StatusOK, organizations)
 }
 
-// CreateCompanyHandler creates a new company record.
-func CreateCompanyHandler(w http.ResponseWriter, r *http.Request) {
-	var company models.Company
-	if err := json.NewDecoder(r.Body).Decode(&company); err != nil {
+// CreateOrganizationHandler creates a new organization record.
+func CreateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
+	var org models.Organization
+	if err := json.NewDecoder(r.Body).Decode(&org); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if company.Name == "" {
-		WriteError(w, http.StatusBadRequest, "Company name is required")
+	if org.Name == "" {
+		WriteError(w, http.StatusBadRequest, "Organization name is required")
 		return
 	}
 
 	username := getUsername(r)
-	if err := db.SaveCompany(&company, username); err != nil {
+	if err := db.SaveOrganization(&org, username); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	WriteJSON(w, http.StatusCreated, company)
+	WriteJSON(w, http.StatusCreated, org)
 }
 
-// GetCompanyHandler returns details for a specific company.
-func GetCompanyHandler(w http.ResponseWriter, r *http.Request) {
+// GetOrganizationHandler returns details for a specific organization.
+func GetOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -62,20 +62,20 @@ func GetCompanyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	company, err := db.GetCompany(id)
+	org, err := db.GetOrganization(id)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if company == nil {
-		WriteError(w, http.StatusNotFound, "Company not found")
+	if org == nil {
+		WriteError(w, http.StatusNotFound, "Organization not found")
 		return
 	}
-	WriteJSON(w, http.StatusOK, company)
+	WriteJSON(w, http.StatusOK, org)
 }
 
-// UpdateCompanyHandler updates an existing company record.
-func UpdateCompanyHandler(w http.ResponseWriter, r *http.Request) {
+// UpdateOrganizationHandler updates an existing organization record.
+func UpdateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -83,38 +83,38 @@ func UpdateCompanyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updates models.Company
+	var updates models.Organization
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	company, err := db.GetCompany(id)
+	org, err := db.GetOrganization(id)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if company == nil {
-		WriteError(w, http.StatusNotFound, "Company not found")
+	if org == nil {
+		WriteError(w, http.StatusNotFound, "Organization not found")
 		return
 	}
 
 	if updates.Name != "" {
-		company.Name = updates.Name
+		org.Name = updates.Name
 	}
-	company.VATNumber = updates.VATNumber
-	company.Info = updates.Info
+	org.VATNumber = updates.VATNumber
+	org.Info = updates.Info
 
 	username := getUsername(r)
-	if err := db.SaveCompany(company, username); err != nil {
+	if err := db.SaveOrganization(org, username); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	WriteJSON(w, http.StatusOK, company)
+	WriteJSON(w, http.StatusOK, org)
 }
 
-// DeleteCompanyHandler deletes a company record and all its dependencies.
-func DeleteCompanyHandler(w http.ResponseWriter, r *http.Request) {
+// DeleteOrganizationHandler deletes an organization record and all its dependencies.
+func DeleteOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -122,7 +122,7 @@ func DeleteCompanyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := db.DeleteCompany(id); err != nil {
+	if err := db.DeleteOrganization(id); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -131,16 +131,16 @@ func DeleteCompanyHandler(w http.ResponseWriter, r *http.Request) {
 
 // --- Contact Handlers ---
 
-// ListContactsHandler returns all contacts for a specific company.
+// ListContactsHandler returns all contacts for a specific organization.
 func ListContactsHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid company ID")
+		WriteError(w, http.StatusBadRequest, "Invalid organization ID")
 		return
 	}
 
-	contacts, err := db.GetContactsByCompany(id)
+	contacts, err := db.GetContactsByOrganization(id)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -148,16 +148,16 @@ func ListContactsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, contacts)
 }
 
-// ListCompanySitesHandler returns all sites linked to a specific company.
-func ListCompanySitesHandler(w http.ResponseWriter, r *http.Request) {
+// ListOrganizationSitesHandler returns all sites linked to a specific organization.
+func ListOrganizationSitesHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid company ID")
+		WriteError(w, http.StatusBadRequest, "Invalid organization ID")
 		return
 	}
 
-	siteIDs, err := db.GetSitesByCompany(id)
+	siteIDs, err := db.GetSitesByOrganization(id)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -171,7 +171,7 @@ func ListCompanySitesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Filter sites by the IDs we found in DB
-	companySites := []models.Site{}
+	orgSites := []models.Site{}
 	idMap := make(map[int]bool)
 	for _, sid := range siteIDs {
 		idMap[sid] = true
@@ -179,22 +179,22 @@ func ListCompanySitesHandler(w http.ResponseWriter, r *http.Request) {
 
 	for _, s := range allSites {
 		if idMap[s.ID] {
-			companySites = append(companySites, s)
+			orgSites = append(orgSites, s)
 		}
 	}
 
-	WriteJSON(w, http.StatusOK, companySites)
+	WriteJSON(w, http.StatusOK, orgSites)
 }
 
-// CreateContactHandler creates a new contact person for a company.
+// CreateContactHandler creates a new contact person for an organization.
 func CreateContactHandler(w http.ResponseWriter, r *http.Request) {
 	var contact models.Contact
 	if err := json.NewDecoder(r.Body).Decode(&contact); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if contact.Name == "" || contact.CompanyID == 0 {
-		WriteError(w, http.StatusBadRequest, "Name and CompanyID are required")
+	if contact.Name == "" || contact.OrganizationID == 0 {
+		WriteError(w, http.StatusBadRequest, "Name and OrganizationID are required")
 		return
 	}
 
@@ -266,8 +266,8 @@ func DeleteContactHandler(w http.ResponseWriter, r *http.Request) {
 
 // --- Site Linking Handlers ---
 
-// GetSiteCompanyHandler returns the company linked to a site.
-func GetSiteCompanyHandler(w http.ResponseWriter, r *http.Request) {
+// GetSiteOrganizationHandler returns the organization linked to a site.
+func GetSiteOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
@@ -275,19 +275,19 @@ func GetSiteCompanyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	company, err := db.GetCompanyBySite(id)
+	org, err := db.GetOrganizationBySite(id)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if company == nil {
-		WriteError(w, http.StatusNotFound, "No company linked to this site")
+	if org == nil {
+		WriteError(w, http.StatusNotFound, "No organization linked to this site")
 		return
 	}
-	WriteJSON(w, http.StatusOK, company)
+	WriteJSON(w, http.StatusOK, org)
 }
 
-// LinkSiteHandler links a site to a company.
+// LinkSiteHandler links a site to an organization.
 func LinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	siteID, err := strconv.Atoi(idStr)
@@ -297,7 +297,7 @@ func LinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		CompanyID int `json:"company_id"`
+		OrganizationID int `json:"organization_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -305,14 +305,14 @@ func LinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	username := getUsername(r)
-	if err := db.LinkSiteToCompany(siteID, body.CompanyID, username); err != nil {
+	if err := db.LinkSiteToOrganization(siteID, body.OrganizationID, username); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	w.WriteHeader(http.StatusOK)
 }
 
-// UnlinkSiteHandler removes the link between a site and its company.
+// UnlinkSiteHandler removes the link between a site and its organization.
 func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 	siteIDStr := r.PathValue("id")
 	siteID, err := strconv.Atoi(siteIDStr)
@@ -321,17 +321,17 @@ func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	company, err := db.GetCompanyBySite(siteID)
+	org, err := db.GetOrganizationBySite(siteID)
 	if err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if company == nil {
+	if org == nil {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 
-	if err := db.UnlinkSiteFromCompany(siteID, company.ID); err != nil {
+	if err := db.UnlinkSiteFromOrganization(siteID, org.ID); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
@@ -340,7 +340,7 @@ func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 
 // --- Note Handlers ---
 
-// ListNotesHandler returns notes for a specific company or site.
+// ListNotesHandler returns notes for a specific organization or site.
 func ListNotesHandler(w http.ResponseWriter, r *http.Request) {
 	parentType := models.NoteParentType(r.URL.Query().Get("type"))
 	parentIDStr := r.URL.Query().Get("id")
@@ -350,7 +350,7 @@ func ListNotesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if parentType != models.NoteParentTypeCompany && parentType != models.NoteParentTypeSite {
+	if parentType != models.NoteParentTypeOrganization && parentType != models.NoteParentTypeSite {
 		WriteError(w, http.StatusBadRequest, "Invalid parent type")
 		return
 	}

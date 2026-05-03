@@ -173,7 +173,7 @@ func initSchema() error {
 			},
 		},
 		{
-			Name: "companies",
+			Name: "organizations",
 			Columns: map[string]string{
 				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
 				"name":       "TEXT NOT NULL",
@@ -188,25 +188,25 @@ func initSchema() error {
 		{
 			Name: "contacts",
 			Columns: map[string]string{
-				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"company_id": "INTEGER REFERENCES companies(id) ON DELETE CASCADE",
-				"name":       "TEXT NOT NULL",
-				"email":      "TEXT",
-				"phone":      "TEXT",
-				"type":       "TEXT",
-				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by": "TEXT",
-				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by": "TEXT",
+				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"organization_id": "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+				"name":            "TEXT NOT NULL",
+				"email":           "TEXT",
+				"phone":           "TEXT",
+				"type":            "TEXT",
+				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":      "TEXT",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":      "TEXT",
 			},
 		},
 		{
-			Name: "site_company_map",
+			Name: "site_organization_map",
 			Columns: map[string]string{
-				"site_id":    "INTEGER NOT NULL",
-				"company_id": "INTEGER REFERENCES companies(id) ON DELETE CASCADE",
-				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by": "TEXT",
+				"site_id":         "INTEGER NOT NULL",
+				"organization_id": "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":      "TEXT",
 			},
 		},
 		{
@@ -235,11 +235,11 @@ func initSchema() error {
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_company_map ON site_company_map(site_id, company_id);")
+	_, err = dbInstance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_organization_map ON site_organization_map(site_id, organization_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_company_id ON contacts(company_id);")
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_organization_id ON contacts(organization_id);")
 	if err != nil {
 		return err
 	}
