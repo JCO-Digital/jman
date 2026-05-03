@@ -23,7 +23,7 @@ export const useDataStore = defineStore("data", () => {
 	// State
 	const servers = ref<Server[]>([]);
 	const sites = ref<Site[]>([]);
-	const siteCompanyLinks = ref<Record<number, number>>({});
+	const siteOrganizationLinks = ref<Record<number, number>>({});
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<Vulnerability[]>([]);
@@ -126,7 +126,8 @@ export const useDataStore = defineStore("data", () => {
 		return sites.value.map((site) => {
 			return {
 				...site,
-				company_id: site.company_id ?? siteCompanyLinks.value[site.id],
+				organization_id:
+					site.organization_id ?? siteOrganizationLinks.value[site.id],
 				server:
 					serversByIdMap.value.get(site.server_id)?.name ?? "Unknown Server",
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
@@ -145,13 +146,15 @@ export const useDataStore = defineStore("data", () => {
 			const cachedPluginInfo = sessionStorage.getItem(CACHE_KEY_PLUGIN_INFO);
 			const cachedVulns = sessionStorage.getItem(CACHE_KEY_VULNS);
 
-			const cachedLinks = sessionStorage.getItem("jman_site_company_links");
+			const cachedLinks = sessionStorage.getItem(
+				"jman_site_organization_links",
+			);
 
 			if (cachedServers && cachedSites && cachedPlugins && cachedPluginInfo) {
 				servers.value = JSON.parse(cachedServers);
 				sites.value = JSON.parse(cachedSites);
 				if (cachedLinks) {
-					siteCompanyLinks.value = JSON.parse(cachedLinks);
+					siteOrganizationLinks.value = JSON.parse(cachedLinks);
 				}
 				plugins.value = JSON.parse(cachedPlugins);
 				pluginInfo.value = JSON.parse(cachedPluginInfo);
@@ -170,13 +173,13 @@ export const useDataStore = defineStore("data", () => {
 	function clearCache() {
 		sessionStorage.removeItem(CACHE_KEY_SERVERS);
 		sessionStorage.removeItem(CACHE_KEY_SITES);
-		sessionStorage.removeItem("jman_site_company_links");
+		sessionStorage.removeItem("jman_site_organization_links");
 		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGIN_INFO);
 		sessionStorage.removeItem(CACHE_KEY_VULNS);
 		servers.value = [];
 		sites.value = [];
-		siteCompanyLinks.value = {};
+		siteOrganizationLinks.value = {};
 		plugins.value = [];
 		pluginInfo.value = [];
 		vulnerabilities.value = [];
@@ -301,15 +304,18 @@ export const useDataStore = defineStore("data", () => {
 		return vulnerabilitiesBySlug.value.get(slug) || [];
 	}
 
-	function setSiteCompanyLink(siteId: number, companyId: number | undefined) {
-		if (companyId === undefined) {
-			delete siteCompanyLinks.value[siteId];
+	function setSiteOrganizationLink(
+		siteId: number,
+		organizationId: number | undefined,
+	) {
+		if (organizationId === undefined) {
+			delete siteOrganizationLinks.value[siteId];
 		} else {
-			siteCompanyLinks.value[siteId] = companyId;
+			siteOrganizationLinks.value[siteId] = organizationId;
 		}
 		sessionStorage.setItem(
-			"jman_site_company_links",
-			JSON.stringify(siteCompanyLinks.value),
+			"jman_site_organization_links",
+			JSON.stringify(siteOrganizationLinks.value),
 		);
 	}
 
@@ -337,7 +343,7 @@ export const useDataStore = defineStore("data", () => {
 		getServerById,
 		getPluginsBySiteId,
 		getVulnerabilitiesBySlug,
-		setSiteCompanyLink,
+		setSiteOrganizationLink,
 		// Actions
 		initData,
 		refreshData,

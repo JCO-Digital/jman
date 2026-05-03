@@ -53,14 +53,15 @@ const handleRefresh = () => {
 					Plugins
 				</RouterLink>
 				<RouterLink
-					to="/companies"
+					to="/organizations"
 					class="nav-item"
 					:class="{
 						active:
-							route.name === 'companies' || route.name === 'company-detail',
+							route.name === 'organizations' ||
+							route.name === 'organization-detail',
 					}"
 				>
-					Contacts
+					Organizations
 				</RouterLink>
 			</div>
 			<div class="nav-actions">

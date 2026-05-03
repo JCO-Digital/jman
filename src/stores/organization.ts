@@ -1,22 +1,22 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
-import type { Company, Contact, ContactType } from "../types";
+import type { Organization, Contact, ContactType } from "../types";
 import { useAuthStore } from "./auth";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
-export const useCompanyStore = defineStore("company", () => {
+export const useOrganizationStore = defineStore("organization", () => {
 	const authStore = useAuthStore();
 
-	const companies = ref<Company[]>([]);
+	const organizations = ref<Organization[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
 
-	async function fetchCompanies(search?: string) {
+	async function fetchOrganizations(search?: string) {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const url = new URL(`${BASE_URL}/companies`, window.location.origin);
+			const url = new URL(`${BASE_URL}/organizations`, window.location.origin);
 			if (search) {
 				url.searchParams.append("search", search);
 			}
@@ -25,10 +25,10 @@ export const useCompanyStore = defineStore("company", () => {
 				headers: authStore.authHeader,
 			});
 
-			if (!res.ok) throw new Error("Failed to fetch companies");
+			if (!res.ok) throw new Error("Failed to fetch organizations");
 
 			const data = await res.json();
-			companies.value = data;
+			organizations.value = data;
 		} catch (e: any) {
 			error.value = e.message;
 			console.error(e);
@@ -37,12 +37,12 @@ export const useCompanyStore = defineStore("company", () => {
 		}
 	}
 
-	async function getCompany(id: number): Promise<Company | null> {
+	async function getOrganization(id: number): Promise<Organization | null> {
 		try {
-			const res = await fetch(`${BASE_URL}/companies/${id}`, {
+			const res = await fetch(`${BASE_URL}/organizations/${id}`, {
 				headers: authStore.authHeader,
 			});
-			if (!res.ok) throw new Error("Failed to fetch company");
+			if (!res.ok) throw new Error("Failed to fetch organization");
 			return await res.json();
 		} catch (e) {
 			console.error(e);
@@ -50,50 +50,69 @@ export const useCompanyStore = defineStore("company", () => {
 		}
 	}
 
-	async function createCompany(company: Partial<Company>) {
-		const res = await fetch(`${BASE_URL}/companies`, {
+	async function createOrganization(organization: Partial<Organization>) {
+		const res = await fetch(`${BASE_URL}/organizations`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				...authStore.authHeader,
 			},
-			body: JSON.stringify(company),
+			body: JSON.stringify(organization),
 		});
-		if (!res.ok) throw new Error("Failed to create company");
+		if (!res.ok) throw new Error("Failed to create organization");
 		return await res.json();
 	}
 
-	async function updateCompany(id: number, company: Partial<Company>) {
-		const res = await fetch(`${BASE_URL}/companies/${id}`, {
+	async function updateOrganization(
+		id: number,
+		organization: Partial<Organization>,
+	) {
+		const res = await fetch(`${BASE_URL}/organizations/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
 				...authStore.authHeader,
 			},
-			body: JSON.stringify(company),
+			body: JSON.stringify(organization),
 		});
-		if (!res.ok) throw new Error("Failed to update company");
+		if (!res.ok) throw new Error("Failed to update organization");
 		return await res.json();
 	}
 
-	async function deleteCompany(id: number) {
-		const res = await fetch(`${BASE_URL}/companies/${id}`, {
+	async function deleteOrganization(id: number) {
+		const res = await fetch(`${BASE_URL}/organizations/${id}`, {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to delete company");
+		if (!res.ok) throw new Error("Failed to delete organization");
 	}
 
-	async function fetchCompanyContacts(companyId: number): Promise<Contact[]> {
-		const res = await fetch(`${BASE_URL}/companies/${companyId}/contacts`, {
-			headers: authStore.authHeader,
-		});
+	async function fetchOrganizationContacts(
+		organizationId: number,
+	): Promise<Contact[]> {
+		const res = await fetch(
+			`${BASE_URL}/organizations/${organizationId}/contacts`,
+			{
+				headers: authStore.authHeader,
+			},
+		);
 		if (!res.ok) throw new Error("Failed to fetch contacts");
 		return await res.json();
 	}
 
+	async function fetchOrganizationSites(organizationId: number) {
+		const res = await fetch(
+			`${BASE_URL}/organizations/${organizationId}/sites`,
+			{
+				headers: authStore.authHeader,
+			},
+		);
+		if (!res.ok) throw new Error("Failed to fetch organization sites");
+		return await res.json();
+	}
+
 	async function createContact(contact: {
-		company_id: number;
+		organization_id: number;
 		name: string;
 		email?: string;
 		phone?: string;
@@ -132,23 +151,28 @@ export const useCompanyStore = defineStore("company", () => {
 		if (!res.ok) throw new Error("Failed to delete contact");
 	}
 
-	async function getCompanyForSite(siteId: number): Promise<Company | null> {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/company`, {
+	async function getOrganizationForSite(
+		siteId: number,
+	): Promise<Organization | null> {
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/organization`, {
 			headers: authStore.authHeader,
 		});
 		if (res.status === 404) return null;
-		if (!res.ok) throw new Error("Failed to fetch company for site");
+		if (!res.ok) throw new Error("Failed to fetch organization for site");
 		return await res.json();
 	}
 
-	async function linkSiteToCompany(siteId: number, companyId: number) {
+	async function linkSiteToOrganization(
+		siteId: number,
+		organizationId: number,
+	) {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/link`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 				...authStore.authHeader,
 			},
-			body: JSON.stringify({ company_id: companyId }),
+			body: JSON.stringify({ organization_id: organizationId }),
 		});
 		if (!res.ok) throw new Error("Failed to link site");
 	}
@@ -162,20 +186,21 @@ export const useCompanyStore = defineStore("company", () => {
 	}
 
 	return {
-		companies,
+		organizations,
 		isLoading,
 		error,
-		fetchCompanies,
-		getCompany,
-		createCompany,
-		updateCompany,
-		deleteCompany,
-		fetchCompanyContacts,
+		fetchOrganizations,
+		getOrganization,
+		createOrganization,
+		updateOrganization,
+		deleteOrganization,
+		fetchOrganizationContacts,
+		fetchOrganizationSites,
 		createContact,
 		updateContact,
 		deleteContact,
-		getCompanyForSite,
-		linkSiteToCompany,
+		getOrganizationForSite,
+		linkSiteToOrganization,
 		unlinkSite,
 	};
 });

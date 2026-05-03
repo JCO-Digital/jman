@@ -66,7 +66,7 @@ export interface Backups {
 export interface Site {
 	id: number;
 	server_id: number;
-	company_id?: number;
+	organization_id?: number;
 	domain: string;
 	additional_domains: AdditionalDomain[];
 	site_user: string;
@@ -208,7 +208,7 @@ export interface EnrichedPlugin extends PluginInfo {
 	vulnerabilities: Vulnerability[];
 }
 
-export interface Company {
+export interface Organization {
 	id: number;
 	name: string;
 	vat_number: string | null;
@@ -223,13 +223,13 @@ export type ContactType = "Main" | "Technical" | "Billing";
 
 export interface Contact {
 	id: number;
-	company_id: number;
+	organization_id: number;
 	name: string;
 	email: string | null;
 	phone: string | null;
 	type: ContactType;
 }
 
-export interface EnrichedCompany extends Company {
+export interface EnrichedOrganization extends Organization {
 	contacts: Contact[];
 }

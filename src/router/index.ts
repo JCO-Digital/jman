@@ -49,14 +49,14 @@ const router = createRouter({
 			}),
 		},
 		{
-			path: "/companies",
-			name: "companies",
-			component: () => import("../views/CompaniesView.vue"),
+			path: "/organizations",
+			name: "organizations",
+			component: () => import("../views/OrganizationsView.vue"),
 		},
 		{
-			path: "/company/:id",
-			name: "company-detail",
-			component: () => import("../views/CompanyDetailView.vue"),
+			path: "/organization/:id",
+			name: "organization-detail",
+			component: () => import("../views/OrganizationDetailView.vue"),
 			props: true,
 		},
 		{

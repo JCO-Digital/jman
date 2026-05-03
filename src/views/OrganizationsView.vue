@@ -1,65 +1,65 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { useCompanyStore } from "../stores/company";
+import { useOrganizationStore } from "../stores/organization";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const router = useRouter();
-const companyStore = useCompanyStore();
+const organizationStore = useOrganizationStore();
 
 const searchQuery = ref("");
 
 onMounted(() => {
-	companyStore.fetchCompanies();
+	organizationStore.fetchOrganizations();
 });
 
 const handleSearch = () => {
-	companyStore.fetchCompanies(searchQuery.value);
+	organizationStore.fetchOrganizations(searchQuery.value);
 };
 
-const goToCompany = (id: number) => {
-	router.push({ name: "company-detail", params: { id: id.toString() } });
+const goToOrganization = (id: number) => {
+	router.push({ name: "organization-detail", params: { id: id.toString() } });
 };
 
 const showCreateModal = ref(false);
-const newCompany = ref({
+const newOrganization = ref({
 	name: "",
 	vat_number: "",
 	info: "",
 });
 
-const handleCreateCompany = async () => {
-	if (!newCompany.value.name) return;
+const handleCreateOrganization = async () => {
+	if (!newOrganization.value.name) return;
 	try {
-		await companyStore.createCompany(newCompany.value);
+		await organizationStore.createOrganization(newOrganization.value);
 		showCreateModal.value = false;
-		newCompany.value = { name: "", vat_number: "", info: "" };
-		companyStore.fetchCompanies(searchQuery.value);
+		newOrganization.value = { name: "", vat_number: "", info: "" };
+		organizationStore.fetchOrganizations(searchQuery.value);
 	} catch (e) {
-		console.error("Failed to create company:", e);
+		console.error("Failed to create organization:", e);
 	}
 };
 </script>
 
 <template>
 	<div class="view-container">
-		<ViewHeader title="Contact Management" />
+		<ViewHeader title="Organization Management" />
 
-		<div v-if="companyStore.error" class="error-banner">
-			<p><strong>Error:</strong> {{ companyStore.error }}</p>
+		<div v-if="organizationStore.error" class="error-banner">
+			<p><strong>Error:</strong> {{ organizationStore.error }}</p>
 		</div>
 
 		<div class="controls">
 			<input
 				type="text"
-				placeholder="Search companies by name or VAT..."
+				placeholder="Search organizations by name or VAT..."
 				class="search-input"
 				v-model="searchQuery"
 				@input="handleSearch"
 			/>
 			<button class="btn btn-primary" @click="showCreateModal = true">
-				Add Company
+				Add Organization
 			</button>
 		</div>
 
@@ -75,33 +75,39 @@ const handleCreateCompany = async () => {
 				</thead>
 				<tbody>
 					<tr
-						v-if="companyStore.isLoading && companyStore.companies.length === 0"
+						v-if="
+							organizationStore.isLoading &&
+							organizationStore.organizations.length === 0
+						"
 					>
 						<td colspan="4">
-							<LoadingSpinner message="Loading companies..." />
+							<LoadingSpinner message="Loading organizations..." />
 						</td>
 					</tr>
-					<tr v-else-if="companyStore.companies.length === 0">
+					<tr v-else-if="organizationStore.organizations.length === 0">
 						<td colspan="4" class="empty-state">
 							<span v-if="searchQuery"
-								>No companies found matching "{{ searchQuery }}".</span
+								>No organizations found matching "{{ searchQuery }}".</span
 							>
-							<span v-else>No companies available.</span>
+							<span v-else>No organizations available.</span>
 						</td>
 					</tr>
 					<tr
-						v-for="company in companyStore.companies"
-						:key="company.id"
+						v-for="organization in organizationStore.organizations"
+						:key="organization.id"
 						class="clickable-row"
-						@click="goToCompany(company.id)"
+						@click="goToOrganization(organization.id)"
 					>
 						<td>
-							<strong>{{ company.name }}</strong>
+							<strong>{{ organization.name }}</strong>
 						</td>
-						<td>{{ company.vat_number || "—" }}</td>
+						<td>{{ organization.vat_number || "—" }}</td>
 						<td>
-							<div class="text-truncate" :title="company.info ?? undefined">
-								{{ company.info || "—" }}
+							<div
+								class="text-truncate"
+								:title="organization.info ?? undefined"
+							>
+								{{ organization.info || "—" }}
 							</div>
 						</td>
 						<td class="actions-cell">
@@ -132,23 +138,23 @@ const handleCreateCompany = async () => {
 			@click.self="showCreateModal = false"
 		>
 			<div class="modal-content card">
-				<h2>Add New Company</h2>
-				<form @submit.prevent="handleCreateCompany" class="form-layout">
+				<h2>Add New Organization</h2>
+				<form @submit.prevent="handleCreateOrganization" class="form-layout">
 					<div class="form-group">
-						<label for="name">Company Name*</label>
+						<label for="name">Organization Name*</label>
 						<input
 							id="name"
-							v-model="newCompany.name"
+							v-model="newOrganization.name"
 							type="text"
 							required
-							placeholder="Enter company name"
+							placeholder="Enter organization name"
 						/>
 					</div>
 					<div class="form-group">
 						<label for="vat">VAT Number</label>
 						<input
 							id="vat"
-							v-model="newCompany.vat_number"
+							v-model="newOrganization.vat_number"
 							type="text"
 							placeholder="e.g. DE123456789"
 						/>
@@ -157,7 +163,7 @@ const handleCreateCompany = async () => {
 						<label for="info">Additional Information</label>
 						<textarea
 							id="info"
-							v-model="newCompany.info"
+							v-model="newOrganization.info"
 							placeholder="Notes, address, etc."
 						></textarea>
 					</div>
@@ -172,9 +178,9 @@ const handleCreateCompany = async () => {
 						<button
 							type="submit"
 							class="btn btn-primary"
-							:disabled="!newCompany.name || companyStore.isLoading"
+							:disabled="!newOrganization.name || organizationStore.isLoading"
 						>
-							Create Company
+							Create Organization
 						</button>
 					</div>
 				</form>

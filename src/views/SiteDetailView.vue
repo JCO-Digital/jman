@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import { useMonitorStore } from "../stores/monitor";
+import { useOrganizationStore } from "../stores/organization";
+import type { Organization, Contact } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
-import { useMonitorStore } from "../stores/monitor";
-import { useCompanyStore } from "../stores/company";
-import type { Company, Contact } from "../types";
 
 const props = defineProps<{
 	id: string;
@@ -17,15 +17,20 @@ const props = defineProps<{
 const router = useRouter();
 const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
-const companyStore = useCompanyStore();
+const organizationStore = useOrganizationStore();
 
 const siteId = parseInt(props.id, 10);
-const company = ref<Company | null>(null);
+const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
 const site = computed(() => dataStore.getSiteById(siteId));
 
-monitorStore.ensureHistory();
+// Fetch initial data
+onMounted(async () => {
+	await dataStore.initData();
+	monitorStore.ensureHistory();
+});
 
+// Watch for domain changes to fetch monitor status
 watch(
 	() => site.value?.domain,
 	(domain) => {
@@ -36,31 +41,35 @@ watch(
 	{ immediate: true },
 );
 
+// Watch for site ID to fetch linked organization
 watch(
 	() => site.value?.id,
 	async (id) => {
 		if (id) {
 			try {
-				company.value = await companyStore.getCompanyForSite(id);
-				dataStore.setSiteCompanyLink(id, company.value?.id);
-				if (company.value) {
-					contacts.value = await companyStore.fetchCompanyContacts(
-						company.value.id,
+				organization.value = await organizationStore.getOrganizationForSite(id);
+				dataStore.setSiteOrganizationLink(id, organization.value?.id);
+				if (organization.value) {
+					contacts.value = await organizationStore.fetchOrganizationContacts(
+						organization.value.id,
 					);
 				}
 			} catch (e) {
-				console.error("Failed to fetch company for site", e);
+				console.error("Failed to fetch organization for site", e);
 			}
 		}
 	},
 	{ immediate: true },
 );
+
 const server = computed(() =>
 	site.value ? dataStore.getServerById(site.value.server_id) : null,
 );
+
 const history = computed(() =>
 	site.value ? monitorStore.historyByDomain.get(site.value.domain) || [] : [],
 );
+
 const sitePlugins = computed(() => {
 	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
 	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
@@ -86,6 +95,8 @@ const siteInfoItems = computed(() => {
 				: `https://${site.value.domain}`,
 		},
 		{ label: "PHP Version", value: site.value.php_version },
+		{ label: "Public Folder", value: site.value.public_folder },
+		{ label: "WordPress", value: site.value.is_wordpress ? "Yes" : "No" },
 		{ label: "Status", value: site.value.status },
 	];
 });
@@ -95,6 +106,8 @@ const serverInfoItems = computed(() => {
 	return [
 		{ label: "Server Name", value: server.value.name, copyable: true },
 		{ label: "IP Address", value: server.value.ip_address, copyable: true },
+		{ label: "Ubuntu", value: server.value.ubuntu_version },
+		{ label: "Provider", value: server.value.provider_name },
 	];
 });
 
@@ -109,29 +122,29 @@ const goToPlugin = (name: string) => {
 	});
 };
 
-const goToCompany = () => {
-	if (company.value) {
+const goToOrganization = () => {
+	if (organization.value) {
 		router.push({
-			name: "company-detail",
-			params: { id: company.value.id.toString() },
+			name: "organization-detail",
+			params: { id: organization.value.id.toString() },
 		});
 	}
 };
 
 const showLinkModal = ref(false);
-const companySearchQuery = ref("");
-const searchResults = ref<Company[]>([]);
+const organizationSearchQuery = ref("");
+const searchResults = ref<Organization[]>([]);
 const isSearching = ref(false);
 
 const handleSearch = async () => {
-	if (companySearchQuery.value.length < 2) {
+	if (organizationSearchQuery.value.length < 2) {
 		searchResults.value = [];
 		return;
 	}
 	isSearching.value = true;
 	try {
-		await companyStore.fetchCompanies(companySearchQuery.value);
-		searchResults.value = companyStore.companies;
+		await organizationStore.fetchOrganizations(organizationSearchQuery.value);
+		searchResults.value = organizationStore.organizations;
 	} catch (e) {
 		console.error("Search failed", e);
 	} finally {
@@ -139,33 +152,33 @@ const handleSearch = async () => {
 	}
 };
 
-const linkCompany = async (compId: number) => {
+const linkOrganization = async (compId: number) => {
 	try {
-		await companyStore.linkSiteToCompany(siteId, compId);
-		dataStore.setSiteCompanyLink(siteId, compId);
+		await organizationStore.linkSiteToOrganization(siteId, compId);
+		dataStore.setSiteOrganizationLink(siteId, compId);
 		await dataStore.refreshData();
-		company.value = await companyStore.getCompanyForSite(siteId);
-		if (company.value) {
-			contacts.value = await companyStore.fetchCompanyContacts(
-				company.value.id,
+		organization.value = await organizationStore.getOrganizationForSite(siteId);
+		if (organization.value) {
+			contacts.value = await organizationStore.fetchOrganizationContacts(
+				organization.value.id,
 			);
 		}
 		showLinkModal.value = false;
 	} catch (e: any) {
-		alert("Failed to link company: " + e.message);
+		alert("Failed to link organization: " + e.message);
 	}
 };
 
-const unlinkCompany = async () => {
-	if (!confirm("Are you sure you want to unlink this company?")) return;
+const unlinkOrganization = async () => {
+	if (!confirm("Are you sure you want to unlink this organization?")) return;
 	try {
-		await companyStore.unlinkSite(siteId);
-		dataStore.setSiteCompanyLink(siteId, undefined);
+		await organizationStore.unlinkSite(siteId);
+		dataStore.setSiteOrganizationLink(siteId, undefined);
 		await dataStore.refreshData();
-		company.value = null;
+		organization.value = null;
 		contacts.value = [];
 	} catch (e: any) {
-		alert("Failed to unlink company: " + e.message);
+		alert("Failed to unlink organization: " + e.message);
 	}
 };
 </script>
@@ -178,15 +191,16 @@ const unlinkCompany = async () => {
 		/>
 
 		<main class="content" v-if="site">
-			<InfoCard title="Site Information" :items="siteInfoItems" />
+			<div class="grid-2-cols">
+				<InfoCard title="Site Information" :items="siteInfoItems" />
+				<InfoCard
+					v-if="server"
+					title="Server Information"
+					:items="serverInfoItems"
+				/>
+			</div>
 
-			<InfoCard
-				v-if="server"
-				title="Server Information"
-				:items="serverInfoItems"
-			/>
-
-			<section class="card">
+			<section class="card organization-section">
 				<div
 					style="
 						display: flex;
@@ -197,43 +211,43 @@ const unlinkCompany = async () => {
 						padding-bottom: 8px;
 					"
 				>
-					<h2 style="margin: 0; border: none">Company Information</h2>
+					<h2 style="margin: 0; border: none">Organization Information</h2>
 					<div class="header-actions">
 						<button
-							v-if="company"
+							v-if="organization"
 							class="text-btn"
-							@click="unlinkCompany"
+							@click="unlinkOrganization"
 							style="color: #ef4444"
 						>
 							Unlink
 						</button>
 						<button
-							v-if="company"
+							v-if="organization"
 							class="back-btn"
-							@click="goToCompany"
+							@click="goToOrganization"
 							style="padding: 4px 12px; font-size: 13px"
 						>
-							View Company
+							View Organization
 						</button>
 						<button
 							v-else
 							class="btn btn-primary btn-sm"
 							@click="showLinkModal = true"
 						>
-							Link Company
+							Link Organization
 						</button>
 					</div>
 				</div>
 
-				<div v-if="company">
+				<div v-if="organization">
 					<div class="info-grid">
 						<div class="info-item">
 							<span class="label">Name:</span>
-							<span class="value">{{ company.name }}</span>
+							<span class="value">{{ organization.name }}</span>
 						</div>
-						<div class="info-item" v-if="company.vat_number">
+						<div class="info-item" v-if="organization.vat_number">
 							<span class="label">VAT Number:</span>
-							<span class="value">{{ company.vat_number }}</span>
+							<span class="value">{{ organization.vat_number }}</span>
 						</div>
 					</div>
 
@@ -265,7 +279,9 @@ const unlinkCompany = async () => {
 						</div>
 					</div>
 				</div>
-				<div v-else class="empty-state">No company linked to this site.</div>
+				<div v-else class="empty-state">
+					No organization linked to this site.
+				</div>
 			</section>
 
 			<MonitorHistoryCard :history="history" :domain="site.domain" />
@@ -330,20 +346,20 @@ const unlinkCompany = async () => {
 			</div>
 		</main>
 
-		<!-- Link Company Modal -->
+		<!-- Link Organization Modal -->
 		<div
 			v-if="showLinkModal"
 			class="modal-overlay"
 			@click.self="showLinkModal = false"
 		>
 			<div class="modal-content card">
-				<h2>Link Company to Site</h2>
+				<h2>Link Organization to Site</h2>
 				<div class="form-layout">
 					<div class="form-group">
-						<label for="comp-search">Search Company</label>
+						<label for="org-search">Search Organization</label>
 						<input
-							id="comp-search"
-							v-model="companySearchQuery"
+							id="org-search"
+							v-model="organizationSearchQuery"
 							type="text"
 							placeholder="Type name or VAT..."
 							@input="handleSearch"
@@ -355,7 +371,7 @@ const unlinkCompany = async () => {
 							v-for="res in searchResults"
 							:key="res.id"
 							class="search-result-item"
-							@click="linkCompany(res.id)"
+							@click="linkOrganization(res.id)"
 						>
 							<div class="res-name">{{ res.name }}</div>
 							<div class="res-vat" v-if="res.vat_number">
@@ -364,10 +380,10 @@ const unlinkCompany = async () => {
 						</div>
 					</div>
 					<div
-						v-else-if="companySearchQuery.length >= 2 && !isSearching"
+						v-else-if="organizationSearchQuery.length >= 2 && !isSearching"
 						class="empty-state"
 					>
-						No companies found.
+						No organizations found.
 					</div>
 					<div v-else-if="isSearching" class="empty-state">Searching...</div>
 
@@ -383,6 +399,19 @@ const unlinkCompany = async () => {
 </template>
 
 <style scoped>
+.grid-2-cols {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 24px;
+	margin-bottom: 24px;
+}
+
+@media (max-width: 1024px) {
+	.grid-2-cols {
+		grid-template-columns: 1fr;
+	}
+}
+
 .contacts-preview {
 	margin-top: 24px;
 }
@@ -411,6 +440,28 @@ const unlinkCompany = async () => {
 
 .text-btn:hover {
 	opacity: 0.8;
+}
+
+.info-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 16px;
+}
+
+.info-item {
+	display: flex;
+	flex-direction: column;
+}
+
+.label {
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	font-weight: 600;
+	margin-bottom: 4px;
+}
+
+.value {
+	font-weight: 500;
 }
 
 /* Modal styles */
