@@ -120,7 +120,7 @@ func GetAllPluginSlugs() ([]string, error) {
 	}
 	defer rows.Close()
 
-	var slugs []string
+	slugs := []string{}
 	for rows.Next() {
 		var slug string
 		if err := rows.Scan(&slug); err != nil {
@@ -151,7 +151,7 @@ func GetAllPluginInfo() ([]models.PluginInfo, error) {
 	}
 	defer rows.Close()
 
-	var plugins []models.PluginInfo
+	plugins := []models.PluginInfo{}
 	for rows.Next() {
 		var info models.PluginInfo
 		err := rows.Scan(
