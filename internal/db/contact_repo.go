@@ -253,6 +253,30 @@ func GetCompanyBySite(siteID int) (*models.Company, error) {
 	return &c, nil
 }
 
+func GetSitesByCompany(companyID int) ([]int, error) {
+	db := GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	query := `SELECT site_id FROM site_company_map WHERE company_id = ?`
+	rows, err := db.Query(query, companyID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var siteIDs []int
+	for rows.Next() {
+		var id int
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		siteIDs = append(siteIDs, id)
+	}
+	return siteIDs, nil
+}
+
 // --- Notes Repository ---
 
 func SaveNote(note *models.Note, username string) error {

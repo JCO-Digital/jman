@@ -2,9 +2,11 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -144,6 +146,44 @@ func ListContactsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, contacts)
+}
+
+// ListCompanySitesHandler returns all sites linked to a specific company.
+func ListCompanySitesHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid company ID")
+		return
+	}
+
+	siteIDs, err := db.GetSitesByCompany(id)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	// Load all sites from cache to return full site objects
+	allSites := []models.Site{}
+	if err := cache.ReadJSONCache("sites", &allSites, cache.DefaultTTL); err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v", err))
+		return
+	}
+
+	// Filter sites by the IDs we found in DB
+	companySites := []models.Site{}
+	idMap := make(map[int]bool)
+	for _, sid := range siteIDs {
+		idMap[sid] = true
+	}
+
+	for _, s := range allSites {
+		if idMap[s.ID] {
+			companySites = append(companySites, s)
+		}
+	}
+
+	WriteJSON(w, http.StatusOK, companySites)
 }
 
 // CreateContactHandler creates a new contact person for a company.

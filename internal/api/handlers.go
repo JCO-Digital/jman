@@ -42,6 +42,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PATCH /api/companies/{id}", auth(UpdateCompanyHandler))
 	mux.Handle("DELETE /api/companies/{id}", auth(DeleteCompanyHandler))
 	mux.Handle("GET /api/companies/{id}/contacts", auth(ListContactsHandler))
+	mux.Handle("GET /api/companies/{id}/sites", auth(ListCompanySitesHandler))
 	mux.Handle("POST /api/contacts", auth(CreateContactHandler))
 	mux.Handle("PATCH /api/contacts/{id}", auth(UpdateContactHandler))
 	mux.Handle("DELETE /api/contacts/{id}", auth(DeleteContactHandler))
