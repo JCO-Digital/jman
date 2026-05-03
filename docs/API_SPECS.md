@@ -86,11 +86,11 @@ Returns metadata for known plugins (author, homepage, version info).
 
 ---
 
-## Company Management (Read/Write)
+## Organization Management (Read/Write)
 
-### List Companies
+### List Organizations
 
-`GET /companies` (Protected)
+`GET /organizations` (Protected)
 
 **Query Parameters**
 | Parameter | Type | Description |
@@ -105,7 +105,7 @@ Returns metadata for known plugins (author, homepage, version info).
 		"id": 1,
 		"name": "Acme Corp",
 		"vat_number": "US1234567",
-		"info": "Notes about company",
+		"info": "Notes about organization",
 		"created_at": "datetime",
 		"created_by": "string",
 		"updated_at": "datetime",
@@ -114,9 +114,9 @@ Returns metadata for known plugins (author, homepage, version info).
 ]
 ```
 
-### Create Company
+### Create Organization
 
-`POST /companies` (Protected)
+`POST /organizations` (Protected)
 
 **Request Body**
 | Field | Type | Required |
@@ -125,27 +125,27 @@ Returns metadata for known plugins (author, homepage, version info).
 | `vat_number` | string | No |
 | `info` | string | No |
 
-### Get/Update/Delete Company
+### Get/Update/Delete Organization
 
-`GET /companies/{id}`
-`PATCH /companies/{id}`
-`DELETE /companies/{id}` (Protected)
+`GET /organizations/{id}`
+`PATCH /organizations/{id}`
+`DELETE /organizations/{id}` (Protected)
 
 ---
 
 ## Contact Management (Read/Write)
 
-### List Company Contacts
+### List Organization Contacts
 
-`GET /companies/{id}/contacts` (Protected)
+`GET /organizations/{id}/contacts` (Protected)
 
-Returns all contact people associated with a specific company.
+Returns all contact people associated with a specific organization.
 
-### List Company Sites
+### List Organization Sites
 
-`GET /companies/{id}/sites` (Protected)
+`GET /organizations/{id}/sites` (Protected)
 
-Returns all sites linked to a specific company.
+Returns all sites linked to a specific organization.
 
 ### Create Contact
 
@@ -154,7 +154,7 @@ Returns all sites linked to a specific company.
 **Request Body**
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `company_id` | int | Yes | |
+| `organization_id` | int | Yes | |
 | `name` | string | Yes | |
 | `email` | string | No | |
 | `phone` | string | No | |
@@ -169,22 +169,22 @@ Returns all sites linked to a specific company.
 
 ## Site Linking
 
-These endpoints manage the relationship between external site IDs and company records.
+These endpoints manage the relationship between external site IDs and organization records.
 
-### Get Company for Site
+### Get Organization for Site
 
-`GET /sites/{site_id}/company` (Protected)
+`GET /sites/{site_id}/organization` (Protected)
 
-Returns the `Company` object linked to the specific Site ID.
+Returns the `Organization` object linked to the specific Site ID.
 
-### Link Site to Company
+### Link Site to Organization
 
 `POST /sites/{site_id}/link` (Protected)
 
 **Request Body**
 
 ```json
-{ "company_id": 123 }
+{ "organization_id": 123 }
 ```
 
 ### Unlink Site
@@ -195,7 +195,7 @@ Returns the `Company` object linked to the specific Site ID.
 
 ## Notes
 
-Notes can be attached to either a `Company` or a `Site`.
+Notes can be attached to either an `Organization` or a `Site`.
 
 ### List Notes
 
@@ -204,7 +204,7 @@ Notes can be attached to either a `Company` or a `Site`.
 **Query Parameters**
 | Parameter | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `type` | string | Yes | `Company` or `Site` |
+| `type` | string | Yes | `Organization` or `Site` |
 | `id` | int | Yes | The ID of the record |
 
 ### Create Note
@@ -214,7 +214,7 @@ Notes can be attached to either a `Company` or a `Site`.
 **Request Body**
 | Field | Type | Required |
 | :--- | :--- | :--- |
-| `parent_type` | string | Yes (`Company`|`Site`) |
+| `parent_type` | string | Yes (`Organization`|`Site`) |
 | `parent_id` | int | Yes |
 | `content` | string | Yes |
 

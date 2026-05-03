@@ -10,8 +10,8 @@ type AuditFields struct {
 	UpdatedBy string    `json:"updated_by"`
 }
 
-// Company represents a company record in the database.
-type Company struct {
+// Organization represents an organization record in the database.
+type Organization struct {
 	ID        int    `json:"id"`
 	Name      string `json:"name"`
 	VATNumber string `json:"vat_number"`
@@ -28,34 +28,34 @@ const (
 	ContactTypeBilling   ContactType = "Billing"
 )
 
-// Contact represents a contact person tied to a company.
+// Contact represents a contact person tied to an organization.
 type Contact struct {
-	ID        int         `json:"id"`
-	CompanyID int         `json:"company_id"`
-	Name      string      `json:"name"`
-	Email     string      `json:"email"`
-	Phone     string      `json:"phone"`
-	Type      ContactType `json:"type"`
+	ID             int         `json:"id"`
+	OrganizationID int         `json:"organization_id"`
+	Name           string      `json:"name"`
+	Email          string      `json:"email"`
+	Phone          string      `json:"phone"`
+	Type           ContactType `json:"type"`
 	AuditFields
 }
 
-// SiteCompanyMap represents the link between a site and a company.
-type SiteCompanyMap struct {
-	SiteID    int       `json:"site_id"`
-	CompanyID int       `json:"company_id"`
-	CreatedAt time.Time `json:"created_at"`
-	CreatedBy string    `json:"created_by"`
+// SiteOrganizationMap represents the link between a site and an organization.
+type SiteOrganizationMap struct {
+	SiteID         int       `json:"site_id"`
+	OrganizationID int       `json:"organization_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	CreatedBy      string    `json:"created_by"`
 }
 
 // NoteParentType defines what kind of record a note is attached to.
 type NoteParentType string
 
 const (
-	NoteParentTypeCompany NoteParentType = "Company"
-	NoteParentTypeSite    NoteParentType = "Site"
+	NoteParentTypeOrganization NoteParentType = "Organization"
+	NoteParentTypeSite         NoteParentType = "Site"
 )
 
-// Note represents a free-text record linked to a company or site.
+// Note represents a free-text record linked to an organization or site.
 type Note struct {
 	ID         int            `json:"id"`
 	ParentType NoteParentType `json:"parent_type"`

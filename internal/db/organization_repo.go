@@ -8,72 +8,72 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-// --- Company Repository ---
+// --- Organization Repository ---
 
-func SaveCompany(company *models.Company, username string) error {
+func SaveOrganization(org *models.Organization, username string) error {
 	db := GetDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
 	now := time.Now()
-	if company.ID == 0 {
+	if org.ID == 0 {
 		query := `
-		INSERT INTO companies (name, vat_number, info, created_at, created_by, updated_at, updated_by)
+		INSERT INTO organizations (name, vat_number, info, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		`
-		result, err := db.Exec(query, company.Name, company.VATNumber, company.Info, now, username, now, username)
+		result, err := db.Exec(query, org.Name, org.VATNumber, org.Info, now, username, now, username)
 		if err != nil {
-			return fmt.Errorf("failed to insert company: %w", err)
+			return fmt.Errorf("failed to insert organization: %w", err)
 		}
 		id, _ := result.LastInsertId()
-		company.ID = int(id)
-		company.CreatedAt = now
-		company.CreatedBy = username
-		company.UpdatedAt = now
-		company.UpdatedBy = username
+		org.ID = int(id)
+		org.CreatedAt = now
+		org.CreatedBy = username
+		org.UpdatedAt = now
+		org.UpdatedBy = username
 	} else {
 		query := `
-		UPDATE companies SET name = ?, vat_number = ?, info = ?, updated_at = ?, updated_by = ?
+		UPDATE organizations SET name = ?, vat_number = ?, info = ?, updated_at = ?, updated_by = ?
 		WHERE id = ?
 		`
-		_, err := db.Exec(query, company.Name, company.VATNumber, company.Info, now, username, company.ID)
+		_, err := db.Exec(query, org.Name, org.VATNumber, org.Info, now, username, org.ID)
 		if err != nil {
-			return fmt.Errorf("failed to update company: %w", err)
+			return fmt.Errorf("failed to update organization: %w", err)
 		}
-		company.UpdatedAt = now
-		company.UpdatedBy = username
+		org.UpdatedAt = now
+		org.UpdatedBy = username
 	}
 	return nil
 }
 
-func GetCompany(id int) (*models.Company, error) {
+func GetOrganization(id int) (*models.Organization, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, name, vat_number, info, created_at, created_by, updated_at, updated_by FROM companies WHERE id = ?`
-	var c models.Company
+	query := `SELECT id, name, vat_number, info, created_at, created_by, updated_at, updated_by FROM organizations WHERE id = ?`
+	var o models.Organization
 	err := db.QueryRow(query, id).Scan(
-		&c.ID, &c.Name, &c.VATNumber, &c.Info, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy,
+		&o.ID, &o.Name, &o.VATNumber, &o.Info, &o.CreatedAt, &o.CreatedBy, &o.UpdatedAt, &o.UpdatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get company: %w", err)
+		return nil, fmt.Errorf("failed to get organization: %w", err)
 	}
-	return &c, nil
+	return &o, nil
 }
 
-func GetAllCompanies(search string) ([]models.Company, error) {
+func GetAllOrganizations(search string) ([]models.Organization, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, name, vat_number, info, created_at, created_by, updated_at, updated_by FROM companies`
+	query := `SELECT id, name, vat_number, info, created_at, created_by, updated_at, updated_by FROM organizations`
 	var args []interface{}
 	if search != "" {
 		query += " WHERE name LIKE ? OR vat_number LIKE ?"
@@ -84,27 +84,27 @@ func GetAllCompanies(search string) ([]models.Company, error) {
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query companies: %w", err)
+		return nil, fmt.Errorf("failed to query organizations: %w", err)
 	}
 	defer rows.Close()
 
-	companies := []models.Company{}
+	organizations := []models.Organization{}
 	for rows.Next() {
-		var c models.Company
-		if err := rows.Scan(&c.ID, &c.Name, &c.VATNumber, &c.Info, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy); err != nil {
+		var o models.Organization
+		if err := rows.Scan(&o.ID, &o.Name, &o.VATNumber, &o.Info, &o.CreatedAt, &o.CreatedBy, &o.UpdatedAt, &o.UpdatedBy); err != nil {
 			return nil, err
 		}
-		companies = append(companies, c)
+		organizations = append(organizations, o)
 	}
-	return companies, nil
+	return organizations, nil
 }
 
-func DeleteCompany(id int) error {
+func DeleteOrganization(id int) error {
 	db := GetDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	_, err := db.Exec("DELETE FROM companies WHERE id = ?", id)
+	_, err := db.Exec("DELETE FROM organizations WHERE id = ?", id)
 	return err
 }
 
@@ -119,10 +119,10 @@ func SaveContact(contact *models.Contact, username string) error {
 	now := time.Now()
 	if contact.ID == 0 {
 		query := `
-		INSERT INTO contacts (company_id, name, email, phone, type, created_at, created_by, updated_at, updated_by)
+		INSERT INTO contacts (organization_id, name, email, phone, type, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
-		result, err := db.Exec(query, contact.CompanyID, contact.Name, contact.Email, contact.Phone, contact.Type, now, username, now, username)
+		result, err := db.Exec(query, contact.OrganizationID, contact.Name, contact.Email, contact.Phone, contact.Type, now, username, now, username)
 		if err != nil {
 			return fmt.Errorf("failed to insert contact: %w", err)
 		}
@@ -153,10 +153,10 @@ func GetContact(id int) (*models.Contact, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, company_id, name, email, phone, type, created_at, created_by, updated_at, updated_by FROM contacts WHERE id = ?`
+	query := `SELECT id, organization_id, name, email, phone, type, created_at, created_by, updated_at, updated_by FROM contacts WHERE id = ?`
 	var c models.Contact
 	err := db.QueryRow(query, id).Scan(
-		&c.ID, &c.CompanyID, &c.Name, &c.Email, &c.Phone, &c.Type, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy,
+		&c.ID, &c.OrganizationID, &c.Name, &c.Email, &c.Phone, &c.Type, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -167,14 +167,14 @@ func GetContact(id int) (*models.Contact, error) {
 	return &c, nil
 }
 
-func GetContactsByCompany(companyID int) ([]models.Contact, error) {
+func GetContactsByOrganization(organizationID int) ([]models.Contact, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, company_id, name, email, phone, type, created_at, created_by, updated_at, updated_by FROM contacts WHERE company_id = ? ORDER BY name ASC`
-	rows, err := db.Query(query, companyID)
+	query := `SELECT id, organization_id, name, email, phone, type, created_at, created_by, updated_at, updated_by FROM contacts WHERE organization_id = ? ORDER BY name ASC`
+	rows, err := db.Query(query, organizationID)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +183,7 @@ func GetContactsByCompany(companyID int) ([]models.Contact, error) {
 	contacts := []models.Contact{}
 	for rows.Next() {
 		var c models.Contact
-		if err := rows.Scan(&c.ID, &c.CompanyID, &c.Name, &c.Email, &c.Phone, &c.Type, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy); err != nil {
+		if err := rows.Scan(&c.ID, &c.OrganizationID, &c.Name, &c.Email, &c.Phone, &c.Type, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy); err != nil {
 			return nil, err
 		}
 		contacts = append(contacts, c)
@@ -200,67 +200,67 @@ func DeleteContact(id int) error {
 	return err
 }
 
-// --- Site-Company Mapping Repository ---
+// --- Site-Organization Mapping Repository ---
 
-func LinkSiteToCompany(siteID, companyID int, username string) error {
+func LinkSiteToOrganization(siteID, organizationID int, username string) error {
 	db := GetDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
 	query := `
-	INSERT INTO site_company_map (site_id, company_id, created_by)
+	INSERT INTO site_organization_map (site_id, organization_id, created_by)
 	VALUES (?, ?, ?)
-	ON CONFLICT(site_id, company_id) DO NOTHING
+	ON CONFLICT(site_id, organization_id) DO NOTHING
 	`
-	_, err := db.Exec(query, siteID, companyID, username)
+	_, err := db.Exec(query, siteID, organizationID, username)
 	return err
 }
 
-func UnlinkSiteFromCompany(siteID, companyID int) error {
+func UnlinkSiteFromOrganization(siteID, organizationID int) error {
 	db := GetDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	query := `DELETE FROM site_company_map WHERE site_id = ? AND company_id = ?`
-	_, err := db.Exec(query, siteID, companyID)
+	query := `DELETE FROM site_organization_map WHERE site_id = ? AND organization_id = ?`
+	_, err := db.Exec(query, siteID, organizationID)
 	return err
 }
 
-func GetCompanyBySite(siteID int) (*models.Company, error) {
+func GetOrganizationBySite(siteID int) (*models.Organization, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
 	query := `
-	SELECT c.id, c.name, c.vat_number, c.info, c.created_at, c.created_by, c.updated_at, c.updated_by
-	FROM companies c
-	JOIN site_company_map m ON c.id = m.company_id
+	SELECT o.id, o.name, o.vat_number, o.info, o.created_at, o.created_by, o.updated_at, o.updated_by
+	FROM organizations o
+	JOIN site_organization_map m ON o.id = m.organization_id
 	WHERE m.site_id = ?
 	`
-	var c models.Company
+	var o models.Organization
 	err := db.QueryRow(query, siteID).Scan(
-		&c.ID, &c.Name, &c.VATNumber, &c.Info, &c.CreatedAt, &c.CreatedBy, &c.UpdatedAt, &c.UpdatedBy,
+		&o.ID, &o.Name, &o.VATNumber, &o.Info, &o.CreatedAt, &o.CreatedBy, &o.UpdatedAt, &o.UpdatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get company for site: %w", err)
+		return nil, fmt.Errorf("failed to get organization for site: %w", err)
 	}
-	return &c, nil
+	return &o, nil
 }
 
-func GetSitesByCompany(companyID int) ([]int, error) {
+func GetSitesByOrganization(organizationID int) ([]int, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT site_id FROM site_company_map WHERE company_id = ?`
-	rows, err := db.Query(query, companyID)
+	query := `SELECT site_id FROM site_organization_map WHERE organization_id = ?`
+	rows, err := db.Query(query, organizationID)
 	if err != nil {
 		return nil, err
 	}
