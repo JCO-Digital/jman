@@ -127,8 +127,8 @@ Returns metadata for known plugins (author, homepage, version info).
 
 ### Get/Update/Delete Organization
 
-`GET /organizations/{id}`
-`PATCH /organizations/{id}`
+`GET /organizations/{id}` (Protected)
+`PATCH /organizations/{id}` (Protected)
 `DELETE /organizations/{id}` (Protected)
 
 ---
@@ -220,7 +220,7 @@ Notes can be attached to either an `Organization` or a `Site`.
 
 ### Update/Delete Note
 
-`PATCH /notes/{id}` (Body: `{"content": "..."}`)
+`PATCH /notes/{id}` (Protected) (Body: `{"content": "..."}`)
 `DELETE /notes/{id}` (Protected)
 
 ---
@@ -234,7 +234,7 @@ Notes can be attached to either an `Organization` or a `Site`.
 **Query Parameters**
 | Parameter | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `hours` | int | 24 | Lookback window |
+| `hours` | int | 48 | Lookback window |
 
 ### Get Status
 

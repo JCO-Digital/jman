@@ -45,6 +45,9 @@ func CreateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Ignore any client-supplied ID so POST cannot be used to update an existing organization.
+	org.ID = 0
+
 	username := getUsername(r)
 	if err := db.SaveOrganization(&org, username); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
@@ -165,8 +168,8 @@ func ListOrganizationSitesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Load all sites from cache to return full site objects
 	allSites := []models.Site{}
-	if err := cache.ReadJSONCache("sites", &allSites, cache.DefaultTTL); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v", err))
+	if err := cache.ReadJSONCache("sites", &allSites, -1); err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
 		return
 	}
 
@@ -197,6 +200,19 @@ func CreateContactHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Name and OrganizationID are required")
 		return
 	}
+
+	org, err := db.GetOrganization(contact.OrganizationID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if org == nil {
+		WriteError(w, http.StatusBadRequest, "Invalid OrganizationID")
+		return
+	}
+
+	// Ignore any client-supplied ID so this handler always creates a new contact.
+	contact.ID = 0
 
 	username := getUsername(r)
 	if err := db.SaveContact(&contact, username); err != nil {
@@ -374,6 +390,12 @@ func CreateNoteHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Content, ParentID and ParentType are required")
 		return
 	}
+	if note.ParentType != models.NoteParentTypeOrganization && note.ParentType != models.NoteParentTypeSite {
+		WriteError(w, http.StatusBadRequest, "Invalid parent type")
+		return
+	}
+
+	note.ID = 0
 
 	username := getUsername(r)
 	if err := db.SaveNote(&note, username); err != nil {
