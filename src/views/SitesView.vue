@@ -202,7 +202,7 @@ const goToSite = (id: number) => {
 							>
 								{{ site.vulnerabilities.length }}
 							</span>
-							<span v-else style="color: #999">—</span>
+							<span v-else class="empty-dash">—</span>
 						</td>
 					</tr>
 				</tbody>
@@ -221,5 +221,8 @@ const goToSite = (id: number) => {
 </template>
 
 <style scoped>
+.empty-dash {
+	color: #999;
+}
 /* All specific styles moved to components or available in style.css */
 </style>

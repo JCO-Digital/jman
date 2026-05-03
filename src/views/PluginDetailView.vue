@@ -96,7 +96,7 @@ const goToSite = (siteId: number) => {
 									<span v-if="item.isVulnerable" class="status-badge error">
 										Yes
 									</span>
-									<span v-else style="color: #999">—</span>
+									<span v-else class="empty-dash">—</span>
 								</td>
 							</tr>
 						</tbody>
@@ -113,7 +113,7 @@ const goToSite = (siteId: number) => {
 				/>
 				<div v-else class="empty-state">
 					<p>Plugin details not found.</p>
-					<button class="back-btn" @click="goBack" style="margin-top: 16px">
+					<button class="back-btn not-found-back-btn" @click="goBack">
 						Go back to plugins
 					</button>
 				</div>
@@ -124,4 +124,11 @@ const goToSite = (siteId: number) => {
 
 <style scoped>
 /* All specific styles moved to components or available in style.css */
+.empty-dash {
+	color: #999;
+}
+
+.not-found-back-btn {
+	margin-top: 16px;
+}
 </style>

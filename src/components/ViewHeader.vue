@@ -16,6 +16,9 @@ defineProps<{
 			</button>
 			<h1>{{ title }}</h1>
 		</div>
+		<div class="header-actions">
+			<slot name="actions"></slot>
+		</div>
 	</header>
 </template>
 
