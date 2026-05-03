@@ -2,17 +2,24 @@
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useOrganizationStore } from "../stores/organization";
+import { useDataStore } from "../stores/data";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const router = useRouter();
 const organizationStore = useOrganizationStore();
+const dataStore = useDataStore();
 
 const searchQuery = ref("");
 
 onMounted(() => {
 	organizationStore.fetchOrganizations();
+	dataStore.initData();
 });
+
+const getLinkedSites = (orgId: number) => {
+	return dataStore.enrichedSites.filter((s) => s.organization_id === orgId);
+};
 
 const handleSearch = () => {
 	organizationStore.fetchOrganizations(searchQuery.value);
@@ -68,8 +75,7 @@ const handleCreateOrganization = async () => {
 				<thead>
 					<tr>
 						<th>Name</th>
-						<th>VAT Number</th>
-						<th>Information</th>
+						<th>Linked Sites</th>
 						<th class="actions-cell"></th>
 					</tr>
 				</thead>
@@ -80,12 +86,12 @@ const handleCreateOrganization = async () => {
 							organizationStore.organizations.length === 0
 						"
 					>
-						<td colspan="4">
+						<td colspan="3">
 							<LoadingSpinner message="Loading organizations..." />
 						</td>
 					</tr>
 					<tr v-else-if="organizationStore.organizations.length === 0">
-						<td colspan="4" class="empty-state">
+						<td colspan="3" class="empty-state">
 							<span v-if="searchQuery"
 								>No organizations found matching "{{ searchQuery }}".</span
 							>
@@ -99,15 +105,28 @@ const handleCreateOrganization = async () => {
 						@click="goToOrganization(organization.id)"
 					>
 						<td>
-							<strong>{{ organization.name }}</strong>
+							<strong :title="organization.info ?? undefined">{{
+								organization.name
+							}}</strong>
 						</td>
-						<td>{{ organization.vat_number || "—" }}</td>
 						<td>
-							<div
-								class="text-truncate"
-								:title="organization.info ?? undefined"
-							>
-								{{ organization.info || "—" }}
+							<div class="sites-list">
+								<template v-if="getLinkedSites(organization.id).length > 0">
+									<span
+										v-for="site in getLinkedSites(organization.id).slice(0, 5)"
+										:key="site.id"
+										class="site-pill"
+									>
+										{{ site.domain }}
+									</span>
+									<span
+										v-if="getLinkedSites(organization.id).length > 5"
+										class="site-pill others-tag"
+									>
+										+{{ getLinkedSites(organization.id).length - 5 }} others
+									</span>
+								</template>
+								<span v-else class="empty-text">—</span>
 							</div>
 						</td>
 						<td class="actions-cell">
@@ -200,11 +219,32 @@ const handleCreateOrganization = async () => {
 	flex: 1;
 }
 
-.text-truncate {
-	max-width: 400px;
+.sites-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	font-size: 0.85rem;
+	max-width: 500px;
+}
+
+.site-pill {
+	background-color: var(--badge-default-bg);
+	color: var(--badge-default-text);
+	padding: 2px 8px;
+	border-radius: 9999px;
+	font-size: 11px;
+	font-weight: 500;
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+}
+
+.others-tag {
+	background-color: transparent;
+	border: 1px solid var(--primary);
+	color: var(--primary);
+}
+
+.empty-text {
+	color: var(--text-disabled);
 }
 
 .actions-cell {
