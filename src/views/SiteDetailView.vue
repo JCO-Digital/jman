@@ -24,6 +24,8 @@ const company = ref<Company | null>(null);
 const contacts = ref<Contact[]>([]);
 const site = computed(() => dataStore.getSiteById(siteId));
 
+monitorStore.ensureHistory();
+
 watch(
 	() => site.value?.domain,
 	(domain) => {
@@ -40,6 +42,7 @@ watch(
 		if (id) {
 			try {
 				company.value = await companyStore.getCompanyForSite(id);
+				dataStore.setSiteCompanyLink(id, company.value?.id);
 				if (company.value) {
 					contacts.value = await companyStore.fetchCompanyContacts(
 						company.value.id,
@@ -139,6 +142,7 @@ const handleSearch = async () => {
 const linkCompany = async (compId: number) => {
 	try {
 		await companyStore.linkSiteToCompany(siteId, compId);
+		dataStore.setSiteCompanyLink(siteId, compId);
 		await dataStore.refreshData();
 		company.value = await companyStore.getCompanyForSite(siteId);
 		if (company.value) {
@@ -156,6 +160,7 @@ const unlinkCompany = async () => {
 	if (!confirm("Are you sure you want to unlink this company?")) return;
 	try {
 		await companyStore.unlinkSite(siteId);
+		dataStore.setSiteCompanyLink(siteId, undefined);
 		await dataStore.refreshData();
 		company.value = null;
 		contacts.value = [];

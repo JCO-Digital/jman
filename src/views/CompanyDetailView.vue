@@ -20,7 +20,7 @@ const companyId = parseInt(props.id, 10);
 const company = ref<Company | null>(null);
 const contacts = ref<Contact[]>([]);
 const linkedSites = computed(() =>
-	dataStore.sites.filter((s) => s.company_id === companyId),
+	dataStore.enrichedSites.filter((s) => s.company_id === companyId),
 );
 const isLoading = ref(true);
 const error = ref<string | null>(null);
@@ -176,7 +176,7 @@ const siteSearchQuery = ref("");
 
 const availableSites = computed(() => {
 	const query = siteSearchQuery.value.toLowerCase();
-	return dataStore.sites.filter((site) => {
+	return dataStore.enrichedSites.filter((site) => {
 		const isNotLinked = !linkedSites.value.some((s) => s.id === site.id);
 		const matchesQuery = site.domain.toLowerCase().includes(query);
 		return isNotLinked && matchesQuery;
@@ -186,6 +186,7 @@ const availableSites = computed(() => {
 const handleLinkSite = async (siteId: number) => {
 	try {
 		await companyStore.linkSiteToCompany(siteId, companyId);
+		dataStore.setSiteCompanyLink(siteId, companyId);
 		await dataStore.refreshData();
 		showLinkSiteModal.value = false;
 		siteSearchQuery.value = "";
@@ -198,6 +199,7 @@ const handleUnlinkSite = async (siteId: number) => {
 	if (!confirm("Are you sure you want to unlink this site?")) return;
 	try {
 		await companyStore.unlinkSite(siteId);
+		dataStore.setSiteCompanyLink(siteId, undefined);
 		await dataStore.refreshData();
 	} catch (e: any) {
 		alert("Failed to unlink site: " + e.message);
