@@ -20,7 +20,7 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 		t = ttl[0]
 	}
 
-	var plugins []models.WPPlugin
+	plugins := []models.WPPlugin{}
 
 	force := t == 0
 	if !force {
@@ -31,7 +31,7 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 
 	sites, err := GetSiteList()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get site list: %w", err)
+		return plugins, fmt.Errorf("failed to get site list: %w", err)
 	}
 
 	updated := false
@@ -105,7 +105,7 @@ func UpdateSitePluginCache(site models.CliSite) error {
 	pluginsMu.Lock()
 	defer pluginsMu.Unlock()
 
-	var plugins []models.WPPlugin
+	plugins := []models.WPPlugin{}
 	_ = ReadJSONCache("plugins", &plugins, -1) // Load existing even if expired
 
 	// Filter out old entries for this site and replace with new ones
@@ -137,19 +137,19 @@ func UpdateSitePluginCache(site models.CliSite) error {
 func GetCachedPluginData() ([]models.WPPluginData, error) {
 	plugins, err := GetCachedPlugins(DefaultTTL)
 	if err != nil {
-		return nil, err
+		return []models.WPPluginData{}, err
 	}
 
 	sites, err := GetSiteList()
 	if err != nil {
-		return nil, err
+		return []models.WPPluginData{}, err
 	}
 	siteNames := make(map[int]string)
 	for _, s := range sites {
 		siteNames[s.ID] = s.Name
 	}
 
-	var pluginData []models.WPPluginData
+	pluginData := []models.WPPluginData{}
 	pluginMap := make(map[string]*models.WPPluginData)
 
 	for _, plugin := range plugins {
@@ -185,12 +185,12 @@ func GetCachedPluginData() ([]models.WPPluginData, error) {
 func GetFastCachedPluginData() ([]models.WPPluginData, error) {
 	plugins, err := GetFastCachedPlugins()
 	if err != nil {
-		return nil, err
+		return []models.WPPluginData{}, err
 	}
 
 	sites, err := GetFastSiteList()
 	if err != nil {
-		return nil, err
+		return []models.WPPluginData{}, err
 	}
 
 	siteNames := make(map[int]string)
@@ -198,7 +198,7 @@ func GetFastCachedPluginData() ([]models.WPPluginData, error) {
 		siteNames[s.ID] = s.Name
 	}
 
-	var pluginData []models.WPPluginData
+	pluginData := []models.WPPluginData{}
 	pluginMap := make(map[string]*models.WPPluginData)
 
 	for _, plugin := range plugins {
@@ -235,9 +235,9 @@ func GetFastCachedPlugins() ([]models.WPPlugin, error) {
 	pluginsMu.Lock()
 	defer pluginsMu.Unlock()
 
-	var plugins []models.WPPlugin
+	plugins := []models.WPPlugin{}
 	if err := ReadJSONCache("plugins", &plugins, -1); err != nil {
-		return nil, err
+		return plugins, err
 	}
 	return plugins, nil
 }

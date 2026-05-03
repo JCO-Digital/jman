@@ -247,12 +247,12 @@ func IsVersionAffected(ver string, op models.Operator) bool {
 // GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
 // Vulnerabilities whose UUID appears in the ignore list are silently skipped.
 func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite) []models.VulnReport {
-	var reports []models.VulnReport
+	reports := []models.VulnReport{}
 
 	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
 	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 		// Missing or invalid vulnerability cache for this plugin; skip it.
-		return nil
+		return reports
 	}
 
 	ignoredMap, err := db.GetIgnoredVulnMap()
@@ -297,7 +297,7 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 // ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
 // determines which sites are affected by which vulnerabilities based on version ranges.
 func ProcessVulnerabilities() ([]models.VulnReport, error) {
-	var reports []models.VulnReport
+	reports := []models.VulnReport{}
 
 	pluginData, err := cache.GetCachedPluginData()
 	if err != nil {

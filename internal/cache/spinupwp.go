@@ -22,7 +22,7 @@ func GetCachedServers(ttl ...time.Duration) ([]models.Server, error) {
 // RefreshCachedServers fetches servers from the API and updates the cache.
 // If a ttl is provided and the cache is still valid, it returns the cached data.
 func RefreshCachedServers(ttl ...time.Duration) ([]models.Server, error) {
-	var servers []models.Server
+	servers := []models.Server{}
 	if len(ttl) > 0 && ttl[0] > 0 {
 		if err := ReadJSONCache("servers", &servers, ttl[0]); err == nil && len(servers) > 0 {
 			return servers, nil
@@ -33,7 +33,7 @@ func RefreshCachedServers(ttl ...time.Duration) ([]models.Server, error) {
 	var err error
 	servers, err = spinupwp.GetServers()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch servers: %w", err)
+		return servers, fmt.Errorf("failed to fetch servers: %w", err)
 	}
 
 	if err := WriteJSONCache("servers", servers); err != nil {
@@ -55,7 +55,7 @@ func GetCachedSites(ttl ...time.Duration) ([]models.Site, error) {
 // RefreshCachedSites fetches sites from the API and updates the cache.
 // If a ttl is provided and the cache is still valid, it returns the cached data.
 func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
-	var sites []models.Site
+	sites := []models.Site{}
 	if len(ttl) > 0 && ttl[0] > 0 {
 		if err := ReadJSONCache("sites", &sites, ttl[0]); err == nil && len(sites) > 0 {
 			return sites, nil
@@ -66,7 +66,7 @@ func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
 	var err error
 	sites, err = spinupwp.GetSites()
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch sites: %w", err)
+		return sites, fmt.Errorf("failed to fetch sites: %w", err)
 	}
 
 	if err := WriteJSONCache("sites", sites); err != nil {
@@ -78,18 +78,18 @@ func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
 
 // GetFastCachedServers retrieves servers from the cache without checking expiry.
 func GetFastCachedServers() ([]models.Server, error) {
-	var servers []models.Server
+	servers := []models.Server{}
 	if err := ReadJSONCache("servers", &servers, -1); err != nil {
-		return nil, err
+		return servers, err
 	}
 	return servers, nil
 }
 
 // GetFastCachedSites retrieves sites from the cache without checking expiry.
 func GetFastCachedSites() ([]models.Site, error) {
-	var sites []models.Site
+	sites := []models.Site{}
 	if err := ReadJSONCache("sites", &sites, -1); err != nil {
-		return nil, err
+		return sites, err
 	}
 	return sites, nil
 }
@@ -122,7 +122,7 @@ func GetFastServerMap() (map[int]string, error) {
 
 // GetSiteList retrieves all sites and maps them to CLI-friendly Site models
 func GetSiteList() ([]models.CliSite, error) {
-	var cliSites []models.CliSite
+	cliSites := []models.CliSite{}
 	serverMap, err := GetServerMap()
 	if err != nil {
 		return nil, err
@@ -160,7 +160,7 @@ func GetSiteList() ([]models.CliSite, error) {
 
 // GetFastSiteList retrieves sites from cache without checking expiry.
 func GetFastSiteList() ([]models.CliSite, error) {
-	var cliSites []models.CliSite
+	cliSites := []models.CliSite{}
 	serverMap, err := GetFastServerMap()
 	if err != nil {
 		return nil, err

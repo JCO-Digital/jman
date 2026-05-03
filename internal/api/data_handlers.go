@@ -14,9 +14,9 @@ import (
 
 // PluginsHandler returns the list of cached WordPress plugins.
 func PluginsHandler(w http.ResponseWriter, r *http.Request) {
-	var plugins []models.WPPlugin
-	if err := cache.ReadJSONCache("plugins", &plugins, cache.DefaultTTL); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch plugins' to fetch data.", err))
+	plugins := []models.WPPlugin{}
+	if err := cache.ReadJSONCache("plugins", &plugins, -1); err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
 		return
 	}
 
@@ -54,9 +54,9 @@ func PluginInfoHandler(w http.ResponseWriter, r *http.Request) {
 
 // ServersHandler returns the list of cached servers.
 func ServersHandler(w http.ResponseWriter, r *http.Request) {
-	var servers []models.Server
-	if err := cache.ReadJSONCache("servers", &servers, cache.DefaultTTL); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch servers' to fetch data.", err))
+	servers := []models.Server{}
+	if err := cache.ReadJSONCache("servers", &servers, -1); err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
 		return
 	}
 
@@ -70,9 +70,9 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 
 // SitesHandler returns the list of cached sites.
 func SitesHandler(w http.ResponseWriter, r *http.Request) {
-	var sites []models.Site
-	if err := cache.ReadJSONCache("sites", &sites, cache.DefaultTTL); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing or expired: %v. Run 'jman fetch sites' to fetch data.", err))
+	sites := []models.Site{}
+	if err := cache.ReadJSONCache("sites", &sites, -1); err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
 		return
 	}
 
