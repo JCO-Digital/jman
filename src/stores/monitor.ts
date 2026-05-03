@@ -12,6 +12,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 	const currentStatus = ref<Record<string, MonitorStatus>>({});
 	const ignoredDomains = ref<IgnoredSite[]>([]);
 	const isLoadingHistory = ref(false);
+	const historyFetched = ref(false);
 	const isLoadingIgnored = ref(false);
 
 	const historyByDomain = computed(() => {
@@ -38,9 +39,11 @@ export const useMonitorStore = defineStore("monitor", () => {
 			const data = await res.json();
 			console.log("Monitor history:", data);
 			history.value = data || [];
+			historyFetched.value = true;
 			return history.value;
 		} catch (error) {
 			console.error("Failed to fetch monitor history:", error);
+			historyFetched.value = true;
 			throw error;
 		} finally {
 			isLoadingHistory.value = false;
@@ -48,7 +51,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 	}
 
 	async function ensureHistory() {
-		if (history.value.length === 0 && !isLoadingHistory.value) {
+		if (!historyFetched.value && !isLoadingHistory.value) {
 			await fetchHistory();
 		}
 	}
@@ -162,6 +165,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 
 	return {
 		history,
+		historyFetched,
 		historyByDomain,
 		currentStatus,
 		ignoredDomains,
