@@ -23,6 +23,7 @@ export const useDataStore = defineStore("data", () => {
 	// State
 	const servers = ref<Server[]>([]);
 	const sites = ref<Site[]>([]);
+	const siteOrganizationLinks = ref<Record<number, number>>({});
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<Vulnerability[]>([]);
@@ -125,6 +126,8 @@ export const useDataStore = defineStore("data", () => {
 		return sites.value.map((site) => {
 			return {
 				...site,
+				organization_id:
+					site.organization_id ?? siteOrganizationLinks.value[site.id],
 				server:
 					serversByIdMap.value.get(site.server_id)?.name ?? "Unknown Server",
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
@@ -143,9 +146,16 @@ export const useDataStore = defineStore("data", () => {
 			const cachedPluginInfo = sessionStorage.getItem(CACHE_KEY_PLUGIN_INFO);
 			const cachedVulns = sessionStorage.getItem(CACHE_KEY_VULNS);
 
+			const cachedLinks = sessionStorage.getItem(
+				"jman_site_organization_links",
+			);
+
 			if (cachedServers && cachedSites && cachedPlugins && cachedPluginInfo) {
 				servers.value = JSON.parse(cachedServers);
 				sites.value = JSON.parse(cachedSites);
+				if (cachedLinks) {
+					siteOrganizationLinks.value = JSON.parse(cachedLinks);
+				}
 				plugins.value = JSON.parse(cachedPlugins);
 				pluginInfo.value = JSON.parse(cachedPluginInfo);
 				if (cachedVulns) {
@@ -163,11 +173,13 @@ export const useDataStore = defineStore("data", () => {
 	function clearCache() {
 		sessionStorage.removeItem(CACHE_KEY_SERVERS);
 		sessionStorage.removeItem(CACHE_KEY_SITES);
+		sessionStorage.removeItem("jman_site_organization_links");
 		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGIN_INFO);
 		sessionStorage.removeItem(CACHE_KEY_VULNS);
 		servers.value = [];
 		sites.value = [];
+		siteOrganizationLinks.value = {};
 		plugins.value = [];
 		pluginInfo.value = [];
 		vulnerabilities.value = [];
@@ -277,8 +289,6 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function getSiteById(id: number) {
-		const monitorStore = useMonitorStore();
-		monitorStore.ensureHistory();
 		return sitesByIdMap.value.get(id);
 	}
 
@@ -292,6 +302,21 @@ export const useDataStore = defineStore("data", () => {
 
 	function getVulnerabilitiesBySlug(slug: string) {
 		return vulnerabilitiesBySlug.value.get(slug) || [];
+	}
+
+	function setSiteOrganizationLink(
+		siteId: number,
+		organizationId: number | undefined,
+	) {
+		if (organizationId === undefined) {
+			delete siteOrganizationLinks.value[siteId];
+		} else {
+			siteOrganizationLinks.value[siteId] = organizationId;
+		}
+		sessionStorage.setItem(
+			"jman_site_organization_links",
+			JSON.stringify(siteOrganizationLinks.value),
+		);
 	}
 
 	return {
@@ -318,6 +343,7 @@ export const useDataStore = defineStore("data", () => {
 		getServerById,
 		getPluginsBySiteId,
 		getVulnerabilitiesBySlug,
+		setSiteOrganizationLink,
 		// Actions
 		initData,
 		refreshData,
