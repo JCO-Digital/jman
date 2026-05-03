@@ -27,7 +27,6 @@ const site = computed(() => dataStore.getSiteById(siteId));
 // Fetch initial data
 onMounted(async () => {
 	await dataStore.initData();
-	monitorStore.ensureHistory();
 });
 
 // Watch for domain changes to fetch monitor status
@@ -178,10 +177,10 @@ const handleSearch = () => {
 	}, 300);
 };
 
-const linkOrganization = async (compId: number) => {
+const linkOrganization = async (organizationId: number) => {
 	try {
-		await organizationStore.linkSiteToOrganization(siteId, compId);
-		dataStore.setSiteOrganizationLink(siteId, compId);
+		await organizationStore.linkSiteToOrganization(siteId, organizationId);
+		dataStore.setSiteOrganizationLink(siteId, organizationId);
 		await dataStore.refreshData();
 		organization.value = await organizationStore.getOrganizationForSite(siteId);
 		if (organization.value) {
@@ -227,31 +226,20 @@ const unlinkOrganization = async () => {
 			</div>
 
 			<section class="card organization-section">
-				<div
-					style="
-						display: flex;
-						justify-content: space-between;
-						align-items: center;
-						margin-bottom: 16px;
-						border-bottom: 1px solid var(--border-color);
-						padding-bottom: 8px;
-					"
-				>
-					<h2 style="margin: 0; border: none">Organization Information</h2>
+				<div class="organization-header">
+					<h2 class="organization-title">Organization Information</h2>
 					<div class="header-actions">
 						<button
 							v-if="organization"
-							class="text-btn"
+							class="text-btn unlink-btn"
 							@click="unlinkOrganization"
-							style="color: #ef4444"
 						>
 							Unlink
 						</button>
 						<button
 							v-if="organization"
-							class="back-btn"
+							class="back-btn view-org-btn"
 							@click="goToOrganization"
-							style="padding: 4px 12px; font-size: 13px"
 						>
 							View Organization
 						</button>
@@ -349,7 +337,7 @@ const unlinkOrganization = async () => {
 									>
 										{{ plugin.vulnerabilities.length }}
 									</span>
-									<span v-else style="color: #999">—</span>
+									<span v-else class="empty-dash">—</span>
 								</td>
 							</tr>
 						</tbody>
@@ -365,7 +353,7 @@ const unlinkOrganization = async () => {
 				/>
 				<div v-else class="empty-state">
 					<p>Site not found.</p>
-					<button class="back-btn" @click="goBack" style="margin-top: 16px">
+					<button class="back-btn not-found-back-btn" @click="goBack">
 						Go back to sites
 					</button>
 				</div>
@@ -446,6 +434,37 @@ const unlinkOrganization = async () => {
 	font-size: 0.95rem;
 	margin-bottom: 12px;
 	color: var(--text-muted);
+}
+
+.organization-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	border-bottom: 1px solid var(--border-color);
+	padding-bottom: 8px;
+}
+
+.organization-title {
+	margin: 0;
+	border: none;
+}
+
+.unlink-btn {
+	color: #ef4444;
+}
+
+.view-org-btn {
+	padding: 4px 12px;
+	font-size: 13px;
+}
+
+.empty-dash {
+	color: #999;
+}
+
+.not-found-back-btn {
+	margin-top: 16px;
 }
 
 .header-actions {

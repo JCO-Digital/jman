@@ -81,7 +81,7 @@ const formatDate = (dateStr: string) => {
 						</p>
 					</div>
 
-					<div class="setting-group" style="margin-top: 20px">
+					<div class="setting-group refresh-interval-group">
 						<label for="data-refresh-interval"
 							>Site & Plugin Data Refresh Interval (seconds)</label
 						>
@@ -184,6 +184,10 @@ const formatDate = (dateStr: string) => {
 </template>
 
 <style scoped>
+.refresh-interval-group {
+	margin-top: 20px;
+}
+
 .settings-form {
 	margin-top: 16px;
 }
