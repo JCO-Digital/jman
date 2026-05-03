@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { useCompanyStore } from "../stores/company";
+import { useOrganizationStore } from "../stores/organization";
 import { useDataStore } from "../stores/data";
-import type { Company, Contact, ContactType, Site } from "../types";
+import type { Organization, Contact, ContactType, Site } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
@@ -13,15 +13,13 @@ const props = defineProps<{
 }>();
 
 const router = useRouter();
-const companyStore = useCompanyStore();
+const organizationStore = useOrganizationStore();
 const dataStore = useDataStore();
 
-const companyId = parseInt(props.id, 10);
-const company = ref<Company | null>(null);
+const organizationId = parseInt(props.id, 10);
+const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
-const linkedSites = computed(() =>
-	dataStore.enrichedSites.filter((s) => s.company_id === companyId),
-);
+const linkedSites = ref<Site[]>([]);
 const isLoading = ref(true);
 const error = ref<string | null>(null);
 
@@ -29,20 +27,21 @@ const loadData = async () => {
 	isLoading.value = true;
 	error.value = null;
 	try {
-		const [companyData, contactsData] = await Promise.all([
-			companyStore.getCompany(companyId),
-			companyStore.fetchCompanyContacts(companyId),
-			dataStore.refreshData(),
+		const [organizationData, contactsData, sitesData] = await Promise.all([
+			organizationStore.getOrganization(organizationId),
+			organizationStore.fetchOrganizationContacts(organizationId),
+			organizationStore.fetchOrganizationSites(organizationId),
 		]);
 
-		if (companyData) {
-			company.value = companyData;
+		if (organizationData) {
+			organization.value = organizationData;
 			contacts.value = contactsData;
+			linkedSites.value = sitesData;
 		} else {
-			error.value = "Company not found";
+			error.value = "Organization not found";
 		}
 	} catch (e: any) {
-		error.value = e.message || "Failed to load company details";
+		error.value = e.message || "Failed to load organization details";
 	} finally {
 		isLoading.value = false;
 	}
@@ -52,35 +51,38 @@ onMounted(() => {
 	loadData();
 });
 
-const companyInfoItems = computed(() => {
-	if (!company.value) return [];
+const organizationInfoItems = computed(() => {
+	if (!organization.value) return [];
 	return [
 		{
-			label: "Company Name",
+			label: "Organization Name",
 			key: "name",
-			value: company.value.name,
+			value: organization.value.name,
 			required: true,
 		},
 		{
 			label: "VAT Number",
 			key: "vat_number",
-			value: company.value.vat_number,
+			value: organization.value.vat_number,
 		},
 		{
 			label: "Information",
 			key: "info",
-			value: company.value.info,
+			value: organization.value.info,
 			type: "textarea" as const,
 		},
 	];
 });
 
-const handleSaveCompany = async (values: Record<string, any>) => {
+const handleSaveOrganization = async (values: Record<string, any>) => {
 	try {
-		const updated = await companyStore.updateCompany(companyId, values);
-		company.value = updated;
+		const updated = await organizationStore.updateOrganization(
+			organizationId,
+			values,
+		);
+		organization.value = updated;
 	} catch (e: any) {
-		alert("Failed to update company: " + e.message);
+		alert("Failed to update organization: " + e.message);
 	}
 };
 
@@ -125,18 +127,19 @@ const openEditContact = (contact: Contact) => {
 const handleContactSubmit = async () => {
 	try {
 		if (editingContact.value) {
-			await companyStore.updateContact(
+			await organizationStore.updateContact(
 				editingContact.value.id,
 				contactForm.value,
 			);
 		} else {
-			await companyStore.createContact({
+			await organizationStore.createContact({
 				...contactForm.value,
-				company_id: companyId,
+				organization_id: organizationId,
 			});
 		}
 		showContactModal.value = false;
-		contacts.value = await companyStore.fetchCompanyContacts(companyId);
+		contacts.value =
+			await organizationStore.fetchOrganizationContacts(organizationId);
 	} catch (e: any) {
 		alert("Failed to save contact: " + e.message);
 	}
@@ -145,29 +148,30 @@ const handleContactSubmit = async () => {
 const handleDeleteContact = async (id: number) => {
 	if (!confirm("Are you sure you want to delete this contact?")) return;
 	try {
-		await companyStore.deleteContact(id);
-		contacts.value = await companyStore.fetchCompanyContacts(companyId);
+		await organizationStore.deleteContact(id);
+		contacts.value =
+			await organizationStore.fetchOrganizationContacts(organizationId);
 	} catch (e: any) {
 		alert("Failed to delete contact: " + e.message);
 	}
 };
 
 const goBack = () => {
-	router.push({ name: "companies" });
+	router.push({ name: "organizations" });
 };
 
-const handleDeleteCompany = async () => {
+const handleDeleteOrganization = async () => {
 	if (
 		!confirm(
-			`Are you sure you want to delete ${company.value?.name}? This will also delete all associated contacts.`,
+			`Are you sure you want to delete ${organization.value?.name}? This will also delete all associated contacts.`,
 		)
 	)
 		return;
 	try {
-		await companyStore.deleteCompany(companyId);
-		router.push({ name: "companies" });
+		await organizationStore.deleteOrganization(organizationId);
+		router.push({ name: "organizations" });
 	} catch (e: any) {
-		alert("Failed to delete company: " + e.message);
+		alert("Failed to delete organization: " + e.message);
 	}
 };
 
@@ -185,9 +189,11 @@ const availableSites = computed(() => {
 
 const handleLinkSite = async (siteId: number) => {
 	try {
-		await companyStore.linkSiteToCompany(siteId, companyId);
-		dataStore.setSiteCompanyLink(siteId, companyId);
+		await organizationStore.linkSiteToOrganization(siteId, organizationId);
+		dataStore.setSiteOrganizationLink(siteId, organizationId);
 		await dataStore.refreshData();
+		linkedSites.value =
+			await organizationStore.fetchOrganizationSites(organizationId);
 		showLinkSiteModal.value = false;
 		siteSearchQuery.value = "";
 	} catch (e: any) {
@@ -198,9 +204,11 @@ const handleLinkSite = async (siteId: number) => {
 const handleUnlinkSite = async (siteId: number) => {
 	if (!confirm("Are you sure you want to unlink this site?")) return;
 	try {
-		await companyStore.unlinkSite(siteId);
-		dataStore.setSiteCompanyLink(siteId, undefined);
+		await organizationStore.unlinkSite(siteId);
+		dataStore.setSiteOrganizationLink(siteId, undefined);
 		await dataStore.refreshData();
+		linkedSites.value =
+			await organizationStore.fetchOrganizationSites(organizationId);
 	} catch (e: any) {
 		alert("Failed to unlink site: " + e.message);
 	}
@@ -214,12 +222,16 @@ const goToSite = (siteId: number) => {
 <template>
 	<div class="view-container">
 		<ViewHeader
-			:title="company?.name || 'Company Details'"
-			:back-button="{ text: 'Back to Contacts', onClick: goBack }"
+			:title="organization?.name || 'Organization Details'"
+			:back-button="{ text: 'Back to Organizations', onClick: goBack }"
 		>
 			<template #actions>
-				<button v-if="company" class="btn-danger" @click="handleDeleteCompany">
-					Delete Company
+				<button
+					v-if="organization"
+					class="btn-danger"
+					@click="handleDeleteOrganization"
+				>
+					Delete Organization
 				</button>
 			</template>
 		</ViewHeader>
@@ -229,11 +241,11 @@ const goToSite = (siteId: number) => {
 			<button class="text-btn" @click="loadData">Retry</button>
 		</div>
 
-		<main class="content" v-if="company">
+		<main class="content" v-if="organization">
 			<EditableInfoCard
-				title="Company Information"
-				:items="companyInfoItems"
-				@save="handleSaveCompany"
+				title="Organization Information"
+				:items="organizationInfoItems"
+				@save="handleSaveOrganization"
 			/>
 
 			<section class="card">
@@ -258,7 +270,7 @@ const goToSite = (siteId: number) => {
 						<tbody>
 							<tr v-if="contacts.length === 0">
 								<td colspan="5" class="empty-state">
-									No contacts found for this company.
+									No contacts found for this organization.
 								</td>
 							</tr>
 							<tr v-for="contact in contacts" :key="contact.id">
@@ -353,7 +365,7 @@ const goToSite = (siteId: number) => {
 						<tbody>
 							<tr v-if="linkedSites.length === 0">
 								<td colspan="3" class="empty-state">
-									No sites linked to this company.
+									No sites linked to this organization.
 								</td>
 							</tr>
 							<tr v-for="site in linkedSites" :key="site.id">
@@ -400,7 +412,7 @@ const goToSite = (siteId: number) => {
 
 		<main class="content" v-else-if="isLoading">
 			<div class="card">
-				<LoadingSpinner message="Loading company details..." />
+				<LoadingSpinner message="Loading organization details..." />
 			</div>
 		</main>
 
@@ -480,7 +492,7 @@ const goToSite = (siteId: number) => {
 			@click.self="showLinkSiteModal = false"
 		>
 			<div class="modal-content card">
-				<h2>Link Site to Company</h2>
+				<h2>Link Site to Organization</h2>
 				<div class="form-layout">
 					<div class="form-group">
 						<label for="s-search">Search Site Domain</label>
@@ -620,7 +632,7 @@ const goToSite = (siteId: number) => {
 	color: #f59e0b;
 }
 
-/* Modal styles (shared with CompaniesView) */
+/* Modal styles */
 .modal-overlay {
 	position: fixed;
 	top: 0;
