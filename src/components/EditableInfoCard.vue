@@ -15,6 +15,7 @@ const props = defineProps<{
 	title: string;
 	items: EditableInfoItem[];
 	isLoading?: boolean;
+	onSave?: (values: Record<string, any>) => Promise<void> | void;
 }>();
 
 const emit = defineEmits<{
@@ -22,6 +23,7 @@ const emit = defineEmits<{
 }>();
 
 const isEditing = ref(false);
+const isSaving = ref(false);
 const localValues = ref<Record<string, any>>({});
 const copiedIndex = ref<number | null>(null);
 
@@ -40,9 +42,20 @@ const cancelEditing = () => {
 	isEditing.value = false;
 };
 
-const handleSave = () => {
-	emit("save", { ...localValues.value });
-	isEditing.value = false;
+const handleSave = async () => {
+	isSaving.value = true;
+	try {
+		const values = { ...localValues.value };
+		if (props.onSave) {
+			await props.onSave(values);
+		}
+		emit("save", values);
+		isEditing.value = false;
+	} catch (error) {
+		console.error("Failed to save:", error);
+	} finally {
+		isSaving.value = false;
+	}
 };
 
 const copyToClipboard = async (value: any, index: number) => {
@@ -68,8 +81,20 @@ const copyToClipboard = async (value: any, index: number) => {
 					Edit
 				</button>
 				<template v-else>
-					<button class="text-btn cancel" @click="cancelEditing">Cancel</button>
-					<button class="primary-btn-sm" @click="handleSave">Save</button>
+					<button
+						class="text-btn cancel"
+						@click="cancelEditing"
+						:disabled="isSaving"
+					>
+						Cancel
+					</button>
+					<button
+						class="primary-btn-sm"
+						@click="handleSave"
+						:disabled="isSaving"
+					>
+						{{ isSaving ? "Saving..." : "Save" }}
+					</button>
 				</template>
 			</div>
 		</div>
@@ -85,7 +110,9 @@ const copyToClipboard = async (value: any, index: number) => {
 						:title="item.copyable ? 'Click to copy' : ''"
 					>
 						{{ item.value || "—" }}
-						<span v-if="copiedIndex === index" class="copy-feedback">Copied!</span>
+						<span v-if="copiedIndex === index" class="copy-feedback"
+							>Copied!</span
+						>
 					</span>
 				</div>
 			</div>
@@ -100,13 +127,27 @@ const copyToClipboard = async (value: any, index: number) => {
 			>
 				<label :for="item.key">{{ item.label }}</label>
 
-				<select v-if="item.type === 'select'" :id="item.key" v-model="localValues[item.key]">
-					<option v-for="opt in item.options" :key="opt.value" :value="opt.value">
+				<select
+					v-if="item.type === 'select'"
+					:id="item.key"
+					v-model="localValues[item.key]"
+					:disabled="isSaving"
+				>
+					<option
+						v-for="opt in item.options"
+						:key="opt.value"
+						:value="opt.value"
+					>
 						{{ opt.label }}
 					</option>
 				</select>
 
-				<textarea v-else-if="item.type === 'textarea'" :id="item.key" v-model="localValues[item.key]"></textarea>
+				<textarea
+					v-else-if="item.type === 'textarea'"
+					:id="item.key"
+					v-model="localValues[item.key]"
+					:disabled="isSaving"
+				></textarea>
 
 				<input
 					v-else
@@ -114,6 +155,7 @@ const copyToClipboard = async (value: any, index: number) => {
 					:id="item.key"
 					v-model="localValues[item.key]"
 					:required="item.required"
+					:disabled="isSaving"
 				/>
 			</div>
 		</div>
@@ -251,12 +293,17 @@ const copyToClipboard = async (value: any, index: number) => {
 	transition: background-color 0.2s;
 }
 
-.text-btn:hover {
+.text-btn:hover:not(:disabled) {
 	background-color: var(--bg-hover);
 }
 
 .text-btn.cancel {
 	color: var(--text-muted);
+}
+
+.text-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
 }
 
 .primary-btn-sm {
@@ -271,7 +318,12 @@ const copyToClipboard = async (value: any, index: number) => {
 	transition: filter 0.2s;
 }
 
-.primary-btn-sm:hover {
+.primary-btn-sm:hover:not(:disabled) {
 	filter: brightness(1.1);
+}
+
+.primary-btn-sm:disabled {
+	opacity: 0.7;
+	cursor: not-allowed;
 }
 </style>

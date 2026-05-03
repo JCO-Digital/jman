@@ -83,6 +83,7 @@ const handleSaveOrganization = async (values: Record<string, any>) => {
 		organization.value = updated;
 	} catch (e: any) {
 		alert("Failed to update organization: " + e.message);
+		throw e;
 	}
 };
 
@@ -245,7 +246,7 @@ const goToSite = (siteId: number) => {
 			<EditableInfoCard
 				title="Organization Information"
 				:items="organizationInfoItems"
-				@save="handleSaveOrganization"
+				:onSave="handleSaveOrganization"
 			/>
 
 			<section class="card">
