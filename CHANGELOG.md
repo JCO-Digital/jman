@@ -1,6 +1,21 @@
 # Changelog
 
-### 5.2.1 (2026-04-30)
+## 5.3.0 (2026-05-03)
+
+#### Features
+
+- api: add endpoint to list sites by company (287faa2)
+- api: implement company, contact, and note management (6709e02)
+
+#### Bug Fixes
+
+- api: improve cache handling and strengthen input validation (17b228b)
+
+#### Refactor
+
+- api: rename company entities to organization (f19d01a)
+
+### v5.2.1 (2026-04-30)
 
 #### Bug Fixes
 
