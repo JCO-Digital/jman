@@ -1,6 +1,33 @@
 # Changelog
 
-### 1.9.3 (2026-04-21)
+## 1.10.0 (2026-05-04)
+
+#### Features
+
+- organization: sync site links on organization fetch (24a6292)
+
+## v1.10.0 (2026-05-03)
+
+#### Features
+
+- organization: add debounce and request cancellation to search functionality (f46a89e)
+- EditableInfoCard: add async save support and loading state (50d54ee)
+- organization: display linked sites in organizations table (3fb85da)
+- data: implement local caching for site-company associations (b494b18)
+- site: implement site and company linking functionality (c80bf4e)
+- company: implement company and contact management system (81cdea9)
+
+#### Bug Fixes
+
+- component: allow falsy values in EditableInfoCard (7d4fd54)
+- monitor: prevent marking history as fetched on error (439a342)
+
+#### Refactor
+
+- style: remove inline styles in favor of scoped CSS classes (40daa90)
+- organization: rename companies to organizations (32267b4)
+
+### v1.9.3 (2026-04-21)
 
 #### Bug Fixes
 
