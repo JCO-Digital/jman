@@ -463,7 +463,7 @@ const goToSite = (siteId: number) => {
 							id="c-phone"
 							v-model="contactForm.phone"
 							type="tel"
-							placeholder="+49 ..."
+							placeholder="+358 ..."
 						/>
 					</div>
 					<div class="form-actions">
