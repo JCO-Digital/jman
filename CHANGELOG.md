@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.11.0 (2026-05-04)
+## 1.12.0 (2026-05-04)
+
+#### Features
+
+- audit: add audit trail to organization view (ccda9aa)
+
+#### Bug Fixes
+
+- organization: update phone placeholder format (c9a2ae1)
+
+## v1.11.0 (2026-05-04)
 
 #### Features
 
