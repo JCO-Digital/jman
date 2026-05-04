@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.3.0 (2026-05-03)
+## 5.4.0 (2026-05-04)
+
+#### Features
+
+- api: add endpoint to list users (4d3d9f2)
+
+## v5.3.0 (2026-05-03)
 
 #### Features
 
