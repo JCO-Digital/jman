@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.4.0 (2026-05-04)
+## 5.5.0 (2026-05-04)
+
+#### Features
+
+- plugin: add summary report for multi-site plugin updates (f853d54)
+
+## v5.4.0 (2026-05-04)
 
 #### Features
 
