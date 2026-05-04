@@ -1,12 +1,14 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
-import type { Organization, Contact, ContactType } from "../types";
+import type { Organization, Contact, ContactType, Site } from "../types";
 import { useAuthStore } from "./auth";
+import { useDataStore } from "./data";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const useOrganizationStore = defineStore("organization", () => {
 	const authStore = useAuthStore();
+	const dataStore = useDataStore();
 
 	const organizations = ref<Organization[]>([]);
 	const isLoading = ref(false);
@@ -110,7 +112,15 @@ export const useOrganizationStore = defineStore("organization", () => {
 			},
 		);
 		if (!res.ok) throw new Error("Failed to fetch organization sites");
-		return await res.json();
+		const sites = await res.json();
+
+		if (Array.isArray(sites)) {
+			sites.forEach((site: Site) => {
+				dataStore.setSiteOrganizationLink(site.id, organizationId);
+			});
+		}
+
+		return sites;
 	}
 
 	async function createContact(contact: {
