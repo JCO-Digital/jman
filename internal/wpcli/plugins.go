@@ -85,9 +85,9 @@ type UpdateResult struct {
 }
 
 // UpdatePlugin updates one or more plugins.
-func UpdatePlugin(ssh, path string, plugins []string) (int, error) {
+func UpdatePlugin(ssh, path string, plugins []string) ([]UpdateResult, error) {
 	if len(plugins) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 
 	args := []string{"plugin", "update"}
@@ -96,22 +96,20 @@ func UpdatePlugin(ssh, path string, plugins []string) (int, error) {
 
 	res, err := RunWP(CliOptions{SSH: ssh, Path: path, IncludePlugins: true}, args...)
 	if err != nil {
-		return 0, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
+		return nil, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
 	var updates []UpdateResult
 	if err := json.Unmarshal([]byte(res.Output), &updates); err != nil {
-		return 0, fmt.Errorf("failed to parse update result: %w", err)
+		return nil, fmt.Errorf("failed to parse update result: %w", err)
 	}
-	updated := 0
 	for _, update := range updates {
 		if update.Status == "Updated" {
-			updated++
 			verb.Printf(verb.Normal, "Updated %s from %s to %s\n", update.Name, update.OldVersion, update.NewVersion)
 		} else {
 			verb.Printf(verb.Normal, "Failed to update %s: %s\n", update.Name, update.Status)
 		}
 	}
-	return updated, nil
+	return updates, nil
 }
 
 // RemovePlugin uninstalls and deactivates a plugin.
