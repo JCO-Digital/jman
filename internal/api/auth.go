@@ -217,6 +217,20 @@ func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	}
 }
 
+// ListUsersHandler returns a list of all configured users (usernames and display names).
+func ListUsersHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var resp []loginRespUser
+		for _, u := range usersCfg.Users {
+			resp = append(resp, loginRespUser{
+				Username:    u.Username,
+				DisplayName: u.DisplayName,
+			})
+		}
+		WriteJSON(w, http.StatusOK, resp)
+	}
+}
+
 // --- Middleware ---
 
 // AuthMiddleware returns middleware that validates the JWT Bearer token in the
