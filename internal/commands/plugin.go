@@ -131,12 +131,67 @@ var updatePluginCmd = &cobra.Command{
 			return nil
 		}
 
+		type siteReport struct {
+			siteName string
+			updated  []wpcli.UpdateResult
+			failed   []string
+		}
+		var reports []siteReport
+
 		for _, site := range sites {
-			updateErr := updatePlugin(site, pluginName)
+			updated, failed, updateErr := updatePlugin(site, pluginName)
 			if updateErr != nil {
 				verb.Printf(verb.Normal, "Error updating plugin on %s: %v\n", verb.Blue(site.Name), verb.Red(updateErr))
 			}
+			if len(updated) > 0 || len(failed) > 0 {
+				reports = append(reports, siteReport{site.Name, updated, failed})
+			}
 		}
+
+		if len(sites) > 1 && len(reports) > 0 {
+			verb.Printf(verb.Normal, "\n%s\n", verb.Bold("Update Report:"))
+
+			hasUpdated := false
+			for _, r := range reports {
+				if len(r.updated) > 0 {
+					hasUpdated = true
+					break
+				}
+			}
+
+			if hasUpdated {
+				verb.Printf(verb.Normal, "\n%s\n", verb.Green("Updated Plugins:"))
+				for _, r := range reports {
+					if len(r.updated) > 0 {
+						verb.Printf(verb.Normal, "  %s:\n", verb.Blue(r.siteName))
+						for _, u := range r.updated {
+							verb.Printf(verb.Normal, "    - %s (%s -> %s)\n", u.Name, u.OldVersion, u.NewVersion)
+						}
+					}
+				}
+			}
+
+			hasFailed := false
+			for _, r := range reports {
+				if len(r.failed) > 0 {
+					hasFailed = true
+					break
+				}
+			}
+
+			if hasFailed {
+				verb.Printf(verb.Normal, "\n%s\n", verb.Red("Failed Updates:"))
+				for _, r := range reports {
+					if len(r.failed) > 0 {
+						verb.Printf(verb.Normal, "  %s:\n", verb.Blue(r.siteName))
+						for _, f := range r.failed {
+							verb.Printf(verb.Normal, "    - %s\n", verb.Red(f))
+						}
+					}
+				}
+			}
+		}
+
 		return nil
 	},
 }
@@ -300,7 +355,7 @@ func listPlugins(site models.CliSite) error {
 	return nil
 }
 
-func updatePlugin(site models.CliSite, pluginName string) error {
+func updatePlugin(site models.CliSite, pluginName string) ([]wpcli.UpdateResult, []string, error) {
 	if pluginName == "" {
 		pluginName = "all"
 	}
@@ -308,12 +363,12 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 
 	plugins, err := getPluginUpdates(site)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 
 	if len(plugins) == 0 {
 		verb.Printf(verb.Normal, "No plugins to update on %s.\n", verb.Blue(site.Name))
-		return nil
+		return nil, nil, nil
 	}
 	verb.Printf(verb.Normal, "Found %d plugins with updates available:\n", len(plugins))
 
@@ -329,18 +384,24 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 	}
 	if len(toUpdate) == 0 {
 		verb.Printf(verb.Normal, "No matching plugins to update on %s.\n", verb.Blue(site.Name))
-		return nil
+		return nil, nil, nil
 	}
 	verb.Printf(verb.Normal, "Updating %d plugins on %s...\n", len(toUpdate), verb.Blue(site.Name))
 
 	var failed []string
-	updatedCount := 0
+	var allUpdated []wpcli.UpdateResult
 	for _, p := range toUpdate {
-		count, err := wpcli.UpdatePlugin(site.SSH, site.Path, []string{p})
+		results, err := wpcli.UpdatePlugin(site.SSH, site.Path, []string{p})
 		if err != nil {
 			failed = append(failed, p)
 		} else {
-			updatedCount += count
+			for _, res := range results {
+				if res.Status == "Updated" {
+					allUpdated = append(allUpdated, res)
+				} else {
+					failed = append(failed, res.Name)
+				}
+			}
 		}
 	}
 
@@ -348,8 +409,8 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 		verb.Printf(verb.Normal, "Failed to update %d plugins on %s: %s\n", len(failed), verb.Blue(site.Name), verb.Red(strings.Join(failed, ", ")))
 	}
 
-	if updatedCount > 0 || len(failed) == 0 {
-		verb.Printf(verb.Normal, "Successfully updated %d plugins on %s.\n", updatedCount, verb.Blue(site.Name))
+	if len(allUpdated) > 0 || len(failed) == 0 {
+		verb.Printf(verb.Normal, "Successfully updated %d plugins on %s.\n", len(allUpdated), verb.Blue(site.Name))
 	}
 
 	// Update cache after updates
@@ -357,7 +418,7 @@ func updatePlugin(site models.CliSite, pluginName string) error {
 		verb.Printf(verb.Normal, "Warning: failed to update cache for site %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 	}
 
-	return nil
+	return allUpdated, failed, nil
 }
 
 func getPluginUpdates(site models.CliSite) ([]models.WPPlugin, error) {
