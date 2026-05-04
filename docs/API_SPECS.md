@@ -273,3 +273,28 @@ The API returns a standard error object for all non-2xx/3xx responses:
 - `404 Not Found`: Record does not exist
 - `429 Too Many Requests`: Login rate limit exceeded
 - `500 Internal Server Error`: Server-side error
+
+---
+
+## User Management (Read-Only)
+
+### List Users
+
+`GET /users` (Protected)
+
+Returns a list of all users in the system to resolve display names for auditing.
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"username": "admin",
+		"displayName": "Administrator"
+	},
+	{
+		"username": "niklas",
+		"displayName": "Niklas"
+	}
+]
+```

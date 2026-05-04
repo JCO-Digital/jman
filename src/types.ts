@@ -97,6 +97,9 @@ export interface Site {
 		username: string;
 	};
 	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
 	status: string;
 }
 
@@ -228,6 +231,10 @@ export interface Contact {
 	email: string | null;
 	phone: string | null;
 	type: ContactType;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
 }
 
 export interface EnrichedOrganization extends Organization {

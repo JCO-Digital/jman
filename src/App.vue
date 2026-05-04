@@ -5,12 +5,14 @@ import { useDataStore } from "./stores/data";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
+import { useUserStore } from "./stores/user";
 import AppNav from "./components/AppNav.vue";
 import packageInfo from "../package.json";
 
 const dataStore = useDataStore();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
+const userStore = useUserStore();
 
 authStore.initialize();
 settingsStore.initialize();
@@ -82,6 +84,7 @@ const version = packageInfo.version;
 const handleLogout = () => {
 	stopIntervals();
 	dataStore.clearCache();
+	userStore.clearCache();
 	authStore.logout();
 };
 </script>
