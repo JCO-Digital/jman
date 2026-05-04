@@ -159,6 +159,11 @@ select {
 	width: 95%;
 	margin: 0 auto;
 	padding: 20px;
+
+	@media (max-width: 640px) {
+		width: 100%;
+		padding: 16px 12px;
+	}
 }
 
 .content {
@@ -181,10 +186,13 @@ select {
 .header {
 	justify-content: space-between;
 	margin-bottom: 24px;
+	flex-wrap: wrap;
+	gap: 16px;
 }
 
 .title-area {
 	gap: 16px;
+	flex-wrap: wrap;
 }
 
 /* Buttons */
@@ -251,6 +259,10 @@ select {
 		border: 1px solid var(--border-input);
 		border-radius: 4px;
 		font-size: 14px;
+
+		@media (max-width: 640px) {
+			max-width: none;
+		}
 	}
 }
 
@@ -302,7 +314,8 @@ select {
 	background: var(--bg-card);
 	border: 1px solid var(--border-color);
 	border-radius: 8px;
-	overflow: hidden;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
 }
 
 .data-table {
@@ -314,6 +327,10 @@ select {
 	& td {
 		padding: 12px 16px;
 		border-bottom: 1px solid var(--border-color);
+
+		@media (max-width: 640px) {
+			padding: 10px 12px;
+		}
 	}
 
 	& th {
@@ -353,6 +370,8 @@ select {
 	padding: 12px 16px;
 	background-color: var(--bg-table-header);
 	border-top: 1px solid var(--border-color);
+	flex-wrap: wrap;
+	gap: 12px;
 
 	& .rows-per-page select {
 		margin-left: 8px;
@@ -433,11 +452,21 @@ select {
 		border-bottom: 1px solid var(--border-color);
 		padding: 0 20px;
 
+		@media (max-width: 640px) {
+			padding: 0 12px;
+		}
+
 		& .nav-container {
 			max-width: 1200px;
 			margin: 0 auto;
 			display: flex;
 			gap: 24px;
+
+			@media (max-width: 768px) {
+				gap: 12px;
+				overflow-x: auto;
+				-webkit-overflow-scrolling: touch;
+			}
 
 			& .nav-item {
 				padding: 16px 4px;
@@ -466,5 +495,25 @@ select {
 		text-align: center;
 		font-size: 0.875rem;
 		color: var(--text-muted);
+	}
+}
+
+/* Responsive Utilities */
+.hide-mobile {
+	@media (max-width: 640px) {
+		display: none !important;
+	}
+}
+
+.show-mobile {
+	@media (min-width: 641px) {
+		display: none !important;
+	}
+}
+
+.mobile-only {
+	display: none;
+	@media (max-width: 640px) {
+		display: block;
 	}
 }

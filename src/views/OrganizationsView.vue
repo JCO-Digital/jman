@@ -103,7 +103,7 @@ const handleCreateOrganization = async () => {
 				<thead>
 					<tr>
 						<th>Name</th>
-						<th>Linked Sites</th>
+						<th class="hide-mobile">Linked Sites</th>
 						<th class="actions-cell"></th>
 					</tr>
 				</thead>
@@ -114,12 +114,21 @@ const handleCreateOrganization = async () => {
 							organizationStore.organizations.length === 0
 						"
 					>
-						<td colspan="3">
+						<td colspan="3" class="hide-mobile">
+							<LoadingSpinner message="Loading organizations..." />
+						</td>
+						<td colspan="2" class="show-mobile">
 							<LoadingSpinner message="Loading organizations..." />
 						</td>
 					</tr>
 					<tr v-else-if="organizationStore.organizations.length === 0">
-						<td colspan="3" class="empty-state">
+						<td colspan="3" class="empty-state hide-mobile">
+							<span v-if="searchQuery"
+								>No organizations found matching "{{ searchQuery }}".</span
+							>
+							<span v-else>No organizations available.</span>
+						</td>
+						<td colspan="2" class="empty-state show-mobile">
 							<span v-if="searchQuery"
 								>No organizations found matching "{{ searchQuery }}".</span
 							>
@@ -137,7 +146,7 @@ const handleCreateOrganization = async () => {
 								organization.name
 							}}</strong>
 						</td>
-						<td>
+						<td class="hide-mobile">
 							<div class="sites-list">
 								<template v-if="getLinkedSites(organization.id).length > 0">
 									<span
@@ -203,7 +212,7 @@ const handleCreateOrganization = async () => {
 							id="vat"
 							v-model="newOrganization.vat_number"
 							type="text"
-							placeholder="e.g. DE123456789"
+							placeholder="e.g. FI123456789"
 						/>
 					</div>
 					<div class="form-group">
@@ -241,6 +250,11 @@ const handleCreateOrganization = async () => {
 	display: flex;
 	gap: 16px;
 	margin-bottom: 24px;
+
+	@media (max-width: 640px) {
+		flex-direction: column;
+		align-items: stretch;
+	}
 }
 
 .search-input {
@@ -310,6 +324,13 @@ const handleCreateOrganization = async () => {
 	max-width: 550px;
 	padding: 24px;
 	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+
+	@media (max-width: 640px) {
+		width: 95%;
+		padding: 20px 16px;
+		max-height: 90vh;
+		overflow-y: auto;
+	}
 }
 
 .modal-content h2 {

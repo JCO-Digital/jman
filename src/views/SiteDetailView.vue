@@ -273,7 +273,7 @@ const unlinkOrganization = async () => {
 									<tr>
 										<th>Name</th>
 										<th>Type</th>
-										<th>Email</th>
+										<th class="hide-mobile">Email</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -286,7 +286,7 @@ const unlinkOrganization = async () => {
 												{{ contact.type }}
 											</span>
 										</td>
-										<td>{{ contact.email || "—" }}</td>
+										<td class="hide-mobile">{{ contact.email || "—" }}</td>
 									</tr>
 								</tbody>
 							</table>
@@ -307,8 +307,8 @@ const unlinkOrganization = async () => {
 						<thead>
 							<tr>
 								<th>Plugin Name</th>
-								<th>Version</th>
-								<th>Status</th>
+								<th class="hide-mobile">Version</th>
+								<th class="hide-mobile">Status</th>
 								<th>Vulns</th>
 							</tr>
 						</thead>
@@ -323,8 +323,8 @@ const unlinkOrganization = async () => {
 								@click="goToPlugin(plugin.name)"
 							>
 								<td>{{ plugin.name }}</td>
-								<td>{{ plugin.version }}</td>
-								<td>
+								<td class="hide-mobile">{{ plugin.version }}</td>
+								<td class="hide-mobile">
 									<span :class="['status-badge', plugin.status.toLowerCase()]">
 										{{ plugin.status }}
 									</span>
@@ -443,6 +443,8 @@ const unlinkOrganization = async () => {
 	margin-bottom: 16px;
 	border-bottom: 1px solid var(--border-color);
 	padding-bottom: 8px;
+	flex-wrap: wrap;
+	gap: 12px;
 }
 
 .organization-title {
@@ -529,6 +531,13 @@ const unlinkOrganization = async () => {
 	max-width: 500px;
 	padding: 24px;
 	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+
+	@media (max-width: 640px) {
+		width: 95%;
+		padding: 20px 16px;
+		max-height: 90vh;
+		overflow-y: auto;
+	}
 }
 
 .modal-content h2 {

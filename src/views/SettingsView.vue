@@ -147,8 +147,8 @@ const formatDate = (dateStr: string) => {
 						<thead>
 							<tr>
 								<th>Domain</th>
-								<th>Reason</th>
-								<th>Added At</th>
+								<th class="hide-mobile">Reason</th>
+								<th class="hide-mobile">Added At</th>
 								<th class="text-right">Actions</th>
 							</tr>
 						</thead>
@@ -158,8 +158,8 @@ const formatDate = (dateStr: string) => {
 								:key="site.domain"
 							>
 								<td class="font-medium">{{ site.domain }}</td>
-								<td>{{ site.reason || "-" }}</td>
-								<td class="text-muted small">
+								<td class="hide-mobile">{{ site.reason || "-" }}</td>
+								<td class="text-muted small hide-mobile">
 									{{ formatDate(site.created_at) }}
 								</td>
 								<td class="text-right">
@@ -197,6 +197,10 @@ const formatDate = (dateStr: string) => {
 	flex-direction: column;
 	gap: 8px;
 	max-width: 400px;
+
+	@media (max-width: 640px) {
+		max-width: none;
+	}
 }
 
 .setting-group label {
@@ -215,6 +219,10 @@ const formatDate = (dateStr: string) => {
 
 .refresh-input {
 	width: 120px;
+
+	@media (max-width: 640px) {
+		width: 100%;
+	}
 }
 
 .add-ignored-form {
@@ -227,6 +235,10 @@ const formatDate = (dateStr: string) => {
 .input-group {
 	display: flex;
 	gap: 12px;
+
+	@media (max-width: 640px) {
+		flex-direction: column;
+	}
 }
 
 .input-group .text-input {

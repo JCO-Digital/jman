@@ -572,7 +572,9 @@ const goToSite = (siteId: number) => {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 20px;
+	margin-bottom: 16px;
+	flex-wrap: wrap;
+	gap: 12px;
 }
 
 .card-header h2 {
@@ -650,9 +652,16 @@ const goToSite = (siteId: number) => {
 
 .modal-content {
 	width: 100%;
-	max-width: 500px;
+	max-width: 550px;
 	padding: 24px;
 	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+
+	@media (max-width: 640px) {
+		width: 95%;
+		padding: 20px 16px;
+		max-height: 90vh;
+		overflow-y: auto;
+	}
 }
 
 .modal-content h2 {
@@ -719,6 +728,22 @@ const goToSite = (siteId: number) => {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
+}
+
+@media (max-width: 640px) {
+	/* Hide Email and Phone in contacts table on mobile */
+	section:nth-of-type(1) .data-table th:nth-child(3),
+	section:nth-of-type(1) .data-table td:nth-child(3),
+	section:nth-of-type(1) .data-table th:nth-child(4),
+	section:nth-of-type(1) .data-table td:nth-child(4) {
+		display: none;
+	}
+
+	/* Hide Type in sites table on mobile */
+	section:nth-of-type(2) .data-table th:nth-child(2),
+	section:nth-of-type(2) .data-table td:nth-child(2) {
+		display: none;
+	}
 }
 
 .text-btn {
