@@ -114,7 +114,7 @@ const handleRefresh = () => {
 					</svg>
 				</RouterLink>
 				<div class="nav-user">
-					<span v-if="authStore.user" class="user-display-name">
+					<span v-if="authStore.user" class="user-display-name hide-mobile">
 						{{ authStore.user.displayName }}
 					</span>
 					<button class="logout-btn" @click="handleLogout">Logout</button>
@@ -134,18 +134,30 @@ const handleRefresh = () => {
 .nav-links {
 	display: flex;
 	gap: 24px;
+
+	@media (max-width: 768px) {
+		gap: 16px;
+	}
 }
 
 .nav-actions {
 	display: flex;
 	align-items: center;
 	gap: 16px;
+
+	@media (max-width: 768px) {
+		gap: 8px;
+	}
 }
 
 .nav-user {
 	display: flex;
 	align-items: center;
 	gap: 12px;
+
+	@media (max-width: 640px) {
+		gap: 8px;
+	}
 }
 
 .user-display-name {
@@ -190,6 +202,11 @@ const handleRefresh = () => {
 	font-weight: 500;
 	cursor: pointer;
 	transition: background-color 0.2s;
+
+	@media (max-width: 640px) {
+		padding: 6px 10px;
+		font-size: 12px;
+	}
 }
 
 .logout-btn:hover {

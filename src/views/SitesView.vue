@@ -149,7 +149,7 @@ const goToSite = (id: number) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('server')">
+						<th @click="handleSort('server')" class="hide-mobile">
 							Server
 							<span v-if="sortKey === 'server'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -171,12 +171,21 @@ const goToSite = (id: number) => {
 				</thead>
 				<tbody>
 					<tr v-if="dataStore.isLoading && dataStore.sites.length === 0">
-						<td colspan="4">
+						<td colspan="4" class="hide-mobile">
+							<LoadingSpinner message="Loading data..." />
+						</td>
+						<td colspan="3" class="show-mobile">
 							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="4" class="empty-state">
+						<td colspan="4" class="empty-state hide-mobile">
+							<span v-if="searchQuery"
+								>No sites found matching "{{ searchQuery }}".</span
+							>
+							<span v-else>No sites available.</span>
+						</td>
+						<td colspan="3" class="empty-state show-mobile">
 							<span v-if="searchQuery"
 								>No sites found matching "{{ searchQuery }}".</span
 							>
@@ -190,7 +199,7 @@ const goToSite = (id: number) => {
 						@click="goToSite(site.id)"
 					>
 						<td>{{ site.domain }}</td>
-						<td>{{ site.server }}</td>
+						<td class="hide-mobile">{{ site.server }}</td>
 						<td>
 							{{ site.is_wordpress ? site.plugins.length : "Not WP" }}
 						</td>

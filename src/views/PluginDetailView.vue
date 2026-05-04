@@ -73,8 +73,8 @@ const goToSite = (siteId: number) => {
 						<thead>
 							<tr>
 								<th>Site Domain</th>
-								<th>Version</th>
-								<th>Status</th>
+								<th class="hide-mobile">Version</th>
+								<th class="hide-mobile">Status</th>
 								<th>Vuln</th>
 							</tr>
 						</thead>
@@ -86,8 +86,8 @@ const goToSite = (siteId: number) => {
 								@click="goToSite(item.site_id)"
 							>
 								<td>{{ item.site_domain }}</td>
-								<td>{{ item.version }}</td>
-								<td>
+								<td class="hide-mobile">{{ item.version }}</td>
+								<td class="hide-mobile">
 									<span :class="['status-badge', item.status.toLowerCase()]">
 										{{ item.status }}
 									</span>
