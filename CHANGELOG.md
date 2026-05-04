@@ -1,10 +1,17 @@
 # Changelog
 
-## 1.10.0 (2026-05-04)
+## 1.11.0 (2026-05-04)
 
 #### Features
 
 - organization: sync site links on organization fetch (24a6292)
+
+#### Styles
+
+- ui: implement responsive design for mobile screens (a5f5db7)
+
+### Misc
+- v1.10.0 (29063de)
 
 ## v1.10.0 (2026-05-03)
 
