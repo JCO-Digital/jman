@@ -86,6 +86,31 @@ Returns metadata for known plugins (author, homepage, version info).
 
 ---
 
+## User Management (Read-Only)
+
+### List Users
+
+`GET /users` (Protected)
+
+Returns a list of all users in the system to resolve display names for auditing.
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"username": "admin",
+		"displayName": "Administrator"
+	},
+	{
+		"username": "niklas",
+		"displayName": "Niklas"
+	}
+]
+```
+
+---
+
 ## Organization Management (Read/Write)
 
 ### List Organizations

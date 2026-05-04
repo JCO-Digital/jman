@@ -27,6 +27,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/servers", auth(ServersHandler))
 	mux.Handle("GET /api/sites", auth(SitesHandler))
 	mux.Handle("GET /api/vulns", auth(VulnsHandler))
+	mux.Handle("GET /api/users", auth(ListUsersHandler(&usersCfg)))
 
 	// --- Monitoring routes ---
 	mux.Handle("GET /api/monitor/history", auth(MonitorHistoryHandler))
