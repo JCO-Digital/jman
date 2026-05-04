@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useOrganizationStore } from "../stores/organization";
 import { useDataStore } from "../stores/data";
+import { useUserStore } from "../stores/user";
 import type { Organization, Contact, ContactType, Site } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -15,6 +16,7 @@ const props = defineProps<{
 const router = useRouter();
 const organizationStore = useOrganizationStore();
 const dataStore = useDataStore();
+const userStore = useUserStore();
 
 const organizationId = parseInt(props.id, 10);
 const organization = ref<Organization | null>(null);
@@ -49,6 +51,7 @@ const loadData = async () => {
 
 onMounted(() => {
 	loadData();
+	userStore.fetchUsers();
 });
 
 const organizationInfoItems = computed(() => {
@@ -218,6 +221,42 @@ const handleUnlinkSite = async (siteId: number) => {
 const goToSite = (siteId: number) => {
 	router.push({ name: "site-detail", params: { id: siteId.toString() } });
 };
+
+const formatAuditDate = (dateStr: string) => {
+	if (!dateStr) return "";
+	return new Date(dateStr).toLocaleString(undefined, {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+};
+
+const isModified = (item: any) => {
+	if (!item || !item.updated_at || !item.created_at) return false;
+	return (
+		item.updated_at !== item.created_at || item.updated_by !== item.created_by
+	);
+};
+
+const contactsAudit = computed(() => {
+	if (!contacts.value?.length) return null;
+	return contacts.value.reduce((latest, current) => {
+		const latestTime = new Date(latest.updated_at || 0).getTime();
+		const currentTime = new Date(current.updated_at || 0).getTime();
+		return currentTime > latestTime ? current : latest;
+	});
+});
+
+const sitesAudit = computed(() => {
+	if (!linkedSites.value?.length) return null;
+	return linkedSites.value.reduce((latest, current) => {
+		const latestTime = new Date(latest.updated_at || 0).getTime();
+		const currentTime = new Date(current.updated_at || 0).getTime();
+		return currentTime > latestTime ? current : latest;
+	});
+});
 </script>
 
 <template>
@@ -243,172 +282,213 @@ const goToSite = (siteId: number) => {
 		</div>
 
 		<main class="content" v-if="organization">
-			<EditableInfoCard
-				title="Organization Information"
-				:items="organizationInfoItems"
-				:onSave="handleSaveOrganization"
-			/>
-
-			<section class="card">
-				<div class="card-header">
-					<h2>Contacts ({{ contacts.length }})</h2>
-					<button class="btn btn-primary btn-sm" @click="openAddContact">
-						Add Contact
-					</button>
-				</div>
-
-				<div class="table-container">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Name</th>
-								<th>Type</th>
-								<th>Email</th>
-								<th>Phone</th>
-								<th class="actions-cell">Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-if="contacts.length === 0">
-								<td colspan="5" class="empty-state">
-									No contacts found for this organization.
-								</td>
-							</tr>
-							<tr v-for="contact in contacts" :key="contact.id">
-								<td>
-									<strong>{{ contact.name }}</strong>
-								</td>
-								<td>
-									<span :class="['status-badge', contact.type.toLowerCase()]">
-										{{ contact.type }}
-									</span>
-								</td>
-								<td>{{ contact.email || "—" }}</td>
-								<td>{{ contact.phone || "—" }}</td>
-								<td class="actions-cell">
-									<div class="row-actions">
-										<button
-											class="icon-btn-sm"
-											@click="openEditContact(contact)"
-											title="Edit"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											>
-												<path
-													d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
-												></path>
-												<path
-													d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
-												></path>
-											</svg>
-										</button>
-										<button
-											class="icon-btn-sm delete"
-											@click="handleDeleteContact(contact.id)"
-											title="Delete"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											>
-												<polyline points="3 6 5 6 21 6"></polyline>
-												<path
-													d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-												></path>
-												<line x1="10" y1="11" x2="10" y2="17"></line>
-												<line x1="14" y1="11" x2="14" y2="17"></line>
-											</svg>
-										</button>
-									</div>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</section>
-
-			<section class="card">
-				<div class="card-header">
-					<h2>Linked Sites ({{ linkedSites.length }})</h2>
-					<button
-						class="btn btn-primary btn-sm"
-						@click="showLinkSiteModal = true"
+			<div class="card-group">
+				<EditableInfoCard
+					title="Organization Information"
+					:items="organizationInfoItems"
+					:on-save="handleSaveOrganization"
+				/>
+				<div class="card-footer-audit" v-if="organization?.created_by">
+					Created by
+					{{ userStore.resolveDisplayName(organization.created_by) }} on
+					{{ formatAuditDate(organization.created_at) }}.<template
+						v-if="isModified(organization)"
 					>
-						Link Site
-					</button>
+						Last edited by
+						{{ userStore.resolveDisplayName(organization.updated_by) }} on
+						{{ formatAuditDate(organization.updated_at) }}.
+					</template>
 				</div>
+			</div>
 
-				<div class="table-container">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Domain</th>
-								<th>PHP</th>
-								<th class="actions-cell">Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr v-if="linkedSites.length === 0">
-								<td colspan="3" class="empty-state">
-									No sites linked to this organization.
-								</td>
-							</tr>
-							<tr v-for="site in linkedSites" :key="site.id">
-								<td>
-									<a
-										href="#"
-										@click.prevent="goToSite(site.id)"
-										class="site-link"
-									>
-										<strong>{{ site.domain }}</strong>
-									</a>
-								</td>
-								<td>{{ site.php_version }}</td>
-								<td class="actions-cell">
-									<div class="row-actions">
-										<button
-											class="icon-btn-sm delete"
-											@click="handleUnlinkSite(site.id)"
-											title="Unlink Site"
-										>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="16"
-												height="16"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
+			<div class="card-group">
+				<section class="card">
+					<div class="card-header">
+						<h2>Contacts ({{ contacts.length }})</h2>
+						<button class="btn btn-primary btn-sm" @click="openAddContact">
+							Add Contact
+						</button>
+					</div>
+
+					<div class="table-container">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Name</th>
+									<th>Type</th>
+									<th>Email</th>
+									<th>Phone</th>
+									<th class="actions-cell">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-if="contacts.length === 0">
+									<td colspan="5" class="empty-state">
+										No contacts found for this organization.
+									</td>
+								</tr>
+								<tr v-for="contact in contacts" :key="contact.id">
+									<td>
+										<strong>{{ contact.name }}</strong>
+									</td>
+									<td>
+										<span :class="['status-badge', contact.type.toLowerCase()]">
+											{{ contact.type }}
+										</span>
+									</td>
+									<td>{{ contact.email || "—" }}</td>
+									<td>{{ contact.phone || "—" }}</td>
+									<td class="actions-cell">
+										<div class="row-actions">
+											<button
+												class="icon-btn-sm"
+												@click="openEditContact(contact)"
+												title="Edit"
 											>
-												<line x1="18" y1="6" x2="6" y2="18"></line>
-												<line x1="6" y1="6" x2="18" y2="18"></line>
-											</svg>
-										</button>
-									</div>
-								</td>
-							</tr>
-						</tbody>
-					</table>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<path
+														d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+													></path>
+													<path
+														d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+													></path>
+												</svg>
+											</button>
+											<button
+												class="icon-btn-sm delete"
+												@click="handleDeleteContact(contact.id)"
+												title="Delete"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<polyline points="3 6 5 6 21 6"></polyline>
+													<path
+														d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+													></path>
+													<line x1="10" y1="11" x2="10" y2="17"></line>
+													<line x1="14" y1="11" x2="14" y2="17"></line>
+												</svg>
+											</button>
+										</div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+				<div class="card-footer-audit" v-if="contactsAudit?.updated_by">
+					<template v-if="isModified(contactsAudit)">
+						Last edited by
+						{{ userStore.resolveDisplayName(contactsAudit.updated_by) }} on
+						{{ formatAuditDate(contactsAudit.updated_at) }}.
+					</template>
+					<template v-else>
+						Created by
+						{{ userStore.resolveDisplayName(contactsAudit.created_by) }} on
+						{{ formatAuditDate(contactsAudit.created_at) }}.
+					</template>
 				</div>
-			</section>
+			</div>
+
+			<div class="card-group">
+				<section class="card">
+					<div class="card-header">
+						<h2>Linked Sites ({{ linkedSites.length }})</h2>
+						<button
+							class="btn btn-primary btn-sm"
+							@click="showLinkSiteModal = true"
+						>
+							Link Site
+						</button>
+					</div>
+
+					<div class="table-container">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Domain</th>
+									<th>PHP</th>
+									<th class="actions-cell">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-if="linkedSites.length === 0">
+									<td colspan="3" class="empty-state">
+										No sites linked to this organization.
+									</td>
+								</tr>
+								<tr v-for="site in linkedSites" :key="site.id">
+									<td>
+										<a
+											href="#"
+											@click.prevent="goToSite(site.id)"
+											class="site-link"
+										>
+											<strong>{{ site.domain }}</strong>
+										</a>
+									</td>
+									<td>{{ site.php_version }}</td>
+									<td class="actions-cell">
+										<div class="row-actions">
+											<button
+												class="icon-btn-sm delete"
+												@click="handleUnlinkSite(site.id)"
+												title="Unlink Site"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<line x1="18" y1="6" x2="6" y2="18"></line>
+													<line x1="6" y1="6" x2="18" y2="18"></line>
+												</svg>
+											</button>
+										</div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+				<div class="card-footer-audit" v-if="sitesAudit?.updated_by">
+					<template v-if="isModified(sitesAudit)">
+						Last edited by
+						{{ userStore.resolveDisplayName(sitesAudit.updated_by) }} on
+						{{ formatAuditDate(sitesAudit.updated_at) }}.
+					</template>
+					<template v-else>
+						Created by
+						{{ userStore.resolveDisplayName(sitesAudit.created_by) }} on
+						{{ formatAuditDate(sitesAudit.created_at) }}.
+					</template>
+				</div>
+			</div>
 		</main>
 
 		<main class="content" v-else-if="isLoading">
@@ -538,6 +618,19 @@ const goToSite = (siteId: number) => {
 
 .site-link:hover {
 	text-decoration: underline;
+}
+
+.card-group {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.card-footer-audit {
+	font-size: 0.7rem;
+	color: var(--text-muted);
+	padding: 0 8px;
+	opacity: 0.8;
 }
 
 .search-results-list {
