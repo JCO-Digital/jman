@@ -14,9 +14,12 @@ const searchQuery = ref("");
 let searchTimeout: number | null = null;
 let abortController: AbortController | null = null;
 
-onMounted(() => {
-	organizationStore.fetchOrganizations();
+onMounted(async () => {
+	await organizationStore.fetchOrganizations();
 	dataStore.initData();
+	organizationStore.organizations.forEach((org) => {
+		organizationStore.fetchOrganizationSites(org.id);
+	});
 });
 
 const getLinkedSites = (orgId: number) => {
@@ -39,6 +42,9 @@ const handleSearch = () => {
 				searchQuery.value,
 				abortController.signal,
 			);
+			organizationStore.organizations.forEach((org) => {
+				organizationStore.fetchOrganizationSites(org.id);
+			});
 		} catch (e: any) {
 			if (e.name !== "AbortError") {
 				console.error("Search failed", e);
