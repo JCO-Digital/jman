@@ -1,6 +1,16 @@
 # Changelog
 
-## 5.5.0 (2026-05-04)
+## 5.6.0 (2026-05-05)
+
+#### Features
+
+- api: implement role-based access control with user levels (d9a9243)
+- api: automate next_billing updates and add explicit override (0a57c06)
+- api: add endpoint to list all organization assets (5689010)
+- asset: add active status and lifecycle tracking to assets (948e6e5)
+- asset: implement asset management system (cc0e718)
+
+## v5.5.0 (2026-05-04)
 
 #### Features
 
