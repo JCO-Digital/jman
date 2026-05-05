@@ -192,6 +192,83 @@ Returns all sites linked to a specific organization.
 
 ---
 
+## Asset Management (Read/Write)
+
+### List Asset Templates
+
+`GET /assets` (Protected)
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `search` | string | Filter by name, identifier or type |
+
+### Create Asset Template
+
+`POST /assets` (Protected)
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `type` | string | Yes | `Plugin`, `Domain`, `Hosting Package`, `Service Package`, `General` |
+| `identifier` | string | No | TLD for domains, slug for plugins |
+| `name` | string | Yes | |
+| `description` | string | No | |
+| `default_price` | int | No | Default price in cents |
+| `default_freq` | string | No | `Yearly`, `Quarterly`, `Monthly`, `One-time` |
+
+### Get/Update/Delete Asset Template
+
+`GET /assets/{id}` (Protected)
+`PATCH /assets/{id}` (Protected)
+`DELETE /assets/{id}` (Protected)
+
+---
+
+## Organization Asset Management
+
+### List Organization Assets
+
+`GET /organizations/{id}/assets` (Protected)
+
+### Link Asset to Organization
+
+`POST /organizations/{id}/assets` (Protected)
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `asset_id` | int | No | Template ID |
+| `site_id` | int | No | Optional site link |
+| `identifier` | string | No | Specific domain or product name |
+| `price` | int | No | Price in cents (defaults to template) |
+| `billing_freq` | string | No | Defaults to template |
+| `next_billing` | datetime | No | |
+| `description` | string | No | |
+
+### Get/Update/Delete Organization Asset
+
+`GET /organization-assets/{id}` (Protected)
+`PATCH /organization-assets/{id}` (Protected)
+`DELETE /organization-assets/{id}` (Protected)
+
+### Asset Payment History
+
+`GET /organization-assets/{id}/payments` (Protected)
+
+`POST /organization-assets/{id}/payments` (Protected)
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `amount` | int | Yes | Amount in cents |
+| `payment_date` | datetime | No | Defaults to now |
+| `info` | string | No | Description/Note |
+
+`DELETE /asset-payments/{id}` (Protected)
+
+---
+
 ## Site Linking
 
 These endpoints manage the relationship between external site IDs and organization records.

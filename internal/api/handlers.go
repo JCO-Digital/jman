@@ -48,6 +48,21 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PATCH /api/contacts/{id}", auth(UpdateContactHandler))
 	mux.Handle("DELETE /api/contacts/{id}", auth(DeleteContactHandler))
 
+	// --- Asset routes ---
+	mux.Handle("GET /api/assets", auth(ListAssetsHandler))
+	mux.Handle("POST /api/assets", auth(CreateAssetHandler))
+	mux.Handle("GET /api/assets/{id}", auth(GetAssetHandler))
+	mux.Handle("PATCH /api/assets/{id}", auth(UpdateAssetHandler))
+	mux.Handle("DELETE /api/assets/{id}", auth(DeleteAssetHandler))
+	mux.Handle("GET /api/organizations/{id}/assets", auth(ListOrganizationAssetsHandler))
+	mux.Handle("POST /api/organizations/{id}/assets", auth(CreateOrganizationAssetHandler))
+	mux.Handle("GET /api/organization-assets/{id}", auth(GetOrganizationAssetHandler))
+	mux.Handle("PATCH /api/organization-assets/{id}", auth(UpdateOrganizationAssetHandler))
+	mux.Handle("DELETE /api/organization-assets/{id}", auth(DeleteOrganizationAssetHandler))
+	mux.Handle("GET /api/organization-assets/{id}/payments", auth(ListAssetPaymentsHandler))
+	mux.Handle("POST /api/organization-assets/{id}/payments", auth(CreateAssetPaymentHandler))
+	mux.Handle("DELETE /api/asset-payments/{id}", auth(DeleteAssetPaymentHandler))
+
 	// --- Site linking routes ---
 	mux.Handle("GET /api/sites/{id}/organization", auth(GetSiteOrganizationHandler))
 	mux.Handle("POST /api/sites/{id}/link", auth(LinkSiteHandler))
