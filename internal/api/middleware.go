@@ -87,3 +87,37 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
 }
+
+// levelToInt converts a UserLevel to an integer for comparison.
+func levelToInt(l config.UserLevel) int {
+	switch l {
+	case config.LevelExecute:
+		return 2
+	case config.LevelEdit:
+		return 1
+	case config.LevelBasic:
+		return 0
+	default:
+		return 0
+	}
+}
+
+// RequireLevel returns a middleware that checks if the authenticated user has at least the required level.
+func RequireLevel(minLevel config.UserLevel) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims := GetAuthClaims(r.Context())
+			if claims == nil {
+				WriteError(w, http.StatusUnauthorized, "Authentication required")
+				return
+			}
+
+			if levelToInt(claims.Level) < levelToInt(minLevel) {
+				WriteError(w, http.StatusForbidden, "Insufficient permissions")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
