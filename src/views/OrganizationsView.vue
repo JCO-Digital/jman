@@ -3,12 +3,14 @@ import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useOrganizationStore } from "../stores/organization";
 import { useDataStore } from "../stores/data";
+import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const router = useRouter();
 const organizationStore = useOrganizationStore();
 const dataStore = useDataStore();
+const authStore = useAuthStore();
 
 const searchQuery = ref("");
 let searchTimeout: number | null = null;
@@ -93,7 +95,11 @@ const handleCreateOrganization = async () => {
 				v-model="searchQuery"
 				@input="handleSearch"
 			/>
-			<button class="btn btn-primary" @click="showCreateModal = true">
+			<button
+				v-if="authStore.canEdit"
+				class="btn btn-primary"
+				@click="showCreateModal = true"
+			>
 				Add Organization
 			</button>
 		</div>

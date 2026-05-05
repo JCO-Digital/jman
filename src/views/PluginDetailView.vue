@@ -3,6 +3,7 @@ import { computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useAssetStore } from "../stores/assetStore";
+import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
@@ -15,6 +16,7 @@ const props = defineProps<{
 const router = useRouter();
 const dataStore = useDataStore();
 const assetStore = useAssetStore();
+const authStore = useAuthStore();
 
 onMounted(() => {
 	assetStore.fetchAssets();
@@ -82,7 +84,7 @@ const manageAssetTemplate = () => {
 			title="Plugin Details"
 			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
 		>
-			<template #actions>
+			<template #actions v-if="authStore.canEdit">
 				<button
 					class="btn"
 					:class="assetTemplate ? 'btn-outline' : 'btn-primary'"
