@@ -296,12 +296,15 @@ Returns a list of all linked assets across all organizations. This is useful for
 
 `POST /organization-assets/{id}/payments` (Protected)
 
+Recording a payment automatically advances the `next_billing` date of the linked asset based on its `billing_freq` (Yearly, Quarterly, or Monthly). If the frequency is `One-time`, the `next_billing` date is cleared.
+
 **Request Body**
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `amount` | int | Yes | Amount in cents |
 | `payment_date` | datetime | No | Defaults to now |
 | `info` | string | No | Description/Note |
+| `next_billing` | datetime | No | Explicitly set the next billing date (overrides auto-advancement) |
 
 `DELETE /asset-payments/{id}` (Protected)
 
