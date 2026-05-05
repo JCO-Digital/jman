@@ -1,6 +1,14 @@
 # Changelog
 
-## 1.12.0 (2026-05-04)
+## 1.13.0 (2026-05-05)
+
+#### Features
+
+- ui: implement toast notifications for error handling (507257a)
+- auth: implement role-based access control with level-based permissions (417442f)
+- assets: implement asset and subscription management module (26b4b06)
+
+## v1.12.0 (2026-05-04)
 
 #### Features
 
