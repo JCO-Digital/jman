@@ -16,6 +16,7 @@ import (
 var (
 	useraddUsername    string
 	useraddDisplayName string
+	useraddLevel       string
 )
 
 var useraddCmd = &cobra.Command{
@@ -31,6 +32,7 @@ randomly generated JWT secret.`,
 func init() {
 	useraddCmd.Flags().StringVar(&useraddUsername, "username", "", "username for the new user (required)")
 	useraddCmd.Flags().StringVar(&useraddDisplayName, "display-name", "", "display name for the new user (required)")
+	useraddCmd.Flags().StringVar(&useraddLevel, "level", "basic", "user level (basic, edit, execute)")
 	_ = useraddCmd.MarkFlagRequired("username")
 	_ = useraddCmd.MarkFlagRequired("display-name")
 	rootCmd.AddCommand(useraddCmd)
@@ -94,11 +96,22 @@ func runUseradd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
+	level := config.UserLevel(useraddLevel)
+	switch level {
+	case config.LevelBasic, config.LevelEdit, config.LevelExecute:
+		// Valid
+	case "":
+		level = config.LevelBasic
+	default:
+		return fmt.Errorf("invalid level %q: must be basic, edit, or execute", useraddLevel)
+	}
+
 	cfg.Users = append(cfg.Users, config.UserEntry{
 		Username:     useraddUsername,
 		PasswordHash: string(hash),
 		DisplayName:  useraddDisplayName,
 		TOTPSecret:   "",
+		Level:        level,
 	})
 
 	if err := config.SaveUsersConfig(configDir, cfg); err != nil {

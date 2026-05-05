@@ -26,6 +26,7 @@ const authClaimsKey contextKey = "authClaims"
 type AuthClaims struct {
 	Username    string
 	DisplayName string
+	Level       config.UserLevel
 }
 
 // GetAuthClaims retrieves the AuthClaims from the request context.
@@ -44,11 +45,12 @@ func contextWithClaims(ctx context.Context, claims *AuthClaims) context.Context 
 // jwtClaims is the full set of claims embedded in every token we issue.
 type jwtClaims struct {
 	jwt.RegisteredClaims
-	DisplayName string `json:"name,omitempty"`
+	DisplayName string           `json:"name,omitempty"`
+	Level       config.UserLevel `json:"level,omitempty"`
 }
 
 // signToken creates a new signed JWT for the given user.
-func signToken(usersCfg *config.UsersConfig, username, displayName string) (string, time.Time, error) {
+func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, time.Time, error) {
 	lifetime := time.Duration(usersCfg.TokenLifetimeHours) * time.Hour
 	if lifetime <= 0 {
 		lifetime = 24 * time.Hour
@@ -56,13 +58,20 @@ func signToken(usersCfg *config.UsersConfig, username, displayName string) (stri
 	now := time.Now()
 	expiresAt := now.Add(lifetime)
 
+	// Fallback logic: Execute level requires TOTP.
+	effectiveLevel := user.Level
+	if effectiveLevel == config.LevelExecute && user.TOTPSecret == "" {
+		effectiveLevel = config.LevelEdit
+	}
+
 	claims := jwtClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   username,
+			Subject:   user.Username,
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
-		DisplayName: displayName,
+		DisplayName: user.DisplayName,
+		Level:       effectiveLevel,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -107,8 +116,9 @@ type loginResponse struct {
 }
 
 type loginRespUser struct {
-	Username    string `json:"username"`
-	DisplayName string `json:"displayName"`
+	Username    string           `json:"username"`
+	DisplayName string           `json:"displayName"`
+	Level       config.UserLevel `json:"level"`
 }
 
 type refreshResponse struct {
@@ -173,7 +183,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		}
 
 		// Authentication succeeded — issue a token.
-		token, expiresAt, err := signToken(usersCfg, user.Username, user.DisplayName)
+		token, expiresAt, err := signToken(usersCfg, user)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to sign JWT: %v", err)
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
@@ -182,12 +192,19 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 
 		limiter.Reset(req.Username)
 
+		// Re-calculate effective level for response (must match what's in the token).
+		effectiveLevel := user.Level
+		if effectiveLevel == config.LevelExecute && user.TOTPSecret == "" {
+			effectiveLevel = config.LevelEdit
+		}
+
 		WriteJSON(w, http.StatusOK, loginResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
 			User: loginRespUser{
 				Username:    user.Username,
 				DisplayName: user.DisplayName,
+				Level:       effectiveLevel,
 			},
 		})
 	}
@@ -203,7 +220,13 @@ func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		token, expiresAt, err := signToken(usersCfg, claims.Username, claims.DisplayName)
+		user := config.FindUser(usersCfg, claims.Username)
+		if user == nil {
+			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			return
+		}
+
+		token, expiresAt, err := signToken(usersCfg, user)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to sign refresh JWT: %v", err)
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
@@ -225,6 +248,7 @@ func ListUsersHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			resp = append(resp, loginRespUser{
 				Username:    u.Username,
 				DisplayName: u.DisplayName,
+				Level:       u.Level,
 			})
 		}
 		WriteJSON(w, http.StatusOK, resp)
@@ -272,6 +296,7 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 		authClaims := &AuthClaims{
 			Username:    claims.Subject,
 			DisplayName: claims.DisplayName,
+			Level:       claims.Level,
 		}
 
 		ctx := contextWithClaims(r.Context(), authClaims)

@@ -10,12 +10,22 @@ import (
 	"github.com/spf13/viper"
 )
 
+// UserLevel represents the authorization level of a user.
+type UserLevel string
+
+const (
+	LevelBasic   UserLevel = "basic"
+	LevelEdit    UserLevel = "edit"
+	LevelExecute UserLevel = "execute"
+)
+
 // UserEntry represents a single user defined in the users.toml configuration file.
 type UserEntry struct {
-	Username     string `toml:"username" mapstructure:"username"`
-	PasswordHash string `toml:"passwordHash" mapstructure:"passwordHash"`
-	DisplayName  string `toml:"displayName" mapstructure:"displayName"`
-	TOTPSecret   string `toml:"totpSecret" mapstructure:"totpSecret"`
+	Username     string    `toml:"username" mapstructure:"username"`
+	PasswordHash string    `toml:"passwordHash" mapstructure:"passwordHash"`
+	DisplayName  string    `toml:"displayName" mapstructure:"displayName"`
+	TOTPSecret   string    `toml:"totpSecret" mapstructure:"totpSecret"`
+	Level        UserLevel `toml:"level" mapstructure:"level"`
 }
 
 // UsersConfig holds the authentication-related configuration loaded from users.toml.
@@ -43,6 +53,13 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 	var cfg UsersConfig
 	if err := v.Unmarshal(&cfg); err != nil {
 		return UsersConfig{}, fmt.Errorf("failed to unmarshal users config: %w", err)
+	}
+
+	// Set default levels for users that don't have one defined.
+	for i := range cfg.Users {
+		if cfg.Users[i].Level == "" {
+			cfg.Users[i].Level = LevelBasic
+		}
 	}
 
 	if cfg.JWTSecret == "" {

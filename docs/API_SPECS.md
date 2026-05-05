@@ -192,6 +192,124 @@ Returns all sites linked to a specific organization.
 
 ---
 
+## Asset Management (Read/Write)
+
+### List Asset Templates
+
+`GET /assets` (Protected)
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `search` | string | Filter by name, identifier or type |
+
+### Create Asset Template
+
+`POST /assets` (Protected)
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `type` | string | Yes | `Plugin`, `Domain`, `Hosting Package`, `Service Package`, `General` |
+| `identifier` | string | No | TLD for domains, slug for plugins |
+| `name` | string | Yes | |
+| `description` | string | No | |
+| `default_price` | int | No | Default price in cents |
+| `default_freq` | string | No | `Yearly`, `Quarterly`, `Monthly`, `One-time` |
+| `active` | bool | No | Default: `true` |
+
+### Get/Update/Delete Asset Template
+
+`GET /assets/{id}` (Protected)
+`PATCH /assets/{id}` (Protected)
+`DELETE /assets/{id}` (Protected)
+
+---
+
+## Organization Asset Management
+
+### List All Organization Assets
+
+`GET /organization-assets` (Protected)
+
+Returns a list of all linked assets across all organizations. This is useful for dashboard views and tracking upcoming renewals.
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `search` | string | Filter by identifier, organization name, or asset name |
+| `status` | string | Filter by `active`, `cancelled`, or `paused` |
+| `before` | datetime | Filter for assets with `next_billing` on or before this date |
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"id": 1,
+		"organization_id": 10,
+		"organization_name": "Acme Corp",
+		"asset_id": 5,
+		"asset_name": ".fi Domain",
+		"site_id": 20,
+		"identifier": "acme.fi",
+		"price": 1500,
+		"billing_freq": "Yearly",
+		"next_billing": "2024-12-31T00:00:00Z",
+		"status": "active",
+		"description": "Primary domain",
+		"created_at": "datetime",
+		"created_by": "string"
+	}
+]
+```
+
+### List Organization Assets
+
+`GET /organizations/{id}/assets` (Protected)
+
+### Link Asset to Organization
+
+`POST /organizations/{id}/assets` (Protected)
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `asset_id` | int | No | Template ID |
+| `site_id` | int | No | Optional site link |
+| `identifier` | string | No | Specific domain or product name |
+| `price` | int | No | Price in cents (defaults to template) |
+| `billing_freq` | string | No | Defaults to template |
+| `next_billing` | datetime | No | |
+| `status` | string | No | One of: `active`, `cancelled`, `paused`. Default: `active` |
+| `description` | string | No | |
+
+### Get/Update/Delete Organization Asset
+
+`GET /organization-assets/{id}` (Protected)
+`PATCH /organization-assets/{id}` (Protected)
+`DELETE /organization-assets/{id}` (Protected)
+
+### Asset Payment History
+
+`GET /organization-assets/{id}/payments` (Protected)
+
+`POST /organization-assets/{id}/payments` (Protected)
+
+Recording a payment automatically advances the `next_billing` date of the linked asset based on its `billing_freq` (Yearly, Quarterly, or Monthly). If the frequency is `One-time`, the `next_billing` date is cleared.
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `amount` | int | Yes | Amount in cents |
+| `payment_date` | datetime | No | Defaults to now |
+| `info` | string | No | Description/Note |
+| `next_billing` | datetime | No | Explicitly set the next billing date (overrides auto-advancement) |
+
+`DELETE /asset-payments/{id}` (Protected)
+
+---
+
 ## Site Linking
 
 These endpoints manage the relationship between external site IDs and organization records.
