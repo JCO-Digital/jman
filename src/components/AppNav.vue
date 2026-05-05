@@ -64,10 +64,10 @@ const handleRefresh = () => {
 					Organizations
 				</RouterLink>
 				<RouterLink
-					to="/assets"
+					to="/inventory"
 					class="nav-item"
 					:class="{
-						active: route.name === 'assets',
+						active: route.name === 'assets' || route.name === 'asset-templates',
 					}"
 				>
 					Assets
