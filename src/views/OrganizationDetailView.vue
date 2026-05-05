@@ -5,6 +5,7 @@ import { useOrganizationStore } from "../stores/organization";
 import { useDataStore } from "../stores/data";
 import { useUserStore } from "../stores/user";
 import { useAssetStore } from "../stores/assetStore";
+import { useAuthStore } from "../stores/auth";
 import type {
 	Organization,
 	Contact,
@@ -28,6 +29,7 @@ const organizationStore = useOrganizationStore();
 const dataStore = useDataStore();
 const userStore = useUserStore();
 const assetStore = useAssetStore();
+const authStore = useAuthStore();
 
 const organizationId = parseInt(props.id, 10);
 const organization = ref<Organization | null>(null);
@@ -276,7 +278,7 @@ const selectAssetTemplate = (template: Asset) => {
 	assetForm.value.identifier = template.identifier || "";
 	assetForm.value.price = template.default_price || 0;
 	assetForm.value.billing_freq = template.default_freq || "Yearly";
-	assetForm.value.next_billing = new Date().toISOString().split("T")[0];
+	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
 	assetSearchQuery.value = template.name;
 	availableAssetTemplates.value = [];
 };
@@ -305,7 +307,7 @@ const openEditAsset = (oa: EnrichedOrganizationAsset) => {
 		identifier: oa.identifier || "",
 		price: oa.price,
 		billing_freq: oa.billing_freq,
-		next_billing: oa.next_billing ? oa.next_billing.split("T")[0] : "",
+		next_billing: oa.next_billing ? oa.next_billing.split("T")[0] || "" : "",
 		status: oa.status,
 		description: oa.description || "",
 	};
@@ -349,10 +351,10 @@ const unlinkedPlugins = computed(() => {
 	}> = [];
 
 	// Get all asset templates that are of type 'Plugin'
+	// Get all asset templates that are of type 'Plugin'
 	const pluginTemplates = assetStore.assets.filter(
 		(a) => a.type === "Plugin" && a.identifier,
 	);
-	const pluginTemplateIdentifiers = pluginTemplates.map((a) => a.identifier);
 
 	orgSites.forEach((site) => {
 		site.plugins.forEach((plugin) => {
@@ -397,7 +399,7 @@ const convertToAsset = async (plugin: {
 	editingOrgAsset.value = null;
 	assetForm.value.site_id = plugin.site.id;
 	assetForm.value.identifier = plugin.slug;
-	assetForm.value.next_billing = new Date().toISOString().split("T")[0];
+	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
 
 	await assetStore.fetchAssets(plugin.slug);
 	const template = assetStore.assets.find(
@@ -417,16 +419,17 @@ const convertToAsset = async (plugin: {
 const calculateNextBillingDate = (
 	dateStr: string | null,
 	freq: BillingFrequency,
-) => {
+): string => {
 	const date = dateStr ? new Date(dateStr) : new Date();
-	if (isNaN(date.getTime())) return new Date().toISOString().split("T")[0];
+	if (isNaN(date.getTime()))
+		return new Date().toISOString().split("T")[0] || "";
 
 	if (freq === "Monthly") date.setMonth(date.getMonth() + 1);
 	else if (freq === "Quarterly") date.setMonth(date.getMonth() + 3);
 	else if (freq === "Yearly") date.setFullYear(date.getFullYear() + 1);
 	else return "";
 
-	return date.toISOString().split("T")[0];
+	return date.toISOString().split("T")[0] || "";
 };
 
 const openPaymentModal = (asset: EnrichedOrganizationAsset) => {
@@ -526,7 +529,7 @@ const sitesAudit = computed(() => {
 		>
 			<template #actions>
 				<button
-					v-if="organization"
+					v-if="organization && authStore.canEdit"
 					class="btn-danger"
 					@click="handleDeleteOrganization"
 				>
@@ -545,6 +548,7 @@ const sitesAudit = computed(() => {
 				<EditableInfoCard
 					title="Organization Information"
 					:items="organizationInfoItems"
+					:editable="authStore.canEdit"
 					:on-save="handleSaveOrganization"
 				/>
 				<div class="card-footer-audit" v-if="organization?.created_by">
@@ -564,7 +568,11 @@ const sitesAudit = computed(() => {
 				<section class="card">
 					<div class="card-header">
 						<h2>Contacts ({{ contacts.length }})</h2>
-						<button class="btn btn-primary btn-sm" @click="openAddContact">
+						<button
+							v-if="authStore.canEdit"
+							class="btn btn-primary btn-sm"
+							@click="openAddContact"
+						>
 							Add Contact
 						</button>
 					</div>
@@ -577,7 +585,7 @@ const sitesAudit = computed(() => {
 									<th>Type</th>
 									<th>Email</th>
 									<th>Phone</th>
-									<th class="actions-cell">Actions</th>
+									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -597,7 +605,7 @@ const sitesAudit = computed(() => {
 									</td>
 									<td>{{ contact.email || "—" }}</td>
 									<td>{{ contact.phone || "—" }}</td>
-									<td class="actions-cell">
+									<td v-if="authStore.canEdit" class="actions-cell">
 										<div class="row-actions">
 											<button
 												class="icon-btn-sm"
@@ -673,6 +681,7 @@ const sitesAudit = computed(() => {
 					<div class="card-header">
 						<h2>Linked Sites ({{ linkedSites.length }})</h2>
 						<button
+							v-if="authStore.canEdit"
 							class="btn btn-primary btn-sm"
 							@click="showLinkSiteModal = true"
 						>
@@ -686,7 +695,7 @@ const sitesAudit = computed(() => {
 								<tr>
 									<th>Domain</th>
 									<th>PHP</th>
-									<th class="actions-cell">Actions</th>
+									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -706,7 +715,7 @@ const sitesAudit = computed(() => {
 										</a>
 									</td>
 									<td>{{ site.php_version }}</td>
-									<td class="actions-cell">
+									<td v-if="authStore.canEdit" class="actions-cell">
 										<div class="row-actions">
 											<button
 												class="icon-btn-sm delete"
@@ -753,7 +762,11 @@ const sitesAudit = computed(() => {
 				<section class="card">
 					<div class="card-header">
 						<h2>Assets & Services ({{ orgAssets.length }})</h2>
-						<button class="btn btn-primary btn-sm" @click="openAddAsset">
+						<button
+							v-if="authStore.canEdit"
+							class="btn btn-primary btn-sm"
+							@click="openAddAsset"
+						>
 							Link Asset
 						</button>
 					</div>
@@ -768,7 +781,7 @@ const sitesAudit = computed(() => {
 									<th>Frequency</th>
 									<th>Next Billing</th>
 									<th>Status</th>
-									<th class="actions-cell">Actions</th>
+									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -802,7 +815,7 @@ const sitesAudit = computed(() => {
 											{{ oa.status }}
 										</span>
 									</td>
-									<td class="actions-cell">
+									<td v-if="authStore.canEdit" class="actions-cell">
 										<div class="row-actions">
 											<button
 												class="icon-btn-sm"
@@ -897,7 +910,7 @@ const sitesAudit = computed(() => {
 								<tr>
 									<th>Site</th>
 									<th>Plugin</th>
-									<th class="actions-cell">Actions</th>
+									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -906,7 +919,7 @@ const sitesAudit = computed(() => {
 									<td>
 										<strong>{{ p.pluginName }}</strong>
 									</td>
-									<td class="actions-cell">
+									<td v-if="authStore.canEdit" class="actions-cell">
 										<button
 											class="btn btn-primary btn-sm"
 											@click="convertToAsset(p)"

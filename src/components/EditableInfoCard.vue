@@ -15,6 +15,7 @@ const props = defineProps<{
 	title: string;
 	items: EditableInfoItem[];
 	isLoading?: boolean;
+	editable?: boolean;
 	onSave?: (values: Record<string, any>) => Promise<void> | void;
 }>();
 
@@ -76,7 +77,7 @@ const copyToClipboard = async (value: any, index: number) => {
 	<section class="card">
 		<div class="card-header">
 			<h2>{{ title }}</h2>
-			<div class="header-actions" v-if="!isLoading">
+			<div class="header-actions" v-if="!isLoading && editable !== false">
 				<button v-if="!isEditing" class="text-btn" @click="startEditing">
 					Edit
 				</button>

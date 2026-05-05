@@ -2,11 +2,13 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAssetStore } from "../../stores/assetStore";
+import { useAuthStore } from "../../stores/auth";
 import type { Asset, AssetType, BillingFrequency } from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 
 const assetStore = useAssetStore();
+const authStore = useAuthStore();
 const route = useRoute();
 
 const searchQuery = ref((route.query.search as string) || "");
@@ -131,7 +133,11 @@ const formatCurrency = (cents: number) => {
 			}"
 		>
 			<template #actions>
-				<button class="btn btn-primary" @click="openAddModal">
+				<button
+					v-if="authStore.canEdit"
+					class="btn btn-primary"
+					@click="openAddModal"
+				>
 					Create Template
 				</button>
 			</template>
@@ -166,7 +172,7 @@ const formatCurrency = (cents: number) => {
 						>
 							{{ asset.active ? "Active" : "Inactive" }}
 						</span>
-						<div class="row-actions">
+						<div v-if="authStore.canEdit" class="row-actions">
 							<button
 								class="icon-btn-sm"
 								@click="openEditModal(asset)"

@@ -2,11 +2,13 @@
 import { ref, onMounted } from "vue";
 import { useSettingsStore } from "../stores/settings";
 import { useMonitorStore } from "../stores/monitor";
+import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const settingsStore = useSettingsStore();
 const monitorStore = useMonitorStore();
+const authStore = useAuthStore();
 
 const newDomain = ref("");
 const newReason = ref("");
@@ -109,7 +111,11 @@ const formatDate = (dateStr: string) => {
 				</p>
 
 				<!-- Add form -->
-				<form @submit.prevent="handleAddIgnored" class="add-ignored-form">
+				<form
+					v-if="authStore.canEdit"
+					@submit.prevent="handleAddIgnored"
+					class="add-ignored-form"
+				>
 					<div class="input-group">
 						<input
 							type="text"
@@ -149,7 +155,7 @@ const formatDate = (dateStr: string) => {
 								<th>Domain</th>
 								<th class="hide-mobile">Reason</th>
 								<th class="hide-mobile">Added At</th>
-								<th class="text-right">Actions</th>
+								<th v-if="authStore.canEdit" class="text-right">Actions</th>
 							</tr>
 						</thead>
 						<tbody>
@@ -162,7 +168,7 @@ const formatDate = (dateStr: string) => {
 								<td class="text-muted small hide-mobile">
 									{{ formatDate(site.created_at) }}
 								</td>
-								<td class="text-right">
+								<td v-if="authStore.canEdit" class="text-right">
 									<button
 										class="btn-text danger"
 										@click="handleRemoveIgnored(site.domain)"

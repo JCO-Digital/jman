@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useMonitorStore } from "../stores/monitor";
 import { useOrganizationStore } from "../stores/organization";
+import { useAuthStore } from "../stores/auth";
 import type { Organization, Contact } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -18,6 +19,7 @@ const router = useRouter();
 const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
 const organizationStore = useOrganizationStore();
+const authStore = useAuthStore();
 
 const siteId = parseInt(props.id, 10);
 const organization = ref<Organization | null>(null);
@@ -230,7 +232,7 @@ const unlinkOrganization = async () => {
 					<h2 class="organization-title">Organization Information</h2>
 					<div class="header-actions">
 						<button
-							v-if="organization"
+							v-if="organization && authStore.canEdit"
 							class="text-btn unlink-btn"
 							@click="unlinkOrganization"
 						>
@@ -244,7 +246,7 @@ const unlinkOrganization = async () => {
 							View Organization
 						</button>
 						<button
-							v-else
+							v-if="!organization && authStore.canEdit"
 							class="btn btn-primary btn-sm"
 							@click="showLinkModal = true"
 						>
