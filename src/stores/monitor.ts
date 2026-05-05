@@ -36,8 +36,14 @@ export const useMonitorStore = defineStore("monitor", () => {
 			const res = await fetch(`${BASE_URL}/monitor/history?hours=${hours}`, {
 				headers: authStore.authHeader,
 			});
+			if (!res.ok) {
+				if (res.status === 401) {
+					authStore.logout();
+					return;
+				}
+				throw new Error("Failed to fetch monitor history");
+			}
 			const data = await res.json();
-			console.log("Monitor history:", data);
 			history.value = data || [];
 			historyFetched.value = true;
 			return history.value;
@@ -65,8 +71,14 @@ export const useMonitorStore = defineStore("monitor", () => {
 			const res = await fetch(url, {
 				headers: authStore.authHeader,
 			});
+			if (!res.ok) {
+				if (res.status === 401) {
+					authStore.logout();
+					return;
+				}
+				throw new Error("Failed to fetch monitor status");
+			}
 			const data = await res.json();
-			console.log(`Monitor status ${domain ? `for ${domain}` : "all"}:`, data);
 			if (domain) {
 				currentStatus.value[domain] = data;
 			}
@@ -87,8 +99,14 @@ export const useMonitorStore = defineStore("monitor", () => {
 			const res = await fetch(`${BASE_URL}/monitor/ignored`, {
 				headers: authStore.authHeader,
 			});
+			if (!res.ok) {
+				if (res.status === 401) {
+					authStore.logout();
+					return;
+				}
+				throw new Error("Failed to fetch ignored sites");
+			}
 			const data = await res.json();
-			console.log("Ignored sites:", data);
 			ignoredDomains.value = data;
 			return data;
 		} catch (error) {
@@ -120,7 +138,6 @@ export const useMonitorStore = defineStore("monitor", () => {
 			}
 
 			const data = await res.json();
-			console.log("Added to ignore list:", data);
 			await fetchIgnored();
 			return data;
 		} catch (error) {
@@ -153,7 +170,6 @@ export const useMonitorStore = defineStore("monitor", () => {
 				data = await res.text();
 			}
 
-			console.log(`Removed ${domain} from ignore list:`, data);
 			await fetchIgnored();
 			return data;
 		} catch (error) {

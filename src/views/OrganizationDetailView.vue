@@ -6,6 +6,7 @@ import { useDataStore } from "../stores/data";
 import { useUserStore } from "../stores/user";
 import { useAssetStore } from "../stores/assetStore";
 import { useAuthStore } from "../stores/auth";
+import { useToastStore } from "../stores/toast";
 import type {
 	Organization,
 	Contact,
@@ -30,6 +31,7 @@ const dataStore = useDataStore();
 const userStore = useUserStore();
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
+const toast = useToastStore();
 
 const organizationId = parseInt(props.id, 10);
 const organization = ref<Organization | null>(null);
@@ -102,7 +104,7 @@ const handleSaveOrganization = async (values: Record<string, any>) => {
 		);
 		organization.value = updated;
 	} catch (e: any) {
-		alert("Failed to update organization: " + e.message);
+		toast.addToast("Failed to update organization: " + e.message, "error");
 		throw e;
 	}
 };
@@ -162,7 +164,7 @@ const handleContactSubmit = async () => {
 		contacts.value =
 			await organizationStore.fetchOrganizationContacts(organizationId);
 	} catch (e: any) {
-		alert("Failed to save contact: " + e.message);
+		toast.addToast("Failed to save contact: " + e.message, "error");
 	}
 };
 
@@ -173,7 +175,7 @@ const handleDeleteContact = async (id: number) => {
 		contacts.value =
 			await organizationStore.fetchOrganizationContacts(organizationId);
 	} catch (e: any) {
-		alert("Failed to delete contact: " + e.message);
+		toast.addToast("Failed to delete contact: " + e.message, "error");
 	}
 };
 
@@ -192,7 +194,7 @@ const handleDeleteOrganization = async () => {
 		await organizationStore.deleteOrganization(organizationId);
 		router.push({ name: "organizations" });
 	} catch (e: any) {
-		alert("Failed to delete organization: " + e.message);
+		toast.addToast("Failed to delete organization: " + e.message, "error");
 	}
 };
 
@@ -218,7 +220,7 @@ const handleLinkSite = async (siteId: number) => {
 		showLinkSiteModal.value = false;
 		siteSearchQuery.value = "";
 	} catch (e: any) {
-		alert("Failed to link site: " + e.message);
+		toast.addToast("Failed to link site: " + e.message, "error");
 	}
 };
 
@@ -231,7 +233,7 @@ const handleUnlinkSite = async (siteId: number) => {
 		linkedSites.value =
 			await organizationStore.fetchOrganizationSites(organizationId);
 	} catch (e: any) {
-		alert("Failed to unlink site: " + e.message);
+		toast.addToast("Failed to unlink site: " + e.message, "error");
 	}
 };
 
@@ -334,7 +336,7 @@ const handleLinkAsset = async () => {
 		showLinkAssetModal.value = false;
 		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
 	} catch (e: any) {
-		alert("Failed to save asset: " + e.message);
+		toast.addToast("Failed to save asset: " + e.message, "error");
 	}
 };
 
@@ -458,7 +460,7 @@ const handleRecordPayment = async () => {
 		showPaymentModal.value = false;
 		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
 	} catch (e: any) {
-		alert("Failed to record payment: " + e.message);
+		toast.addToast("Failed to record payment: " + e.message, "error");
 	}
 };
 
@@ -468,7 +470,7 @@ const handleUnlinkAsset = async (id: number) => {
 		await assetStore.unlinkAsset(id);
 		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
 	} catch (e: any) {
-		alert("Failed to unlink asset: " + e.message);
+		toast.addToast("Failed to unlink asset: " + e.message, "error");
 	}
 };
 
