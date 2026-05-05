@@ -210,6 +210,52 @@ func initSchema() error {
 			},
 		},
 		{
+			Name: "assets",
+			Columns: map[string]string{
+				"id":            "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"type":          "TEXT NOT NULL",
+				"identifier":    "TEXT",
+				"name":          "TEXT NOT NULL",
+				"description":   "TEXT",
+				"default_price": "INTEGER",
+				"default_freq":  "TEXT",
+				"created_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":    "TEXT",
+				"updated_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":    "TEXT",
+			},
+		},
+		{
+			Name: "organization_assets",
+			Columns: map[string]string{
+				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"organization_id": "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+				"site_id":         "INTEGER",
+				"asset_id":        "INTEGER REFERENCES assets(id) ON DELETE SET NULL",
+				"identifier":      "TEXT",
+				"price":           "INTEGER",
+				"billing_freq":    "TEXT",
+				"next_billing":    "DATETIME",
+				"description":     "TEXT",
+				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":      "TEXT",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":      "TEXT",
+			},
+		},
+		{
+			Name: "asset_payments",
+			Columns: map[string]string{
+				"id":           "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"org_asset_id": "INTEGER REFERENCES organization_assets(id) ON DELETE CASCADE",
+				"amount":       "INTEGER",
+				"payment_date": "DATETIME",
+				"info":         "TEXT",
+				"created_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":   "TEXT",
+			},
+		},
+		{
 			Name: "notes",
 			Columns: map[string]string{
 				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -244,6 +290,14 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_type, parent_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_organization_assets_org_id ON organization_assets(organization_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_asset_payments_asset_id ON asset_payments(org_asset_id);")
 	return err
 }
 
