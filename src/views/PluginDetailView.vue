@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import { useAssetStore } from "../stores/assetStore";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
@@ -13,6 +14,17 @@ const props = defineProps<{
 
 const router = useRouter();
 const dataStore = useDataStore();
+const assetStore = useAssetStore();
+
+onMounted(() => {
+	assetStore.fetchAssets();
+});
+
+const assetTemplate = computed(() => {
+	return assetStore.assets.find(
+		(a) => a.identifier === props.name && a.type === "Plugin",
+	);
+});
 
 const info = computed(() => {
 	return dataStore.enrichedPlugins.find((i) => i.slug === props.name);
@@ -46,6 +58,22 @@ const goBack = () => {
 const goToSite = (siteId: number) => {
 	router.push({ name: "site-detail", params: { id: siteId.toString() } });
 };
+
+const manageAssetTemplate = () => {
+	router.push({
+		name: "asset-templates",
+		query: !assetTemplate.value
+			? {
+					create: "true",
+					type: "Plugin",
+					identifier: props.name,
+					name: info.value?.name || props.name,
+				}
+			: {
+					search: props.name,
+				},
+	});
+};
 </script>
 
 <template>
@@ -53,7 +81,50 @@ const goToSite = (siteId: number) => {
 		<ViewHeader
 			title="Plugin Details"
 			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
-		/>
+		>
+			<template #actions>
+				<button
+					class="btn"
+					:class="assetTemplate ? 'btn-outline' : 'btn-primary'"
+					@click="manageAssetTemplate"
+				>
+					<svg
+						v-if="!assetTemplate"
+						xmlns="http://www.w3.org/2000/svg"
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<circle cx="12" cy="12" r="10"></circle>
+						<line x1="12" y1="8" x2="12" y2="16"></line>
+						<line x1="8" y1="12" x2="16" y2="12"></line>
+					</svg>
+					<svg
+						v-else
+						xmlns="http://www.w3.org/2000/svg"
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
+						<path
+							d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"
+						></path>
+						<line x1="7" y1="7" x2="7.01" y2="7"></line>
+					</svg>
+					{{ assetTemplate ? "View Asset Template" : "Create Asset Template" }}
+				</button>
+			</template>
+		</ViewHeader>
 
 		<main class="content" v-if="sitesWithPlugin.length > 0 || info">
 			<PluginInfoCard
@@ -130,5 +201,21 @@ const goToSite = (siteId: number) => {
 
 .not-found-back-btn {
 	margin-top: 16px;
+}
+
+.btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.btn-outline {
+	background-color: transparent;
+	border: 1px solid var(--border-input);
+	color: var(--text-main);
+}
+
+.btn-outline:hover {
+	background-color: var(--bg-hover);
 }
 </style>

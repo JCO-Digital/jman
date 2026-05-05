@@ -240,3 +240,65 @@ export interface Contact {
 export interface EnrichedOrganization extends Organization {
 	contacts: Contact[];
 }
+
+export type AssetType =
+	| "Plugin"
+	| "Domain"
+	| "Hosting Package"
+	| "Service Package"
+	| "General";
+export type BillingFrequency = "Yearly" | "Quarterly" | "Monthly" | "One-time";
+
+export interface Asset {
+	id: number;
+	type: AssetType;
+	identifier: string | null;
+	name: string;
+	description: string | null;
+	default_price: number | null;
+	default_freq: BillingFrequency | null;
+	active: boolean;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export type OrganizationAssetStatus = "active" | "cancelled" | "paused";
+
+export interface OrganizationAsset {
+	id: number;
+	organization_id: number;
+	organization_name?: string;
+	site_id: number | null;
+	asset_id: number | null;
+	asset_name?: string;
+	identifier: string | null;
+	price: number;
+	billing_freq: BillingFrequency;
+	next_billing: string | null;
+	last_billed: string | null;
+	status: OrganizationAssetStatus;
+	description: string | null;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export interface AssetPayment {
+	id: number;
+	organization_asset_id: number;
+	amount: number;
+	payment_date: string;
+	info: string | null;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export interface EnrichedOrganizationAsset extends OrganizationAsset {
+	asset?: Asset;
+	payments?: AssetPayment[];
+}

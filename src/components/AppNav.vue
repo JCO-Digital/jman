@@ -63,6 +63,15 @@ const handleRefresh = () => {
 				>
 					Organizations
 				</RouterLink>
+				<RouterLink
+					to="/assets"
+					class="nav-item"
+					:class="{
+						active: route.name === 'assets',
+					}"
+				>
+					Assets
+				</RouterLink>
 			</div>
 			<div class="nav-actions">
 				<button
