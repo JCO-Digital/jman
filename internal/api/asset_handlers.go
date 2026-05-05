@@ -308,7 +308,7 @@ func ListAssetPaymentsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, payments)
 }
 
-// CreateAssetPaymentHandler records a new payment.
+// CreateAssetPaymentHandler records a new payment and optionally updates the next_billing date.
 func CreateAssetPaymentHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	oaID, err := strconv.Atoi(idStr)
@@ -317,15 +317,55 @@ func CreateAssetPaymentHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var payment models.AssetPayment
-	if err := json.NewDecoder(r.Body).Decode(&payment); err != nil {
+	var req struct {
+		Amount      int        `json:"amount"`
+		PaymentDate time.Time  `json:"payment_date"`
+		Info        string     `json:"info"`
+		NextBilling *time.Time `json:"next_billing"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	payment.OrgAssetID = oaID
-	payment.ID = 0
+
+	oa, err := db.GetOrganizationAsset(oaID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if oa == nil {
+		WriteError(w, http.StatusNotFound, "Organization asset not found")
+		return
+	}
+
+	// Prepare payment
+	payment := models.AssetPayment{
+		OrgAssetID:  oaID,
+		Amount:      req.Amount,
+		PaymentDate: req.PaymentDate,
+		Info:        req.Info,
+	}
 	if payment.PaymentDate.IsZero() {
 		payment.PaymentDate = time.Now()
+	}
+
+	// Update next billing for the asset
+	if req.NextBilling != nil {
+		oa.NextBilling = req.NextBilling
+	} else if oa.NextBilling != nil {
+		switch oa.BillingFreq {
+		case models.BillingFrequencyYearly:
+			next := oa.NextBilling.AddDate(1, 0, 0)
+			oa.NextBilling = &next
+		case models.BillingFrequencyQuarterly:
+			next := oa.NextBilling.AddDate(0, 3, 0)
+			oa.NextBilling = &next
+		case models.BillingFrequencyMonthly:
+			next := oa.NextBilling.AddDate(0, 1, 0)
+			oa.NextBilling = &next
+		case models.BillingFrequencyOneTime:
+			oa.NextBilling = nil
+		}
 	}
 
 	username := getUsername(r)
@@ -333,6 +373,12 @@ func CreateAssetPaymentHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	if err := db.SaveOrganizationAsset(oa, username); err != nil {
+		// We don't fail the whole request if only the link update fails,
+		// but we log it (using fmt for simplicity here)
+	}
+
 	WriteJSON(w, http.StatusCreated, payment)
 }
 

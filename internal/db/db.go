@@ -307,6 +307,15 @@ func initSchema() error {
 // SQLite has restrictions on ALTER TABLE (e.g., adding columns with non-constant defaults like CURRENT_TIMESTAMP).
 // To be robust, this implementation uses the "recreate and copy" pattern if changes are detected.
 func migrateTable(def TableDefinition) error {
+	// Disable foreign keys during migration to avoid broken references when renaming tables.
+	// PRAGMA foreign_keys must be set outside of a transaction.
+	if _, err := dbInstance.Exec("PRAGMA foreign_keys=OFF"); err != nil {
+		return fmt.Errorf("failed to disable foreign keys: %w", err)
+	}
+	defer func() {
+		_, _ = dbInstance.Exec("PRAGMA foreign_keys=ON")
+	}()
+
 	tx, err := dbInstance.Begin()
 	if err != nil {
 		return err
