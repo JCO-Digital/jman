@@ -100,6 +100,7 @@ func UpdateAssetHandler(w http.ResponseWriter, r *http.Request) {
 	asset.Description = updates.Description
 	asset.DefaultPrice = updates.DefaultPrice
 	asset.DefaultFreq = updates.DefaultFreq
+	asset.Active = updates.Active
 
 	username := getUsername(r)
 	if err := db.SaveAsset(asset, username); err != nil {
@@ -177,6 +178,10 @@ func CreateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if oa.Status == "" {
+		oa.Status = models.AssetStatusActive
+	}
+
 	username := getUsername(r)
 	if err := db.SaveOrganizationAsset(&oa, username); err != nil {
 		WriteError(w, http.StatusInternalServerError, err.Error())
@@ -241,6 +246,9 @@ func UpdateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 		oa.BillingFreq = updates.BillingFreq
 	}
 	oa.NextBilling = updates.NextBilling
+	if updates.Status != "" {
+		oa.Status = updates.Status
+	}
 	oa.Description = updates.Description
 
 	username := getUsername(r)

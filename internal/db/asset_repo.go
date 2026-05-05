@@ -19,10 +19,10 @@ func SaveAsset(asset *models.Asset, username string) error {
 	now := time.Now()
 	if asset.ID == 0 {
 		query := `
-		INSERT INTO assets (type, identifier, name, description, default_price, default_freq, created_at, created_by, updated_at, updated_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO assets (type, identifier, name, description, default_price, default_freq, active, created_at, created_by, updated_at, updated_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
-		result, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, now, username, now, username)
+		result, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active, now, username, now, username)
 		if err != nil {
 			return fmt.Errorf("failed to insert asset: %w", err)
 		}
@@ -34,10 +34,10 @@ func SaveAsset(asset *models.Asset, username string) error {
 		asset.UpdatedBy = username
 	} else {
 		query := `
-		UPDATE assets SET type = ?, identifier = ?, name = ?, description = ?, default_price = ?, default_freq = ?, updated_at = ?, updated_by = ?
+		UPDATE assets SET type = ?, identifier = ?, name = ?, description = ?, default_price = ?, default_freq = ?, active = ?, updated_at = ?, updated_by = ?
 		WHERE id = ?
 		`
-		_, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, now, username, asset.ID)
+		_, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active, now, username, asset.ID)
 		if err != nil {
 			return fmt.Errorf("failed to update asset: %w", err)
 		}
@@ -53,10 +53,10 @@ func GetAsset(id int) (*models.Asset, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, type, identifier, name, description, default_price, default_freq, created_at, created_by, updated_at, updated_by FROM assets WHERE id = ?`
+	query := `SELECT id, type, identifier, name, description, default_price, default_freq, active, created_at, created_by, updated_at, updated_by FROM assets WHERE id = ?`
 	var a models.Asset
 	err := db.QueryRow(query, id).Scan(
-		&a.ID, &a.Type, &a.Identifier, &a.Name, &a.Description, &a.DefaultPrice, &a.DefaultFreq, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &a.UpdatedBy,
+		&a.ID, &a.Type, &a.Identifier, &a.Name, &a.Description, &a.DefaultPrice, &a.DefaultFreq, &a.Active, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &a.UpdatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -73,7 +73,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, type, identifier, name, description, default_price, default_freq, created_at, created_by, updated_at, updated_by FROM assets`
+	query := `SELECT id, type, identifier, name, description, default_price, default_freq, active, created_at, created_by, updated_at, updated_by FROM assets`
 	var args []interface{}
 	if search != "" {
 		query += " WHERE name LIKE ? OR identifier LIKE ? OR type LIKE ?"
@@ -91,7 +91,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 	assets := []models.Asset{}
 	for rows.Next() {
 		var a models.Asset
-		if err := rows.Scan(&a.ID, &a.Type, &a.Identifier, &a.Name, &a.Description, &a.DefaultPrice, &a.DefaultFreq, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &a.UpdatedBy); err != nil {
+		if err := rows.Scan(&a.ID, &a.Type, &a.Identifier, &a.Name, &a.Description, &a.DefaultPrice, &a.DefaultFreq, &a.Active, &a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &a.UpdatedBy); err != nil {
 			return nil, err
 		}
 		assets = append(assets, a)
@@ -119,10 +119,10 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 	now := time.Now()
 	if oa.ID == 0 {
 		query := `
-		INSERT INTO organization_assets (organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, description, created_at, created_by, updated_at, updated_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO organization_assets (organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, created_at, created_by, updated_at, updated_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
-		result, err := db.Exec(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Description, now, username, now, username)
+		result, err := db.Exec(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, now, username, now, username)
 		if err != nil {
 			return fmt.Errorf("failed to insert organization asset: %w", err)
 		}
@@ -134,10 +134,10 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 		oa.UpdatedBy = username
 	} else {
 		query := `
-		UPDATE organization_assets SET site_id = ?, asset_id = ?, identifier = ?, price = ?, billing_freq = ?, next_billing = ?, description = ?, updated_at = ?, updated_by = ?
+		UPDATE organization_assets SET site_id = ?, asset_id = ?, identifier = ?, price = ?, billing_freq = ?, next_billing = ?, status = ?, description = ?, updated_at = ?, updated_by = ?
 		WHERE id = ?
 		`
-		_, err := db.Exec(query, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Description, now, username, oa.ID)
+		_, err := db.Exec(query, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, now, username, oa.ID)
 		if err != nil {
 			return fmt.Errorf("failed to update organization asset: %w", err)
 		}
@@ -153,10 +153,10 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, description, created_at, created_by, updated_at, updated_by FROM organization_assets WHERE id = ?`
+	query := `SELECT id, organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, created_at, created_by, updated_at, updated_by FROM organization_assets WHERE id = ?`
 	var oa models.OrganizationAsset
 	err := db.QueryRow(query, id).Scan(
-		&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq, &oa.NextBilling, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
+		&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq, &oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -173,7 +173,7 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, description, created_at, created_by, updated_at, updated_by FROM organization_assets WHERE organization_id = ? ORDER BY created_at DESC`
+	query := `SELECT id, organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, created_at, created_by, updated_at, updated_by FROM organization_assets WHERE organization_id = ? ORDER BY created_at DESC`
 	rows, err := db.Query(query, organizationID)
 	if err != nil {
 		return nil, err
@@ -183,7 +183,7 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 	oas := []models.OrganizationAsset{}
 	for rows.Next() {
 		var oa models.OrganizationAsset
-		if err := rows.Scan(&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq, &oa.NextBilling, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy); err != nil {
+		if err := rows.Scan(&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq, &oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy); err != nil {
 			return nil, err
 		}
 		oas = append(oas, oa)

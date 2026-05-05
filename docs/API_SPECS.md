@@ -216,6 +216,7 @@ Returns all sites linked to a specific organization.
 | `description` | string | No | |
 | `default_price` | int | No | Default price in cents |
 | `default_freq` | string | No | `Yearly`, `Quarterly`, `Monthly`, `One-time` |
+| `active` | bool | No | Default: `true` |
 
 ### Get/Update/Delete Asset Template
 
@@ -244,6 +245,7 @@ Returns all sites linked to a specific organization.
 | `price` | int | No | Price in cents (defaults to template) |
 | `billing_freq` | string | No | Defaults to template |
 | `next_billing` | datetime | No | |
+| `status` | string | No | One of: `active`, `cancelled`, `paused`. Default: `active` |
 | `description` | string | No | |
 
 ### Get/Update/Delete Organization Asset
