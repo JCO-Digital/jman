@@ -228,6 +228,42 @@ Returns all sites linked to a specific organization.
 
 ## Organization Asset Management
 
+### List All Organization Assets
+
+`GET /organization-assets` (Protected)
+
+Returns a list of all linked assets across all organizations. This is useful for dashboard views and tracking upcoming renewals.
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `search` | string | Filter by identifier, organization name, or asset name |
+| `status` | string | Filter by `active`, `cancelled`, or `paused` |
+| `before` | datetime | Filter for assets with `next_billing` on or before this date |
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"id": 1,
+		"organization_id": 10,
+		"organization_name": "Acme Corp",
+		"asset_id": 5,
+		"asset_name": ".fi Domain",
+		"site_id": 20,
+		"identifier": "acme.fi",
+		"price": 1500,
+		"billing_freq": "Yearly",
+		"next_billing": "2024-12-31T00:00:00Z",
+		"status": "active",
+		"description": "Primary domain",
+		"created_at": "datetime",
+		"created_by": "string"
+	}
+]
+```
+
 ### List Organization Assets
 
 `GET /organizations/{id}/assets` (Protected)
