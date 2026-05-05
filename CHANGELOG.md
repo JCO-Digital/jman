@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.13.0 (2026-05-05)
+### 1.13.1 (2026-05-05)
+
+#### Bug Fixes
+
+- navigation: rename assets route to inventory (ef5ce4d)
+
+## v1.13.0 (2026-05-05)
 
 #### Features
 
