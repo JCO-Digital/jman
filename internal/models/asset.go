@@ -23,6 +23,15 @@ const (
 	BillingFrequencyOneTime   BillingFrequency = "One-time"
 )
 
+// AssetStatus defines the status of a linked asset.
+type AssetStatus string
+
+const (
+	AssetStatusActive    AssetStatus = "active"
+	AssetStatusCancelled AssetStatus = "cancelled"
+	AssetStatusPaused    AssetStatus = "paused"
+)
+
 // Asset represents a generic product or service template.
 type Asset struct {
 	ID           int              `json:"id"`
@@ -32,6 +41,7 @@ type Asset struct {
 	Description  string           `json:"description"`
 	DefaultPrice int              `json:"default_price"` // stored in cents
 	DefaultFreq  BillingFrequency `json:"default_freq"`
+	Active       bool             `json:"active"`
 	AuditFields
 }
 
@@ -45,6 +55,7 @@ type OrganizationAsset struct {
 	Price          int              `json:"price"`              // stored in cents
 	BillingFreq    BillingFrequency `json:"billing_freq"`
 	NextBilling    *time.Time       `json:"next_billing"`
+	Status         AssetStatus      `json:"status"`
 	Description    string           `json:"description"`
 	AuditFields
 }
