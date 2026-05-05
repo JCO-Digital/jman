@@ -128,6 +128,20 @@ func DeleteAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 // --- Organization Asset Handlers ---
 
+// ListAllOrganizationAssetsHandler returns all linked assets across all organizations.
+// Supports filtering by search, status, and before (next_billing).
+func ListAllOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
+	search := r.URL.Query().Get("search")
+	status := r.URL.Query().Get("status")
+	before := r.URL.Query().Get("before")
+	assets, err := db.GetAllOrganizationAssets(search, status, before)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	WriteJSON(w, http.StatusOK, assets)
+}
+
 // ListOrganizationAssetsHandler returns assets for a specific organization.
 func ListOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")

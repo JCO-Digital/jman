@@ -54,6 +54,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/assets/{id}", auth(GetAssetHandler))
 	mux.Handle("PATCH /api/assets/{id}", auth(UpdateAssetHandler))
 	mux.Handle("DELETE /api/assets/{id}", auth(DeleteAssetHandler))
+	mux.Handle("GET /api/organization-assets", auth(ListAllOrganizationAssetsHandler))
 	mux.Handle("GET /api/organizations/{id}/assets", auth(ListOrganizationAssetsHandler))
 	mux.Handle("POST /api/organizations/{id}/assets", auth(CreateOrganizationAssetHandler))
 	mux.Handle("GET /api/organization-assets/{id}", auth(GetOrganizationAssetHandler))

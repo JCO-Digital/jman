@@ -167,13 +167,79 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	return &oa, nil
 }
 
+func GetAllOrganizationAssets(search, status, before string) ([]models.OrganizationAsset, error) {
+	db := GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	query := `
+	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
+	       oa.next_billing, oa.status, oa.description, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
+	       o.name as organization_name, a.name as asset_name
+	FROM organization_assets oa
+	LEFT JOIN organizations o ON oa.organization_id = o.id
+	LEFT JOIN assets a ON oa.asset_id = a.id
+	WHERE 1=1
+	`
+	var args []interface{}
+
+	if search != "" {
+		query += " AND (oa.identifier LIKE ? OR o.name LIKE ? OR a.name LIKE ?)"
+		term := "%" + search + "%"
+		args = append(args, term, term, term)
+	}
+
+	if status != "" {
+		query += " AND oa.status = ?"
+		args = append(args, status)
+	}
+
+	if before != "" {
+		query += " AND oa.next_billing <= ?"
+		args = append(args, before)
+	}
+
+	query += " ORDER BY oa.next_billing ASC, oa.created_at DESC"
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query organization assets: %w", err)
+	}
+	defer rows.Close()
+
+	oas := []models.OrganizationAsset{}
+	for rows.Next() {
+		var oa models.OrganizationAsset
+		err := rows.Scan(
+			&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
+			&oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
+			&oa.OrganizationName, &oa.AssetName,
+		)
+		if err != nil {
+			return nil, err
+		}
+		oas = append(oas, oa)
+	}
+	return oas, nil
+}
+
 func GetOrganizationAssetsByOrganization(organizationID int) ([]models.OrganizationAsset, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, created_at, created_by, updated_at, updated_by FROM organization_assets WHERE organization_id = ? ORDER BY created_at DESC`
+	query := `
+	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
+	       oa.next_billing, oa.status, oa.description, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
+	       o.name as organization_name, a.name as asset_name
+	FROM organization_assets oa
+	LEFT JOIN organizations o ON oa.organization_id = o.id
+	LEFT JOIN assets a ON oa.asset_id = a.id
+	WHERE oa.organization_id = ?
+	ORDER BY oa.next_billing ASC, oa.created_at DESC
+	`
 	rows, err := db.Query(query, organizationID)
 	if err != nil {
 		return nil, err
@@ -183,7 +249,12 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 	oas := []models.OrganizationAsset{}
 	for rows.Next() {
 		var oa models.OrganizationAsset
-		if err := rows.Scan(&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq, &oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy); err != nil {
+		err := rows.Scan(
+			&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
+			&oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
+			&oa.OrganizationName, &oa.AssetName,
+		)
+		if err != nil {
 			return nil, err
 		}
 		oas = append(oas, oa)

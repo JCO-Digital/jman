@@ -47,16 +47,18 @@ type Asset struct {
 
 // OrganizationAsset represents a specific instance of an asset linked to an organization.
 type OrganizationAsset struct {
-	ID             int              `json:"id"`
-	OrganizationID int              `json:"organization_id"`
-	SiteID         *int             `json:"site_id,omitempty"`  // Optional link to a site
-	AssetID        *int             `json:"asset_id,omitempty"` // Reference to the template
-	Identifier     string           `json:"identifier"`         // Specific domain name, product name, etc.
-	Price          int              `json:"price"`              // stored in cents
-	BillingFreq    BillingFrequency `json:"billing_freq"`
-	NextBilling    *time.Time       `json:"next_billing"`
-	Status         AssetStatus      `json:"status"`
-	Description    string           `json:"description"`
+	ID               int              `json:"id"`
+	OrganizationID   int              `json:"organization_id"`
+	SiteID           *int             `json:"site_id,omitempty"`  // Optional link to a site
+	AssetID          *int             `json:"asset_id,omitempty"` // Reference to the template
+	Identifier       string           `json:"identifier"`         // Specific domain name, product name, etc.
+	Price            int              `json:"price"`              // stored in cents
+	BillingFreq      BillingFrequency `json:"billing_freq"`
+	NextBilling      *time.Time       `json:"next_billing"`
+	Status           AssetStatus      `json:"status"`
+	Description      string           `json:"description"`
+	OrganizationName string           `json:"organization_name,omitempty"`
+	AssetName        string           `json:"asset_name,omitempty"`
 	AuditFields
 }
 
