@@ -4,7 +4,17 @@ import { useRouter } from "vue-router";
 import { useOrganizationStore } from "../stores/organization";
 import { useDataStore } from "../stores/data";
 import { useUserStore } from "../stores/user";
-import type { Organization, Contact, ContactType, Site } from "../types";
+import { useAssetStore } from "../stores/assetStore";
+import type {
+	Organization,
+	Contact,
+	ContactType,
+	Site,
+	EnrichedOrganizationAsset,
+	Asset,
+	BillingFrequency,
+	OrganizationAssetStatus,
+} from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
@@ -17,11 +27,13 @@ const router = useRouter();
 const organizationStore = useOrganizationStore();
 const dataStore = useDataStore();
 const userStore = useUserStore();
+const assetStore = useAssetStore();
 
 const organizationId = parseInt(props.id, 10);
 const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
 const linkedSites = ref<Site[]>([]);
+const orgAssets = ref<EnrichedOrganizationAsset[]>([]);
 const isLoading = ref(true);
 const error = ref<string | null>(null);
 
@@ -29,16 +41,19 @@ const loadData = async () => {
 	isLoading.value = true;
 	error.value = null;
 	try {
-		const [organizationData, contactsData, sitesData] = await Promise.all([
-			organizationStore.getOrganization(organizationId),
-			organizationStore.fetchOrganizationContacts(organizationId),
-			organizationStore.fetchOrganizationSites(organizationId),
-		]);
+		const [organizationData, contactsData, sitesData, assetsData] =
+			await Promise.all([
+				organizationStore.getOrganization(organizationId),
+				organizationStore.fetchOrganizationContacts(organizationId),
+				organizationStore.fetchOrganizationSites(organizationId),
+				assetStore.fetchOrganizationAssets(organizationId),
+			]);
 
 		if (organizationData) {
 			organization.value = organizationData;
 			contacts.value = contactsData;
 			linkedSites.value = sitesData;
+			orgAssets.value = assetsData;
 		} else {
 			error.value = "Organization not found";
 		}
@@ -218,8 +233,252 @@ const handleUnlinkSite = async (siteId: number) => {
 	}
 };
 
-const goToSite = (siteId: number) => {
-	router.push({ name: "site-detail", params: { id: siteId.toString() } });
+const goToSite = (id: number) => {
+	router.push({ name: "site-detail", params: { id: id.toString() } });
+};
+
+// Asset Management
+const showLinkAssetModal = ref(false);
+const showPaymentModal = ref(false);
+const editingOrgAsset = ref<EnrichedOrganizationAsset | null>(null);
+const selectedAssetForPayment = ref<EnrichedOrganizationAsset | null>(null);
+const assetSearchQuery = ref("");
+const availableAssetTemplates = ref<Asset[]>([]);
+
+const assetForm = ref({
+	asset_id: null as number | null,
+	site_id: null as number | null,
+	identifier: "",
+	price: 0,
+	billing_freq: "Yearly" as BillingFrequency,
+	next_billing: "",
+	status: "active" as OrganizationAssetStatus,
+	description: "",
+});
+
+const paymentForm = ref({
+	amount: 0,
+	info: "",
+	next_billing: "",
+});
+
+const searchAssets = async () => {
+	if (assetSearchQuery.value.length < 2) {
+		availableAssetTemplates.value = [];
+		return;
+	}
+	await assetStore.fetchAssets(assetSearchQuery.value);
+	availableAssetTemplates.value = assetStore.assets;
+};
+
+const selectAssetTemplate = (template: Asset) => {
+	assetForm.value.asset_id = template.id;
+	assetForm.value.identifier = template.identifier || "";
+	assetForm.value.price = template.default_price || 0;
+	assetForm.value.billing_freq = template.default_freq || "Yearly";
+	assetForm.value.next_billing = new Date().toISOString().split("T")[0];
+	assetSearchQuery.value = template.name;
+	availableAssetTemplates.value = [];
+};
+
+const openAddAsset = () => {
+	editingOrgAsset.value = null;
+	assetForm.value = {
+		asset_id: null,
+		site_id: null,
+		identifier: "",
+		price: 0,
+		billing_freq: "Yearly",
+		next_billing: "",
+		status: "active",
+		description: "",
+	};
+	assetSearchQuery.value = "";
+	showLinkAssetModal.value = true;
+};
+
+const openEditAsset = (oa: EnrichedOrganizationAsset) => {
+	editingOrgAsset.value = oa;
+	assetForm.value = {
+		asset_id: oa.asset_id,
+		site_id: oa.site_id,
+		identifier: oa.identifier || "",
+		price: oa.price,
+		billing_freq: oa.billing_freq,
+		next_billing: oa.next_billing ? oa.next_billing.split("T")[0] : "",
+		status: oa.status,
+		description: oa.description || "",
+	};
+	assetSearchQuery.value = oa.asset?.name || oa.asset_name || "";
+	showLinkAssetModal.value = true;
+};
+
+const handleLinkAsset = async () => {
+	try {
+		const payload = { ...assetForm.value };
+		if (payload.next_billing) {
+			payload.next_billing = new Date(payload.next_billing).toISOString();
+		}
+
+		if (editingOrgAsset.value) {
+			await assetStore.updateOrganizationAsset(
+				editingOrgAsset.value.id,
+				payload,
+			);
+		} else {
+			await assetStore.linkAsset(organizationId, payload);
+		}
+
+		showLinkAssetModal.value = false;
+		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
+	} catch (e: any) {
+		alert("Failed to save asset: " + e.message);
+	}
+};
+
+const unlinkedPlugins = computed(() => {
+	const siteIds = linkedSites.value.map((s) => s.id);
+	const orgSites = dataStore.enrichedSites.filter((s) =>
+		siteIds.includes(s.id),
+	);
+
+	const unlinked: Array<{
+		site: Site;
+		pluginName: string;
+		slug: string;
+	}> = [];
+
+	// Get all asset templates that are of type 'Plugin'
+	const pluginTemplates = assetStore.assets.filter(
+		(a) => a.type === "Plugin" && a.identifier,
+	);
+	const pluginTemplateIdentifiers = pluginTemplates.map((a) => a.identifier);
+
+	orgSites.forEach((site) => {
+		site.plugins.forEach((plugin) => {
+			// Only suggest plugins that match an existing asset template identifier (slug)
+			const matchingTemplate = pluginTemplates.find(
+				(a) => a.identifier === plugin.name,
+			);
+
+			if (!matchingTemplate) {
+				return;
+			}
+
+			// Check if already linked specifically to this site OR globally to the organization
+			const isLinked = orgAssets.value.some(
+				(oa) =>
+					(oa.site_id === site.id || oa.site_id === null) &&
+					(oa.asset_id === matchingTemplate.id ||
+						oa.identifier === plugin.name),
+			);
+
+			if (!isLinked) {
+				const enriched = dataStore.enrichedPlugins.find(
+					(p) => p.slug === plugin.name,
+				);
+				unlinked.push({
+					site,
+					pluginName: enriched ? enriched.shortName : plugin.name,
+					slug: plugin.name,
+				});
+			}
+		});
+	});
+
+	return unlinked;
+});
+
+const convertToAsset = async (plugin: {
+	site: Site;
+	pluginName: string;
+	slug: string;
+}) => {
+	editingOrgAsset.value = null;
+	assetForm.value.site_id = plugin.site.id;
+	assetForm.value.identifier = plugin.slug;
+	assetForm.value.next_billing = new Date().toISOString().split("T")[0];
+
+	await assetStore.fetchAssets(plugin.slug);
+	const template = assetStore.assets.find(
+		(a) => a.type === "Plugin" && a.identifier === plugin.slug,
+	);
+
+	if (template) {
+		selectAssetTemplate(template);
+	} else {
+		assetForm.value.asset_id = null;
+		assetSearchQuery.value = plugin.pluginName;
+	}
+
+	showLinkAssetModal.value = true;
+};
+
+const calculateNextBillingDate = (
+	dateStr: string | null,
+	freq: BillingFrequency,
+) => {
+	const date = dateStr ? new Date(dateStr) : new Date();
+	if (isNaN(date.getTime())) return new Date().toISOString().split("T")[0];
+
+	if (freq === "Monthly") date.setMonth(date.getMonth() + 1);
+	else if (freq === "Quarterly") date.setMonth(date.getMonth() + 3);
+	else if (freq === "Yearly") date.setFullYear(date.getFullYear() + 1);
+	else return "";
+
+	return date.toISOString().split("T")[0];
+};
+
+const openPaymentModal = (asset: EnrichedOrganizationAsset) => {
+	selectedAssetForPayment.value = asset;
+	const suggestedNextDate = calculateNextBillingDate(
+		asset.next_billing,
+		asset.billing_freq,
+	);
+	paymentForm.value = {
+		amount: asset.price,
+		info: `Renewal ${new Date().toLocaleDateString()}`,
+		next_billing: suggestedNextDate,
+	};
+	showPaymentModal.value = true;
+};
+
+const handleRecordPayment = async () => {
+	if (!selectedAssetForPayment.value) return;
+	try {
+		const payload = { ...paymentForm.value };
+		if (payload.next_billing) {
+			payload.next_billing = new Date(payload.next_billing).toISOString();
+		}
+
+		await assetStore.recordPayment(selectedAssetForPayment.value.id, payload);
+		showPaymentModal.value = false;
+		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
+	} catch (e: any) {
+		alert("Failed to record payment: " + e.message);
+	}
+};
+
+const handleUnlinkAsset = async (id: number) => {
+	if (!confirm("Are you sure you want to unlink this asset?")) return;
+	try {
+		await assetStore.unlinkAsset(id);
+		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
+	} catch (e: any) {
+		alert("Failed to unlink asset: " + e.message);
+	}
+};
+
+const formatCurrency = (cents: number) => {
+	return new Intl.NumberFormat("de-DE", {
+		style: "currency",
+		currency: "EUR",
+	}).format(cents / 100);
+};
+
+const formatDate = (dateString: string | null) => {
+	if (!dateString) return "-";
+	return new Date(dateString).toLocaleDateString("de-DE");
 };
 
 const formatAuditDate = (dateStr: string) => {
@@ -489,6 +748,178 @@ const sitesAudit = computed(() => {
 					</template>
 				</div>
 			</div>
+
+			<div class="card-group">
+				<section class="card">
+					<div class="card-header">
+						<h2>Assets & Services ({{ orgAssets.length }})</h2>
+						<button class="btn btn-primary btn-sm" @click="openAddAsset">
+							Link Asset
+						</button>
+					</div>
+
+					<div class="table-container">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Asset</th>
+									<th>Identifier</th>
+									<th>Price</th>
+									<th>Frequency</th>
+									<th>Next Billing</th>
+									<th>Status</th>
+									<th class="actions-cell">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-if="orgAssets.length === 0">
+									<td colspan="6" class="empty-state">
+										No assets linked to this organization.
+									</td>
+								</tr>
+								<tr v-for="oa in orgAssets" :key="oa.id">
+									<td>
+										<strong>{{
+											oa.asset?.name ||
+											oa.asset_name ||
+											oa.identifier ||
+											"Custom Asset"
+										}}</strong>
+										<div v-if="oa.site_id" class="sub-text">
+											Linked to:
+											{{
+												linkedSites.find((s) => s.id === oa.site_id)?.domain ||
+												"Unknown Site"
+											}}
+										</div>
+									</td>
+									<td>{{ oa.identifier }}</td>
+									<td>{{ formatCurrency(oa.price) }}</td>
+									<td>{{ oa.billing_freq }}</td>
+									<td>{{ formatDate(oa.next_billing) }}</td>
+									<td>
+										<span :class="['status-badge', oa.status]">
+											{{ oa.status }}
+										</span>
+									</td>
+									<td class="actions-cell">
+										<div class="row-actions">
+											<button
+												class="icon-btn-sm"
+												@click="openEditAsset(oa)"
+												title="Edit Asset"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<path
+														d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+													></path>
+													<path
+														d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"
+													></path>
+												</svg>
+											</button>
+											<button
+												class="icon-btn-sm"
+												@click="openPaymentModal(oa)"
+												title="Record Payment"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<rect
+														x="2"
+														y="5"
+														width="20"
+														height="14"
+														rx="2"
+													></rect>
+													<line x1="2" y1="10" x2="22" y2="10"></line>
+												</svg>
+											</button>
+											<button
+												class="icon-btn-sm delete"
+												@click="handleUnlinkAsset(oa.id)"
+												title="Unlink Asset"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<line x1="18" y1="6" x2="6" y2="18"></line>
+													<line x1="6" y1="6" x2="18" y2="18"></line>
+												</svg>
+											</button>
+										</div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+			</div>
+
+			<div class="card-group" v-if="unlinkedPlugins.length > 0">
+				<section class="card">
+					<div class="card-header">
+						<h2>Plugin Audit</h2>
+						<span class="unlinked-count"
+							>{{ unlinkedPlugins.length }} Potential Assets</span
+						>
+					</div>
+					<div class="table-container">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Site</th>
+									<th>Plugin</th>
+									<th class="actions-cell">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr v-for="(p, idx) in unlinkedPlugins" :key="idx">
+									<td>{{ p.site.domain }}</td>
+									<td>
+										<strong>{{ p.pluginName }}</strong>
+									</td>
+									<td class="actions-cell">
+										<button
+											class="btn btn-primary btn-sm"
+											@click="convertToAsset(p)"
+										>
+											Convert to Asset
+										</button>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</section>
+			</div>
 		</main>
 
 		<main class="content" v-else-if="isLoading">
@@ -604,6 +1035,194 @@ const sitesAudit = computed(() => {
 							Cancel
 						</button>
 					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Link Asset Modal -->
+	<div
+		class="modal-overlay"
+		v-if="showLinkAssetModal"
+		@click.self="showLinkAssetModal = false"
+	>
+		<div class="modal-content card">
+			<h2>{{ editingOrgAsset ? "Edit Asset" : "Link New Asset" }}</h2>
+			<div class="form-layout">
+				<div class="form-group">
+					<label for="a-search">Search Template</label>
+					<input
+						type="text"
+						id="a-search"
+						v-model="assetSearchQuery"
+						@input="searchAssets"
+						placeholder="Start typing asset name..."
+						autocomplete="off"
+					/>
+					<div
+						class="search-results-list"
+						v-if="availableAssetTemplates.length > 0"
+					>
+						<div
+							v-for="template in availableAssetTemplates"
+							:key="template.id"
+							class="search-result-item"
+							@click="selectAssetTemplate(template)"
+						>
+							<div class="res-name">{{ template.name }}</div>
+							<div class="sub-text">
+								{{ template.type }} -
+								{{ formatCurrency(template.default_price || 0) }}
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div v-if="assetForm.asset_id" class="form-row">
+					<div class="form-group">
+						<label for="a-price">Price (€)</label>
+						<input
+							type="number"
+							id="a-price"
+							step="0.01"
+							:value="(assetForm.price / 100).toFixed(2)"
+							@input="
+								(e) =>
+									(assetForm.price = Math.round(
+										parseFloat((e.target as HTMLInputElement).value || '0') *
+											100,
+									))
+							"
+						/>
+					</div>
+					<div class="form-group">
+						<label for="a-freq">Frequency</label>
+						<select id="a-freq" v-model="assetForm.billing_freq">
+							<option value="Monthly">Monthly</option>
+							<option value="Quarterly">Quarterly</option>
+							<option value="Yearly">Yearly</option>
+							<option value="One-time">One-time</option>
+						</select>
+					</div>
+				</div>
+
+				<div class="form-group">
+					<label for="a-site">Link to Site (Optional)</label>
+					<select id="a-site" v-model="assetForm.site_id">
+						<option :value="null">None</option>
+						<option v-for="site in linkedSites" :key="site.id" :value="site.id">
+							{{ site.domain }}
+						</option>
+					</select>
+				</div>
+
+				<div class="form-group">
+					<label for="a-identifier">Identifier / License / Domain</label>
+					<input type="text" id="a-identifier" v-model="assetForm.identifier" />
+				</div>
+
+				<div class="form-row">
+					<div class="form-group">
+						<label for="a-next-billing">Next Billing Date</label>
+						<input
+							type="date"
+							id="a-next-billing"
+							v-model="assetForm.next_billing"
+						/>
+					</div>
+					<div class="form-group">
+						<label for="a-status">Status</label>
+						<select id="a-status" v-model="assetForm.status">
+							<option value="active">Active</option>
+							<option value="paused">Paused</option>
+							<option value="cancelled">Cancelled</option>
+						</select>
+					</div>
+				</div>
+
+				<div class="form-group">
+					<label for="a-description">Description / Notes</label>
+					<textarea
+						id="a-description"
+						v-model="assetForm.description"
+						rows="2"
+					></textarea>
+				</div>
+
+				<div class="form-actions">
+					<button class="back-btn" @click="showLinkAssetModal = false">
+						Cancel
+					</button>
+					<button
+						class="btn btn-primary"
+						@click="handleLinkAsset"
+						:disabled="!assetForm.asset_id"
+					>
+						{{ editingOrgAsset ? "Update Asset" : "Link Asset" }}
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<!-- Record Payment Modal -->
+	<div
+		class="modal-overlay"
+		v-if="showPaymentModal"
+		@click.self="showPaymentModal = false"
+	>
+		<div class="modal-content card">
+			<h2>Record Payment</h2>
+			<p v-if="selectedAssetForPayment">
+				Recording payment for:
+				<strong>{{
+					selectedAssetForPayment.asset?.name ||
+					selectedAssetForPayment.identifier
+				}}</strong>
+			</p>
+			<div class="form-layout">
+				<div class="form-group">
+					<label for="p-amount">Amount (€)</label>
+					<input
+						type="number"
+						id="p-amount"
+						step="0.01"
+						:value="(paymentForm.amount / 100).toFixed(2)"
+						@input="
+							(e) =>
+								(paymentForm.amount = Math.round(
+									parseFloat((e.target as HTMLInputElement).value || '0') * 100,
+								))
+						"
+					/>
+				</div>
+				<div class="form-group">
+					<label for="p-info">Reference / Info</label>
+					<input
+						type="text"
+						id="p-info"
+						v-model="paymentForm.info"
+						placeholder="Invoice # or Note"
+					/>
+				</div>
+				<div
+					class="form-group"
+					v-if="selectedAssetForPayment?.billing_freq !== 'One-time'"
+				>
+					<label for="p-next-billing">Next Billing Date</label>
+					<input
+						type="date"
+						id="p-next-billing"
+						v-model="paymentForm.next_billing"
+					/>
+				</div>
+				<div class="form-actions">
+					<button class="back-btn" @click="showPaymentModal = false">
+						Cancel
+					</button>
+					<button class="btn btn-primary" @click="handleRecordPayment">
+						Confirm & Advance Billing
+					</button>
 				</div>
 			</div>
 		</div>
@@ -768,29 +1387,73 @@ const sitesAudit = computed(() => {
 .form-layout {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
+	gap: 1.5rem;
+}
+
+.form-row {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1rem;
+}
+
+.sub-text {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	margin-top: 0.2rem;
+}
+
+.unlinked-count {
+	font-size: 0.8rem;
+	background-color: var(--bg-muted);
+	color: var(--text-muted);
+	padding: 2px 8px;
+	border-radius: 10px;
+	font-weight: 500;
+}
+
+.status-badge.active {
+	background-color: var(--badge-active-bg);
+	color: var(--badge-active-text);
+}
+
+.status-badge.paused {
+	background-color: var(--badge-drop-in-bg);
+	color: var(--badge-drop-in-text);
+}
+
+.status-badge.cancelled {
+	background-color: var(--badge-inactive-bg);
+	color: var(--badge-inactive-text);
 }
 
 .form-group {
 	display: flex;
 	flex-direction: column;
-	gap: 6px;
+	gap: 0.5rem;
 }
 
 .form-group label {
-	font-size: 0.85rem;
 	font-weight: 600;
+	font-size: 0.875rem;
 	color: var(--text-muted);
 }
 
 .form-group input,
-.form-group select {
-	padding: 10px 12px;
+.form-group select,
+.form-group textarea {
+	padding: 0.625rem;
 	border: 1px solid var(--border-input);
-	border-radius: 6px;
-	background: var(--bg-body);
+	border-radius: 4px;
+	font-size: 0.875rem;
+	width: 100%;
+	background-color: var(--bg-card);
 	color: var(--text-main);
-	font-size: 0.95rem;
+}
+
+.form-group textarea {
+	resize: vertical;
+	min-height: 80px;
+	font-family: inherit;
 }
 
 .form-actions {

@@ -60,6 +60,16 @@ const router = createRouter({
 			props: true,
 		},
 		{
+			path: "/assets",
+			name: "assets",
+			component: () => import("../views/Assets/AssetsListView.vue"),
+		},
+		{
+			path: "/assets/templates",
+			name: "asset-templates",
+			component: () => import("../views/Assets/TemplatesView.vue"),
+		},
+		{
 			path: "/",
 			name: "home",
 			component: () => import("../views/DashboardView.vue"),

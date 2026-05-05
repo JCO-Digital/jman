@@ -120,7 +120,8 @@ table {
 }
 
 input,
-select {
+select,
+textarea {
 	background-color: var(--bg-card);
 	color: var(--text-main);
 	border-color: var(--border-input);
@@ -128,6 +129,12 @@ select {
 	&::placeholder {
 		color: var(--text-placeholder);
 	}
+}
+
+textarea {
+	resize: vertical;
+	min-height: 80px;
+	font-family: inherit;
 }
 
 /* Global loading spinner */
