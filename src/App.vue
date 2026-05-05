@@ -7,6 +7,7 @@ import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
 import { useUserStore } from "./stores/user";
 import AppNav from "./components/AppNav.vue";
+import ToastContainer from "./components/ToastContainer.vue";
 import packageInfo from "../package.json";
 
 const dataStore = useDataStore();
@@ -99,6 +100,7 @@ const handleLogout = () => {
 			v{{ version }}
 		</footer>
 	</div>
+	<ToastContainer />
 </template>
 
 <style scoped>

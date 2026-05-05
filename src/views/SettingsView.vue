@@ -3,12 +3,14 @@ import { ref, onMounted } from "vue";
 import { useSettingsStore } from "../stores/settings";
 import { useMonitorStore } from "../stores/monitor";
 import { useAuthStore } from "../stores/auth";
+import { useToastStore } from "../stores/toast";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 
 const settingsStore = useSettingsStore();
 const monitorStore = useMonitorStore();
 const authStore = useAuthStore();
+const toast = useToastStore();
 
 const newDomain = ref("");
 const newReason = ref("");
@@ -41,7 +43,7 @@ const handleRemoveIgnored = async (domain: string) => {
 	try {
 		await monitorStore.removeIgnored(domain);
 	} catch (e: any) {
-		alert(e.message || "Failed to remove domain");
+		toast.addToast(e.message || "Failed to remove domain", "error");
 	}
 };
 

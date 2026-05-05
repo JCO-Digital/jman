@@ -5,6 +5,7 @@ import { useDataStore } from "../stores/data";
 import { useMonitorStore } from "../stores/monitor";
 import { useOrganizationStore } from "../stores/organization";
 import { useAuthStore } from "../stores/auth";
+import { useToastStore } from "../stores/toast";
 import type { Organization, Contact } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -20,6 +21,7 @@ const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
 const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
+const toast = useToastStore();
 
 const siteId = parseInt(props.id, 10);
 const organization = ref<Organization | null>(null);
@@ -192,7 +194,7 @@ const linkOrganization = async (organizationId: number) => {
 		}
 		showLinkModal.value = false;
 	} catch (e: any) {
-		alert("Failed to link organization: " + e.message);
+		toast.addToast("Failed to link organization: " + e.message, "error");
 	}
 };
 
@@ -205,7 +207,7 @@ const unlinkOrganization = async () => {
 		organization.value = null;
 		contacts.value = [];
 	} catch (e: any) {
-		alert("Failed to unlink organization: " + e.message);
+		toast.addToast("Failed to unlink organization: " + e.message, "error");
 	}
 };
 </script>

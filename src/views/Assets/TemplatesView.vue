@@ -3,12 +3,14 @@ import { ref, computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAssetStore } from "../../stores/assetStore";
 import { useAuthStore } from "../../stores/auth";
+import { useToastStore } from "../../stores/toast";
 import type { Asset, AssetType, BillingFrequency } from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
+const toast = useToastStore();
 const route = useRoute();
 
 const searchQuery = ref((route.query.search as string) || "");
@@ -101,7 +103,7 @@ const handleSubmit = async () => {
 		showModal.value = false;
 		await loadAssets();
 	} catch (e: any) {
-		alert("Failed to save asset: " + e.message);
+		toast.addToast("Failed to save asset: " + e.message, "error");
 	}
 };
 
@@ -111,7 +113,7 @@ const handleDelete = async (id: number) => {
 		await assetStore.deleteAsset(id);
 		await loadAssets();
 	} catch (e: any) {
-		alert("Failed to delete asset: " + e.message);
+		toast.addToast("Failed to delete asset: " + e.message, "error");
 	}
 };
 
