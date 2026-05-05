@@ -60,12 +60,12 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/assets",
+			path: "/inventory",
 			name: "assets",
 			component: () => import("../views/Assets/AssetsListView.vue"),
 		},
 		{
-			path: "/assets/templates",
+			path: "/inventory/templates",
 			name: "asset-templates",
 			component: () => import("../views/Assets/TemplatesView.vue"),
 		},
