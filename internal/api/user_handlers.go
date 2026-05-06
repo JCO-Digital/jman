@@ -181,6 +181,37 @@ func AdminListUsersHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 // --- User Self-Service Handlers (Any Level) ---
 
+type userProfileResponse struct {
+	Username    string           `json:"username"`
+	DisplayName string           `json:"displayName"`
+	Level       config.UserLevel `json:"level"`
+	Has2FA      bool             `json:"has2FA"`
+}
+
+// GetProfileHandler returns the profile information for the logged-in user.
+func GetProfileHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := GetAuthClaims(r.Context())
+		if claims == nil {
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
+			return
+		}
+
+		user := config.FindUser(usersCfg, claims.Username)
+		if user == nil {
+			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			return
+		}
+
+		WriteJSON(w, http.StatusOK, userProfileResponse{
+			Username:    user.Username,
+			DisplayName: user.DisplayName,
+			Level:       claims.Level, // Use level from claims as it accounts for 2FA fallback
+			Has2FA:      user.TOTPSecret != "",
+		})
+	}
+}
+
 type updateProfileRequest struct {
 	DisplayName string `json:"displayName"`
 }

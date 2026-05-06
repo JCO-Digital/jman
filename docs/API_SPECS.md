@@ -122,6 +122,23 @@ Deletes a user. Cannot delete self or the last administrator.
 
 These endpoints allow any authenticated user to manage their own account.
 
+### Get Profile
+
+`GET /user/profile` (Protected: `basic`)
+
+Returns the profile information for the logged-in user.
+
+**Response (200 OK)**
+
+```json
+{
+	"username": "string",
+	"displayName": "string",
+	"level": "string",
+	"has2FA": boolean
+}
+```
+
 ### Update Profile
 
 `PATCH /user/profile` (Protected: `basic`)

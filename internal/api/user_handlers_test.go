@@ -194,6 +194,43 @@ func TestDeleteUserHandler(t *testing.T) {
 	})
 }
 
+func TestGetProfileHandler(t *testing.T) {
+	cfg, tempDir := setupTestUsersConfig(t)
+	defer os.RemoveAll(tempDir)
+
+	handler := GetProfileHandler(cfg)
+
+	t.Run("Success", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/api/user/profile", nil)
+
+		claims := &AuthClaims{Username: "user", Level: config.LevelBasic}
+		ctx := contextWithClaims(context.Background(), claims)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		var resp userProfileResponse
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("Failed to decode response: %v", err)
+		}
+
+		if resp.Username != "user" {
+			t.Errorf("Expected username user, got %s", resp.Username)
+		}
+		if resp.Level != config.LevelBasic {
+			t.Errorf("Expected level basic, got %s", resp.Level)
+		}
+		if resp.Has2FA != false {
+			t.Error("Expected has2FA to be false")
+		}
+	})
+}
+
 func TestUpdateProfileHandler(t *testing.T) {
 	cfg, tempDir := setupTestUsersConfig(t)
 	defer os.RemoveAll(tempDir)
