@@ -22,6 +22,8 @@ export const useUserStore = defineStore("user", () => {
 
 	const users = ref<AdminUser[]>([]);
 	const profile = ref<UserProfile | null>(null);
+	const profileLoading = ref(false);
+	const profileError = ref<string | null>(null);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
 
@@ -58,6 +60,8 @@ export const useUserStore = defineStore("user", () => {
 
 	async function fetchProfile(): Promise<UserProfile | null> {
 		if (!authStore.isAuthenticated) return null;
+		profileLoading.value = true;
+		profileError.value = null;
 		try {
 			const res = await fetch(`${BASE_URL}/user/profile`, {
 				headers: authStore.authHeader,
@@ -71,8 +75,11 @@ export const useUserStore = defineStore("user", () => {
 			profile.value = data;
 			return data;
 		} catch (e: any) {
+			profileError.value = e.message || "Failed to load profile";
 			console.error("Error fetching profile:", e);
 			return null;
+		} finally {
+			profileLoading.value = false;
 		}
 	}
 
@@ -262,6 +269,7 @@ export const useUserStore = defineStore("user", () => {
 	function clearCache() {
 		users.value = [];
 		profile.value = null;
+		profileError.value = null;
 		error.value = null;
 	}
 
@@ -269,6 +277,8 @@ export const useUserStore = defineStore("user", () => {
 		// State
 		users,
 		profile,
+		profileLoading,
+		profileError,
 		isLoading,
 		error,
 		// Getters
