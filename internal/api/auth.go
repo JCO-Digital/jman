@@ -51,6 +51,8 @@ type jwtClaims struct {
 
 // signToken creates a new signed JWT for the given user.
 func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, time.Time, error) {
+	usersCfg.RLock()
+	defer usersCfg.RUnlock()
 	lifetime := time.Duration(usersCfg.TokenLifetimeHours) * time.Hour
 	if lifetime <= 0 {
 		lifetime = 24 * time.Hour
@@ -84,6 +86,8 @@ func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, ti
 
 // parseToken validates a raw JWT string and returns the parsed claims.
 func parseToken(usersCfg *config.UsersConfig, raw string) (*jwtClaims, error) {
+	usersCfg.RLock()
+	defer usersCfg.RUnlock()
 	token, err := jwt.ParseWithClaims(raw, &jwtClaims{}, func(t *jwt.Token) (any, error) {
 		// Ensure the signing method is what we expect.
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
@@ -154,6 +158,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			return
 		}
 
+		usersCfg.RLock()
 		user := config.FindUser(usersCfg, req.Username)
 
 		// Always run bcrypt comparison to prevent timing-based user enumeration.
@@ -161,6 +166,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		if user != nil {
 			hashToCompare = []byte(user.PasswordHash)
 		}
+		usersCfg.RUnlock()
 		if err := bcrypt.CompareHashAndPassword(hashToCompare, []byte(req.Password)); err != nil || user == nil {
 			limiter.RecordFailure(req.Username)
 			WriteError(w, http.StatusUnauthorized, "Invalid credentials")
@@ -220,7 +226,10 @@ func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		usersCfg.RLock()
 		user := config.FindUser(usersCfg, claims.Username)
+		usersCfg.RUnlock()
+
 		if user == nil {
 			WriteError(w, http.StatusUnauthorized, "User no longer exists")
 			return
