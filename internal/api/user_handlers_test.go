@@ -132,6 +132,68 @@ func TestCreateUserHandler(t *testing.T) {
 	})
 }
 
+func TestUpdateUserHandler(t *testing.T) {
+	cfg, tempDir := setupTestUsersConfig(t)
+	defer os.RemoveAll(tempDir)
+
+	handler := UpdateUserHandler(cfg)
+
+	t.Run("Success", func(t *testing.T) {
+		reqBody := updateUserRequest{
+			DisplayName: "New Admin Name",
+			Level:       config.LevelEdit,
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/api/users/admin", bytes.NewBuffer(body))
+		req.SetPathValue("username", "admin")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		user := config.FindUser(cfg, "admin")
+		if user.DisplayName != "New Admin Name" {
+			t.Errorf("Expected DisplayName New Admin Name, got %s", user.DisplayName)
+		}
+		if user.Level != config.LevelEdit {
+			t.Errorf("Expected level edit, got %s", user.Level)
+		}
+	})
+
+	t.Run("User Not Found", func(t *testing.T) {
+		reqBody := updateUserRequest{DisplayName: "Nobody"}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/api/users/nonexistent", bytes.NewBuffer(body))
+		req.SetPathValue("username", "nonexistent")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusNotFound {
+			t.Errorf("Expected status 404, got %d", w.Code)
+		}
+	})
+
+	t.Run("Invalid Level", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"level": "god-mode",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/api/users/admin", bytes.NewBuffer(body))
+		req.SetPathValue("username", "admin")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+}
+
 func TestDeleteUserHandler(t *testing.T) {
 	cfg, tempDir := setupTestUsersConfig(t)
 	defer os.RemoveAll(tempDir)

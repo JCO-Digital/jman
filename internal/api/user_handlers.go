@@ -51,6 +51,11 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		level := req.Level
 		if level == "" {
 			level = config.LevelBasic
+		} else {
+			if err := ValidateUserLevel(level); err != nil {
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 		}
 
 		usersCfg.Users = append(usersCfg.Users, config.UserEntry{
@@ -99,6 +104,10 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			user.DisplayName = req.DisplayName
 		}
 		if req.Level != "" {
+			if err := ValidateUserLevel(req.Level); err != nil {
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			user.Level = req.Level
 		}
 

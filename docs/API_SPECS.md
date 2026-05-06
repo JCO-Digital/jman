@@ -146,7 +146,7 @@ Returns the profile information for the logged-in user.
 **Request Body**
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `displayName` | string | Yes | |
+| `displayName` | string | No | |
 
 ### Change Password
 
@@ -270,6 +270,7 @@ The API returns a standard error object for all non-2xx/3xx responses:
 
 - `200 OK`: Success
 - `201 Created`: Successfully created a record
+- `204 No Content`: Successfully deleted a record
 - `400 Bad Request`: Validation error or malformed JSON
 - `401 Unauthorized`: Missing or invalid JWT token
 - `403 Forbidden`: Insufficient user level (permissions error)
