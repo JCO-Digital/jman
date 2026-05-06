@@ -309,7 +309,9 @@ const openEditAsset = (oa: EnrichedOrganizationAsset) => {
 		identifier: oa.identifier || "",
 		price: oa.price,
 		billing_freq: oa.billing_freq,
-		next_billing: oa.next_billing ? oa.next_billing.split("T")[0] || "" : "",
+		next_billing: oa.next_billing
+			? oa.next_billing.split("T")[0] || ""
+			: "",
 		status: oa.status,
 		description: oa.description || "",
 	};
@@ -334,7 +336,8 @@ const handleLinkAsset = async () => {
 		}
 
 		showLinkAssetModal.value = false;
-		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
+		orgAssets.value =
+			await assetStore.fetchOrganizationAssets(organizationId);
 	} catch (e: any) {
 		toast.addToast("Failed to save asset: " + e.message, "error");
 	}
@@ -456,9 +459,13 @@ const handleRecordPayment = async () => {
 			payload.next_billing = new Date(payload.next_billing).toISOString();
 		}
 
-		await assetStore.recordPayment(selectedAssetForPayment.value.id, payload);
+		await assetStore.recordPayment(
+			selectedAssetForPayment.value.id,
+			payload,
+		);
 		showPaymentModal.value = false;
-		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
+		orgAssets.value =
+			await assetStore.fetchOrganizationAssets(organizationId);
 	} catch (e: any) {
 		toast.addToast("Failed to record payment: " + e.message, "error");
 	}
@@ -468,7 +475,8 @@ const handleUnlinkAsset = async (id: number) => {
 	if (!confirm("Are you sure you want to unlink this asset?")) return;
 	try {
 		await assetStore.unlinkAsset(id);
-		orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
+		orgAssets.value =
+			await assetStore.fetchOrganizationAssets(organizationId);
 	} catch (e: any) {
 		toast.addToast("Failed to unlink asset: " + e.message, "error");
 	}
@@ -500,7 +508,8 @@ const formatAuditDate = (dateStr: string) => {
 const isModified = (item: any) => {
 	if (!item || !item.updated_at || !item.created_at) return false;
 	return (
-		item.updated_at !== item.created_at || item.updated_by !== item.created_by
+		item.updated_at !== item.created_at ||
+		item.updated_by !== item.created_by
 	);
 };
 
@@ -545,7 +554,7 @@ const sitesAudit = computed(() => {
 			<button class="text-btn" @click="loadData">Retry</button>
 		</div>
 
-		<main class="content" v-if="organization">
+		<main v-if="organization" class="content">
 			<div class="card-group">
 				<EditableInfoCard
 					title="Organization Information"
@@ -553,15 +562,19 @@ const sitesAudit = computed(() => {
 					:editable="authStore.canEdit"
 					:on-save="handleSaveOrganization"
 				/>
-				<div class="card-footer-audit" v-if="organization?.created_by">
+				<div v-if="organization?.created_by" class="card-footer-audit">
 					Created by
-					{{ userStore.resolveDisplayName(organization.created_by) }} on
-					{{ formatAuditDate(organization.created_at) }}.<template
+					{{ userStore.resolveDisplayName(organization.created_by) }}
+					on {{ formatAuditDate(organization.created_at) }}.<template
 						v-if="isModified(organization)"
 					>
 						Last edited by
-						{{ userStore.resolveDisplayName(organization.updated_by) }} on
-						{{ formatAuditDate(organization.updated_at) }}.
+						{{
+							userStore.resolveDisplayName(
+								organization.updated_by,
+							)
+						}}
+						on {{ formatAuditDate(organization.updated_at) }}.
 					</template>
 				</div>
 			</div>
@@ -587,7 +600,12 @@ const sitesAudit = computed(() => {
 									<th>Type</th>
 									<th>Email</th>
 									<th>Phone</th>
-									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
+									<th
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
+										Actions
+									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -596,23 +614,36 @@ const sitesAudit = computed(() => {
 										No contacts found for this organization.
 									</td>
 								</tr>
-								<tr v-for="contact in contacts" :key="contact.id">
+								<tr
+									v-for="contact in contacts"
+									:key="contact.id"
+								>
 									<td>
 										<strong>{{ contact.name }}</strong>
 									</td>
 									<td>
-										<span :class="['status-badge', contact.type.toLowerCase()]">
+										<span
+											:class="[
+												'status-badge',
+												contact.type.toLowerCase(),
+											]"
+										>
 											{{ contact.type }}
 										</span>
 									</td>
 									<td>{{ contact.email || "—" }}</td>
 									<td>{{ contact.phone || "—" }}</td>
-									<td v-if="authStore.canEdit" class="actions-cell">
+									<td
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
 										<div class="row-actions">
 											<button
 												class="icon-btn-sm"
-												@click="openEditContact(contact)"
 												title="Edit"
+												@click="
+													openEditContact(contact)
+												"
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -635,8 +666,12 @@ const sitesAudit = computed(() => {
 											</button>
 											<button
 												class="icon-btn-sm delete"
-												@click="handleDeleteContact(contact.id)"
 												title="Delete"
+												@click="
+													handleDeleteContact(
+														contact.id,
+													)
+												"
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -649,12 +684,24 @@ const sitesAudit = computed(() => {
 													stroke-linecap="round"
 													stroke-linejoin="round"
 												>
-													<polyline points="3 6 5 6 21 6"></polyline>
+													<polyline
+														points="3 6 5 6 21 6"
+													></polyline>
 													<path
 														d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
 													></path>
-													<line x1="10" y1="11" x2="10" y2="17"></line>
-													<line x1="14" y1="11" x2="14" y2="17"></line>
+													<line
+														x1="10"
+														y1="11"
+														x2="10"
+														y2="17"
+													></line>
+													<line
+														x1="14"
+														y1="11"
+														x2="14"
+														y2="17"
+													></line>
 												</svg>
 											</button>
 										</div>
@@ -664,16 +711,24 @@ const sitesAudit = computed(() => {
 						</table>
 					</div>
 				</section>
-				<div class="card-footer-audit" v-if="contactsAudit?.updated_by">
+				<div v-if="contactsAudit?.updated_by" class="card-footer-audit">
 					<template v-if="isModified(contactsAudit)">
 						Last edited by
-						{{ userStore.resolveDisplayName(contactsAudit.updated_by) }} on
-						{{ formatAuditDate(contactsAudit.updated_at) }}.
+						{{
+							userStore.resolveDisplayName(
+								contactsAudit.updated_by,
+							)
+						}}
+						on {{ formatAuditDate(contactsAudit.updated_at) }}.
 					</template>
 					<template v-else>
 						Created by
-						{{ userStore.resolveDisplayName(contactsAudit.created_by) }} on
-						{{ formatAuditDate(contactsAudit.created_at) }}.
+						{{
+							userStore.resolveDisplayName(
+								contactsAudit.created_by,
+							)
+						}}
+						on {{ formatAuditDate(contactsAudit.created_at) }}.
 					</template>
 				</div>
 			</div>
@@ -697,7 +752,12 @@ const sitesAudit = computed(() => {
 								<tr>
 									<th>Domain</th>
 									<th>PHP</th>
-									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
+									<th
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
+										Actions
+									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -710,19 +770,24 @@ const sitesAudit = computed(() => {
 									<td>
 										<a
 											href="#"
-											@click.prevent="goToSite(site.id)"
 											class="site-link"
+											@click.prevent="goToSite(site.id)"
 										>
 											<strong>{{ site.domain }}</strong>
 										</a>
 									</td>
 									<td>{{ site.php_version }}</td>
-									<td v-if="authStore.canEdit" class="actions-cell">
+									<td
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
 										<div class="row-actions">
 											<button
 												class="icon-btn-sm delete"
-												@click="handleUnlinkSite(site.id)"
 												title="Unlink Site"
+												@click="
+													handleUnlinkSite(site.id)
+												"
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -735,8 +800,18 @@ const sitesAudit = computed(() => {
 													stroke-linecap="round"
 													stroke-linejoin="round"
 												>
-													<line x1="18" y1="6" x2="6" y2="18"></line>
-													<line x1="6" y1="6" x2="18" y2="18"></line>
+													<line
+														x1="18"
+														y1="6"
+														x2="6"
+														y2="18"
+													></line>
+													<line
+														x1="6"
+														y1="6"
+														x2="18"
+														y2="18"
+													></line>
 												</svg>
 											</button>
 										</div>
@@ -746,16 +821,20 @@ const sitesAudit = computed(() => {
 						</table>
 					</div>
 				</section>
-				<div class="card-footer-audit" v-if="sitesAudit?.updated_by">
+				<div v-if="sitesAudit?.updated_by" class="card-footer-audit">
 					<template v-if="isModified(sitesAudit)">
 						Last edited by
-						{{ userStore.resolveDisplayName(sitesAudit.updated_by) }} on
-						{{ formatAuditDate(sitesAudit.updated_at) }}.
+						{{
+							userStore.resolveDisplayName(sitesAudit.updated_by)
+						}}
+						on {{ formatAuditDate(sitesAudit.updated_at) }}.
 					</template>
 					<template v-else>
 						Created by
-						{{ userStore.resolveDisplayName(sitesAudit.created_by) }} on
-						{{ formatAuditDate(sitesAudit.created_at) }}.
+						{{
+							userStore.resolveDisplayName(sitesAudit.created_by)
+						}}
+						on {{ formatAuditDate(sitesAudit.created_at) }}.
 					</template>
 				</div>
 			</div>
@@ -783,7 +862,12 @@ const sitesAudit = computed(() => {
 									<th>Frequency</th>
 									<th>Next Billing</th>
 									<th>Status</th>
-									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
+									<th
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
+										Actions
+									</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -803,8 +887,9 @@ const sitesAudit = computed(() => {
 										<div v-if="oa.site_id" class="sub-text">
 											Linked to:
 											{{
-												linkedSites.find((s) => s.id === oa.site_id)?.domain ||
-												"Unknown Site"
+												linkedSites.find(
+													(s) => s.id === oa.site_id,
+												)?.domain || "Unknown Site"
 											}}
 										</div>
 									</td>
@@ -813,16 +898,21 @@ const sitesAudit = computed(() => {
 									<td>{{ oa.billing_freq }}</td>
 									<td>{{ formatDate(oa.next_billing) }}</td>
 									<td>
-										<span :class="['status-badge', oa.status]">
+										<span
+											:class="['status-badge', oa.status]"
+										>
 											{{ oa.status }}
 										</span>
 									</td>
-									<td v-if="authStore.canEdit" class="actions-cell">
+									<td
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
 										<div class="row-actions">
 											<button
 												class="icon-btn-sm"
-												@click="openEditAsset(oa)"
 												title="Edit Asset"
+												@click="openEditAsset(oa)"
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -845,8 +935,8 @@ const sitesAudit = computed(() => {
 											</button>
 											<button
 												class="icon-btn-sm"
-												@click="openPaymentModal(oa)"
 												title="Record Payment"
+												@click="openPaymentModal(oa)"
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -866,13 +956,20 @@ const sitesAudit = computed(() => {
 														height="14"
 														rx="2"
 													></rect>
-													<line x1="2" y1="10" x2="22" y2="10"></line>
+													<line
+														x1="2"
+														y1="10"
+														x2="22"
+														y2="10"
+													></line>
 												</svg>
 											</button>
 											<button
 												class="icon-btn-sm delete"
-												@click="handleUnlinkAsset(oa.id)"
 												title="Unlink Asset"
+												@click="
+													handleUnlinkAsset(oa.id)
+												"
 											>
 												<svg
 													xmlns="http://www.w3.org/2000/svg"
@@ -885,8 +982,18 @@ const sitesAudit = computed(() => {
 													stroke-linecap="round"
 													stroke-linejoin="round"
 												>
-													<line x1="18" y1="6" x2="6" y2="18"></line>
-													<line x1="6" y1="6" x2="18" y2="18"></line>
+													<line
+														x1="18"
+														y1="6"
+														x2="6"
+														y2="18"
+													></line>
+													<line
+														x1="6"
+														y1="6"
+														x2="18"
+														y2="18"
+													></line>
 												</svg>
 											</button>
 										</div>
@@ -898,7 +1005,7 @@ const sitesAudit = computed(() => {
 				</section>
 			</div>
 
-			<div class="card-group" v-if="unlinkedPlugins.length > 0">
+			<div v-if="unlinkedPlugins.length > 0" class="card-group">
 				<section class="card">
 					<div class="card-header">
 						<h2>Plugin Audit</h2>
@@ -912,16 +1019,27 @@ const sitesAudit = computed(() => {
 								<tr>
 									<th>Site</th>
 									<th>Plugin</th>
-									<th v-if="authStore.canEdit" class="actions-cell">Actions</th>
+									<th
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
+										Actions
+									</th>
 								</tr>
 							</thead>
 							<tbody>
-								<tr v-for="(p, idx) in unlinkedPlugins" :key="idx">
+								<tr
+									v-for="(p, idx) in unlinkedPlugins"
+									:key="idx"
+								>
 									<td>{{ p.site.domain }}</td>
 									<td>
 										<strong>{{ p.pluginName }}</strong>
 									</td>
-									<td v-if="authStore.canEdit" class="actions-cell">
+									<td
+										v-if="authStore.canEdit"
+										class="actions-cell"
+									>
 										<button
 											class="btn btn-primary btn-sm"
 											@click="convertToAsset(p)"
@@ -937,7 +1055,7 @@ const sitesAudit = computed(() => {
 			</div>
 		</main>
 
-		<main class="content" v-else-if="isLoading">
+		<main v-else-if="isLoading" class="content">
 			<div class="card">
 				<LoadingSpinner message="Loading organization details..." />
 			</div>
@@ -950,8 +1068,10 @@ const sitesAudit = computed(() => {
 			@click.self="showContactModal = false"
 		>
 			<div class="modal-content card">
-				<h2>{{ editingContact ? "Edit Contact" : "Add New Contact" }}</h2>
-				<form @submit.prevent="handleContactSubmit" class="form-layout">
+				<h2>
+					{{ editingContact ? "Edit Contact" : "Add New Contact" }}
+				</h2>
+				<form class="form-layout" @submit.prevent="handleContactSubmit">
 					<div class="form-group">
 						<label for="c-name">Full Name*</label>
 						<input
@@ -1005,7 +1125,11 @@ const sitesAudit = computed(() => {
 							class="btn btn-primary"
 							:disabled="!contactForm.name"
 						>
-							{{ editingContact ? "Update Contact" : "Add Contact" }}
+							{{
+								editingContact
+									? "Update Contact"
+									: "Add Contact"
+							}}
 						</button>
 					</div>
 				</form>
@@ -1031,7 +1155,10 @@ const sitesAudit = computed(() => {
 						/>
 					</div>
 
-					<div class="search-results-list" v-if="availableSites.length > 0">
+					<div
+						v-if="availableSites.length > 0"
+						class="search-results-list"
+					>
 						<div
 							v-for="site in availableSites"
 							:key="site.id"
@@ -1041,12 +1168,18 @@ const sitesAudit = computed(() => {
 							<div class="res-name">{{ site.domain }}</div>
 						</div>
 					</div>
-					<div v-else-if="siteSearchQuery.length > 0" class="empty-state">
+					<div
+						v-else-if="siteSearchQuery.length > 0"
+						class="empty-state"
+					>
 						No available sites found.
 					</div>
 
 					<div class="form-actions">
-						<button class="back-btn" @click="showLinkSiteModal = false">
+						<button
+							class="back-btn"
+							@click="showLinkSiteModal = false"
+						>
 							Cancel
 						</button>
 					</div>
@@ -1057,8 +1190,8 @@ const sitesAudit = computed(() => {
 
 	<!-- Link Asset Modal -->
 	<div
-		class="modal-overlay"
 		v-if="showLinkAssetModal"
+		class="modal-overlay"
 		@click.self="showLinkAssetModal = false"
 	>
 		<div class="modal-content card">
@@ -1067,16 +1200,16 @@ const sitesAudit = computed(() => {
 				<div class="form-group">
 					<label for="a-search">Search Template</label>
 					<input
-						type="text"
 						id="a-search"
 						v-model="assetSearchQuery"
-						@input="searchAssets"
+						type="text"
 						placeholder="Start typing asset name..."
 						autocomplete="off"
+						@input="searchAssets"
 					/>
 					<div
-						class="search-results-list"
 						v-if="availableAssetTemplates.length > 0"
+						class="search-results-list"
 					>
 						<div
 							v-for="template in availableAssetTemplates"
@@ -1087,7 +1220,9 @@ const sitesAudit = computed(() => {
 							<div class="res-name">{{ template.name }}</div>
 							<div class="sub-text">
 								{{ template.type }} -
-								{{ formatCurrency(template.default_price || 0) }}
+								{{
+									formatCurrency(template.default_price || 0)
+								}}
 							</div>
 						</div>
 					</div>
@@ -1097,15 +1232,17 @@ const sitesAudit = computed(() => {
 					<div class="form-group">
 						<label for="a-price">Price (€)</label>
 						<input
-							type="number"
 							id="a-price"
+							type="number"
 							step="0.01"
 							:value="(assetForm.price / 100).toFixed(2)"
 							@input="
 								(e) =>
 									(assetForm.price = Math.round(
-										parseFloat((e.target as HTMLInputElement).value || '0') *
-											100,
+										parseFloat(
+											(e.target as HTMLInputElement)
+												.value || '0',
+										) * 100,
 									))
 							"
 						/>
@@ -1125,24 +1262,34 @@ const sitesAudit = computed(() => {
 					<label for="a-site">Link to Site (Optional)</label>
 					<select id="a-site" v-model="assetForm.site_id">
 						<option :value="null">None</option>
-						<option v-for="site in linkedSites" :key="site.id" :value="site.id">
+						<option
+							v-for="site in linkedSites"
+							:key="site.id"
+							:value="site.id"
+						>
 							{{ site.domain }}
 						</option>
 					</select>
 				</div>
 
 				<div class="form-group">
-					<label for="a-identifier">Identifier / License / Domain</label>
-					<input type="text" id="a-identifier" v-model="assetForm.identifier" />
+					<label for="a-identifier"
+						>Identifier / License / Domain</label
+					>
+					<input
+						id="a-identifier"
+						v-model="assetForm.identifier"
+						type="text"
+					/>
 				</div>
 
 				<div class="form-row">
 					<div class="form-group">
 						<label for="a-next-billing">Next Billing Date</label>
 						<input
-							type="date"
 							id="a-next-billing"
 							v-model="assetForm.next_billing"
+							type="date"
 						/>
 					</div>
 					<div class="form-group">
@@ -1165,13 +1312,16 @@ const sitesAudit = computed(() => {
 				</div>
 
 				<div class="form-actions">
-					<button class="back-btn" @click="showLinkAssetModal = false">
+					<button
+						class="back-btn"
+						@click="showLinkAssetModal = false"
+					>
 						Cancel
 					</button>
 					<button
 						class="btn btn-primary"
-						@click="handleLinkAsset"
 						:disabled="!assetForm.asset_id"
+						@click="handleLinkAsset"
 					>
 						{{ editingOrgAsset ? "Update Asset" : "Link Asset" }}
 					</button>
@@ -1182,8 +1332,8 @@ const sitesAudit = computed(() => {
 
 	<!-- Record Payment Modal -->
 	<div
-		class="modal-overlay"
 		v-if="showPaymentModal"
+		class="modal-overlay"
 		@click.self="showPaymentModal = false"
 	>
 		<div class="modal-content card">
@@ -1199,14 +1349,17 @@ const sitesAudit = computed(() => {
 				<div class="form-group">
 					<label for="p-amount">Amount (€)</label>
 					<input
-						type="number"
 						id="p-amount"
+						type="number"
 						step="0.01"
 						:value="(paymentForm.amount / 100).toFixed(2)"
 						@input="
 							(e) =>
 								(paymentForm.amount = Math.round(
-									parseFloat((e.target as HTMLInputElement).value || '0') * 100,
+									parseFloat(
+										(e.target as HTMLInputElement).value ||
+											'0',
+									) * 100,
 								))
 						"
 					/>
@@ -1214,28 +1367,31 @@ const sitesAudit = computed(() => {
 				<div class="form-group">
 					<label for="p-info">Reference / Info</label>
 					<input
-						type="text"
 						id="p-info"
 						v-model="paymentForm.info"
+						type="text"
 						placeholder="Invoice # or Note"
 					/>
 				</div>
 				<div
-					class="form-group"
 					v-if="selectedAssetForPayment?.billing_freq !== 'One-time'"
+					class="form-group"
 				>
 					<label for="p-next-billing">Next Billing Date</label>
 					<input
-						type="date"
 						id="p-next-billing"
 						v-model="paymentForm.next_billing"
+						type="date"
 					/>
 				</div>
 				<div class="form-actions">
 					<button class="back-btn" @click="showPaymentModal = false">
 						Cancel
 					</button>
-					<button class="btn btn-primary" @click="handleRecordPayment">
+					<button
+						class="btn btn-primary"
+						@click="handleRecordPayment"
+					>
 						Confirm & Advance Billing
 					</button>
 				</div>

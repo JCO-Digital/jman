@@ -13,7 +13,10 @@ const toastStore = useToastStore();
 				:class="['toast', `toast--${toast.type}`]"
 			>
 				<span class="toast-message">{{ toast.message }}</span>
-				<button class="toast-dismiss" @click="toastStore.removeToast(toast.id)">
+				<button
+					class="toast-dismiss"
+					@click="toastStore.removeToast(toast.id)"
+				>
 					&times;
 				</button>
 			</div>

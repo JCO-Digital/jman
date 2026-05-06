@@ -1,61 +1,45 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { useSettingsStore } from "../stores/settings";
-import { useMonitorStore } from "../stores/monitor";
+import { ref, computed, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
-import { useToastStore } from "../stores/toast";
 import ViewHeader from "../components/ViewHeader.vue";
-import LoadingSpinner from "../components/LoadingSpinner.vue";
+import SettingsTabs from "../components/settings/SettingsTabs.vue";
+import GeneralSettings from "../components/settings/GeneralSettings.vue";
+import AccountSettings from "../components/settings/AccountSettings.vue";
+import UserManagement from "../components/settings/UserManagement.vue";
 
-const settingsStore = useSettingsStore();
-const monitorStore = useMonitorStore();
+const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
-const toast = useToastStore();
 
-const newDomain = ref("");
-const newReason = ref("");
-const isSubmitting = ref(false);
-const error = ref<string | null>(null);
-
-onMounted(() => {
-	monitorStore.fetchIgnored();
+const validTabs = computed(() => {
+	const tabs = ["general", "account"];
+	if (authStore.canExecute) tabs.push("users");
+	return tabs;
 });
 
-const handleAddIgnored = async () => {
-	if (!newDomain.value) return;
+const activeTab = ref(getInitialTab());
 
-	isSubmitting.value = true;
-	error.value = null;
-	try {
-		await monitorStore.addIgnored(newDomain.value, newReason.value);
-		newDomain.value = "";
-		newReason.value = "";
-	} catch (e: any) {
-		error.value = e.message || "Failed to add domain to ignore list";
-	} finally {
-		isSubmitting.value = false;
-	}
-};
+function getInitialTab(): string {
+	const tab = route.query.tab as string;
+	if (tab && validTabs.value.includes(tab)) return tab;
+	return "general";
+}
 
-const handleRemoveIgnored = async (domain: string) => {
-	if (!confirm(`Are you sure you want to stop ignoring ${domain}?`)) return;
+// Sync tab to URL query parameter
+watch(activeTab, (newTab) => {
+	router.replace({ query: { ...route.query, tab: newTab } });
+});
 
-	try {
-		await monitorStore.removeIgnored(domain);
-	} catch (e: any) {
-		toast.addToast(e.message || "Failed to remove domain", "error");
-	}
-};
-
-const formatDate = (dateStr: string) => {
-	return new Date(dateStr).toLocaleString(undefined, {
-		year: "numeric",
-		month: "short",
-		day: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
-};
+// React to URL changes (e.g. browser back/forward)
+watch(
+	() => route.query.tab,
+	(newTab) => {
+		if (typeof newTab === "string" && validTabs.value.includes(newTab)) {
+			activeTab.value = newTab;
+		}
+	},
+);
 </script>
 
 <template>
@@ -63,258 +47,24 @@ const formatDate = (dateStr: string) => {
 		<ViewHeader title="Settings" />
 
 		<main class="content">
-			<!-- Local App Settings -->
-			<section class="card">
-				<h2>Application Settings</h2>
-				<div class="settings-form">
-					<div class="setting-group">
-						<label for="monitor-refresh-interval"
-							>Monitor History Refresh Interval (seconds)</label
-						>
-						<input
-							id="monitor-refresh-interval"
-							type="number"
-							v-model.number="settingsStore.monitorRefreshInterval"
-							min="10"
-							max="3600"
-							class="refresh-input"
-						/>
-						<p class="help-text">
-							How often the uptime history data is automatically reloaded
-							(Default: 60s).
-						</p>
-					</div>
+			<SettingsTabs
+				v-model="activeTab"
+				:show-users-tab="authStore.canExecute"
+			/>
 
-					<div class="setting-group refresh-interval-group">
-						<label for="data-refresh-interval"
-							>Site & Plugin Data Refresh Interval (seconds)</label
-						>
-						<input
-							id="data-refresh-interval"
-							type="number"
-							v-model.number="settingsStore.dataRefreshInterval"
-							min="30"
-							max="3600"
-							class="refresh-input"
-						/>
-						<p class="help-text">
-							How often sites, servers, and plugins are automatically reloaded
-							(Default: 300s).
-						</p>
-					</div>
-				</div>
-			</section>
-
-			<!-- Ignored Domains Section -->
-			<section class="card">
-				<h2>Ignored Domains</h2>
-				<p class="section-desc">
-					Sites in this list are excluded from uptime monitoring.
-				</p>
-
-				<!-- Add form -->
-				<form
-					v-if="authStore.canEdit"
-					@submit.prevent="handleAddIgnored"
-					class="add-ignored-form"
-				>
-					<div class="input-group">
-						<input
-							type="text"
-							v-model="newDomain"
-							placeholder="domain.com"
-							required
-							class="text-input"
-						/>
-						<input
-							type="text"
-							v-model="newReason"
-							placeholder="Reason (optional)"
-							class="text-input"
-						/>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							:disabled="isSubmitting"
-						>
-							{{ isSubmitting ? "Adding..." : "Add to list" }}
-						</button>
-					</div>
-					<p v-if="error" class="error-text small">{{ error }}</p>
-				</form>
-
-				<div v-if="monitorStore.isLoadingIgnored" class="state-container">
-					<LoadingSpinner message="Loading ignored domains..." />
-				</div>
-
-				<div
-					v-else-if="monitorStore.ignoredDomains.length > 0"
-					class="table-container"
-				>
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Domain</th>
-								<th class="hide-mobile">Reason</th>
-								<th class="hide-mobile">Added At</th>
-								<th v-if="authStore.canEdit" class="text-right">Actions</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-for="site in monitorStore.ignoredDomains"
-								:key="site.domain"
-							>
-								<td class="font-medium">{{ site.domain }}</td>
-								<td class="hide-mobile">{{ site.reason || "-" }}</td>
-								<td class="text-muted small hide-mobile">
-									{{ formatDate(site.created_at) }}
-								</td>
-								<td v-if="authStore.canEdit" class="text-right">
-									<button
-										class="btn-text danger"
-										@click="handleRemoveIgnored(site.domain)"
-									>
-										Remove
-									</button>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-
-				<div v-else class="state-container">
-					<p class="empty-text">No domains are currently ignored.</p>
-				</div>
-			</section>
+			<div class="tab-content">
+				<GeneralSettings v-if="activeTab === 'general'" />
+				<AccountSettings v-else-if="activeTab === 'account'" />
+				<UserManagement
+					v-else-if="activeTab === 'users' && authStore.canExecute"
+				/>
+			</div>
 		</main>
 	</div>
 </template>
 
 <style scoped>
-.refresh-interval-group {
-	margin-top: 20px;
-}
-
-.settings-form {
-	margin-top: 16px;
-}
-
-.setting-group {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	max-width: 400px;
-
-	@media (max-width: 640px) {
-		max-width: none;
-	}
-}
-
-.setting-group label {
-	font-weight: 600;
-	font-size: 14px;
-	color: var(--text-heading);
-}
-
-.refresh-input,
-.text-input {
-	padding: 8px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 14px;
-}
-
-.refresh-input {
-	width: 120px;
-
-	@media (max-width: 640px) {
-		width: 100%;
-	}
-}
-
-.add-ignored-form {
-	margin-bottom: 24px;
-	background: var(--bg-body);
-	padding: 16px;
-	border-radius: 6px;
-}
-
-.input-group {
-	display: flex;
-	gap: 12px;
-
-	@media (max-width: 640px) {
-		flex-direction: column;
-	}
-}
-
-.input-group .text-input {
-	flex: 1;
-}
-
-.font-medium {
-	font-weight: 500;
-}
-
-.small {
-	font-size: 0.85em;
-}
-
-.error-text.small {
-	margin-top: 8px;
-	color: var(--error-text);
-}
-
-.help-text {
-	font-size: 12px;
-	color: var(--text-muted);
-	margin: 0;
-}
-
-.section-desc {
-	color: var(--text-muted);
-	margin-bottom: 20px;
-}
-
-.state-container {
-	padding: 40px;
-	text-align: center;
-	color: var(--text-muted);
-}
-
-.empty-text {
-	margin: 0;
-	font-style: italic;
-}
-
-.info-footer {
+.tab-content {
 	margin-top: 24px;
-	padding-top: 16px;
-	border-top: 1px solid var(--border-color);
-	color: var(--text-muted);
-}
-
-.text-right {
-	text-align: right;
-}
-
-.btn-text {
-	background: none;
-	border: none;
-	color: var(--primary);
-	cursor: pointer;
-	font-size: 14px;
-	padding: 0;
-	font-weight: 500;
-}
-
-.btn-text.danger {
-	color: var(--error-text);
-}
-
-.btn-text:disabled {
-	color: var(--text-disabled);
-	cursor: not-allowed;
 }
 </style>

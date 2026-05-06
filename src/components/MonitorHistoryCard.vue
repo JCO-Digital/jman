@@ -143,7 +143,8 @@ const startTimeLabel = computed(() => {
 					class="value"
 					:class="{
 						'text-success': uptimePercentage > 95,
-						'text-warning': uptimePercentage <= 95 && uptimePercentage > 80,
+						'text-warning':
+							uptimePercentage <= 95 && uptimePercentage > 80,
 						'text-error': uptimePercentage <= 80,
 					}"
 				>
@@ -163,7 +164,7 @@ const startTimeLabel = computed(() => {
 			</RouterLink>
 		</div>
 
-		<div class="history-container" v-else-if="timelineData.length > 0">
+		<div v-else-if="timelineData.length > 0" class="history-container">
 			<div class="status-timeline">
 				<div
 					v-for="item in timelineData"

@@ -38,7 +38,9 @@ const handleRefresh = () => {
 					to="/sites"
 					class="nav-item"
 					:class="{
-						active: route.name === 'sites' || route.name === 'site-detail',
+						active:
+							route.name === 'sites' ||
+							route.name === 'site-detail',
 					}"
 				>
 					Sites
@@ -47,7 +49,9 @@ const handleRefresh = () => {
 					to="/plugins"
 					class="nav-item"
 					:class="{
-						active: route.name === 'plugins' || route.name === 'plugin-detail',
+						active:
+							route.name === 'plugins' ||
+							route.name === 'plugin-detail',
 					}"
 				>
 					Plugins
@@ -67,7 +71,9 @@ const handleRefresh = () => {
 					to="/inventory"
 					class="nav-item"
 					:class="{
-						active: route.name === 'assets' || route.name === 'asset-templates',
+						active:
+							route.name === 'assets' ||
+							route.name === 'asset-templates',
 					}"
 				>
 					Assets
@@ -76,9 +82,9 @@ const handleRefresh = () => {
 			<div class="nav-actions">
 				<button
 					class="icon-btn refresh-btn"
-					@click="handleRefresh"
 					:disabled="dataStore.isLoading"
 					title="Refresh data"
+					@click="handleRefresh"
 				>
 					<svg
 						v-if="!dataStore.isLoading"
@@ -123,10 +129,15 @@ const handleRefresh = () => {
 					</svg>
 				</RouterLink>
 				<div class="nav-user">
-					<span v-if="authStore.user" class="user-display-name hide-mobile">
+					<span
+						v-if="authStore.user"
+						class="user-display-name hide-mobile"
+					>
 						{{ authStore.user.displayName }}
 					</span>
-					<button class="logout-btn" @click="handleLogout">Logout</button>
+					<button class="logout-btn" @click="handleLogout">
+						Logout
+					</button>
 				</div>
 			</div>
 		</div>

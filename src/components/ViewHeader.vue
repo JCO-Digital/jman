@@ -11,7 +11,11 @@ defineProps<{
 <template>
 	<header class="header">
 		<div class="title-area">
-			<button v-if="backButton" class="back-btn" @click="backButton.onClick">
+			<button
+				v-if="backButton"
+				class="back-btn"
+				@click="backButton.onClick"
+			>
 				&larr; {{ backButton.text }}
 			</button>
 			<h1>{{ title }}</h1>

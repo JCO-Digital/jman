@@ -136,10 +136,10 @@ const goToPlugin = (name: string) => {
 
 		<div class="controls">
 			<input
+				v-model="searchQuery"
 				type="text"
 				placeholder="Search plugins by name..."
 				class="search-input"
-				v-model="searchQuery"
 				@input="updateRoute(1, rowsPerPage)"
 			/>
 		</div>
@@ -154,13 +154,13 @@ const goToPlugin = (name: string) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('version')" class="hide-mobile">
+						<th class="hide-mobile" @click="handleSort('version')">
 							Version
 							<span v-if="sortKey === 'version'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('author')" class="hide-mobile">
+						<th class="hide-mobile" @click="handleSort('author')">
 							Author
 							<span v-if="sortKey === 'author'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -181,7 +181,12 @@ const goToPlugin = (name: string) => {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="dataStore.isLoading && dataStore.pluginInfo.length === 0">
+					<tr
+						v-if="
+							dataStore.isLoading &&
+							dataStore.pluginInfo.length === 0
+						"
+					>
 						<td colspan="5" class="hide-mobile">
 							<LoadingSpinner message="Loading data..." />
 						</td>
@@ -192,13 +197,17 @@ const goToPlugin = (name: string) => {
 					<tr v-else-if="paginatedPlugins.length === 0">
 						<td colspan="5" class="empty-state hide-mobile">
 							<span v-if="searchQuery"
-								>No plugins found matching "{{ searchQuery }}".</span
+								>No plugins found matching "{{
+									searchQuery
+								}}".</span
 							>
 							<span v-else>No plugins available.</span>
 						</td>
 						<td colspan="3" class="empty-state show-mobile">
 							<span v-if="searchQuery"
-								>No plugins found matching "{{ searchQuery }}".</span
+								>No plugins found matching "{{
+									searchQuery
+								}}".</span
 							>
 							<span v-else>No plugins available.</span>
 						</td>
@@ -210,7 +219,9 @@ const goToPlugin = (name: string) => {
 						@click="goToPlugin(plugin.slug)"
 					>
 						<td>
-							<div class="plugin-name">{{ plugin.shortName }}</div>
+							<div class="plugin-name">
+								{{ plugin.shortName }}
+							</div>
 							<div class="plugin-slug">
 								{{ plugin.slug }}
 							</div>
