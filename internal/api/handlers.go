@@ -45,7 +45,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/user/password", basic(ChangePasswordHandler(&usersCfg)))
 	mux.Handle("POST /api/user/2fa/setup", basic(Setup2FAHandler))
 	mux.Handle("POST /api/user/2fa/activate", basic(Activate2FAHandler(&usersCfg)))
-	mux.Handle("DELETE /api/user/2fa", basic(Deactivate2FAHandler(&usersCfg)))
+	mux.Handle("POST /api/user/2fa/deactivate", basic(Deactivate2FAHandler(&usersCfg)))
 
 	// --- Monitoring routes ---
 	mux.Handle("GET /api/monitor/history", basic(MonitorHistoryHandler))

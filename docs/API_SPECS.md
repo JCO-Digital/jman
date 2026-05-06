@@ -166,9 +166,14 @@ Verifies a setup code and enables 2FA for the current user.
 
 ### 2FA Deactivation
 
-`DELETE /user/2fa` (Protected: `basic`)
+`POST /user/2fa/deactivate` (Protected: `basic`)
 
-Disables 2FA for the current user.
+Disables 2FA for the current user. Requires a valid TOTP code.
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `code` | string | Yes | 6-digit TOTP code |
 
 ---
 
