@@ -86,10 +86,15 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 	}
 	cfg.mu = &sync.RWMutex{}
 
-	// Set default levels for users that don't have one defined.
+	// Set default levels for users that don't have one defined, and validate levels.
 	for i := range cfg.Users {
 		if cfg.Users[i].Level == "" {
 			cfg.Users[i].Level = LevelBasic
+		} else {
+			l := cfg.Users[i].Level
+			if l != LevelBasic && l != LevelEdit && l != LevelExecute {
+				return UsersConfig{}, fmt.Errorf("invalid level %q for user %q in users.toml", l, cfg.Users[i].Username)
+			}
 		}
 	}
 

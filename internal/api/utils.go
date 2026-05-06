@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -89,4 +91,22 @@ func ValidateUserLevel(l config.UserLevel) error {
 	default:
 		return fmt.Errorf("invalid user level: %s", l)
 	}
+}
+
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+// ValidateUsername ensures the username follows safety rules.
+func ValidateUsername(username string) error {
+	if len(username) < 3 || len(username) > 32 {
+		return fmt.Errorf("username must be between 3 and 32 characters")
+	}
+	if !usernameRegex.MatchString(username) {
+		return fmt.Errorf("username can only contain alphanumeric characters, dots, underscores, and hyphens")
+	}
+	return nil
+}
+
+// NormalizeUsername trims whitespace and converts to lowercase.
+func NormalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
 }

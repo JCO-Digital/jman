@@ -147,6 +147,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			return
 		}
 
+		req.Username = NormalizeUsername(req.Username)
 		if req.Username == "" || req.Password == "" {
 			WriteError(w, http.StatusBadRequest, "Invalid request body")
 			return

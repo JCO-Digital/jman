@@ -64,6 +64,11 @@ func runUseradd(cmd *cobra.Command, args []string) error {
 		cfg = loaded
 	}
 
+	useraddUsername = api.NormalizeUsername(useraddUsername)
+	if err := api.ValidateUsername(useraddUsername); err != nil {
+		return err
+	}
+
 	// Reject duplicate usernames.
 	if config.FindUser(&cfg, useraddUsername) != nil {
 		return fmt.Errorf("user %q already exists in users.toml", useraddUsername)
