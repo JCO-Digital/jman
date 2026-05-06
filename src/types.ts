@@ -302,3 +302,36 @@ export interface EnrichedOrganizationAsset extends OrganizationAsset {
 	asset?: Asset;
 	payments?: AssetPayment[];
 }
+
+export type UserLevel = "basic" | "edit" | "execute";
+
+export interface AdminUser {
+	username: string;
+	displayName: string;
+	level: UserLevel;
+	has2FA: boolean;
+}
+
+export interface CreateUserPayload {
+	username: string;
+	password: string;
+	displayName: string;
+	level?: UserLevel;
+}
+
+export interface UpdateUserPayload {
+	displayName?: string;
+	level?: UserLevel;
+}
+
+export interface TwoFactorSetupResponse {
+	secret: string;
+	uri: string;
+}
+
+export interface UserProfile {
+	username: string;
+	displayName: string;
+	level: UserLevel;
+	has2FA: boolean;
+}
