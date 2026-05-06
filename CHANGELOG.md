@@ -1,6 +1,21 @@
 # Changelog
 
-### 1.13.1 (2026-05-05)
+## 1.14.0 (2026-05-06)
+
+#### Features
+
+- user: add loading and error states for profile fetching (8c5f9a1)
+- settings: add user management and 2FA configuration (a168fdc)
+
+#### Bug Fixes
+
+- settings: validate password strength in user form submission (57795ce)
+
+#### Maintenance
+
+- lint: configure ESLint and Prettier (275da79)
+
+### v1.13.1 (2026-05-05)
 
 #### Bug Fixes
 
