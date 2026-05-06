@@ -78,7 +78,7 @@ func TestCreateUserHandler(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		reqBody := createUserRequest{
 			Username:    "newuser",
-			Password:    "newpass",
+			Password:    "newpass-strong-123",
 			DisplayName: "New User",
 			Level:       config.LevelEdit,
 		}
@@ -97,10 +97,27 @@ func TestCreateUserHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("Weak Password", func(t *testing.T) {
+		reqBody := createUserRequest{
+			Username:    "weakuser",
+			Password:    "abc",
+			DisplayName: "Weak User",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/users", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
 	t.Run("Duplicate User", func(t *testing.T) {
 		reqBody := createUserRequest{
 			Username:    "admin",
-			Password:    "pass",
+			Password:    "password-is-strong-enough-now",
 			DisplayName: "Admin",
 		}
 		body, _ := json.Marshal(reqBody)
@@ -217,7 +234,7 @@ func TestChangePasswordHandler(t *testing.T) {
 	t.Run("Successful Change", func(t *testing.T) {
 		reqBody := changePasswordRequest{
 			CurrentPassword: "password123",
-			NewPassword:     "newsecurepass",
+			NewPassword:     "newsecurepass-very-strong",
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/api/user/password", bytes.NewBuffer(body))
@@ -234,16 +251,36 @@ func TestChangePasswordHandler(t *testing.T) {
 		}
 
 		user := config.FindUser(cfg, "user")
-		err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("newsecurepass"))
+		err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("newsecurepass-very-strong"))
 		if err != nil {
 			t.Error("Password was not updated correctly")
+		}
+	})
+
+	t.Run("Weak New Password", func(t *testing.T) {
+		reqBody := changePasswordRequest{
+			CurrentPassword: "newsecurepass-very-strong",
+			NewPassword:     "short",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/user/password", bytes.NewBuffer(body))
+
+		claims := &AuthClaims{Username: "user", Level: config.LevelBasic}
+		ctx := contextWithClaims(context.Background(), claims)
+		req = req.WithContext(ctx)
+
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
 		}
 	})
 
 	t.Run("Wrong Current Password", func(t *testing.T) {
 		reqBody := changePasswordRequest{
 			CurrentPassword: "wrongpassword",
-			NewPassword:     "newsecurepass",
+			NewPassword:     "newsecurepass-very-strong",
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/api/user/password", bytes.NewBuffer(body))

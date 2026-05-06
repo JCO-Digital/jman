@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/JCO-Digital/jman/internal/api"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
@@ -87,8 +88,8 @@ func runUseradd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("passwords do not match")
 	}
 
-	if len(pw1) == 0 {
-		return fmt.Errorf("password cannot be empty")
+	if err := api.ValidatePasswordStrength(string(pw1)); err != nil {
+		return err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword(pw1, 12)

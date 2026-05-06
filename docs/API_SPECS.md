@@ -11,6 +11,10 @@ This document provides a comprehensive technical specification for the `jman-api
   - `basic`: Read-only access to most data.
   - `edit`: Read/Write access to database records (Organizations, Assets, etc.).
   - `execute`: Administrative access (User management, system commands).
+- **Password Strength**:
+  - Enforced using an entropy-based calculation: `poolSize ^ length`.
+  - Required minimum variations: 10,000,000,000.
+  - Pool sizes: Lowercase (26), Uppercase (26), Numbers (10), Special characters (16).
 - **Date Format**: ISO 8601 / RFC 3339 (`YYYY-MM-DDTHH:MM:SSZ`)
 
 ---
@@ -92,7 +96,7 @@ Returns a detailed list of all users in the system.
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `username` | string | Yes | |
-| `password` | string | Yes | |
+| `password` | string | Yes | Must meet entropy requirements |
 | `displayName` | string | Yes | |
 | `level` | string | No | `basic`, `edit`, or `execute` (default: `basic`) |
 
@@ -135,7 +139,7 @@ These endpoints allow any authenticated user to manage their own account.
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `currentPassword` | string | Yes | |
-| `newPassword` | string | Yes | |
+| `newPassword` | string | Yes | Must meet entropy requirements |
 
 ### 2FA Setup
 

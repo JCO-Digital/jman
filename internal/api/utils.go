@@ -2,6 +2,8 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
 
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -25,4 +27,55 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 // WriteError writes a JSON error response with the given HTTP status code.
 func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, ErrorResponse{Error: message})
+}
+
+// ValidatePasswordStrength enforces a minimum entropy based on character pools.
+// The requirement is at least 10,000,000,000 variations, calculated as (poolSize ^ length).
+func ValidatePasswordStrength(password string) error {
+	if len(password) == 0 {
+		return fmt.Errorf("password cannot be empty")
+	}
+
+	var basePool int
+	var hasLower, hasUpper, hasDigit, hasSpecial bool
+
+	for _, r := range password {
+		switch {
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		default:
+			// Treat anything else as a special character (pool size 16)
+			hasSpecial = true
+		}
+	}
+
+	if hasLower {
+		basePool += 26
+	}
+	if hasUpper {
+		basePool += 26
+	}
+	if hasDigit {
+		basePool += 10
+	}
+	if hasSpecial {
+		basePool += 16
+	}
+
+	if basePool == 0 {
+		return fmt.Errorf("password contains invalid characters")
+	}
+
+	// Calculate log10 of total variations: length * log10(basePool)
+	// We require at least 10^10 variations (10,000,000,000).
+	variationsLog10 := float64(len(password)) * math.Log10(float64(basePool))
+	if variationsLog10 < 10 {
+		return fmt.Errorf("password is too weak: try a longer password or use more character types")
+	}
+
+	return nil
 }
