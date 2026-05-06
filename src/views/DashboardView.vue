@@ -28,7 +28,8 @@ const loadRenewals = async () => {
 			if (!a.next_billing) return 1;
 			if (!b.next_billing) return -1;
 			return (
-				new Date(a.next_billing).getTime() - new Date(b.next_billing).getTime()
+				new Date(a.next_billing).getTime() -
+				new Date(b.next_billing).getTime()
 			);
 		});
 	} catch (e) {
@@ -82,14 +83,17 @@ const formatDate = (dateString: string | null) => {
 				label="Active vulnerabilities detected"
 				:loading="dataStore.isVulnsLoading"
 				:value-style="{
-					color: dataStore.vulnerabilities.length > 0 ? '#d32f2f' : 'inherit',
+					color:
+						dataStore.vulnerabilities.length > 0
+							? '#d32f2f'
+							: 'inherit',
 				}"
 			/>
 		</main>
 
 		<section
-			class="card renewals-widget"
 			v-if="upcomingRenewals.length > 0 || isRenewalsLoading"
+			class="card renewals-widget"
 		>
 			<div class="card-header">
 				<h2>Upcoming Renewals (30 Days)</h2>
@@ -111,12 +115,16 @@ const formatDate = (dateString: string | null) => {
 						<tr v-for="oa in upcomingRenewals" :key="oa.id">
 							<td>{{ oa.organization_name }}</td>
 							<td>
-								<strong>{{ oa.asset_name || oa.identifier }}</strong>
+								<strong>{{
+									oa.asset_name || oa.identifier
+								}}</strong>
 							</td>
 							<td>{{ formatCurrency(oa.price) }}</td>
 							<td
 								:class="{
-									overdue: new Date(oa.next_billing || '') < new Date(),
+									overdue:
+										new Date(oa.next_billing || '') <
+										new Date(),
 								}"
 							>
 								{{ formatDate(oa.next_billing) }}

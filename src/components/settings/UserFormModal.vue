@@ -140,20 +140,22 @@ async function handleSubmit() {
 						<p>{{ errorMessage }}</p>
 					</div>
 
-					<form @submit.prevent="handleSubmit" class="modal-form">
+					<form class="modal-form" @submit.prevent="handleSubmit">
 						<!-- Username -->
 						<div class="form-group">
 							<label for="user-username">Username</label>
 							<input
 								v-if="!isEditMode"
 								id="user-username"
-								type="text"
 								v-model="username"
+								type="text"
 								placeholder="Enter username"
 								required
 								autocomplete="off"
 							/>
-							<span v-else class="readonly-value">{{ username }}</span>
+							<span v-else class="readonly-value">{{
+								username
+							}}</span>
 						</div>
 
 						<!-- Display Name -->
@@ -161,8 +163,8 @@ async function handleSubmit() {
 							<label for="user-displayname">Display Name</label>
 							<input
 								id="user-displayname"
-								type="text"
 								v-model="displayName"
+								type="text"
 								placeholder="Enter display name"
 								required
 							/>
@@ -173,15 +175,18 @@ async function handleSubmit() {
 							<label for="user-password">Password</label>
 							<input
 								id="user-password"
-								type="password"
 								v-model="password"
+								type="password"
 								placeholder="Enter password"
 								required
 								autocomplete="new-password"
 							/>
 
 							<!-- Password strength indicator -->
-							<div v-if="password.length > 0" class="strength-indicator">
+							<div
+								v-if="password.length > 0"
+								class="strength-indicator"
+							>
 								<div class="strength-bar-track">
 									<div
 										class="strength-bar-fill"
@@ -192,16 +197,28 @@ async function handleSubmit() {
 									></div>
 								</div>
 								<div class="strength-classes">
-									<span :class="{ active: passwordStrength.hasLowercase }"
+									<span
+										:class="{
+											active: passwordStrength.hasLowercase,
+										}"
 										>a-z</span
 									>
-									<span :class="{ active: passwordStrength.hasUppercase }"
+									<span
+										:class="{
+											active: passwordStrength.hasUppercase,
+										}"
 										>A-Z</span
 									>
-									<span :class="{ active: passwordStrength.hasNumbers }"
+									<span
+										:class="{
+											active: passwordStrength.hasNumbers,
+										}"
 										>0-9</span
 									>
-									<span :class="{ active: passwordStrength.hasSpecial }"
+									<span
+										:class="{
+											active: passwordStrength.hasSpecial,
+										}"
 										>!@#</span
 									>
 								</div>
@@ -221,7 +238,11 @@ async function handleSubmit() {
 				</div>
 
 				<footer class="modal-footer">
-					<button type="button" class="btn btn-cancel" @click="emit('close')">
+					<button
+						type="button"
+						class="btn btn-cancel"
+						@click="emit('close')"
+					>
 						Cancel
 					</button>
 					<button

@@ -91,7 +91,8 @@ const filteredAndSortedSites = computed(() => {
 });
 
 const totalPages = computed(
-	() => Math.ceil(filteredAndSortedSites.value.length / rowsPerPage.value) || 1,
+	() =>
+		Math.ceil(filteredAndSortedSites.value.length / rowsPerPage.value) || 1,
 );
 
 const paginatedSites = computed(() => {
@@ -131,10 +132,10 @@ const goToSite = (id: number) => {
 
 		<div class="controls">
 			<input
+				v-model="searchQuery"
 				type="text"
 				placeholder="Search sites by name or URL..."
 				class="search-input"
-				v-model="searchQuery"
 				@input="updateRoute(1, rowsPerPage)"
 			/>
 		</div>
@@ -149,7 +150,7 @@ const goToSite = (id: number) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('server')" class="hide-mobile">
+						<th class="hide-mobile" @click="handleSort('server')">
 							Server
 							<span v-if="sortKey === 'server'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -170,7 +171,11 @@ const goToSite = (id: number) => {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="dataStore.isLoading && dataStore.sites.length === 0">
+					<tr
+						v-if="
+							dataStore.isLoading && dataStore.sites.length === 0
+						"
+					>
 						<td colspan="4" class="hide-mobile">
 							<LoadingSpinner message="Loading data..." />
 						</td>
@@ -181,13 +186,17 @@ const goToSite = (id: number) => {
 					<tr v-else-if="paginatedSites.length === 0">
 						<td colspan="4" class="empty-state hide-mobile">
 							<span v-if="searchQuery"
-								>No sites found matching "{{ searchQuery }}".</span
+								>No sites found matching "{{
+									searchQuery
+								}}".</span
 							>
 							<span v-else>No sites available.</span>
 						</td>
 						<td colspan="3" class="empty-state show-mobile">
 							<span v-if="searchQuery"
-								>No sites found matching "{{ searchQuery }}".</span
+								>No sites found matching "{{
+									searchQuery
+								}}".</span
 							>
 							<span v-else>No sites available.</span>
 						</td>
@@ -201,7 +210,11 @@ const goToSite = (id: number) => {
 						<td>{{ site.domain }}</td>
 						<td class="hide-mobile">{{ site.server }}</td>
 						<td>
-							{{ site.is_wordpress ? site.plugins.length : "Not WP" }}
+							{{
+								site.is_wordpress
+									? site.plugins.length
+									: "Not WP"
+							}}
 						</td>
 						<td>
 							<span

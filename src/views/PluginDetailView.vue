@@ -34,8 +34,9 @@ const info = computed(() => {
 
 const sitesWithPlugin = computed(() => {
 	const vulnerableSites = new Set(
-		info.value?.vulnerabilities.flatMap((v) => v.sites.map((s) => s.site_id)) ||
-			[],
+		info.value?.vulnerabilities.flatMap((v) =>
+			v.sites.map((s) => s.site_id),
+		) || [],
 	);
 
 	const instances = dataStore.pluginsBySlugMap.get(props.name) || [];
@@ -84,7 +85,7 @@ const manageAssetTemplate = () => {
 			title="Plugin Details"
 			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
 		>
-			<template #actions v-if="authStore.canEdit">
+			<template v-if="authStore.canEdit" #actions>
 				<button
 					class="btn"
 					:class="assetTemplate ? 'btn-outline' : 'btn-primary'"
@@ -123,12 +124,16 @@ const manageAssetTemplate = () => {
 						></path>
 						<line x1="7" y1="7" x2="7.01" y2="7"></line>
 					</svg>
-					{{ assetTemplate ? "View Asset Template" : "Create Asset Template" }}
+					{{
+						assetTemplate
+							? "View Asset Template"
+							: "Create Asset Template"
+					}}
 				</button>
 			</template>
 		</ViewHeader>
 
-		<main class="content" v-if="sitesWithPlugin.length > 0 || info">
+		<main v-if="sitesWithPlugin.length > 0 || info" class="content">
 			<PluginInfoCard
 				:info="info"
 				:installation-count="sitesWithPlugin.length"
@@ -161,12 +166,20 @@ const manageAssetTemplate = () => {
 								<td>{{ item.site_domain }}</td>
 								<td class="hide-mobile">{{ item.version }}</td>
 								<td class="hide-mobile">
-									<span :class="['status-badge', item.status.toLowerCase()]">
+									<span
+										:class="[
+											'status-badge',
+											item.status.toLowerCase(),
+										]"
+									>
 										{{ item.status }}
 									</span>
 								</td>
 								<td>
-									<span v-if="item.isVulnerable" class="status-badge error">
+									<span
+										v-if="item.isVulnerable"
+										class="status-badge error"
+									>
 										Yes
 									</span>
 									<span v-else class="empty-dash">—</span>
@@ -178,7 +191,7 @@ const manageAssetTemplate = () => {
 			</section>
 		</main>
 
-		<main class="content" v-else>
+		<main v-else class="content">
 			<div class="card">
 				<LoadingSpinner
 					v-if="dataStore.isLoading"

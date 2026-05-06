@@ -89,10 +89,10 @@ const handleCreateOrganization = async () => {
 
 		<div class="controls">
 			<input
+				v-model="searchQuery"
 				type="text"
 				placeholder="Search organizations by name or VAT..."
 				class="search-input"
-				v-model="searchQuery"
 				@input="handleSearch"
 			/>
 			<button
@@ -121,22 +121,32 @@ const handleCreateOrganization = async () => {
 						"
 					>
 						<td colspan="3" class="hide-mobile">
-							<LoadingSpinner message="Loading organizations..." />
+							<LoadingSpinner
+								message="Loading organizations..."
+							/>
 						</td>
 						<td colspan="2" class="show-mobile">
-							<LoadingSpinner message="Loading organizations..." />
+							<LoadingSpinner
+								message="Loading organizations..."
+							/>
 						</td>
 					</tr>
-					<tr v-else-if="organizationStore.organizations.length === 0">
+					<tr
+						v-else-if="organizationStore.organizations.length === 0"
+					>
 						<td colspan="3" class="empty-state hide-mobile">
 							<span v-if="searchQuery"
-								>No organizations found matching "{{ searchQuery }}".</span
+								>No organizations found matching "{{
+									searchQuery
+								}}".</span
 							>
 							<span v-else>No organizations available.</span>
 						</td>
 						<td colspan="2" class="empty-state show-mobile">
 							<span v-if="searchQuery"
-								>No organizations found matching "{{ searchQuery }}".</span
+								>No organizations found matching "{{
+									searchQuery
+								}}".</span
 							>
 							<span v-else>No organizations available.</span>
 						</td>
@@ -154,19 +164,33 @@ const handleCreateOrganization = async () => {
 						</td>
 						<td class="hide-mobile">
 							<div class="sites-list">
-								<template v-if="getLinkedSites(organization.id).length > 0">
+								<template
+									v-if="
+										getLinkedSites(organization.id).length >
+										0
+									"
+								>
 									<span
-										v-for="site in getLinkedSites(organization.id).slice(0, 5)"
+										v-for="site in getLinkedSites(
+											organization.id,
+										).slice(0, 5)"
 										:key="site.id"
 										class="site-pill"
 									>
 										{{ site.domain }}
 									</span>
 									<span
-										v-if="getLinkedSites(organization.id).length > 5"
+										v-if="
+											getLinkedSites(organization.id)
+												.length > 5
+										"
 										class="site-pill others-tag"
 									>
-										+{{ getLinkedSites(organization.id).length - 5 }} others
+										+{{
+											getLinkedSites(organization.id)
+												.length - 5
+										}}
+										others
 									</span>
 								</template>
 								<span v-else class="empty-text">—</span>
@@ -201,7 +225,10 @@ const handleCreateOrganization = async () => {
 		>
 			<div class="modal-content card">
 				<h2>Add New Organization</h2>
-				<form @submit.prevent="handleCreateOrganization" class="form-layout">
+				<form
+					class="form-layout"
+					@submit.prevent="handleCreateOrganization"
+				>
 					<div class="form-group">
 						<label for="name">Organization Name*</label>
 						<input
@@ -240,7 +267,10 @@ const handleCreateOrganization = async () => {
 						<button
 							type="submit"
 							class="btn btn-primary"
-							:disabled="!newOrganization.name || organizationStore.isLoading"
+							:disabled="
+								!newOrganization.name ||
+								organizationStore.isLoading
+							"
 						>
 							Create Organization
 						</button>

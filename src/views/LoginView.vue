@@ -76,7 +76,8 @@ const handleLogin = async () => {
 
 				<div class="form-group">
 					<label for="totp"
-						>TOTP Code <span class="optional-label">(optional)</span></label
+						>TOTP Code
+						<span class="optional-label">(optional)</span></label
 					>
 					<input
 						id="totp"
@@ -90,7 +91,11 @@ const handleLogin = async () => {
 				</div>
 
 				<button type="submit" class="login-btn" :disabled="isLoading">
-					<LoadingSpinner v-if="isLoading" small message="Signing in..." />
+					<LoadingSpinner
+						v-if="isLoading"
+						small
+						message="Signing in..."
+					/>
 					<span v-else>Sign In</span>
 				</button>
 			</form>

@@ -68,8 +68,8 @@ const formatDate = (dateStr: string) => {
 				>
 				<input
 					id="monitor-refresh-interval"
-					type="number"
 					v-model.number="settingsStore.monitorRefreshInterval"
+					type="number"
 					min="10"
 					max="3600"
 					class="refresh-input"
@@ -86,15 +86,15 @@ const formatDate = (dateStr: string) => {
 				>
 				<input
 					id="data-refresh-interval"
-					type="number"
 					v-model.number="settingsStore.dataRefreshInterval"
+					type="number"
 					min="30"
 					max="3600"
 					class="refresh-input"
 				/>
 				<p class="help-text">
-					How often sites, servers, and plugins are automatically reloaded
-					(Default: 300s).
+					How often sites, servers, and plugins are automatically
+					reloaded (Default: 300s).
 				</p>
 			</div>
 		</div>
@@ -110,20 +110,20 @@ const formatDate = (dateStr: string) => {
 		<!-- Add form -->
 		<form
 			v-if="authStore.canEdit"
-			@submit.prevent="handleAddIgnored"
 			class="add-ignored-form"
+			@submit.prevent="handleAddIgnored"
 		>
 			<div class="input-group">
 				<input
-					type="text"
 					v-model="newDomain"
+					type="text"
 					placeholder="domain.com"
 					required
 					class="text-input"
 				/>
 				<input
-					type="text"
 					v-model="newReason"
+					type="text"
 					placeholder="Reason (optional)"
 					class="text-input"
 				/>
@@ -152,7 +152,9 @@ const formatDate = (dateStr: string) => {
 						<th>Domain</th>
 						<th class="hide-mobile">Reason</th>
 						<th class="hide-mobile">Added At</th>
-						<th v-if="authStore.canEdit" class="text-right">Actions</th>
+						<th v-if="authStore.canEdit" class="text-right">
+							Actions
+						</th>
 					</tr>
 				</thead>
 				<tbody>

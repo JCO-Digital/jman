@@ -54,7 +54,10 @@ async function handleDelete(user: AdminUser) {
 
 	try {
 		await userStore.deleteUser(user.username);
-		toast.addToast(`User "${user.username}" deleted successfully`, "success");
+		toast.addToast(
+			`User "${user.username}" deleted successfully`,
+			"success",
+		);
 	} catch (e: any) {
 		toast.addToast(e.message || "Failed to delete user", "error");
 	}
@@ -101,7 +104,9 @@ function levelClass(level: string): string {
 						<td class="font-medium">{{ user.username }}</td>
 						<td>{{ user.displayName }}</td>
 						<td>
-							<span :class="['level-badge', levelClass(user.level)]">
+							<span
+								:class="['level-badge', levelClass(user.level)]"
+							>
 								{{ user.level }}
 							</span>
 						</td>
@@ -126,14 +131,21 @@ function levelClass(level: string): string {
 						</td>
 						<td class="text-right">
 							<div class="actions-cell">
-								<button class="btn-text" @click="openEditModal(user)">
+								<button
+									class="btn-text"
+									@click="openEditModal(user)"
+								>
 									Edit
 								</button>
 								<button
 									class="btn-text danger"
-									:disabled="user.username === authStore.user?.username"
+									:disabled="
+										user.username ===
+										authStore.user?.username
+									"
 									:title="
-										user.username === authStore.user?.username
+										user.username ===
+										authStore.user?.username
 											? 'Cannot delete yourself'
 											: 'Delete user'
 									"

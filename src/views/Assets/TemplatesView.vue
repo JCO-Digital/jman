@@ -96,7 +96,10 @@ const openEditModal = (asset: Asset) => {
 const handleSubmit = async () => {
 	try {
 		if (editingAsset.value) {
-			await assetStore.updateAsset(editingAsset.value.id, assetForm.value);
+			await assetStore.updateAsset(
+				editingAsset.value.id,
+				assetForm.value,
+			);
 		} else {
 			await assetStore.createAsset(assetForm.value);
 		}
@@ -108,7 +111,8 @@ const handleSubmit = async () => {
 };
 
 const handleDelete = async (id: number) => {
-	if (!confirm("Are you sure you want to delete this asset template?")) return;
+	if (!confirm("Are you sure you want to delete this asset template?"))
+		return;
 	try {
 		await assetStore.deleteAsset(id);
 		await loadAssets();
@@ -147,8 +151,8 @@ const formatCurrency = (cents: number) => {
 
 		<div class="controls">
 			<input
-				type="text"
 				v-model="searchQuery"
+				type="text"
 				placeholder="Search templates by name, type or identifier..."
 				class="search-input"
 			/>
@@ -160,7 +164,10 @@ const formatCurrency = (cents: number) => {
 			</div>
 
 			<div v-else class="asset-grid">
-				<div v-if="filteredAssets.length === 0" class="card empty-state">
+				<div
+					v-if="filteredAssets.length === 0"
+					class="card empty-state"
+				>
 					No asset templates found.
 				</div>
 				<div
@@ -170,15 +177,18 @@ const formatCurrency = (cents: number) => {
 				>
 					<div class="asset-card-header">
 						<span
-							:class="['status-badge', asset.active ? 'active' : 'inactive']"
+							:class="[
+								'status-badge',
+								asset.active ? 'active' : 'inactive',
+							]"
 						>
 							{{ asset.active ? "Active" : "Inactive" }}
 						</span>
 						<div v-if="authStore.canEdit" class="row-actions">
 							<button
 								class="icon-btn-sm"
-								@click="openEditModal(asset)"
 								title="Edit"
+								@click="openEditModal(asset)"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -201,8 +211,8 @@ const formatCurrency = (cents: number) => {
 							</button>
 							<button
 								class="icon-btn-sm delete"
-								@click="handleDelete(asset.id)"
 								title="Delete"
+								@click="handleDelete(asset.id)"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -228,9 +238,11 @@ const formatCurrency = (cents: number) => {
 						<h3>{{ asset.name }}</h3>
 						<div class="asset-meta">
 							<span class="type-tag">{{ asset.type }}</span>
-							<code v-if="asset.identifier" class="identifier-code">{{
-								asset.identifier
-							}}</code>
+							<code
+								v-if="asset.identifier"
+								class="identifier-code"
+								>{{ asset.identifier }}</code
+							>
 						</div>
 						<p v-if="asset.description" class="description">
 							{{ asset.description }}
@@ -248,13 +260,24 @@ const formatCurrency = (cents: number) => {
 		</main>
 
 		<!-- Asset Template Modal -->
-		<div class="modal-overlay" v-if="showModal" @click.self="showModal = false">
+		<div
+			v-if="showModal"
+			class="modal-overlay"
+			@click.self="showModal = false"
+		>
 			<div class="modal-content card">
-				<h2>{{ editingAsset ? "Edit Template" : "New Asset Template" }}</h2>
-				<form @submit.prevent="handleSubmit" class="form-layout">
+				<h2>
+					{{ editingAsset ? "Edit Template" : "New Asset Template" }}
+				</h2>
+				<form class="form-layout" @submit.prevent="handleSubmit">
 					<div class="form-group">
 						<label for="name">Name</label>
-						<input type="text" id="name" v-model="assetForm.name" required />
+						<input
+							id="name"
+							v-model="assetForm.name"
+							type="text"
+							required
+						/>
 					</div>
 
 					<div class="form-row">
@@ -271,11 +294,13 @@ const formatCurrency = (cents: number) => {
 							</select>
 						</div>
 						<div class="form-group">
-							<label for="identifier">System Identifier (Slug/TLD)</label>
+							<label for="identifier"
+								>System Identifier (Slug/TLD)</label
+							>
 							<input
-								type="text"
 								id="identifier"
 								v-model="assetForm.identifier"
+								type="text"
 								placeholder="e.g. wp-rocket or .com"
 							/>
 						</div>
@@ -285,15 +310,19 @@ const formatCurrency = (cents: number) => {
 						<div class="form-group">
 							<label for="price">Default Price (€)</label>
 							<input
-								type="number"
 								id="price"
+								type="number"
 								step="0.01"
-								:value="(assetForm.default_price / 100).toFixed(2)"
+								:value="
+									(assetForm.default_price / 100).toFixed(2)
+								"
 								@input="
 									(e) =>
 										(assetForm.default_price = Math.round(
-											parseFloat((e.target as HTMLInputElement).value || '0') *
-												100,
+											parseFloat(
+												(e.target as HTMLInputElement)
+													.value || '0',
+											) * 100,
 										))
 								"
 							/>
@@ -301,7 +330,11 @@ const formatCurrency = (cents: number) => {
 						<div class="form-group">
 							<label for="freq">Default Frequency</label>
 							<select id="freq" v-model="assetForm.default_freq">
-								<option v-for="freq in freqOptions" :key="freq" :value="freq">
+								<option
+									v-for="freq in freqOptions"
+									:key="freq"
+									:value="freq"
+								>
 									{{ freq }}
 								</option>
 							</select>
@@ -319,17 +352,25 @@ const formatCurrency = (cents: number) => {
 
 					<div class="form-group checkbox">
 						<label>
-							<input type="checkbox" v-model="assetForm.active" />
+							<input v-model="assetForm.active" type="checkbox" />
 							Active (available for linking)
 						</label>
 					</div>
 
 					<div class="form-actions">
-						<button type="button" class="back-btn" @click="showModal = false">
+						<button
+							type="button"
+							class="back-btn"
+							@click="showModal = false"
+						>
 							Cancel
 						</button>
 						<button type="submit" class="btn btn-primary">
-							{{ editingAsset ? "Update Template" : "Create Template" }}
+							{{
+								editingAsset
+									? "Update Template"
+									: "Create Template"
+							}}
 						</button>
 					</div>
 				</form>

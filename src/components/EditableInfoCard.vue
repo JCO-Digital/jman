@@ -77,22 +77,26 @@ const copyToClipboard = async (value: any, index: number) => {
 	<section class="card">
 		<div class="card-header">
 			<h2>{{ title }}</h2>
-			<div class="header-actions" v-if="!isLoading && editable !== false">
-				<button v-if="!isEditing" class="text-btn" @click="startEditing">
+			<div v-if="!isLoading && editable !== false" class="header-actions">
+				<button
+					v-if="!isEditing"
+					class="text-btn"
+					@click="startEditing"
+				>
 					Edit
 				</button>
 				<template v-else>
 					<button
 						class="text-btn cancel"
-						@click="cancelEditing"
 						:disabled="isSaving"
+						@click="cancelEditing"
 					>
 						Cancel
 					</button>
 					<button
 						class="primary-btn-sm"
-						@click="handleSave"
 						:disabled="isSaving"
+						@click="handleSave"
 					>
 						{{ isSaving ? "Saving..." : "Save" }}
 					</button>
@@ -100,15 +104,23 @@ const copyToClipboard = async (value: any, index: number) => {
 			</div>
 		</div>
 
-		<div class="info-grid" v-if="!isEditing">
-			<div v-for="(item, index) in items" :key="item.key" class="info-item">
+		<div v-if="!isEditing" class="info-grid">
+			<div
+				v-for="(item, index) in items"
+				:key="item.key"
+				class="info-item"
+			>
 				<span class="label">{{ item.label }}:</span>
 				<div class="value-container">
 					<span
 						class="value"
 						:class="{ copyable: item.copyable }"
-						@click="item.copyable ? copyToClipboard(item.value, index) : null"
 						:title="item.copyable ? 'Click to copy' : ''"
+						@click="
+							item.copyable
+								? copyToClipboard(item.value, index)
+								: null
+						"
 					>
 						{{ item.value ?? "—" }}
 						<span v-if="copiedIndex === index" class="copy-feedback"
@@ -119,7 +131,7 @@ const copyToClipboard = async (value: any, index: number) => {
 			</div>
 		</div>
 
-		<div class="edit-form" v-else>
+		<div v-else class="edit-form">
 			<div
 				v-for="item in items"
 				:key="item.key"
@@ -152,9 +164,9 @@ const copyToClipboard = async (value: any, index: number) => {
 
 				<input
 					v-else
-					:type="item.type || 'text'"
 					:id="item.key"
 					v-model="localValues[item.key]"
+					:type="item.type || 'text'"
 					:required="item.required"
 					:disabled="isSaving"
 				/>

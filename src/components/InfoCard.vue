@@ -44,11 +44,17 @@ const copyToClipboard = async (
 					<span
 						class="value"
 						:class="{ copyable: item.copyable }"
-						@click="item.copyable ? copyToClipboard(item.value, index) : null"
 						:title="item.copyable ? 'Click to copy' : ''"
+						@click="
+							item.copyable
+								? copyToClipboard(item.value, index)
+								: null
+						"
 					>
 						{{
-							item.value !== undefined && item.value !== null ? item.value : "-"
+							item.value !== undefined && item.value !== null
+								? item.value
+								: "-"
 						}}
 						<span v-if="copiedIndex === index" class="copy-feedback"
 							>Copied!</span
