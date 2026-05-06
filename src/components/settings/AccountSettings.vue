@@ -315,120 +315,157 @@ function cancelDisable() {
 	<section class="card">
 		<h2>Two-Factor Authentication</h2>
 
-		<div v-if="tfaSuccess" class="feedback success">{{ tfaSuccess }}</div>
-		<div v-if="tfaError" class="feedback error">{{ tfaError }}</div>
+		<!-- Loading state -->
+		<div v-if="userStore.profileLoading" class="tfa-status-loading">
+			Loading 2FA status...
+		</div>
 
-		<!-- 2FA Enabled -->
-		<template v-if="userStore.profile?.has2FA">
-			<p class="tfa-status enabled">
-				Two-factor authentication is enabled ✓
-			</p>
+		<!-- Error state -->
+		<div
+			v-else-if="!userStore.profile && userStore.profileError"
+			class="feedback error"
+		>
+			{{ userStore.profileError }}
+			<button
+				class="btn-text retry-btn"
+				@click="userStore.fetchProfile()"
+			>
+				Retry
+			</button>
+		</div>
 
-			<div v-if="!showDisableInput">
-				<button
-					class="btn btn-danger"
-					:disabled="tfaLoading"
-					@click="showDisableInput = true"
-				>
-					Disable 2FA
-				</button>
+		<!-- Profile loaded -->
+		<template v-else-if="userStore.profile">
+			<div v-if="tfaSuccess" class="feedback success">
+				{{ tfaSuccess }}
 			</div>
+			<div v-if="tfaError" class="feedback error">{{ tfaError }}</div>
 
-			<div v-else class="tfa-action-group">
-				<div class="form-group">
-					<label for="tfa-disable-code" class="form-label">
-						Enter your 6-digit code to confirm
-					</label>
-					<input
-						id="tfa-disable-code"
-						v-model="tfaDisableCode"
-						type="text"
-						class="form-input code-input"
-						placeholder="000000"
-						maxlength="6"
-						autocomplete="one-time-code"
-					/>
-				</div>
-				<div class="btn-group">
-					<button
-						class="btn btn-danger"
-						:disabled="!tfaDisableCode || tfaLoading"
-						@click="deactivateTFA"
-					>
-						{{ tfaLoading ? "Disabling..." : "Confirm Disable" }}
-					</button>
-					<button class="btn btn-secondary" @click="cancelDisable">
-						Cancel
-					</button>
-				</div>
-			</div>
-		</template>
-
-		<!-- 2FA Disabled -->
-		<template v-else>
-			<p class="tfa-status disabled">
-				Two-factor authentication is not enabled.
-			</p>
-
-			<!-- Setup not started -->
-			<div v-if="!tfaSetupData">
-				<button
-					class="btn btn-primary"
-					:disabled="tfaLoading"
-					@click="startSetup2FA"
-				>
-					{{
-						tfaLoading
-							? "Setting up..."
-							: "Enable Two-Factor Authentication"
-					}}
-				</button>
-			</div>
-
-			<!-- Setup in progress -->
-			<div v-else class="tfa-setup">
-				<p class="setup-instructions">
-					Scan the QR code with your authenticator app, or enter the
-					secret key manually.
+			<!-- 2FA Enabled -->
+			<template v-if="userStore.profile.has2FA">
+				<p class="tfa-status enabled">
+					Two-factor authentication is enabled ✓
 				</p>
 
-				<div class="qr-container">
-					<canvas ref="qrCanvas"></canvas>
+				<div v-if="!showDisableInput">
+					<button
+						class="btn btn-danger"
+						:disabled="tfaLoading"
+						@click="showDisableInput = true"
+					>
+						Disable 2FA
+					</button>
 				</div>
 
-				<div class="secret-key-group">
-					<label class="form-label">Secret Key (manual entry)</label>
-					<code class="secret-key">{{ tfaSetupData.secret }}</code>
+				<div v-else class="tfa-action-group">
+					<div class="form-group">
+						<label for="tfa-disable-code" class="form-label">
+							Enter your 6-digit code to confirm
+						</label>
+						<input
+							id="tfa-disable-code"
+							v-model="tfaDisableCode"
+							type="text"
+							class="form-input code-input"
+							placeholder="000000"
+							maxlength="6"
+							autocomplete="one-time-code"
+						/>
+					</div>
+					<div class="btn-group">
+						<button
+							class="btn btn-danger"
+							:disabled="!tfaDisableCode || tfaLoading"
+							@click="deactivateTFA"
+						>
+							{{
+								tfaLoading ? "Disabling..." : "Confirm Disable"
+							}}
+						</button>
+						<button
+							class="btn btn-secondary"
+							@click="cancelDisable"
+						>
+							Cancel
+						</button>
+					</div>
 				</div>
+			</template>
 
-				<div class="form-group">
-					<label for="tfa-setup-code" class="form-label">
-						Enter the 6-digit code from your app
-					</label>
-					<input
-						id="tfa-setup-code"
-						v-model="tfaSetupCode"
-						type="text"
-						class="form-input code-input"
-						placeholder="000000"
-						maxlength="6"
-						autocomplete="one-time-code"
-					/>
-				</div>
+			<!-- 2FA Disabled -->
+			<template v-else>
+				<p class="tfa-status disabled">
+					Two-factor authentication is not enabled.
+				</p>
 
-				<div class="btn-group">
+				<!-- Setup not started -->
+				<div v-if="!tfaSetupData">
 					<button
 						class="btn btn-primary"
-						:disabled="!tfaSetupCode || tfaLoading"
-						@click="activateTFA"
+						:disabled="tfaLoading"
+						@click="startSetup2FA"
 					>
-						{{ tfaLoading ? "Verifying..." : "Verify & Activate" }}
-					</button>
-					<button class="btn btn-secondary" @click="cancelSetup">
-						Cancel
+						{{
+							tfaLoading
+								? "Setting up..."
+								: "Enable Two-Factor Authentication"
+						}}
 					</button>
 				</div>
-			</div>
+
+				<!-- Setup in progress -->
+				<div v-else class="tfa-setup">
+					<p class="setup-instructions">
+						Scan the QR code with your authenticator app, or enter
+						the secret key manually.
+					</p>
+
+					<div class="qr-container">
+						<canvas ref="qrCanvas"></canvas>
+					</div>
+
+					<div class="secret-key-group">
+						<label class="form-label"
+							>Secret Key (manual entry)</label
+						>
+						<code class="secret-key">{{
+							tfaSetupData.secret
+						}}</code>
+					</div>
+
+					<div class="form-group">
+						<label for="tfa-setup-code" class="form-label">
+							Enter the 6-digit code from your app
+						</label>
+						<input
+							id="tfa-setup-code"
+							v-model="tfaSetupCode"
+							type="text"
+							class="form-input code-input"
+							placeholder="000000"
+							maxlength="6"
+							autocomplete="one-time-code"
+						/>
+					</div>
+
+					<div class="btn-group">
+						<button
+							class="btn btn-primary"
+							:disabled="!tfaSetupCode || tfaLoading"
+							@click="activateTFA"
+						>
+							{{
+								tfaLoading
+									? "Verifying..."
+									: "Verify & Activate"
+							}}
+						</button>
+						<button class="btn btn-secondary" @click="cancelSetup">
+							Cancel
+						</button>
+					</div>
+				</div>
+			</template>
 		</template>
 	</section>
 </template>
@@ -566,6 +603,16 @@ function cancelDisable() {
 
 .tfa-status.disabled {
 	color: var(--text-muted);
+}
+
+.tfa-status-loading {
+	color: var(--text-muted);
+	font-size: 14px;
+	font-style: italic;
+}
+
+.retry-btn {
+	margin-left: 12px;
 }
 
 .tfa-setup {
