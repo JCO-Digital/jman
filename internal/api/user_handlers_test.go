@@ -307,7 +307,11 @@ func TestTOTPFlow(t *testing.T) {
 	}
 
 	// 3. Deactivate
-	deactivateReq := httptest.NewRequest("DELETE", "/api/user/2fa", nil)
+	deactivateCode, _ := totp.GenerateCode(secret, time.Now())
+	deactivateBody, _ := json.Marshal(deactivate2FARequest{
+		Code: deactivateCode,
+	})
+	deactivateReq := httptest.NewRequest("POST", "/api/user/2fa/deactivate", bytes.NewBuffer(deactivateBody))
 	deactivateReq = deactivateReq.WithContext(ctx)
 	deactivateW := httptest.NewRecorder()
 	Deactivate2FAHandler(cfg)(deactivateW, deactivateReq)

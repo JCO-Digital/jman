@@ -332,7 +332,12 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	}
 }
 
+type deactivate2FARequest struct {
+	Code string `json:"code"`
+}
+
 // Deactivate2FAHandler removes the TOTP secret for the logged-in user.
+// It requires a valid TOTP code to confirm the deactivation.
 func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
@@ -345,6 +350,19 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		if user == nil {
 			WriteError(w, http.StatusUnauthorized, "User no longer exists")
 			return
+		}
+
+		// If 2FA is enabled, require a valid code to disable it.
+		if user.TOTPSecret != "" {
+			var req deactivate2FARequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				WriteError(w, http.StatusBadRequest, "Invalid request body")
+				return
+			}
+			if !totp.Validate(req.Code, user.TOTPSecret) {
+				WriteError(w, http.StatusBadRequest, "Invalid verification code")
+				return
+			}
 		}
 
 		user.TOTPSecret = ""
