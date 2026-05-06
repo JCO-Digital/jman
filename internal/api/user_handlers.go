@@ -27,8 +27,14 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		req.Username = NormalizeUsername(req.Username)
 		if req.Username == "" || req.Password == "" || req.DisplayName == "" {
 			WriteError(w, http.StatusBadRequest, "Username, password, and display name are required")
+			return
+		}
+
+		if err := ValidateUsername(req.Username); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
@@ -88,7 +94,7 @@ type updateUserRequest struct {
 // UpdateUserHandler allows an admin to modify user details.
 func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username := r.PathValue("username")
+		username := NormalizeUsername(r.PathValue("username"))
 		if username == "" {
 			WriteError(w, http.StatusBadRequest, "Username is required")
 			return
@@ -134,7 +140,7 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 // DeleteUserHandler allows an admin to remove a user.
 func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		username := r.PathValue("username")
+		username := NormalizeUsername(r.PathValue("username"))
 		claims := GetAuthClaims(r.Context())
 
 		if claims != nil && claims.Username == username {

@@ -21,7 +21,11 @@ func setupTestUsersConfig(t *testing.T) (*config.UsersConfig, string) {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
 
+	oldConfigDir := config.RunData.ConfigDir
 	config.RunData.ConfigDir = tempDir
+	t.Cleanup(func() {
+		config.RunData.ConfigDir = oldConfigDir
+	})
 
 	hash, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	cfg := &config.UsersConfig{
@@ -102,6 +106,41 @@ func TestCreateUserHandler(t *testing.T) {
 			Username:    "weakuser",
 			Password:    "abc",
 			DisplayName: "Weak User",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/users", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("Invalid Username", func(t *testing.T) {
+		reqBody := createUserRequest{
+			Username:    "user!",
+			Password:    "strong-password-12345",
+			DisplayName: "Invalid User",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/users", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400, got %d", w.Code)
+		}
+	})
+
+	t.Run("Invalid Level", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"username":    "invalidlevel",
+			"password":    "strong-password-12345",
+			"displayName": "Invalid Level",
+			"level":       "superuser",
 		}
 		body, _ := json.Marshal(reqBody)
 		req := httptest.NewRequest("POST", "/api/users", bytes.NewBuffer(body))
