@@ -6,6 +6,7 @@ import (
 	"math"
 	"net/http"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -78,4 +79,14 @@ func ValidatePasswordStrength(password string) error {
 	}
 
 	return nil
+}
+
+// ValidateUserLevel ensures the provided level is a known valid level.
+func ValidateUserLevel(l config.UserLevel) error {
+	switch l {
+	case config.LevelBasic, config.LevelEdit, config.LevelExecute:
+		return nil
+	default:
+		return fmt.Errorf("invalid user level: %s", l)
+	}
 }
