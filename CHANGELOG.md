@@ -1,6 +1,25 @@
 # Changelog
 
-## 5.6.0 (2026-05-05)
+## 5.7.0 (2026-05-06)
+
+#### Features
+
+- api: add username normalization and validation (eff3f35)
+- api: implement user level validation and update CORS policies (7b3ad38)
+- api: implement get profile endpoint (65c8345)
+- api: enforce password strength requirements (f0358de)
+- api: implement user management and self-service features (d362aac)
+
+#### Bug Fixes
+
+- auth: increase minimum password entropy requirement (451b2ac)
+- api: require TOTP code for 2FA deactivation (1254376)
+
+#### Refactor
+
+- config: implement thread-safe access and atomic file writes (bc2da41)
+
+## v5.6.0 (2026-05-05)
 
 #### Features
 
