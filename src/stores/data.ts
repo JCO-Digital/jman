@@ -116,7 +116,8 @@ export const useDataStore = defineStore("data", () => {
 				version: info.version || "N/A",
 				author: info.author || "Unknown",
 				count,
-				vulnerabilities: vulnerabilitiesBySlug.value.get(info.slug) || [],
+				vulnerabilities:
+					vulnerabilitiesBySlug.value.get(info.slug) || [],
 			};
 		});
 	});
@@ -127,12 +128,16 @@ export const useDataStore = defineStore("data", () => {
 			return {
 				...site,
 				organization_id:
-					site.organization_id ?? siteOrganizationLinks.value[site.id],
+					site.organization_id ??
+					siteOrganizationLinks.value[site.id],
 				server:
-					serversByIdMap.value.get(site.server_id)?.name ?? "Unknown Server",
+					serversByIdMap.value.get(site.server_id)?.name ??
+					"Unknown Server",
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
-				vulnerabilities: vulnerabilitiesBySiteId.value.get(site.id) || [],
-				monitorHistory: monitorStore.historyByDomain.get(site.domain) || [],
+				vulnerabilities:
+					vulnerabilitiesBySiteId.value.get(site.id) || [],
+				monitorHistory:
+					monitorStore.historyByDomain.get(site.domain) || [],
 			};
 		});
 	});
@@ -143,14 +148,21 @@ export const useDataStore = defineStore("data", () => {
 			const cachedServers = sessionStorage.getItem(CACHE_KEY_SERVERS);
 			const cachedSites = sessionStorage.getItem(CACHE_KEY_SITES);
 			const cachedPlugins = sessionStorage.getItem(CACHE_KEY_PLUGINS);
-			const cachedPluginInfo = sessionStorage.getItem(CACHE_KEY_PLUGIN_INFO);
+			const cachedPluginInfo = sessionStorage.getItem(
+				CACHE_KEY_PLUGIN_INFO,
+			);
 			const cachedVulns = sessionStorage.getItem(CACHE_KEY_VULNS);
 
 			const cachedLinks = sessionStorage.getItem(
 				"jman_site_organization_links",
 			);
 
-			if (cachedServers && cachedSites && cachedPlugins && cachedPluginInfo) {
+			if (
+				cachedServers &&
+				cachedSites &&
+				cachedPlugins &&
+				cachedPluginInfo
+			) {
 				servers.value = JSON.parse(cachedServers);
 				sites.value = JSON.parse(cachedSites);
 				if (cachedLinks) {
@@ -214,12 +226,20 @@ export const useDataStore = defineStore("data", () => {
 					if (res.ok) {
 						const data = await res.json();
 						vulnerabilities.value = data;
-						sessionStorage.setItem(CACHE_KEY_VULNS, JSON.stringify(data));
+						sessionStorage.setItem(
+							CACHE_KEY_VULNS,
+							JSON.stringify(data),
+						);
 					} else if (res.status !== 401) {
-						console.error("Failed to fetch vulnerabilities:", res.statusText);
+						console.error(
+							"Failed to fetch vulnerabilities:",
+							res.statusText,
+						);
 					}
 				})
-				.catch((err) => console.error("Failed to fetch vulnerabilities:", err))
+				.catch((err) =>
+					console.error("Failed to fetch vulnerabilities:", err),
+				)
 				.finally(() => {
 					isVulnsLoading.value = false;
 				});
@@ -255,9 +275,15 @@ export const useDataStore = defineStore("data", () => {
 			plugins.value = pluginsData;
 			pluginInfo.value = pluginInfoData;
 
-			sessionStorage.setItem(CACHE_KEY_SERVERS, JSON.stringify(serversData));
+			sessionStorage.setItem(
+				CACHE_KEY_SERVERS,
+				JSON.stringify(serversData),
+			);
 			sessionStorage.setItem(CACHE_KEY_SITES, JSON.stringify(sitesData));
-			sessionStorage.setItem(CACHE_KEY_PLUGINS, JSON.stringify(pluginsData));
+			sessionStorage.setItem(
+				CACHE_KEY_PLUGINS,
+				JSON.stringify(pluginsData),
+			);
 			sessionStorage.setItem(
 				CACHE_KEY_PLUGIN_INFO,
 				JSON.stringify(pluginInfoData),

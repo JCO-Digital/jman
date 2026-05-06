@@ -38,7 +38,10 @@ const handleRowsPerPageChange = (event: Event) => {
 				&laquo; Prev
 			</button>
 			<span>Page {{ currentPage }} of {{ totalPages }}</span>
-			<button :disabled="currentPage === totalPages" @click="emit('next')">
+			<button
+				:disabled="currentPage === totalPages"
+				@click="emit('next')"
+			>
 				Next &raquo;
 			</button>
 		</div>

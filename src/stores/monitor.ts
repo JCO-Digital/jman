@@ -33,9 +33,12 @@ export const useMonitorStore = defineStore("monitor", () => {
 	async function fetchHistory(hours: number = 48) {
 		isLoadingHistory.value = true;
 		try {
-			const res = await fetch(`${BASE_URL}/monitor/history?hours=${hours}`, {
-				headers: authStore.authHeader,
-			});
+			const res = await fetch(
+				`${BASE_URL}/monitor/history?hours=${hours}`,
+				{
+					headers: authStore.authHeader,
+				},
+			);
 			if (!res.ok) {
 				if (res.status === 401) {
 					authStore.logout();
@@ -173,7 +176,10 @@ export const useMonitorStore = defineStore("monitor", () => {
 			await fetchIgnored();
 			return data;
 		} catch (error) {
-			console.error(`Failed to remove site ${domain} from ignore list:`, error);
+			console.error(
+				`Failed to remove site ${domain} from ignore list:`,
+				error,
+			);
 			throw error;
 		}
 	}

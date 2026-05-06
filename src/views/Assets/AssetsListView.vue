@@ -39,8 +39,12 @@ const filteredAssets = computed(() => {
 			a.organization_name
 				?.toLowerCase()
 				.includes(searchQuery.value.toLowerCase()) ||
-			a.asset_name?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-			a.identifier?.toLowerCase().includes(searchQuery.value.toLowerCase());
+			a.asset_name
+				?.toLowerCase()
+				.includes(searchQuery.value.toLowerCase()) ||
+			a.identifier
+				?.toLowerCase()
+				.includes(searchQuery.value.toLowerCase());
 
 		const matchesStatus =
 			statusFilter.value === "all" || a.status === statusFilter.value;
@@ -98,8 +102,8 @@ const formatDate = (dateString: string | null) => {
 
 		<div class="controls-row">
 			<input
-				type="text"
 				v-model="searchQuery"
+				type="text"
 				placeholder="Search by customer, asset or identifier..."
 				class="search-input"
 			/>
@@ -141,9 +145,13 @@ const formatDate = (dateString: string | null) => {
 							class="clickable-row"
 							@click="goToOrganization(asset.organization_id)"
 						>
-							<td class="font-medium">{{ asset.organization_name }}</td>
+							<td class="font-medium">
+								{{ asset.organization_name }}
+							</td>
 							<td>
-								<strong>{{ asset.asset_name || "Custom" }}</strong>
+								<strong>{{
+									asset.asset_name || "Custom"
+								}}</strong>
 								<div v-if="asset.description" class="sub-text">
 									{{ asset.description }}
 								</div>
@@ -156,7 +164,8 @@ const formatDate = (dateString: string | null) => {
 							<td
 								:class="{
 									overdue:
-										new Date(asset.next_billing || '') < new Date() &&
+										new Date(asset.next_billing || '') <
+											new Date() &&
 										asset.status === 'active',
 								}"
 							>

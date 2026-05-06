@@ -18,7 +18,10 @@ export const useOrganizationStore = defineStore("organization", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const url = new URL(`${BASE_URL}/organizations`, window.location.origin);
+			const url = new URL(
+				`${BASE_URL}/organizations`,
+				window.location.origin,
+			);
 			if (search) {
 				url.searchParams.append("search", search);
 			}

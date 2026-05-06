@@ -103,7 +103,9 @@ export const useAuthStore = defineStore("auth", () => {
 
 		if (!res.ok) {
 			const message =
-				(data && data.error) || (rawBody && rawBody.trim()) || "Login failed";
+				(data && data.error) ||
+				(rawBody && rawBody.trim()) ||
+				"Login failed";
 			throw new Error(message);
 		}
 

@@ -176,7 +176,10 @@ export const useUserStore = defineStore("user", () => {
 		// Update auth store user and persist to localStorage
 		if (authStore.user) {
 			authStore.user.displayName = displayName;
-			localStorage.setItem("jman_auth_user", JSON.stringify(authStore.user));
+			localStorage.setItem(
+				"jman_auth_user",
+				JSON.stringify(authStore.user),
+			);
 		}
 	}
 

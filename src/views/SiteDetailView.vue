@@ -50,12 +50,14 @@ watch(
 	async (id) => {
 		if (id) {
 			try {
-				organization.value = await organizationStore.getOrganizationForSite(id);
+				organization.value =
+					await organizationStore.getOrganizationForSite(id);
 				dataStore.setSiteOrganizationLink(id, organization.value?.id);
 				if (organization.value) {
-					contacts.value = await organizationStore.fetchOrganizationContacts(
-						organization.value.id,
-					);
+					contacts.value =
+						await organizationStore.fetchOrganizationContacts(
+							organization.value.id,
+						);
 				}
 			} catch (e) {
 				console.error("Failed to fetch organization for site", e);
@@ -186,7 +188,8 @@ const linkOrganization = async (organizationId: number) => {
 		await organizationStore.linkSiteToOrganization(siteId, organizationId);
 		dataStore.setSiteOrganizationLink(siteId, organizationId);
 		await dataStore.refreshData();
-		organization.value = await organizationStore.getOrganizationForSite(siteId);
+		organization.value =
+			await organizationStore.getOrganizationForSite(siteId);
 		if (organization.value) {
 			contacts.value = await organizationStore.fetchOrganizationContacts(
 				organization.value.id,
@@ -219,7 +222,7 @@ const unlinkOrganization = async () => {
 			:back-button="{ text: 'Back to Sites', onClick: goBack }"
 		/>
 
-		<main class="content" v-if="site">
+		<main v-if="site" class="content">
 			<div class="grid-2-cols">
 				<InfoCard title="Site Information" :items="siteInfoItems" />
 				<InfoCard
@@ -263,13 +266,15 @@ const unlinkOrganization = async () => {
 							<span class="label">Name:</span>
 							<span class="value">{{ organization.name }}</span>
 						</div>
-						<div class="info-item" v-if="organization.vat_number">
+						<div v-if="organization.vat_number" class="info-item">
 							<span class="label">VAT Number:</span>
-							<span class="value">{{ organization.vat_number }}</span>
+							<span class="value">{{
+								organization.vat_number
+							}}</span>
 						</div>
 					</div>
 
-					<div class="contacts-preview" v-if="contacts.length > 0">
+					<div v-if="contacts.length > 0" class="contacts-preview">
 						<h3>Contacts</h3>
 						<div class="table-container">
 							<table class="data-table">
@@ -281,16 +286,24 @@ const unlinkOrganization = async () => {
 									</tr>
 								</thead>
 								<tbody>
-									<tr v-for="contact in contacts" :key="contact.id">
+									<tr
+										v-for="contact in contacts"
+										:key="contact.id"
+									>
 										<td>{{ contact.name }}</td>
 										<td>
 											<span
-												:class="['status-badge', contact.type.toLowerCase()]"
+												:class="[
+													'status-badge',
+													contact.type.toLowerCase(),
+												]"
 											>
 												{{ contact.type }}
 											</span>
 										</td>
-										<td class="hide-mobile">{{ contact.email || "—" }}</td>
+										<td class="hide-mobile">
+											{{ contact.email || "—" }}
+										</td>
 									</tr>
 								</tbody>
 							</table>
@@ -318,7 +331,9 @@ const unlinkOrganization = async () => {
 						</thead>
 						<tbody>
 							<tr v-if="sitePlugins.length === 0">
-								<td colspan="4" class="empty-state">No plugins found.</td>
+								<td colspan="4" class="empty-state">
+									No plugins found.
+								</td>
 							</tr>
 							<tr
 								v-for="plugin in sitePlugins"
@@ -327,9 +342,16 @@ const unlinkOrganization = async () => {
 								@click="goToPlugin(plugin.name)"
 							>
 								<td>{{ plugin.name }}</td>
-								<td class="hide-mobile">{{ plugin.version }}</td>
 								<td class="hide-mobile">
-									<span :class="['status-badge', plugin.status.toLowerCase()]">
+									{{ plugin.version }}
+								</td>
+								<td class="hide-mobile">
+									<span
+										:class="[
+											'status-badge',
+											plugin.status.toLowerCase(),
+										]"
+									>
 										{{ plugin.status }}
 									</span>
 								</td>
@@ -349,7 +371,7 @@ const unlinkOrganization = async () => {
 				</div>
 			</section>
 		</main>
-		<main class="content" v-else>
+		<main v-else class="content">
 			<div class="card">
 				<LoadingSpinner
 					v-if="dataStore.isLoading"
@@ -384,7 +406,10 @@ const unlinkOrganization = async () => {
 						/>
 					</div>
 
-					<div class="search-results-list" v-if="searchResults.length > 0">
+					<div
+						v-if="searchResults.length > 0"
+						class="search-results-list"
+					>
 						<div
 							v-for="res in searchResults"
 							:key="res.id"
@@ -392,18 +417,22 @@ const unlinkOrganization = async () => {
 							@click="linkOrganization(res.id)"
 						>
 							<div class="res-name">{{ res.name }}</div>
-							<div class="res-vat" v-if="res.vat_number">
+							<div v-if="res.vat_number" class="res-vat">
 								{{ res.vat_number }}
 							</div>
 						</div>
 					</div>
 					<div
-						v-else-if="organizationSearchQuery.length >= 2 && !isSearching"
+						v-else-if="
+							organizationSearchQuery.length >= 2 && !isSearching
+						"
 						class="empty-state"
 					>
 						No organizations found.
 					</div>
-					<div v-else-if="isSearching" class="empty-state">Searching...</div>
+					<div v-else-if="isSearching" class="empty-state">
+						Searching...
+					</div>
 
 					<div class="form-actions">
 						<button class="back-btn" @click="showLinkModal = false">

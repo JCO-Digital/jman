@@ -84,7 +84,10 @@ async function changePassword() {
 	passwordSuccess.value = "";
 	passwordError.value = "";
 	try {
-		await userStore.changePassword(currentPassword.value, newPassword.value);
+		await userStore.changePassword(
+			currentPassword.value,
+			newPassword.value,
+		);
 		passwordSuccess.value = "Password changed successfully.";
 		currentPassword.value = "";
 		newPassword.value = "";
@@ -130,7 +133,10 @@ async function activateTFA() {
 	tfaLoading.value = true;
 	tfaError.value = "";
 	try {
-		await userStore.activate2FA(tfaSetupData.value.secret, tfaSetupCode.value);
+		await userStore.activate2FA(
+			tfaSetupData.value.secret,
+			tfaSetupCode.value,
+		);
 		tfaSuccess.value = "Two-factor authentication has been enabled.";
 		tfaSetupData.value = null;
 		tfaSetupCode.value = "";
@@ -184,8 +190,8 @@ function cancelDisable() {
 			<label for="display-name" class="form-label">Display Name</label>
 			<input
 				id="display-name"
-				type="text"
 				v-model="displayName"
+				type="text"
 				class="form-input"
 				placeholder="Enter display name"
 			/>
@@ -210,11 +216,13 @@ function cancelDisable() {
 		<h2>Change Password</h2>
 
 		<div class="form-group">
-			<label for="current-password" class="form-label">Current Password</label>
+			<label for="current-password" class="form-label"
+				>Current Password</label
+			>
 			<input
 				id="current-password"
-				type="password"
 				v-model="currentPassword"
+				type="password"
 				class="form-input"
 				placeholder="Enter current password"
 				autocomplete="current-password"
@@ -225,8 +233,8 @@ function cancelDisable() {
 			<label for="new-password" class="form-label">New Password</label>
 			<input
 				id="new-password"
-				type="password"
 				v-model="newPassword"
+				type="password"
 				class="form-input"
 				placeholder="Enter new password"
 				autocomplete="new-password"
@@ -243,7 +251,10 @@ function cancelDisable() {
 						}"
 					></div>
 				</div>
-				<span class="strength-label" :style="{ color: strengthBarColor }">
+				<span
+					class="strength-label"
+					:style="{ color: strengthBarColor }"
+				>
 					{{ strengthLabel }}
 				</span>
 
@@ -254,7 +265,9 @@ function cancelDisable() {
 					<li :class="{ met: passwordStrength.hasUppercase }">
 						Uppercase letter
 					</li>
-					<li :class="{ met: passwordStrength.hasNumbers }">Number</li>
+					<li :class="{ met: passwordStrength.hasNumbers }">
+						Number
+					</li>
 					<li :class="{ met: passwordStrength.hasSpecial }">
 						Special character
 					</li>
@@ -271,8 +284,8 @@ function cancelDisable() {
 			>
 			<input
 				id="confirm-password"
-				type="password"
 				v-model="confirmPassword"
+				type="password"
 				class="form-input"
 				placeholder="Confirm new password"
 				autocomplete="new-password"
@@ -285,7 +298,9 @@ function cancelDisable() {
 		<div v-if="passwordSuccess" class="feedback success">
 			{{ passwordSuccess }}
 		</div>
-		<div v-if="passwordError" class="feedback error">{{ passwordError }}</div>
+		<div v-if="passwordError" class="feedback error">
+			{{ passwordError }}
+		</div>
 
 		<button
 			class="btn btn-primary"
@@ -305,7 +320,9 @@ function cancelDisable() {
 
 		<!-- 2FA Enabled -->
 		<template v-if="userStore.profile?.has2FA">
-			<p class="tfa-status enabled">Two-factor authentication is enabled ✓</p>
+			<p class="tfa-status enabled">
+				Two-factor authentication is enabled ✓
+			</p>
 
 			<div v-if="!showDisableInput">
 				<button
@@ -324,8 +341,8 @@ function cancelDisable() {
 					</label>
 					<input
 						id="tfa-disable-code"
-						type="text"
 						v-model="tfaDisableCode"
+						type="text"
 						class="form-input code-input"
 						placeholder="000000"
 						maxlength="6"
@@ -361,7 +378,9 @@ function cancelDisable() {
 					@click="startSetup2FA"
 				>
 					{{
-						tfaLoading ? "Setting up..." : "Enable Two-Factor Authentication"
+						tfaLoading
+							? "Setting up..."
+							: "Enable Two-Factor Authentication"
 					}}
 				</button>
 			</div>
@@ -369,8 +388,8 @@ function cancelDisable() {
 			<!-- Setup in progress -->
 			<div v-else class="tfa-setup">
 				<p class="setup-instructions">
-					Scan the QR code with your authenticator app, or enter the secret key
-					manually.
+					Scan the QR code with your authenticator app, or enter the
+					secret key manually.
 				</p>
 
 				<div class="qr-container">
@@ -388,8 +407,8 @@ function cancelDisable() {
 					</label>
 					<input
 						id="tfa-setup-code"
-						type="text"
 						v-model="tfaSetupCode"
+						type="text"
 						class="form-input code-input"
 						placeholder="000000"
 						maxlength="6"
@@ -405,7 +424,9 @@ function cancelDisable() {
 					>
 						{{ tfaLoading ? "Verifying..." : "Verify & Activate" }}
 					</button>
-					<button class="btn btn-secondary" @click="cancelSetup">Cancel</button>
+					<button class="btn btn-secondary" @click="cancelSetup">
+						Cancel
+					</button>
 				</div>
 			</div>
 		</template>

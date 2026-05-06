@@ -15,11 +15,11 @@ defineProps<{
 				<span class="label">Plugin Name:</span>
 				<span class="value">{{ info?.name }}</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Slug:</span>
 				<span class="value">{{ info.slug }}</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Author:</span>
 				<span class="value">
 					<a
@@ -34,23 +34,23 @@ defineProps<{
 					<span v-else>{{ info.author }}</span>
 				</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Version:</span>
 				<span class="value">{{ info.version }}</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Requires:</span>
 				<span class="value">WP {{ info.requires }}</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Tested up to:</span>
 				<span class="value">WP {{ info.tested }}</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Last Updated:</span>
 				<span class="value">{{ info.last_updated }}</span>
 			</div>
-			<div class="info-item" v-if="info">
+			<div v-if="info" class="info-item">
 				<span class="label">Homepage:</span>
 				<span class="value">
 					<a
