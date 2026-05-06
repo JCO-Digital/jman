@@ -30,7 +30,7 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 }
 
 // ValidatePasswordStrength enforces a minimum entropy based on character pools.
-// The requirement is at least 10,000,000,000 variations, calculated as (poolSize ^ length).
+// The requirement is at least 200,000,000,000,000 variations, calculated as (poolSize ^ length).
 func ValidatePasswordStrength(password string) error {
 	if len(password) == 0 {
 		return fmt.Errorf("password cannot be empty")
@@ -71,9 +71,9 @@ func ValidatePasswordStrength(password string) error {
 	}
 
 	// Calculate log10 of total variations: length * log10(basePool)
-	// We require at least 10^10 variations (10,000,000,000).
+	// We require at least 200,000,000,000,000 variations.
 	variationsLog10 := float64(len(password)) * math.Log10(float64(basePool))
-	if variationsLog10 < 10 {
+	if variationsLog10 < math.Log10(200_000_000_000_000) {
 		return fmt.Errorf("password is too weak: try a longer password or use more character types")
 	}
 
