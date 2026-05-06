@@ -13,7 +13,7 @@ This document provides a comprehensive technical specification for the `jman-api
   - `execute`: Administrative access (User management, system commands).
 - **Password Strength**:
   - Enforced using an entropy-based calculation: `poolSize ^ length`.
-  - Required minimum variations: 10,000,000,000.
+  - Required minimum variations: 200,000,000,000,000.
   - Pool sizes: Lowercase (26), Uppercase (26), Numbers (10), Special characters (16).
 - **Date Format**: ISO 8601 / RFC 3339 (`YYYY-MM-DDTHH:MM:SSZ`)
 
