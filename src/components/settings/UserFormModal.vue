@@ -63,7 +63,7 @@ const canSubmit = computed(() => {
 	return (
 		username.value.trim().length > 0 &&
 		displayName.value.trim().length > 0 &&
-		password.value.length > 0
+		passwordStrength.value.valid
 	);
 });
 
