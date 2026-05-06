@@ -23,6 +23,9 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	edit := func(h http.HandlerFunc) http.Handler {
 		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelEdit)(h))
 	}
+	execute := func(h http.HandlerFunc) http.Handler {
+		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelExecute)(h))
+	}
 
 	mux.Handle("POST /api/auth/refresh", basic(RefreshHandler(&usersCfg)))
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
@@ -30,7 +33,20 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/servers", basic(ServersHandler))
 	mux.Handle("GET /api/sites", basic(SitesHandler))
 	mux.Handle("GET /api/vulns", basic(VulnsHandler))
-	mux.Handle("GET /api/users", basic(ListUsersHandler(&usersCfg)))
+
+	// --- User Management (Admin) ---
+	mux.Handle("GET /api/users", execute(AdminListUsersHandler(&usersCfg)))
+	mux.Handle("POST /api/users", execute(CreateUserHandler(&usersCfg)))
+	mux.Handle("PATCH /api/users/{username}", execute(UpdateUserHandler(&usersCfg)))
+	mux.Handle("DELETE /api/users/{username}", execute(DeleteUserHandler(&usersCfg)))
+
+	// --- User Self-Service ---
+	mux.Handle("GET /api/user/profile", basic(GetProfileHandler(&usersCfg)))
+	mux.Handle("PATCH /api/user/profile", basic(UpdateProfileHandler(&usersCfg)))
+	mux.Handle("POST /api/user/password", basic(ChangePasswordHandler(&usersCfg)))
+	mux.Handle("POST /api/user/2fa/setup", basic(Setup2FAHandler))
+	mux.Handle("POST /api/user/2fa/activate", basic(Activate2FAHandler(&usersCfg)))
+	mux.Handle("POST /api/user/2fa/deactivate", basic(Deactivate2FAHandler(&usersCfg)))
 
 	// --- Monitoring routes ---
 	mux.Handle("GET /api/monitor/history", basic(MonitorHistoryHandler))

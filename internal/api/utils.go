@@ -2,8 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"math"
 	"net/http"
+	"regexp"
+	"strings"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -25,4 +30,83 @@ func WriteJSON(w http.ResponseWriter, status int, data any) {
 // WriteError writes a JSON error response with the given HTTP status code.
 func WriteError(w http.ResponseWriter, status int, message string) {
 	WriteJSON(w, status, ErrorResponse{Error: message})
+}
+
+// ValidatePasswordStrength enforces a minimum entropy based on character pools.
+// The requirement is at least 200,000,000,000,000 variations, calculated as (poolSize ^ length).
+func ValidatePasswordStrength(password string) error {
+	if len(password) == 0 {
+		return fmt.Errorf("password cannot be empty")
+	}
+
+	var basePool int
+	var hasLower, hasUpper, hasDigit, hasSpecial bool
+
+	for _, r := range password {
+		switch {
+		case r >= 'a' && r <= 'z':
+			hasLower = true
+		case r >= 'A' && r <= 'Z':
+			hasUpper = true
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		default:
+			// Treat anything else as a special character (pool size 16)
+			hasSpecial = true
+		}
+	}
+
+	if hasLower {
+		basePool += 26
+	}
+	if hasUpper {
+		basePool += 26
+	}
+	if hasDigit {
+		basePool += 10
+	}
+	if hasSpecial {
+		basePool += 16
+	}
+
+	if basePool == 0 {
+		return fmt.Errorf("password contains invalid characters")
+	}
+
+	// Calculate log10 of total variations: length * log10(basePool)
+	// We require at least 200,000,000,000,000 variations.
+	variationsLog10 := float64(len(password)) * math.Log10(float64(basePool))
+	if variationsLog10 < math.Log10(200_000_000_000_000) {
+		return fmt.Errorf("password is too weak: try a longer password or use more character types")
+	}
+
+	return nil
+}
+
+// ValidateUserLevel ensures the provided level is a known valid level.
+func ValidateUserLevel(l config.UserLevel) error {
+	switch l {
+	case config.LevelBasic, config.LevelEdit, config.LevelExecute:
+		return nil
+	default:
+		return fmt.Errorf("invalid user level: %s", l)
+	}
+}
+
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
+
+// ValidateUsername ensures the username follows safety rules.
+func ValidateUsername(username string) error {
+	if len(username) < 3 || len(username) > 32 {
+		return fmt.Errorf("username must be between 3 and 32 characters")
+	}
+	if !usernameRegex.MatchString(username) {
+		return fmt.Errorf("username can only contain alphanumeric characters, dots, underscores, and hyphens")
+	}
+	return nil
+}
+
+// NormalizeUsername trims whitespace and converts to lowercase.
+func NormalizeUsername(username string) string {
+	return strings.ToLower(strings.TrimSpace(username))
 }

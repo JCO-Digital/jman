@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/viper"
@@ -30,9 +31,38 @@ type UserEntry struct {
 
 // UsersConfig holds the authentication-related configuration loaded from users.toml.
 type UsersConfig struct {
-	JWTSecret          string      `toml:"jwtSecret" mapstructure:"jwtSecret"`
-	TokenLifetimeHours int         `toml:"tokenLifetimeHours" mapstructure:"tokenLifetimeHours"`
-	Users              []UserEntry `toml:"users" mapstructure:"users"`
+	JWTSecret          string        `toml:"jwtSecret" mapstructure:"jwtSecret"`
+	TokenLifetimeHours int           `toml:"tokenLifetimeHours" mapstructure:"tokenLifetimeHours"`
+	Users              []UserEntry   `toml:"users" mapstructure:"users"`
+	mu                 *sync.RWMutex `toml:"-" mapstructure:"-"` // Protects fields from concurrent access
+}
+
+// Lock locks the config for writing.
+func (c *UsersConfig) Lock() {
+	if c.mu != nil {
+		c.mu.Lock()
+	}
+}
+
+// Unlock unlocks the config.
+func (c *UsersConfig) Unlock() {
+	if c.mu != nil {
+		c.mu.Unlock()
+	}
+}
+
+// RLock locks the config for reading.
+func (c *UsersConfig) RLock() {
+	if c.mu != nil {
+		c.mu.RLock()
+	}
+}
+
+// RUnlock unlocks the config.
+func (c *UsersConfig) RUnlock() {
+	if c.mu != nil {
+		c.mu.RUnlock()
+	}
 }
 
 // LoadUsersConfig reads and validates the users.toml configuration from the given directory.
@@ -54,11 +84,17 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 	if err := v.Unmarshal(&cfg); err != nil {
 		return UsersConfig{}, fmt.Errorf("failed to unmarshal users config: %w", err)
 	}
+	cfg.mu = &sync.RWMutex{}
 
-	// Set default levels for users that don't have one defined.
+	// Set default levels for users that don't have one defined, and validate levels.
 	for i := range cfg.Users {
 		if cfg.Users[i].Level == "" {
 			cfg.Users[i].Level = LevelBasic
+		} else {
+			l := cfg.Users[i].Level
+			if l != LevelBasic && l != LevelEdit && l != LevelExecute {
+				return UsersConfig{}, fmt.Errorf("invalid level %q for user %q in users.toml", l, cfg.Users[i].Username)
+			}
 		}
 	}
 
@@ -94,6 +130,8 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 // SaveUsersConfig marshals the given UsersConfig to TOML and writes it to
 // users.toml in the specified config directory with restrictive permissions (0600).
 func SaveUsersConfig(configDir string, cfg UsersConfig) error {
+	cfg.RLock()
+	defer cfg.RUnlock()
 	data, err := toml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal users config: %w", err)
@@ -103,8 +141,33 @@ func SaveUsersConfig(configDir string, cfg UsersConfig) error {
 	content := append(header, data...)
 
 	filePath := filepath.Join(configDir, "users.toml")
-	if err := os.WriteFile(filePath, content, 0600); err != nil {
-		return fmt.Errorf("failed to write %s: %w", filePath, err)
+
+	// Atomic write: write to temp file then rename
+	tempFile, err := os.CreateTemp(configDir, "users.toml.*.tmp")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tempPath := tempFile.Name()
+	defer os.Remove(tempPath)
+
+	if _, err := tempFile.Write(content); err != nil {
+		tempFile.Close()
+		return fmt.Errorf("failed to write to temp file: %w", err)
+	}
+	if err := tempFile.Sync(); err != nil {
+		tempFile.Close()
+		return fmt.Errorf("failed to sync temp file: %w", err)
+	}
+	if err := tempFile.Chmod(0600); err != nil {
+		tempFile.Close()
+		return fmt.Errorf("failed to chmod temp file: %w", err)
+	}
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
+	if err := os.Rename(tempPath, filePath); err != nil {
+		return fmt.Errorf("failed to rename temp file to %s: %w", filePath, err)
 	}
 	return nil
 }
