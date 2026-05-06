@@ -32,6 +32,11 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		if err := ValidatePasswordStrength(req.Password); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
 		if config.FindUser(usersCfg, req.Username) != nil {
 			WriteError(w, http.StatusConflict, "User already exists")
 			return
@@ -242,6 +247,11 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
 			WriteError(w, http.StatusUnauthorized, "Invalid current password")
+			return
+		}
+
+		if err := ValidatePasswordStrength(req.NewPassword); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
