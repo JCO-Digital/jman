@@ -322,6 +322,7 @@ export interface CreateUserPayload {
 export interface UpdateUserPayload {
 	displayName?: string;
 	level?: UserLevel;
+	password?: string;
 }
 
 export interface TwoFactorSetupResponse {
