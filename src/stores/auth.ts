@@ -16,7 +16,7 @@ export const useAuthStore = defineStore("auth", () => {
 	const user = ref<{
 		username: string;
 		displayName: string;
-		level?: "basic" | "edit" | "execute";
+		level?: "basic" | "edit" | "execute" | "admin";
 	} | null>(null);
 	const expiresAt = ref<string | null>(null);
 
@@ -26,11 +26,17 @@ export const useAuthStore = defineStore("auth", () => {
 	});
 
 	const canEdit = computed(() => {
-		return userLevel.value === "edit" || userLevel.value === "execute";
+		const l = userLevel.value;
+		return l === "edit" || l === "execute" || l === "admin";
 	});
 
 	const canExecute = computed(() => {
-		return userLevel.value === "execute";
+		const l = userLevel.value;
+		return l === "execute" || l === "admin";
+	});
+
+	const canAdmin = computed(() => {
+		return userLevel.value === "admin";
 	});
 
 	const isAuthenticated = computed(() => {
@@ -44,7 +50,7 @@ export const useAuthStore = defineStore("auth", () => {
 	});
 
 	// Helper
-	function extractLevel(t: string): "basic" | "edit" | "execute" {
+	function extractLevel(t: string): "basic" | "edit" | "execute" | "admin" {
 		try {
 			const parts = t.split(".");
 			const payloadPart = parts[1];
@@ -239,6 +245,7 @@ export const useAuthStore = defineStore("auth", () => {
 		userLevel,
 		canEdit,
 		canExecute,
+		canAdmin,
 		// Actions
 		login,
 		logout,

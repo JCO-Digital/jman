@@ -14,7 +14,7 @@ const authStore = useAuthStore();
 
 const validTabs = computed(() => {
 	const tabs = ["general", "account"];
-	if (authStore.canExecute) tabs.push("users");
+	if (authStore.canAdmin) tabs.push("users");
 	return tabs;
 });
 
@@ -49,14 +49,14 @@ watch(
 		<main class="content">
 			<SettingsTabs
 				v-model="activeTab"
-				:show-users-tab="authStore.canExecute"
+				:show-users-tab="authStore.canAdmin"
 			/>
 
 			<div class="tab-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
 				<AccountSettings v-else-if="activeTab === 'account'" />
 				<UserManagement
-					v-else-if="activeTab === 'users' && authStore.canExecute"
+					v-else-if="activeTab === 'users' && authStore.canAdmin"
 				/>
 			</div>
 		</main>

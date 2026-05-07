@@ -303,7 +303,7 @@ export interface EnrichedOrganizationAsset extends OrganizationAsset {
 	payments?: AssetPayment[];
 }
 
-export type UserLevel = "basic" | "edit" | "execute";
+export type UserLevel = "basic" | "edit" | "execute" | "admin";
 
 export interface AdminUser {
 	username: string;
