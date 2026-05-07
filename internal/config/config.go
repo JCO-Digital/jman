@@ -76,7 +76,7 @@ func loadConfig() error {
 	viper.SetDefault("monitorCacheBypass", false)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
-	viper.SetDefault("allowedOrigins", []string{"*"})
+	viper.SetDefault("allowedOrigins", []string{})
 	viper.SetDefault("ignoreSites", []string{})
 	viper.SetDefault("pluginAliases", map[string]string{})
 

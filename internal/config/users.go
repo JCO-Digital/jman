@@ -23,12 +23,13 @@ const (
 
 // UserEntry represents a single user defined in the users.toml configuration file.
 type UserEntry struct {
-	Username     string    `toml:"username" mapstructure:"username"`
-	PasswordHash string    `toml:"passwordHash" mapstructure:"passwordHash"`
-	DisplayName  string    `toml:"displayName" mapstructure:"displayName"`
-	TOTPSecret   string    `toml:"totpSecret" mapstructure:"totpSecret"`
-	Level        UserLevel `toml:"level" mapstructure:"level"`
-	TokenVersion int       `toml:"tokenVersion" mapstructure:"tokenVersion"`
+	Username          string    `toml:"username" mapstructure:"username"`
+	PasswordHash      string    `toml:"passwordHash" mapstructure:"passwordHash"`
+	DisplayName       string    `toml:"displayName" mapstructure:"displayName"`
+	TOTPSecret        string    `toml:"totpSecret" mapstructure:"totpSecret"`
+	PendingTOTPSecret string    `toml:"pendingTotpSecret,omitempty" mapstructure:"pendingTotpSecret"`
+	Level             UserLevel `toml:"level" mapstructure:"level"`
+	TokenVersion      int       `toml:"tokenVersion" mapstructure:"tokenVersion"`
 }
 
 // UsersConfig holds the authentication-related configuration loaded from users.toml.
@@ -136,6 +137,13 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 			}
 			cfg.Users[i].TOTPSecret = decrypted
 		}
+		if cfg.Users[i].PendingTOTPSecret != "" {
+			decrypted, err := DecryptTOTPSecret(cfg.Users[i].PendingTOTPSecret, encKey)
+			if err != nil {
+				return UsersConfig{}, fmt.Errorf("failed to decrypt pending TOTP secret for user %q: %w", cfg.Users[i].Username, err)
+			}
+			cfg.Users[i].PendingTOTPSecret = decrypted
+		}
 	}
 
 	// Enforce strict file permissions on users.toml. This file contains password
@@ -185,6 +193,13 @@ func SaveUsersConfig(configDir string, cfg UsersConfig) error {
 					return fmt.Errorf("failed to encrypt TOTP secret for user %q: %w", cfg.Users[i].Username, err)
 				}
 				cfg.Users[i].TOTPSecret = encrypted
+			}
+			if cfg.Users[i].PendingTOTPSecret != "" && !IsEncryptedTOTPSecret(cfg.Users[i].PendingTOTPSecret) {
+				encrypted, err := EncryptTOTPSecret(cfg.Users[i].PendingTOTPSecret, encKey)
+				if err != nil {
+					return fmt.Errorf("failed to encrypt pending TOTP secret for user %q: %w", cfg.Users[i].Username, err)
+				}
+				cfg.Users[i].PendingTOTPSecret = encrypted
 			}
 		}
 	}

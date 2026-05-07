@@ -405,7 +405,9 @@ func TestChangePasswordHandler(t *testing.T) {
 	cfg, tempDir := setupTestUsersConfig(t)
 	defer os.RemoveAll(tempDir)
 
-	handler := ChangePasswordHandler(cfg)
+	limiter := NewLoginRateLimiter(false)
+	defer limiter.Stop()
+	handler := ChangePasswordHandler(cfg, limiter)
 
 	t.Run("Successful Change", func(t *testing.T) {
 		reqBody := changePasswordRequest{
@@ -485,7 +487,7 @@ func TestTOTPFlow(t *testing.T) {
 	setupReq := httptest.NewRequest("POST", "/api/user/2fa/setup", nil)
 	setupReq = setupReq.WithContext(ctx)
 	setupW := httptest.NewRecorder()
-	Setup2FAHandler(setupW, setupReq)
+	Setup2FAHandler(cfg)(setupW, setupReq)
 
 	if setupW.Code != http.StatusOK {
 		t.Errorf("Setup failed with %d", setupW.Code)
@@ -502,8 +504,7 @@ func TestTOTPFlow(t *testing.T) {
 	// 2. Activate (with a valid code)
 	code, _ := totp.GenerateCode(secret, time.Now())
 	activateBody, _ := json.Marshal(activate2FARequest{
-		Secret: secret,
-		Code:   code,
+		Code: code,
 	})
 	activateReq := httptest.NewRequest("POST", "/api/user/2fa/activate", bytes.NewBuffer(activateBody))
 	activateReq = activateReq.WithContext(ctx)
