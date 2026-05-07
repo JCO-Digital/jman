@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/JCO-Digital/jman/internal/api"
+	"github.com/JCO-Digital/jman/internal/backup"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/spf13/cobra"
@@ -55,6 +56,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 			),
 		),
 	)
+
+	// Start the database backup scheduler
+	backup.StartScheduler(cmd.Context())
 
 	log.Printf("Starting jman-api (version: %s) on :%s", config.AppVersion, port)
 	return http.ListenAndServe(":"+port, handler)

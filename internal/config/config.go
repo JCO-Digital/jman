@@ -19,6 +19,7 @@ type Runtime struct {
 	ConfigDir string
 	CacheDir  string
 	DataDir   string
+	BackupDir string
 	Version   string
 }
 
@@ -50,15 +51,16 @@ func Init() error {
 		ConfigDir: filepath.Join(xdg.ConfigHome, AppName),
 		CacheDir:  filepath.Join(xdg.CacheHome, AppName),
 		DataDir:   filepath.Join(xdg.DataHome, AppName),
+		BackupDir: filepath.Join(xdg.DataHome, AppName, "backups"),
 	}
 
 	// Ensure directories exist.
 	// ConfigDir uses 0700 because it stores secrets (users.toml with JWT/TOTP keys).
-	// CacheDir and DataDir use 0755 as they don't contain secrets.
+	// CacheDir, DataDir and BackupDir use 0755 as they don't contain secrets.
 	if err := os.MkdirAll(RunData.ConfigDir, 0700); err != nil {
 		return fmt.Errorf("failed to create directory %s: %w", RunData.ConfigDir, err)
 	}
-	for _, dir := range []string{RunData.CacheDir, RunData.DataDir} {
+	for _, dir := range []string{RunData.CacheDir, RunData.DataDir, RunData.BackupDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
