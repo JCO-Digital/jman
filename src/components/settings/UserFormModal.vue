@@ -34,7 +34,7 @@ const modalTitle = computed(() =>
 const submitLabel = computed(() => (isEditMode.value ? "Save" : "Create"));
 
 const passwordStrength = computed(() => {
-	if (isEditMode.value || !password.value) {
+	if (!password.value) {
 		return {
 			valid: false,
 			score: 0,
@@ -58,7 +58,10 @@ const strengthBarColor = computed(() => {
 const canSubmit = computed(() => {
 	if (isSubmitting.value) return false;
 	if (isEditMode.value) {
-		return displayName.value.trim().length > 0;
+		// In edit mode: display name required, and if password is entered it must be valid
+		if (displayName.value.trim().length === 0) return false;
+		if (password.value && !passwordStrength.value.valid) return false;
+		return true;
 	}
 	return (
 		username.value.trim().length > 0 &&
@@ -106,6 +109,9 @@ async function handleSubmit() {
 				displayName: displayName.value.trim(),
 				level: level.value as "basic" | "edit" | "execute",
 			};
+			if (password.value) {
+				payload.password = password.value;
+			}
 			await userStore.updateUser(props.editUser.username, payload);
 		} else {
 			const payload: CreateUserPayload = {
@@ -170,7 +176,7 @@ async function handleSubmit() {
 							/>
 						</div>
 
-						<!-- Password (create mode only) -->
+						<!-- Password (create mode) -->
 						<div v-if="!isEditMode" class="form-group">
 							<label for="user-password">Password</label>
 							<input
@@ -181,6 +187,66 @@ async function handleSubmit() {
 								required
 								autocomplete="new-password"
 							/>
+
+							<!-- Password strength indicator -->
+							<div
+								v-if="password.length > 0"
+								class="strength-indicator"
+							>
+								<div class="strength-bar-track">
+									<div
+										class="strength-bar-fill"
+										:style="{
+											width: passwordStrength.score + '%',
+											backgroundColor: strengthBarColor,
+										}"
+									></div>
+								</div>
+								<div class="strength-classes">
+									<span
+										:class="{
+											active: passwordStrength.hasLowercase,
+										}"
+										>a-z</span
+									>
+									<span
+										:class="{
+											active: passwordStrength.hasUppercase,
+										}"
+										>A-Z</span
+									>
+									<span
+										:class="{
+											active: passwordStrength.hasNumbers,
+										}"
+										>0-9</span
+									>
+									<span
+										:class="{
+											active: passwordStrength.hasSpecial,
+										}"
+										>!@#</span
+									>
+								</div>
+							</div>
+						</div>
+
+						<!-- Password (edit mode - optional reset) -->
+						<div v-if="isEditMode" class="form-group">
+							<label for="user-password-edit"
+								>Reset Password</label
+							>
+							<input
+								id="user-password-edit"
+								v-model="password"
+								type="password"
+								placeholder="Leave blank to keep current"
+								autocomplete="new-password"
+							/>
+							<p class="help-text">
+								Only fill this in if you want to change the
+								user's password.
+							</p>
 
 							<!-- Password strength indicator -->
 							<div
@@ -318,6 +384,12 @@ async function handleSubmit() {
 	font-size: 14px;
 	font-weight: 600;
 	color: var(--text-heading);
+}
+
+.help-text {
+	font-size: 12px;
+	color: var(--text-muted);
+	margin: 0;
 }
 
 .form-group input,
