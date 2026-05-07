@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -17,8 +18,8 @@ type CoreUpdate struct {
 }
 
 // Check WordPress core for updates and return the available updates if any.
-func CheckCore(ssh, path string) ([]CoreUpdate, error) {
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "core", "check-update", "--format=json")
+func CheckCore(site models.CliSite) ([]CoreUpdate, error) {
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "core", "check-update", "--format=json")
 	if err != nil {
 		return nil, fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
 	}
@@ -45,14 +46,14 @@ type CoreUpdateResult struct {
 }
 
 // UpdateCore updates WordPress core to the latest minor version. It returns the new version and language if an update was performed.
-func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
+func UpdateCore(site models.CliSite) (CoreUpdateResult, error) {
 	result := CoreUpdateResult{
 		Success:  false,
 		Version:  "unknown",
 		Language: "",
 	}
 
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "core", "update", "--minor")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "core", "update", "--minor")
 	if err != nil {
 		return result, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
 	}
@@ -75,7 +76,7 @@ func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
 	}
 	result.Success = true
 
-	res, err = RunWP(CliOptions{SSH: ssh, Path: path}, "core", "update-db")
+	res, err = RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "core", "update-db")
 	if err != nil {
 		return result, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
 	}
@@ -85,8 +86,8 @@ func UpdateCore(ssh, path string) (CoreUpdateResult, error) {
 }
 
 // CoreVersion returns the current WordPress core version on the target site.
-func CoreVersion(ssh, path string) (string, error) {
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "core", "version")
+func CoreVersion(site models.CliSite) (string, error) {
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "core", "version")
 	if err != nil {
 		return "", fmt.Errorf("failed to show core version: %w (stderr: %s)", err, res.Error)
 	}

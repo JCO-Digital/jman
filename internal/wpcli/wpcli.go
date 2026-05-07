@@ -2,18 +2,22 @@ package wpcli
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 type CliOptions struct {
+	SiteID         int
 	SSH            string
 	Path           string
 	IncludePlugins bool
 	IncludeThemes  bool
+	Timeout        time.Duration
 }
 
 type RunResult struct {
@@ -45,7 +49,14 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 
 	fullArgs = append(fullArgs, args...)
 
-	cmd := exec.Command("wp", fullArgs...)
+	timeout := opts.Timeout
+	if timeout == 0 {
+		timeout = 1 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "wp", fullArgs...)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -58,6 +69,14 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 	}
 
 	verb.Printf(verb.Debug, "Command output:\n%s\n\nError output:\n%s", res.Output, res.Error)
+
+	if opts.SiteID != 0 {
+		if err != nil {
+			RecordFailure(opts.SiteID)
+		} else {
+			RecordSuccess(opts.SiteID)
+		}
+	}
 
 	// If cmd.Run() returned an error (non-zero exit code), look for the first error line.
 	if err != nil {
@@ -129,7 +148,11 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 	}
 
 	cmdArgs := append([]string{ssh}, args...)
-	cmd := exec.Command("ssh", cmdArgs...)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "ssh", cmdArgs...)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf

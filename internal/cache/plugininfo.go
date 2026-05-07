@@ -2,7 +2,7 @@ package cache
 
 import (
 	"fmt"
-	"os"
+	"sort"
 	"sync"
 	"time"
 
@@ -11,65 +11,9 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/hashicorp/go-version"
 )
-
-var (
-	migrationOnce sync.Once
-)
-
-// migrateIfNecessary checks if the legacy JSON cache exists and migrates it to SQLite.
-func migrateIfNecessary() {
-	migrationOnce.Do(func() {
-		filename := "plugin_info"
-		legacyPath := getCacheFilePath(filename)
-
-		if _, err := os.Stat(legacyPath); os.IsNotExist(err) {
-			return
-		}
-
-		verb.Printf(verb.Verbose, "Migrating legacy plugin info cache to SQLite...\n")
-
-		cache := &PluginInfoCache{
-			Plugins: make(map[string]PluginInfoEntry),
-		}
-
-		// Read the old JSON file
-		if err := ReadJSONCache(filename, cache, -1); err != nil {
-			verb.PrintErrorf(verb.Verbose, "Warning: failed to read legacy cache for migration: %v\n", err)
-			return
-		}
-
-		// Insert into SQLite
-		count := 0
-		for _, entry := range cache.Plugins {
-			// Note: We can't easily preserve the exact 'FetchedAt' via the simple SavePluginInfo
-			// because it defaults to CURRENT_TIMESTAMP, but for a one-time migration
-			// this is acceptable as it just resets the 24h TTL.
-			info := entry.Info
-			sanitizePluginInfo(&info)
-			if err := db.SavePluginInfo(info); err == nil {
-				count++
-			}
-		}
-
-		verb.Printf(verb.Verbose, "Migrated %d entries. Removing legacy file: %s\n", count, legacyPath)
-
-		// Backup/Remove the old file
-		_ = os.Rename(legacyPath, legacyPath+".bak")
-	})
-}
-
-// PluginInfoCache and PluginInfoEntry are kept for legacy migration support.
-type PluginInfoCache struct {
-	Plugins   map[string]PluginInfoEntry `json:"plugins"`
-	UpdatedAt time.Time                  `json:"updated_at"`
-}
-
-type PluginInfoEntry struct {
-	Info      models.PluginInfo `json:"info"`
-	FetchedAt time.Time         `json:"fetched_at"`
-}
 
 // GetPluginName returns the human-readable name for a plugin slug.
 func GetPluginName(slug string) string {
@@ -80,20 +24,8 @@ func GetPluginName(slug string) string {
 	return slug
 }
 
-// sanitizePluginInfo normalizes fields before writing to DB.
-func sanitizePluginInfo(info *models.PluginInfo) {
-	if info == nil {
-		return
-	}
-
-	info.Name = utils.CleanHTML(info.Name)
-	info.Author = utils.CleanHTML(info.Author)
-}
-
 // UpdatePluginInfo updates or creates a plugin info entry with new data.
 func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
-	migrateIfNecessary()
-
 	isFull := false
 	if len(fullFetch) > 0 && fullFetch[0] {
 		isFull = true
@@ -114,14 +46,14 @@ func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
 		if info.Name == "" {
 			info.Name = slug
 		}
-		sanitizePluginInfo(info)
+		models.SanitizePluginInfo(info)
 		_ = db.SavePluginInfo(*info)
 		return true
 	}
 
 	updated := false
 	if isFull {
-		sanitizePluginInfo(info)
+		models.SanitizePluginInfo(info)
 		_ = db.SavePluginInfo(*info)
 		return true
 	}
@@ -144,7 +76,7 @@ func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
 
 	// Always sanitize to ensure any legacy uncleaned data is fixed.
 	oldName, oldAuthor := existing.Name, existing.Author
-	sanitizePluginInfo(existing)
+	models.SanitizePluginInfo(existing)
 
 	if updated || existing.Name != oldName || existing.Author != oldAuthor {
 		_ = db.SavePluginInfo(*existing)
@@ -157,8 +89,6 @@ func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
 // GetPluginInfo returns the full cached PluginInfo for a slug,
 // fetching from the API if stale or missing.
 func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
-	migrateIfNecessary()
-
 	t := DefaultTTL
 	if len(ttl) > 0 {
 		t = ttl[0]
@@ -168,25 +98,57 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 	if err == nil && existing != nil && t > 0 && time.Since(fetchedAt) < t {
 		// Ensure data is sanitized even if it's already in the cache.
 		oldName, oldAuthor := existing.Name, existing.Author
-		sanitizePluginInfo(existing)
+		models.SanitizePluginInfo(existing)
 		if existing.Name != oldName || existing.Author != oldAuthor {
 			_ = db.SavePluginInfo(*existing)
 		}
 		return existing
 	}
 
-	// Fetch from API
+	// Skip remote fetches for mu-plugins and dropins as they won't have metadata on WP.org or via 'plugin get'
+	special, err := isSpecialPlugin(slug, nil)
+	if err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to check if plugin %s is special: %v\n", slug, err)
+	} else if special {
+		verb.Printf(verb.Verbose, "Skipping remote metadata fetch for special plugin (mu/dropin): %s\n", slug)
+		return existing
+	}
+
+	// Fetch from API (WordPress.org)
+	verb.Printf(verb.Verbose, "Fetching metadata for %s from WordPress.org...\n", slug)
 	info, err := wporg.GetPluginInfo(slug)
 	if err != nil {
-		verb.PrintErrorf(verb.Verbose, "Warning: failed to fetch plugin info for %s: %v\n", slug, err)
-		return existing // Fallback to stale
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to fetch plugin info for %s from WordPress.org: %v\n", slug, err)
+	} else if info != nil {
+		verb.Printf(verb.Verbose, "Successfully fetched metadata for %s from WordPress.org.\n", slug)
+	}
+
+	// Fallback to WP-CLI if not found on WP.org
+	if info == nil {
+		verb.Printf(verb.Verbose, "Plugin %s not found on WordPress.org, trying WP-CLI...\n", slug)
+
+		// Pre-fetch site list for fallback
+		sites, err := GetSiteList()
+		if err != nil {
+			verb.PrintErrorf(verb.Verbose, "Warning: failed to get site list for WP-CLI fallback: %v\n", err)
+			return existing
+		}
+		siteMap := make(map[int]models.CliSite)
+		for _, s := range sites {
+			siteMap[s.ID] = s
+		}
+
+		info, err = fetchPluginInfoFromSites(slug, siteMap, nil)
+		if err != nil {
+			verb.PrintErrorf(verb.Verbose, "WP-CLI fallback failed for %s: %v\n", slug, err)
+		}
 	}
 
 	if info == nil {
 		return existing
 	}
 
-	sanitizePluginInfo(info)
+	models.SanitizePluginInfo(info)
 	if err := db.SavePluginInfo(*info); err != nil {
 		verb.PrintErrorf(verb.Verbose, "Warning: failed to save plugin info for %s: %v\n", slug, err)
 	}
@@ -196,11 +158,42 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 
 // RefreshPluginInfoCache fetches info for all given slugs concurrently.
 func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
-	migrateIfNecessary()
-
 	t := DefaultTTL
 	if len(ttl) > 0 {
 		t = ttl[0]
+	}
+
+	// Pre-fetch site list once to avoid redundant cache/DB hits in the fallback loop.
+	sites, err := GetSiteList()
+	if err != nil {
+		return fmt.Errorf("failed to get site list for refresh: %w", err)
+	}
+	siteMap := make(map[int]models.CliSite)
+	for _, s := range sites {
+		siteMap[s.ID] = s
+	}
+
+	// Pre-fetch all site plugins to avoid thousands of DB queries.
+	allPlugins, _ := db.GetAllSitePlugins()
+	pluginToSites := make(map[string][]int)
+	isSpecial := make(map[string]bool)
+	isRegular := make(map[string]bool)
+
+	for _, p := range allPlugins {
+		if p.Status == "must-use" || p.Status == "dropin" {
+			isSpecial[p.Name] = true
+		} else {
+			isRegular[p.Name] = true
+			pluginToSites[p.Name] = append(pluginToSites[p.Name], p.SiteID)
+		}
+	}
+
+	// A plugin is considered "special" (mu/dropin) only if it doesn't exist as a regular plugin anywhere.
+	specialOnlyMap := make(map[string]bool)
+	for slug := range isSpecial {
+		if !isRegular[slug] {
+			specialOnlyMap[slug] = true
+		}
 	}
 
 	var wg sync.WaitGroup
@@ -211,7 +204,7 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 		if err == nil && !fetchedAt.IsZero() && t > 0 && time.Since(fetchedAt) < t {
 			if existing != nil {
 				oldName, oldAuthor := existing.Name, existing.Author
-				sanitizePluginInfo(existing)
+				models.SanitizePluginInfo(existing)
 				if existing.Name != oldName || existing.Author != oldAuthor {
 					_ = db.SavePluginInfo(*existing)
 				}
@@ -220,22 +213,119 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 		}
 
 		slug := slug
-		wg.Go(func() {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			info, err := wporg.GetPluginInfo(slug)
-			if err != nil || info == nil {
+			special, err := isSpecialPlugin(slug, specialOnlyMap)
+			if err != nil {
+				verb.PrintErrorf(verb.Verbose, "Warning: failed to check if plugin %s is special: %v\n", slug, err)
+			} else if special {
 				return
 			}
 
-			sanitizePluginInfo(info)
+			verb.Printf(verb.Verbose, "Fetching metadata for %s from WordPress.org...\n", slug)
+			info, err := wporg.GetPluginInfo(slug)
+			if err != nil {
+				verb.PrintErrorf(verb.Verbose, "Warning: failed to fetch plugin info for %s from WordPress.org: %v\n", slug, err)
+			}
+
+			if info == nil {
+				verb.Printf(verb.Verbose, "Plugin %s not found on WordPress.org, trying WP-CLI fallback...\n", slug)
+				info, err = fetchPluginInfoFromSites(slug, siteMap, pluginToSites)
+				if err != nil {
+					verb.PrintErrorf(verb.Verbose, "WP-CLI fallback failed for %s: %v\n", slug, err)
+				}
+			}
+
+			if info != nil {
+				verb.Printf(verb.Verbose, "Successfully fetched metadata for %s.\n", slug)
+			}
+
+			if info == nil {
+				return
+			}
+
+			models.SanitizePluginInfo(info)
 			_ = db.SavePluginInfo(*info)
-		})
+		}()
 	}
 
 	wg.Wait()
 	return nil
+}
+
+func isSpecialPlugin(slug string, specialOnlyMap map[string]bool) (bool, error) {
+	if specialOnlyMap != nil {
+		return specialOnlyMap[slug], nil
+	}
+
+	// If it's found as a regular plugin anywhere, we don't treat it as special for fetching purposes.
+	siteIDs, err := db.GetSitesWithPlugin(slug)
+	if err != nil {
+		return false, fmt.Errorf("failed to check sites for plugin %s: %w", slug, err)
+	}
+	if len(siteIDs) > 0 {
+		return false, nil
+	}
+
+	dbConn := db.GetDB()
+	if dbConn == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+
+	var exists bool
+	query := "SELECT EXISTS(SELECT 1 FROM site_plugins WHERE slug = ? AND (status = 'must-use' OR status = 'dropin'))"
+	err = dbConn.QueryRow(query, slug).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to query special status for %s: %w", slug, err)
+	}
+	return exists, nil
+}
+
+// fetchPluginInfoFromSites attempts to get plugin metadata from a site where it is installed.
+func fetchPluginInfoFromSites(slug string, siteMap map[int]models.CliSite, pluginToSites map[string][]int) (*models.PluginInfo, error) {
+	var siteIDs []int
+	var err error
+
+	if pluginToSites != nil {
+		siteIDs = pluginToSites[slug]
+	} else {
+		siteIDs, err = db.GetSitesWithPlugin(slug)
+	}
+
+	if err != nil || len(siteIDs) == 0 {
+		return nil, err
+	}
+
+	// Sort site IDs by failure count to prioritize healthier sites.
+	sort.Slice(siteIDs, func(i, j int) bool {
+		return wpcli.GetFailureCount(siteIDs[i]) < wpcli.GetFailureCount(siteIDs[j])
+	})
+
+	for _, id := range siteIDs {
+		site, ok := siteMap[id]
+		if !ok {
+			continue
+		}
+
+		// Only attempt sites that haven't failed too many times recently.
+		if wpcli.GetFailureCount(id) > 3 {
+			continue
+		}
+
+		verb.Printf(verb.Verbose, "Attempting WP-CLI fetch for %s from site %s...\n", slug, site.Name)
+		info, err := wpcli.GetPluginInfo(site, slug, 15*time.Second)
+		if err == nil && info != nil {
+			verb.Printf(verb.Verbose, "Successfully fetched metadata for %s from site %s.\n", slug, site.Name)
+			return info, nil
+		}
+		verb.PrintErrorf(verb.Verbose, "Failed to fetch metadata for %s from site %s: %v\n", slug, site.Name, err)
+	}
+
+	return nil, fmt.Errorf("plugin info not found on any site")
 }
 
 func DisplayPluginName(slug string, truncate, color bool) string {
