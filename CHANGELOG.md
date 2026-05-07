@@ -1,6 +1,20 @@
 # Changelog
 
-## 5.7.0 (2026-05-06)
+## 5.8.0 (2026-05-07)
+
+#### Features
+
+- api: add proxy support and enhance security (253cd8e)
+- auth: introduce admin user level (53c8eea)
+- api: allow admins to update user passwords (23fa4be)
+
+#### Bug Fixes
+
+- api: security across authentication and database layers (abf4fae)
+- api: secure 2FA setup and implement rate limiting on password changes (1423687)
+- auth: implement token revocation and harden user management (4cb10b2)
+
+## v5.7.0 (2026-05-06)
 
 #### Features
 
