@@ -35,7 +35,7 @@ func setupTestUsersConfig(t *testing.T) (*config.UsersConfig, string) {
 				Username:     "admin",
 				PasswordHash: string(hash),
 				DisplayName:  "Admin User",
-				Level:        config.LevelExecute,
+				Level:        config.LevelAdmin,
 			},
 			{
 				Username:     "user",
@@ -266,7 +266,7 @@ func TestDeleteUserHandler(t *testing.T) {
 		req.SetPathValue("username", "user")
 
 		// Set admin claims in context
-		claims := &AuthClaims{Username: "admin", Level: config.LevelExecute}
+		claims := &AuthClaims{Username: "admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req = req.WithContext(ctx)
 
@@ -286,7 +286,7 @@ func TestDeleteUserHandler(t *testing.T) {
 		req := httptest.NewRequest("DELETE", "/api/users/admin", nil)
 		req.SetPathValue("username", "admin")
 
-		claims := &AuthClaims{Username: "admin", Level: config.LevelExecute}
+		claims := &AuthClaims{Username: "admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req = req.WithContext(ctx)
 
@@ -299,12 +299,12 @@ func TestDeleteUserHandler(t *testing.T) {
 	})
 
 	t.Run("Delete Last Admin Forbidden", func(t *testing.T) {
-		// Only "admin" is left as LevelExecute
+		// Only "admin" is left as LevelAdmin
 		req := httptest.NewRequest("DELETE", "/api/users/admin", nil)
 		req.SetPathValue("username", "admin")
 
 		// Use a different admin for the claim to bypass "delete self" check if there were multiple
-		claims := &AuthClaims{Username: "other-admin", Level: config.LevelExecute}
+		claims := &AuthClaims{Username: "other-admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req = req.WithContext(ctx)
 

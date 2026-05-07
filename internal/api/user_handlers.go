@@ -165,13 +165,13 @@ func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		usersCfg.Lock()
 		userIndex := -1
-		execCount := 0
+		adminCount := 0
 		for i, u := range usersCfg.Users {
 			if u.Username == username {
 				userIndex = i
 			}
-			if u.Level == config.LevelExecute {
-				execCount++
+			if u.Level == config.LevelAdmin || u.Level == config.LevelExecute {
+				adminCount++
 			}
 		}
 
@@ -182,7 +182,8 @@ func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		// Prevent locking out the system
-		if usersCfg.Users[userIndex].Level == config.LevelExecute && execCount <= 1 {
+		targetLevel := usersCfg.Users[userIndex].Level
+		if (targetLevel == config.LevelAdmin || targetLevel == config.LevelExecute) && adminCount <= 1 {
 			usersCfg.Unlock()
 			WriteError(w, http.StatusForbidden, "Cannot delete the last administrator")
 			return

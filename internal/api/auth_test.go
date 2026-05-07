@@ -57,12 +57,40 @@ func TestSignAndParseToken(t *testing.T) {
 	}
 }
 
-func TestSignTokenExecuteFallback(t *testing.T) {
+func TestSignTokenHighPrivilegeFallback(t *testing.T) {
 	secret := "this-is-a-long-enough-secret-for-jwt-signing"
 	usersCfg := &config.UsersConfig{
 		JWTSecret:          secret,
 		TokenLifetimeHours: 1,
 	}
+
+	t.Run("Admin with TOTP", func(t *testing.T) {
+		user := &config.UserEntry{
+			Username:    "admin",
+			DisplayName: "Admin User",
+			Level:       config.LevelAdmin,
+			TOTPSecret:  "MFRGGZDFMZTWQ2LK",
+		}
+		token, _, _ := signToken(usersCfg, user)
+		claims, _ := parseToken(usersCfg, token)
+		if claims.Level != config.LevelAdmin {
+			t.Errorf("Expected level admin, got %s", claims.Level)
+		}
+	})
+
+	t.Run("Admin without TOTP falls back to Edit", func(t *testing.T) {
+		user := &config.UserEntry{
+			Username:    "admin",
+			DisplayName: "Admin User",
+			Level:       config.LevelAdmin,
+			TOTPSecret:  "",
+		}
+		token, _, _ := signToken(usersCfg, user)
+		claims, _ := parseToken(usersCfg, token)
+		if claims.Level != config.LevelEdit {
+			t.Errorf("Expected level edit (fallback), got %s", claims.Level)
+		}
+	})
 
 	t.Run("Execute with TOTP", func(t *testing.T) {
 		user := &config.UserEntry{
@@ -105,7 +133,7 @@ func TestLoginHandler(t *testing.T) {
 				Username:     "admin",
 				PasswordHash: string(hash),
 				DisplayName:  "Admin User",
-				Level:        config.LevelEdit,
+				Level:        config.LevelAdmin,
 			},
 		},
 	}
@@ -204,7 +232,7 @@ func TestRefreshHandler(t *testing.T) {
 			{
 				Username:    "admin",
 				DisplayName: "Admin",
-				Level:       config.LevelEdit,
+				Level:       config.LevelAdmin,
 			},
 		},
 	}
@@ -212,7 +240,7 @@ func TestRefreshHandler(t *testing.T) {
 	handler := RefreshHandler(usersCfg)
 
 	t.Run("Authenticated", func(t *testing.T) {
-		claims := &AuthClaims{Username: "admin", DisplayName: "Admin", Level: config.LevelEdit}
+		claims := &AuthClaims{Username: "admin", DisplayName: "Admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req := httptest.NewRequest("POST", "/api/auth/refresh", nil)
 		req = req.WithContext(ctx)
@@ -235,7 +263,7 @@ func TestRefreshHandler(t *testing.T) {
 	})
 
 	t.Run("User Removed", func(t *testing.T) {
-		claims := &AuthClaims{Username: "nonexistent", DisplayName: "Deleted", Level: config.LevelEdit}
+		claims := &AuthClaims{Username: "nonexistent", DisplayName: "Deleted", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req := httptest.NewRequest("POST", "/api/auth/refresh", nil)
 		req = req.WithContext(ctx)
@@ -270,6 +298,20 @@ func TestRequireLevelMiddleware(t *testing.T) {
 
 	t.Run("Sufficient Level", func(t *testing.T) {
 		claims := &AuthClaims{Username: "user", Level: config.LevelEdit}
+		ctx := contextWithClaims(context.Background(), claims)
+		req := httptest.NewRequest("POST", "/api/test", nil)
+		req = req.WithContext(ctx)
+		w := httptest.NewRecorder()
+
+		RequireLevel(config.LevelEdit)(nextHandler).ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status OK, got %d", w.Code)
+		}
+	})
+
+	t.Run("Admin Level", func(t *testing.T) {
+		claims := &AuthClaims{Username: "user", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req := httptest.NewRequest("POST", "/api/test", nil)
 		req = req.WithContext(ctx)

@@ -60,9 +60,9 @@ func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, ti
 	now := time.Now()
 	expiresAt := now.Add(lifetime)
 
-	// Fallback logic: Execute level requires TOTP.
+	// Fallback logic: Admin and Execute levels require TOTP.
 	effectiveLevel := user.Level
-	if effectiveLevel == config.LevelExecute && user.TOTPSecret == "" {
+	if (effectiveLevel == config.LevelAdmin || effectiveLevel == config.LevelExecute) && user.TOTPSecret == "" {
 		effectiveLevel = config.LevelEdit
 	}
 
@@ -201,7 +201,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 
 		// Re-calculate effective level for response (must match what's in the token).
 		effectiveLevel := user.Level
-		if effectiveLevel == config.LevelExecute && user.TOTPSecret == "" {
+		if (effectiveLevel == config.LevelAdmin || effectiveLevel == config.LevelExecute) && user.TOTPSecret == "" {
 			effectiveLevel = config.LevelEdit
 		}
 

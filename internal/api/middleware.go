@@ -91,6 +91,8 @@ func (rw *responseWriter) WriteHeader(code int) {
 // levelToInt converts a UserLevel to an integer for comparison.
 func levelToInt(l config.UserLevel) int {
 	switch l {
+	case config.LevelAdmin:
+		return 3
 	case config.LevelExecute:
 		return 2
 	case config.LevelEdit:
