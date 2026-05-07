@@ -17,6 +17,7 @@ type UserLevel string
 const (
 	LevelBasic   UserLevel = "basic"
 	LevelEdit    UserLevel = "edit"
+	LevelAdmin   UserLevel = "admin"
 	LevelExecute UserLevel = "execute"
 )
 
