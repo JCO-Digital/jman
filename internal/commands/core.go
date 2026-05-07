@@ -55,13 +55,13 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		updated := 0
 		for _, site := range sites {
 			verb.Printf(verb.Verbose, "Checking WordPress core on %s...\n", site.Name)
-			coreUpdates, err := wpcli.CheckCore(site.SSH, site.Path)
+			coreUpdates, err := wpcli.CheckCore(site)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Error checking core on %s: %v\n", site.Name, err)
 				continue
 			}
 			if len(coreUpdates) > 0 {
-				currentVersion, err := wpcli.CoreVersion(site.SSH, site.Path)
+				currentVersion, err := wpcli.CoreVersion(site)
 				if err != nil {
 					verb.PrintErrorf(verb.Normal, "Error getting current core version on %s: %v\n", site.Name, err)
 					continue
@@ -90,7 +90,7 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		updated := 0
 		for _, site := range sites {
 			verb.Printf(verb.Verbose, "Updating WordPress core on %s...\n", site.Name)
-			result, err := wpcli.UpdateCore(site.SSH, site.Path)
+			result, err := wpcli.UpdateCore(site)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Error updating core on %s: %v\n", site.Name, err)
 				continue
@@ -106,7 +106,7 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 	case "version":
 		for _, site := range sites {
 			verb.Printf(verb.Verbose, "Showing WordPress core version on %s...\n", site.Name)
-			version, err := wpcli.CoreVersion(site.SSH, site.Path)
+			version, err := wpcli.CoreVersion(site)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Error showing core version on %s: %v\n", site.Name, err)
 				continue

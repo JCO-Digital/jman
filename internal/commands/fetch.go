@@ -102,6 +102,10 @@ var (
 							continue
 						}
 
+						if response == nil {
+							continue
+						}
+
 						if response.Error != 0 {
 							msg := "unknown error"
 							if response.Message != nil {

@@ -135,6 +135,18 @@ func initSchema() error {
 			},
 		},
 		{
+			Name: "site_plugins",
+			Columns: map[string]string{
+				"site_id":          "INTEGER",
+				"slug":             "TEXT",
+				"status":           "TEXT",
+				"version":          "TEXT",
+				"update_available": "TEXT",
+				"auto_update":      "BOOLEAN",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "slack_messages",
 			Columns: map[string]string{
 				"hash":      "TEXT PRIMARY KEY",
@@ -305,6 +317,10 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_organization_map ON site_organization_map(site_id, organization_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_plugins_pk ON site_plugins(site_id, slug);")
 	if err != nil {
 		return err
 	}

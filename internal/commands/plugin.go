@@ -315,7 +315,7 @@ func installPlugin(site models.CliSite, pluginName string) error {
 	}
 
 	verb.Printf(verb.Verbose, "Installing '%s' on %s (%s)...\n", pluginName, verb.Blue(site.Name), verb.Yellow(site.ServerName))
-	success, err := wpcli.AddPlugin(site.SSH, site.Path, installSource, true)
+	success, err := wpcli.AddPlugin(site, installSource, true)
 	if err != nil {
 		return err
 	}
@@ -391,7 +391,7 @@ func updatePlugin(site models.CliSite, pluginName string) ([]wpcli.UpdateResult,
 	var failed []string
 	var allUpdated []wpcli.UpdateResult
 	for _, p := range toUpdate {
-		results, err := wpcli.UpdatePlugin(site.SSH, site.Path, []string{p})
+		results, err := wpcli.UpdatePlugin(site, []string{p})
 		if err != nil {
 			failed = append(failed, p)
 		} else {
@@ -437,7 +437,7 @@ func getPluginUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 
 func removePlugin(site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Verbose, "Removing '%s' from %s (%s)...\n", verb.Yellow(pluginName), verb.Blue(site.Name), site.ServerName)
-	success, err := wpcli.RemovePlugin(site.SSH, site.Path, pluginName)
+	success, err := wpcli.RemovePlugin(site, pluginName)
 	if err != nil {
 		if strings.Contains(err.Error(), "plugin could not be found") {
 			return fmt.Errorf("plugin not found")
@@ -455,7 +455,7 @@ func removePlugin(site models.CliSite, pluginName string) error {
 
 func pluginInfo(site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Verbose, "Fetching info for '%s' on %s (%s)...\n", verb.Yellow(pluginName), verb.Blue(site.Name), site.ServerName)
-	info, err := wpcli.GetPluginInfo(site.SSH, site.Path, pluginName)
+	info, err := wpcli.GetPluginInfo(site, pluginName)
 	if err != nil {
 		return err
 	}

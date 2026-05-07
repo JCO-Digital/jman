@@ -14,9 +14,9 @@ import (
 
 // PluginsHandler returns the list of cached WordPress plugins.
 func PluginsHandler(w http.ResponseWriter, r *http.Request) {
-	plugins := []models.WPPlugin{}
-	if err := cache.ReadJSONCache("plugins", &plugins, -1); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
+	plugins, err := db.GetAllSitePlugins()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
 	}
 
