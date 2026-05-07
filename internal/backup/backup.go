@@ -49,12 +49,13 @@ func StartScheduler(ctx context.Context) {
 // PerformBackup creates a snapshot of the current database using VACUUM INTO.
 // It also manages a symlink to the latest backup and cleans up files older than 48 hours.
 func PerformBackup() error {
+	start := time.Now()
 	// Ensure backup directory exists
 	if err := os.MkdirAll(config.RunData.BackupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
-	timestamp := time.Now().Format("20060102-150405")
+	timestamp := start.Format("20060102-150405")
 	backupFileName := fmt.Sprintf("jman-%s.db", timestamp)
 	backupPath := filepath.Join(config.RunData.BackupDir, backupFileName)
 
@@ -75,7 +76,7 @@ func PerformBackup() error {
 		log.Printf("Warning: failed to update 'latest.db' symlink: %v", err)
 	}
 
-	log.Printf("Database backup successful: %s", backupFileName)
+	log.Printf("Database backup successful: %s (took %v)", backupFileName, time.Since(start))
 
 	return cleanupOldBackups()
 }
