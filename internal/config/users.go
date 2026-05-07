@@ -28,6 +28,7 @@ type UserEntry struct {
 	DisplayName  string    `toml:"displayName" mapstructure:"displayName"`
 	TOTPSecret   string    `toml:"totpSecret" mapstructure:"totpSecret"`
 	Level        UserLevel `toml:"level" mapstructure:"level"`
+	TokenVersion int       `toml:"tokenVersion" mapstructure:"tokenVersion"`
 }
 
 // UsersConfig holds the authentication-related configuration loaded from users.toml.
@@ -93,7 +94,7 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 			cfg.Users[i].Level = LevelBasic
 		} else {
 			l := cfg.Users[i].Level
-			if l != LevelBasic && l != LevelEdit && l != LevelExecute {
+			if l != LevelBasic && l != LevelEdit && l != LevelAdmin && l != LevelExecute {
 				return UsersConfig{}, fmt.Errorf("invalid level %q for user %q in users.toml", l, cfg.Users[i].Username)
 			}
 		}

@@ -38,6 +38,12 @@ func setupTestUsersConfig(t *testing.T) (*config.UsersConfig, string) {
 				Level:        config.LevelAdmin,
 			},
 			{
+				Username:     "admin2",
+				PasswordHash: string(hash),
+				DisplayName:  "Admin User 2",
+				Level:        config.LevelAdmin,
+			},
+			{
 				Username:     "user",
 				PasswordHash: string(hash),
 				DisplayName:  "Normal User",
@@ -68,8 +74,8 @@ func TestAdminListUsersHandler(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if len(users) != 2 {
-		t.Errorf("Expected 2 users, got %d", len(users))
+	if len(users) != 3 {
+		t.Errorf("Expected 3 users, got %d", len(users))
 	}
 }
 
@@ -299,6 +305,16 @@ func TestDeleteUserHandler(t *testing.T) {
 	})
 
 	t.Run("Delete Last Admin Forbidden", func(t *testing.T) {
+		// Remove admin2 first so admin is the last admin
+		cfg.Lock()
+		for i, u := range cfg.Users {
+			if u.Username == "admin2" {
+				cfg.Users = append(cfg.Users[:i], cfg.Users[i+1:]...)
+				break
+			}
+		}
+		cfg.Unlock()
+
 		// Only "admin" is left as LevelAdmin
 		req := httptest.NewRequest("DELETE", "/api/users/admin", nil)
 		req.SetPathValue("username", "admin")

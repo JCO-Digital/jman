@@ -8,11 +8,22 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// jsonMiddleware ensures Content-Type is set, except if an error was already returned in plain text (though we use plain text for simplicity in errors above, we can set default to json).
-// Actually, it's better to just ensure application/json is the default.
+// JsonMiddleware sets the default Content-Type to application/json for all responses.
 func JsonMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// MaxBodyMiddleware limits the size of incoming request bodies to prevent
+// memory exhaustion from excessively large payloads.
+func MaxBodyMiddleware(next http.Handler) http.Handler {
+	const maxBodySize = 1 << 20 // 1 MB
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil {
+			r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -22,7 +33,7 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("X-XSS-Protection", "1; mode=block")
+		w.Header().Set("X-XSS-Protection", "0")
 		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -55,7 +66,7 @@ func CorsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
 		if r.Method == "OPTIONS" {
-			if !allow && origin != "" && len(allowedOrigins) > 0 && allowedOrigins[0] != "*" {
+			if !allow && origin != "" {
 				w.WriteHeader(http.StatusForbidden)
 				return
 			}

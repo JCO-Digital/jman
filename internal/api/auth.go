@@ -45,8 +45,9 @@ func contextWithClaims(ctx context.Context, claims *AuthClaims) context.Context 
 // jwtClaims is the full set of claims embedded in every token we issue.
 type jwtClaims struct {
 	jwt.RegisteredClaims
-	DisplayName string           `json:"name,omitempty"`
-	Level       config.UserLevel `json:"level,omitempty"`
+	DisplayName  string           `json:"name,omitempty"`
+	Level        config.UserLevel `json:"level,omitempty"`
+	TokenVersion int              `json:"tver"`
 }
 
 // signToken creates a new signed JWT for the given user.
@@ -72,8 +73,9 @@ func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, ti
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
-		DisplayName: user.DisplayName,
-		Level:       effectiveLevel,
+		DisplayName:  user.DisplayName,
+		Level:        effectiveLevel,
+		TokenVersion: user.TokenVersion,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -287,6 +289,22 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 			WriteError(w, http.StatusUnauthorized, "Invalid token")
 			return
 		}
+
+		// Validate the token version against the current user record.
+		// This allows immediate revocation of all tokens when credentials change.
+		usersCfg.RLock()
+		user := config.FindUser(usersCfg, claims.Subject)
+		if user == nil {
+			usersCfg.RUnlock()
+			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			return
+		}
+		if claims.TokenVersion != user.TokenVersion {
+			usersCfg.RUnlock()
+			WriteError(w, http.StatusUnauthorized, "Token revoked")
+			return
+		}
+		usersCfg.RUnlock()
 
 		authClaims := &AuthClaims{
 			Username:    claims.Subject,

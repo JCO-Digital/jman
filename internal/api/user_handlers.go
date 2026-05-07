@@ -68,6 +68,12 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		usersCfg.Lock()
+		// Re-check under write lock to prevent TOCTOU race condition.
+		if config.FindUser(usersCfg, req.Username) != nil {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusConflict, "User already exists")
+			return
+		}
 		usersCfg.Users = append(usersCfg.Users, config.UserEntry{
 			Username:     req.Username,
 			PasswordHash: string(hash),
@@ -124,7 +130,23 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 				WriteError(w, http.StatusBadRequest, err.Error())
 				return
 			}
+			// Prevent demoting the last admin/execute user.
+			if (user.Level == config.LevelAdmin || user.Level == config.LevelExecute) &&
+				req.Level != config.LevelAdmin && req.Level != config.LevelExecute {
+				adminCount := 0
+				for _, u := range usersCfg.Users {
+					if u.Level == config.LevelAdmin || u.Level == config.LevelExecute {
+						adminCount++
+					}
+				}
+				if adminCount <= 1 {
+					usersCfg.Unlock()
+					WriteError(w, http.StatusForbidden, "Cannot demote the last administrator")
+					return
+				}
+			}
 			user.Level = req.Level
+			user.TokenVersion++
 		}
 		if req.Password != "" {
 			if err := ValidatePasswordStrength(req.Password); err != nil {
@@ -139,6 +161,7 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 				return
 			}
 			user.PasswordHash = string(hash)
+			user.TokenVersion++
 		}
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
@@ -355,6 +378,7 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		user.PasswordHash = string(hash)
+		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
 
@@ -429,6 +453,7 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		user.TOTPSecret = req.Secret
+		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
 
@@ -455,6 +480,13 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		// Decode body before acquiring lock to avoid holding the lock during I/O.
+		var req deactivate2FARequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			WriteError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
 		usersCfg.Lock()
 		user := config.FindUser(usersCfg, claims.Username)
 		if user == nil {
@@ -465,12 +497,6 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		// If 2FA is enabled, require a valid code to disable it.
 		if user.TOTPSecret != "" {
-			var req deactivate2FARequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				usersCfg.Unlock()
-				WriteError(w, http.StatusBadRequest, "Invalid request body")
-				return
-			}
 			if !totp.Validate(req.Code, user.TOTPSecret) {
 				usersCfg.Unlock()
 				WriteError(w, http.StatusBadRequest, "Invalid verification code")
@@ -479,6 +505,7 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		user.TOTPSecret = ""
+		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
 

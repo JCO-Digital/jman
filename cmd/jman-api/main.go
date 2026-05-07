@@ -49,7 +49,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	handler := api.LoggingMiddleware(
 		api.SecurityHeadersMiddleware(
 			api.CorsMiddleware(
-				api.JsonMiddleware(mux),
+				api.MaxBodyMiddleware(
+					api.JsonMiddleware(mux),
+				),
 			),
 		),
 	)
