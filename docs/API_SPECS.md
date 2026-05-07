@@ -109,6 +109,7 @@ Returns a detailed list of all users in the system.
 | :--- | :--- | :--- | :--- |
 | `displayName` | string | No | |
 | `level` | string | No | |
+| `password` | string | No | Must meet entropy requirements |
 
 ### Delete User
 

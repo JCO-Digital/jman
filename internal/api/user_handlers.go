@@ -89,6 +89,7 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 type updateUserRequest struct {
 	DisplayName string           `json:"displayName"`
 	Level       config.UserLevel `json:"level"`
+	Password    string           `json:"password"`
 }
 
 // UpdateUserHandler allows an admin to modify user details.
@@ -124,6 +125,20 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 				return
 			}
 			user.Level = req.Level
+		}
+		if req.Password != "" {
+			if err := ValidatePasswordStrength(req.Password); err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			if err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusInternalServerError, "Internal server error")
+				return
+			}
+			user.PasswordHash = string(hash)
 		}
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
