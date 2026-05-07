@@ -476,7 +476,7 @@ func migrateTable(def TableDefinition) error {
 	// Identify columns that exist in both old and new schemas to copy data
 	commonCols := []string{}
 	for _, name := range colNames {
-		if currentCols[name] {
+		if _, exists := currentCols[name]; exists {
 			commonCols = append(commonCols, name)
 		}
 	}
