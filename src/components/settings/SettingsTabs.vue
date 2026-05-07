@@ -7,6 +7,7 @@ interface Tab {
 const props = defineProps<{
 	modelValue: string;
 	showUsersTab: boolean;
+	showIgnoredTab: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -15,12 +16,17 @@ const emit = defineEmits<{
 
 const tabs: Tab[] = [
 	{ id: "general", label: "General" },
+	{ id: "ignored", label: "Ignored Domains" },
 	{ id: "account", label: "My Account" },
 	{ id: "users", label: "Users" },
 ];
 
 function visibleTabs(): Tab[] {
-	return tabs.filter((tab) => tab.id !== "users" || props.showUsersTab);
+	return tabs.filter((tab) => {
+		if (tab.id === "users") return props.showUsersTab;
+		if (tab.id === "ignored") return props.showIgnoredTab;
+		return true;
+	});
 }
 
 function selectTab(id: string) {

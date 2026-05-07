@@ -5,6 +5,7 @@ import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
 import SettingsTabs from "../components/settings/SettingsTabs.vue";
 import GeneralSettings from "../components/settings/GeneralSettings.vue";
+import IgnoredDomains from "../components/settings/IgnoredDomains.vue";
 import AccountSettings from "../components/settings/AccountSettings.vue";
 import UserManagement from "../components/settings/UserManagement.vue";
 
@@ -13,7 +14,9 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const validTabs = computed(() => {
-	const tabs = ["general", "account"];
+	const tabs = ["general"];
+	if (authStore.canEdit) tabs.push("ignored");
+	tabs.push("account");
 	if (authStore.canAdmin) tabs.push("users");
 	return tabs;
 });
@@ -50,10 +53,12 @@ watch(
 			<SettingsTabs
 				v-model="activeTab"
 				:show-users-tab="authStore.canAdmin"
+				:show-ignored-tab="authStore.canEdit"
 			/>
 
 			<div class="tab-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
+				<IgnoredDomains v-else-if="activeTab === 'ignored'" />
 				<AccountSettings v-else-if="activeTab === 'account'" />
 				<UserManagement
 					v-else-if="activeTab === 'users' && authStore.canAdmin"
