@@ -202,6 +202,28 @@ func TestUpdateUserHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("Admin Password Update", func(t *testing.T) {
+		reqBody := updateUserRequest{
+			Password: "new-admin-password-123456",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/api/users/user", bytes.NewBuffer(body))
+		req.SetPathValue("username", "user")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		user := config.FindUser(cfg, "user")
+		err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("new-admin-password-123456"))
+		if err != nil {
+			t.Error("Password was not updated correctly by admin")
+		}
+	})
+
 	t.Run("User Not Found", func(t *testing.T) {
 		reqBody := updateUserRequest{DisplayName: "Nobody"}
 		body, _ := json.Marshal(reqBody)
