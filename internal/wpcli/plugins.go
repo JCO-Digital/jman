@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -11,7 +12,7 @@ import (
 
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error) {
-	res, err := RunWP(CliOptions{SSH: site.SSH, Path: site.Path, IncludePlugins: !skipPlugins}, "plugin", "list", "--format=json")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: !skipPlugins}, "plugin", "list", "--format=json")
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +54,7 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 }
 
 // AddPlugin installs and optionally activates a plugin.
-func AddPlugin(ssh, path, plugin string, activate bool) (bool, error) {
+func AddPlugin(site models.CliSite, plugin string, activate bool) (bool, error) {
 	args := []string{"plugin", "install", plugin}
 
 	// If the plugin is a ZIP file (local or URL), add --force to allow updating.
@@ -65,7 +66,7 @@ func AddPlugin(ssh, path, plugin string, activate bool) (bool, error) {
 	if activate {
 		args = append(args, "--activate")
 	}
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path, IncludePlugins: true}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -85,7 +86,7 @@ type UpdateResult struct {
 }
 
 // UpdatePlugin updates one or more plugins.
-func UpdatePlugin(ssh, path string, plugins []string) ([]UpdateResult, error) {
+func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error) {
 	if len(plugins) == 0 {
 		return nil, nil
 	}
@@ -94,7 +95,7 @@ func UpdatePlugin(ssh, path string, plugins []string) ([]UpdateResult, error) {
 	args = append(args, plugins...)
 	args = append(args, "--format=json")
 
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path, IncludePlugins: true}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
@@ -113,16 +114,20 @@ func UpdatePlugin(ssh, path string, plugins []string) ([]UpdateResult, error) {
 }
 
 // RemovePlugin uninstalls and deactivates a plugin.
-func RemovePlugin(ssh, path, plugin string) (bool, error) {
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path, IncludePlugins: true}, "plugin", "uninstall", plugin, "--deactivate")
+func RemovePlugin(site models.CliSite, plugin string) (bool, error) {
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, "plugin", "uninstall", plugin, "--deactivate")
 	if err != nil {
 		return false, fmt.Errorf("failed to remove plugin: %w (stderr: %s)", err, res.Error)
 	}
 	return strings.Contains(res.Output, "Success: Uninstalled"), nil
 }
 
-func GetPluginInfo(ssh, path, plugin string) (*models.PluginInfo, error) {
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path, IncludePlugins: true}, "plugin", "get", plugin, "--format=json")
+func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration) (*models.PluginInfo, error) {
+	t := time.Duration(0)
+	if len(timeout) > 0 {
+		t = timeout[0]
+	}
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: t}, "plugin", "get", plugin, "--format=json")
 	if err != nil {
 		if strings.Contains(res.Error, "plugin could not be found.") {
 			return nil, fmt.Errorf("plugin %s not found", plugin)

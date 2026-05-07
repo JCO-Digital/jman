@@ -13,7 +13,7 @@ func TestSanitizePluginInfo_DecodesNameAndStripsAuthorHTML(t *testing.T) {
 		Author: "<a href='https://example.com'>Jane &amp; Co</a>",
 	}
 
-	sanitizePluginInfo(info)
+	models.SanitizePluginInfo(info)
 
 	if got, want := info.Name, "My Plugin - Lite"; got != want {
 		t.Fatalf("unexpected sanitized name: got %q, want %q", got, want)
@@ -31,7 +31,7 @@ func TestSanitizePluginInfo_TrimWhitespace(t *testing.T) {
 		Author: "  <strong> ACME&nbsp;Inc </strong>  ",
 	}
 
-	sanitizePluginInfo(info)
+	models.SanitizePluginInfo(info)
 
 	if got, want := info.Name, "Plugin Name"; got != want { // contains NBSP
 		t.Fatalf("unexpected trimmed/decoded name: got %q, want %q", got, want)
@@ -44,5 +44,5 @@ func TestSanitizePluginInfo_TrimWhitespace(t *testing.T) {
 
 func TestSanitizePluginInfo_NilIsNoop(t *testing.T) {
 	// Should not panic.
-	sanitizePluginInfo(nil)
+	models.SanitizePluginInfo(nil)
 }

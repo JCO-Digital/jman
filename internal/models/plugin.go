@@ -1,5 +1,7 @@
 package models
 
+import "github.com/JCO-Digital/jman/internal/utils"
+
 // WPPlugin represents a WordPress plugin installed on a specific site.
 type WPPlugin struct {
 	SiteID     int    `json:"site_id"`
@@ -34,4 +36,14 @@ type PluginInfo struct {
 	Tested        string `json:"tested"`
 	LastUpdated   string `json:"last_updated"`
 	Homepage      string `json:"homepage"`
+}
+
+// SanitizePluginInfo normalizes fields in PluginInfo.
+func SanitizePluginInfo(info *PluginInfo) {
+	if info == nil {
+		return
+	}
+
+	info.Name = utils.CleanHTML(info.Name)
+	info.Author = utils.CleanHTML(info.Author)
 }
