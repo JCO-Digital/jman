@@ -42,6 +42,10 @@ func ValidatePasswordStrength(password string) error {
 		return fmt.Errorf("password cannot be empty")
 	}
 
+	if len(password) > 72 {
+		return fmt.Errorf("password must be 72 characters or fewer")
+	}
+
 	var basePool int
 	var hasLower, hasUpper, hasDigit, hasSpecial bool
 

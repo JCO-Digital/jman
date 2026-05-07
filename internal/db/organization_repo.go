@@ -96,6 +96,9 @@ func GetAllOrganizations(search string) ([]models.Organization, error) {
 		}
 		organizations = append(organizations, o)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return organizations, nil
 }
 
@@ -188,6 +191,9 @@ func GetContactsByOrganization(organizationID int) ([]models.Contact, error) {
 		}
 		contacts = append(contacts, c)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return contacts, nil
 }
 
@@ -274,6 +280,9 @@ func GetSitesByOrganization(organizationID int) ([]int, error) {
 		}
 		siteIDs = append(siteIDs, id)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return siteIDs, nil
 }
 
@@ -336,6 +345,9 @@ func GetNotes(parentType models.NoteParentType, parentID int) ([]models.Note, er
 			return nil, err
 		}
 		notes = append(notes, n)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return notes, nil
 }
