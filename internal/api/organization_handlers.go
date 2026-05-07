@@ -109,8 +109,12 @@ func UpdateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 	if updates.Name != "" {
 		org.Name = updates.Name
 	}
-	org.VATNumber = updates.VATNumber
-	org.Info = updates.Info
+	if updates.VATNumber != "" {
+		org.VATNumber = updates.VATNumber
+	}
+	if updates.Info != "" {
+		org.Info = updates.Info
+	}
 
 	username := getUsername(r)
 	if err := db.SaveOrganization(org, username); err != nil {
@@ -262,8 +266,12 @@ func UpdateContactHandler(w http.ResponseWriter, r *http.Request) {
 	if updates.Name != "" {
 		contact.Name = updates.Name
 	}
-	contact.Email = updates.Email
-	contact.Phone = updates.Phone
+	if updates.Email != "" {
+		contact.Email = updates.Email
+	}
+	if updates.Phone != "" {
+		contact.Phone = updates.Phone
+	}
 	if updates.Type != "" {
 		contact.Type = updates.Type
 	}

@@ -50,6 +50,17 @@ type jwtClaims struct {
 	TokenVersion int              `json:"tver"`
 }
 
+// effectiveLevel returns the user's authorization level, applying the TOTP
+// enforcement policy: Admin and Execute users without TOTP configured are
+// downgraded to Edit level.
+func effectiveLevel(user *config.UserEntry) config.UserLevel {
+	level := user.Level
+	if (level == config.LevelAdmin || level == config.LevelExecute) && user.TOTPSecret == "" {
+		return config.LevelEdit
+	}
+	return level
+}
+
 // signToken creates a new signed JWT for the given user.
 func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, time.Time, error) {
 	usersCfg.RLock()
@@ -61,20 +72,18 @@ func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, ti
 	now := time.Now()
 	expiresAt := now.Add(lifetime)
 
-	// Fallback logic: Admin and Execute levels require TOTP.
-	effectiveLevel := user.Level
-	if (effectiveLevel == config.LevelAdmin || effectiveLevel == config.LevelExecute) && user.TOTPSecret == "" {
-		effectiveLevel = config.LevelEdit
-	}
+	level := effectiveLevel(user)
 
 	claims := jwtClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.Username,
+			Issuer:    "jman-api",
+			Audience:  jwt.ClaimStrings{"jman-api"},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
 		DisplayName:  user.DisplayName,
-		Level:        effectiveLevel,
+		Level:        level,
 		TokenVersion: user.TokenVersion,
 	}
 
@@ -96,7 +105,7 @@ func parseToken(usersCfg *config.UsersConfig, raw string) (*jwtClaims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return []byte(usersCfg.JWTSecret), nil
-	})
+	}, jwt.WithIssuer("jman-api"), jwt.WithAudience("jman-api"))
 	if err != nil {
 		return nil, err
 	}
@@ -196,19 +205,13 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 
 		limiter.Reset(clientIP)
 
-		// Re-calculate effective level for response (must match what's in the token).
-		effectiveLevel := user.Level
-		if (effectiveLevel == config.LevelAdmin || effectiveLevel == config.LevelExecute) && user.TOTPSecret == "" {
-			effectiveLevel = config.LevelEdit
-		}
-
 		WriteJSON(w, http.StatusOK, loginResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
 			User: loginRespUser{
 				Username:    user.Username,
 				DisplayName: user.DisplayName,
-				Level:       effectiveLevel,
+				Level:       effectiveLevel(user),
 			},
 		})
 	}
