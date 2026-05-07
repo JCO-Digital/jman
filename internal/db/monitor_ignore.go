@@ -28,6 +28,9 @@ func GetIgnoredSites() ([]models.IgnoredSite, error) {
 		}
 		sites = append(sites, s)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return sites, nil
 }
 
@@ -68,6 +71,9 @@ func GetIgnoredDomains() (map[string]bool, error) {
 			return nil, fmt.Errorf("failed to scan ignored domain: %w", err)
 		}
 		ignored[domain] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return ignored, nil
 }

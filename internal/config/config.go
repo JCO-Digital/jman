@@ -33,6 +33,7 @@ type AppConfig struct {
 	MonitorCacheBypass  bool              `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	BehindProxy         bool              `toml:"behindProxy" mapstructure:"behindProxy"`
 	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
 	IgnoreSites         []string          `toml:"ignoreSites" mapstructure:"ignoreSites"`
 	PluginAliases       map[string]string `toml:"pluginAliases" mapstructure:"pluginAliases"`
@@ -51,9 +52,13 @@ func Init() error {
 		DataDir:   filepath.Join(xdg.DataHome, AppName),
 	}
 
-	// Ensure directories exist
-	dirs := []string{RunData.ConfigDir, RunData.CacheDir, RunData.DataDir}
-	for _, dir := range dirs {
+	// Ensure directories exist.
+	// ConfigDir uses 0700 because it stores secrets (users.toml with JWT/TOTP keys).
+	// CacheDir and DataDir use 0755 as they don't contain secrets.
+	if err := os.MkdirAll(RunData.ConfigDir, 0700); err != nil {
+		return fmt.Errorf("failed to create directory %s: %w", RunData.ConfigDir, err)
+	}
+	for _, dir := range []string{RunData.CacheDir, RunData.DataDir} {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
@@ -71,7 +76,7 @@ func loadConfig() error {
 	viper.SetDefault("monitorCacheBypass", false)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
-	viper.SetDefault("allowedOrigins", []string{"*"})
+	viper.SetDefault("allowedOrigins", []string{})
 	viper.SetDefault("ignoreSites", []string{})
 	viper.SetDefault("pluginAliases", map[string]string{})
 

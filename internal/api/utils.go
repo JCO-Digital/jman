@@ -12,6 +12,9 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
+// BcryptCost is the bcrypt cost factor used for all password hashing operations.
+const BcryptCost = 12
+
 // ErrorResponse represents a standard JSON error response.
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -37,6 +40,10 @@ func WriteError(w http.ResponseWriter, status int, message string) {
 func ValidatePasswordStrength(password string) error {
 	if len(password) == 0 {
 		return fmt.Errorf("password cannot be empty")
+	}
+
+	if len(password) > 72 {
+		return fmt.Errorf("password must be 72 characters or fewer")
 	}
 
 	var basePool int
@@ -86,7 +93,7 @@ func ValidatePasswordStrength(password string) error {
 // ValidateUserLevel ensures the provided level is a known valid level.
 func ValidateUserLevel(l config.UserLevel) error {
 	switch l {
-	case config.LevelBasic, config.LevelEdit, config.LevelExecute:
+	case config.LevelBasic, config.LevelEdit, config.LevelAdmin, config.LevelExecute:
 		return nil
 	default:
 		return fmt.Errorf("invalid user level: %s", l)
@@ -109,4 +116,12 @@ func ValidateUsername(username string) error {
 // NormalizeUsername trims whitespace and converts to lowercase.
 func NormalizeUsername(username string) string {
 	return strings.ToLower(strings.TrimSpace(username))
+}
+
+// ValidateDisplayName checks that the display name meets length requirements.
+func ValidateDisplayName(name string) error {
+	if len(name) > 100 {
+		return fmt.Errorf("display name must be 100 characters or fewer")
+	}
+	return nil
 }

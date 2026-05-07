@@ -45,8 +45,20 @@ func contextWithClaims(ctx context.Context, claims *AuthClaims) context.Context 
 // jwtClaims is the full set of claims embedded in every token we issue.
 type jwtClaims struct {
 	jwt.RegisteredClaims
-	DisplayName string           `json:"name,omitempty"`
-	Level       config.UserLevel `json:"level,omitempty"`
+	DisplayName  string           `json:"name,omitempty"`
+	Level        config.UserLevel `json:"level,omitempty"`
+	TokenVersion int              `json:"tver"`
+}
+
+// effectiveLevel returns the user's authorization level, applying the TOTP
+// enforcement policy: Admin and Execute users without TOTP configured are
+// downgraded to Edit level.
+func effectiveLevel(user *config.UserEntry) config.UserLevel {
+	level := user.Level
+	if (level == config.LevelAdmin || level == config.LevelExecute) && user.TOTPSecret == "" {
+		return config.LevelEdit
+	}
+	return level
 }
 
 // signToken creates a new signed JWT for the given user.
@@ -60,20 +72,19 @@ func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, ti
 	now := time.Now()
 	expiresAt := now.Add(lifetime)
 
-	// Fallback logic: Execute level requires TOTP.
-	effectiveLevel := user.Level
-	if effectiveLevel == config.LevelExecute && user.TOTPSecret == "" {
-		effectiveLevel = config.LevelEdit
-	}
+	level := effectiveLevel(user)
 
 	claims := jwtClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   user.Username,
+			Issuer:    "jman-api",
+			Audience:  jwt.ClaimStrings{"jman-api"},
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 		},
-		DisplayName: user.DisplayName,
-		Level:       effectiveLevel,
+		DisplayName:  user.DisplayName,
+		Level:        level,
+		TokenVersion: user.TokenVersion,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -94,7 +105,7 @@ func parseToken(usersCfg *config.UsersConfig, raw string) (*jwtClaims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 		return []byte(usersCfg.JWTSecret), nil
-	})
+	}, jwt.WithIssuer("jman-api"), jwt.WithAudience("jman-api"))
 	if err != nil {
 		return nil, err
 	}
@@ -153,8 +164,9 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			return
 		}
 
-		// Rate limiting check.
-		if !limiter.Allow(req.Username) {
+		// Rate limiting check (per client IP).
+		clientIP := limiter.ClientIP(r)
+		if !limiter.Allow(clientIP) {
 			WriteError(w, http.StatusTooManyRequests, "Too many login attempts, try again later")
 			return
 		}
@@ -169,22 +181,16 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		}
 		usersCfg.RUnlock()
 		if err := bcrypt.CompareHashAndPassword(hashToCompare, []byte(req.Password)); err != nil || user == nil {
-			limiter.RecordFailure(req.Username)
+			limiter.RecordFailure(clientIP)
 			WriteError(w, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
 
 		// TOTP validation (only if the user has a TOTP secret configured).
 		if user.TOTPSecret != "" {
-			if req.TOTP == "" {
-				// Don't record as a failure — the client may retry with the code.
-				WriteError(w, http.StatusUnauthorized, "TOTP code required")
-				return
-			}
-			valid := totp.Validate(req.TOTP, user.TOTPSecret)
-			if !valid {
-				limiter.RecordFailure(req.Username)
-				WriteError(w, http.StatusUnauthorized, "Invalid TOTP code")
+			if req.TOTP == "" || !totp.Validate(req.TOTP, user.TOTPSecret) {
+				limiter.RecordFailure(clientIP)
+				WriteError(w, http.StatusUnauthorized, "Invalid credentials")
 				return
 			}
 		}
@@ -197,13 +203,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			return
 		}
 
-		limiter.Reset(req.Username)
-
-		// Re-calculate effective level for response (must match what's in the token).
-		effectiveLevel := user.Level
-		if effectiveLevel == config.LevelExecute && user.TOTPSecret == "" {
-			effectiveLevel = config.LevelEdit
-		}
+		limiter.Reset(clientIP)
 
 		WriteJSON(w, http.StatusOK, loginResponse{
 			Token:     token,
@@ -211,7 +211,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			User: loginRespUser{
 				Username:    user.Username,
 				DisplayName: user.DisplayName,
-				Level:       effectiveLevel,
+				Level:       effectiveLevel(user),
 			},
 		})
 	}
@@ -287,6 +287,22 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 			WriteError(w, http.StatusUnauthorized, "Invalid token")
 			return
 		}
+
+		// Validate the token version against the current user record.
+		// This allows immediate revocation of all tokens when credentials change.
+		usersCfg.RLock()
+		user := config.FindUser(usersCfg, claims.Subject)
+		if user == nil {
+			usersCfg.RUnlock()
+			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			return
+		}
+		if claims.TokenVersion != user.TokenVersion {
+			usersCfg.RUnlock()
+			WriteError(w, http.StatusUnauthorized, "Token revoked")
+			return
+		}
+		usersCfg.RUnlock()
 
 		authClaims := &AuthClaims{
 			Username:    claims.Subject,

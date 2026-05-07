@@ -33,7 +33,7 @@ randomly generated JWT secret.`,
 func init() {
 	useraddCmd.Flags().StringVar(&useraddUsername, "username", "", "username for the new user (required)")
 	useraddCmd.Flags().StringVar(&useraddDisplayName, "display-name", "", "display name for the new user (required)")
-	useraddCmd.Flags().StringVar(&useraddLevel, "level", "basic", "user level (basic, edit, execute)")
+	useraddCmd.Flags().StringVar(&useraddLevel, "level", "basic", "user level (basic, edit, admin, execute)")
 	_ = useraddCmd.MarkFlagRequired("username")
 	_ = useraddCmd.MarkFlagRequired("display-name")
 	rootCmd.AddCommand(useraddCmd)
@@ -97,19 +97,19 @@ func runUseradd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword(pw1, 12)
+	hash, err := bcrypt.GenerateFromPassword(pw1, api.BcryptCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	level := config.UserLevel(useraddLevel)
 	switch level {
-	case config.LevelBasic, config.LevelEdit, config.LevelExecute:
+	case config.LevelBasic, config.LevelEdit, config.LevelAdmin, config.LevelExecute:
 		// Valid
 	case "":
 		level = config.LevelBasic
 	default:
-		return fmt.Errorf("invalid level %q: must be basic, edit, or execute", useraddLevel)
+		return fmt.Errorf("invalid level %q: must be basic, edit, admin, or execute", useraddLevel)
 	}
 
 	cfg.Users = append(cfg.Users, config.UserEntry{
