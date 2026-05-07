@@ -82,6 +82,27 @@ func GetDB() *sql.DB {
 	return dbInstance
 }
 
+// Backup creates a snapshot of the database using VACUUM INTO.
+func Backup(destPath string) error {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	if dbInstance == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	// SQLite's VACUUM INTO requires the target file to NOT exist.
+	// We escape single quotes in the path just in case.
+	escapedPath := strings.ReplaceAll(destPath, "'", "''")
+	query := fmt.Sprintf("VACUUM INTO '%s'", escapedPath)
+
+	if _, err := dbInstance.Exec(query); err != nil {
+		return fmt.Errorf("VACUUM INTO failed: %w", err)
+	}
+
+	return nil
+}
+
 // Close closes the database connection.
 func Close() error {
 	dbMutex.Lock()
