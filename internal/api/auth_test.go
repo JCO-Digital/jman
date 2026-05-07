@@ -138,7 +138,7 @@ func TestLoginHandler(t *testing.T) {
 		},
 	}
 
-	limiter := NewLoginRateLimiter()
+	limiter := NewLoginRateLimiter(false)
 
 	t.Run("Successful Login", func(t *testing.T) {
 		loginReq := loginRequest{

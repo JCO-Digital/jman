@@ -8,6 +8,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // --- Global Asset Handlers ---
@@ -17,7 +18,8 @@ func ListAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	assets, err := db.GetAllAssets(search)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListAssetsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, assets)
@@ -38,7 +40,8 @@ func CreateAssetHandler(w http.ResponseWriter, r *http.Request) {
 	asset.ID = 0
 	username := getUsername(r)
 	if err := db.SaveAsset(&asset, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateAssetHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusCreated, asset)
@@ -55,7 +58,8 @@ func GetAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	asset, err := db.GetAsset(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "GetAssetHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if asset == nil {
@@ -82,7 +86,8 @@ func UpdateAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	asset, err := db.GetAsset(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateAssetHandler: failed to get asset: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if asset == nil {
@@ -104,7 +109,8 @@ func UpdateAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveAsset(asset, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateAssetHandler: failed to save asset: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, asset)
@@ -120,7 +126,8 @@ func DeleteAssetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteAsset(id); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "DeleteAssetHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -136,7 +143,8 @@ func ListAllOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	before := r.URL.Query().Get("before")
 	assets, err := db.GetAllOrganizationAssets(search, status, before)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListAllOrganizationAssetsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, assets)
@@ -153,7 +161,8 @@ func ListOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
 
 	assets, err := db.GetOrganizationAssetsByOrganization(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListOrganizationAssetsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, assets)
@@ -198,7 +207,8 @@ func CreateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveOrganizationAsset(&oa, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateOrganizationAssetHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusCreated, oa)
@@ -215,7 +225,8 @@ func GetOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	oa, err := db.GetOrganizationAsset(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "GetOrganizationAssetHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if oa == nil {
@@ -242,7 +253,8 @@ func UpdateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	oa, err := db.GetOrganizationAsset(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateOrganizationAssetHandler: failed to get asset: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if oa == nil {
@@ -267,7 +279,8 @@ func UpdateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveOrganizationAsset(oa, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateOrganizationAssetHandler: failed to save asset: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, oa)
@@ -283,7 +296,8 @@ func DeleteOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteOrganizationAsset(id); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "DeleteOrganizationAssetHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -302,7 +316,8 @@ func ListAssetPaymentsHandler(w http.ResponseWriter, r *http.Request) {
 
 	payments, err := db.GetAssetPaymentsByAsset(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListAssetPaymentsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, payments)
@@ -330,7 +345,8 @@ func CreateAssetPaymentHandler(w http.ResponseWriter, r *http.Request) {
 
 	oa, err := db.GetOrganizationAsset(oaID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateAssetPaymentHandler: failed to get organization asset: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if oa == nil {
@@ -370,13 +386,13 @@ func CreateAssetPaymentHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveAssetPayment(&payment, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateAssetPaymentHandler: failed to save payment: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	if err := db.SaveOrganizationAsset(oa, username); err != nil {
-		// We don't fail the whole request if only the link update fails,
-		// but we log it (using fmt for simplicity here)
+		verb.LogPrintf(verb.Normal, "CreateAssetPaymentHandler: failed to update organization asset next_billing: %v", err)
 	}
 
 	WriteJSON(w, http.StatusCreated, payment)
@@ -392,7 +408,8 @@ func DeleteAssetPaymentHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteAssetPayment(id); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "DeleteAssetPaymentHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

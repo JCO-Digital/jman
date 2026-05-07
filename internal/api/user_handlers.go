@@ -33,6 +33,11 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		if err := ValidateDisplayName(req.DisplayName); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
 		if err := ValidateUsername(req.Username); err != nil {
 			WriteError(w, http.StatusBadRequest, err.Error())
 			return
@@ -51,7 +56,7 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), BcryptCost)
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
@@ -122,6 +127,11 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		if req.DisplayName != "" {
+			if err := ValidateDisplayName(req.DisplayName); err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			user.DisplayName = req.DisplayName
 		}
 		if req.Level != "" {
@@ -154,7 +164,7 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 				WriteError(w, http.StatusBadRequest, err.Error())
 				return
 			}
-			hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+			hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), BcryptCost)
 			if err != nil {
 				usersCfg.Unlock()
 				WriteError(w, http.StatusInternalServerError, "Internal server error")
@@ -316,6 +326,11 @@ func UpdateProfileHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		if req.DisplayName != "" {
+			if err := ValidateDisplayName(req.DisplayName); err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			user.DisplayName = req.DisplayName
 		}
 		cfgSnapshot := *usersCfg
@@ -370,7 +385,7 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), BcryptCost)
 		if err != nil {
 			usersCfg.Unlock()
 			WriteError(w, http.StatusInternalServerError, "Internal server error")

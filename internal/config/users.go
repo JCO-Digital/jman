@@ -33,7 +33,7 @@ type UserEntry struct {
 
 // UsersConfig holds the authentication-related configuration loaded from users.toml.
 type UsersConfig struct {
-	JWTSecret          string        `toml:"jwtSecret" mapstructure:"jwtSecret"`
+	JWTSecret          string        `toml:"jwtSecret,omitempty" mapstructure:"jwtSecret"`
 	TokenLifetimeHours int           `toml:"tokenLifetimeHours" mapstructure:"tokenLifetimeHours"`
 	Users              []UserEntry   `toml:"users" mapstructure:"users"`
 	mu                 *sync.RWMutex `toml:"-" mapstructure:"-"` // Protects fields from concurrent access
@@ -100,8 +100,15 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 		}
 	}
 
-	if cfg.JWTSecret == "" {
-		return UsersConfig{}, fmt.Errorf("jwtSecret is required in users.toml")
+	// Allow environment variable to override the file-based JWT secret.
+	// This supports 12-factor-app deployments where secrets should not live in files.
+	if envSecret := os.Getenv("JMAN_JWTSECRET"); envSecret != "" {
+		cfg.JWTSecret = envSecret
+		log.Println("INFO: JWT secret loaded from JMAN_JWTSECRET environment variable")
+	} else if cfg.JWTSecret == "" {
+		return UsersConfig{}, fmt.Errorf("jwtSecret must be set in users.toml or via the JMAN_JWTSECRET environment variable")
+	} else {
+		log.Println("INFO: JWT secret loaded from users.toml")
 	}
 
 	if cfg.JWTSecret == "your_64_char_hex_string_here" {
@@ -116,13 +123,34 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 		return UsersConfig{}, fmt.Errorf("at least one user must be defined in users.toml")
 	}
 
-	// Check file permissions and warn if too open
+	// Decrypt TOTP secrets that are stored encrypted.
+	encKey, err := DeriveEncryptionKey(cfg.JWTSecret)
+	if err != nil {
+		return UsersConfig{}, fmt.Errorf("failed to derive encryption key: %w", err)
+	}
+	for i := range cfg.Users {
+		if cfg.Users[i].TOTPSecret != "" {
+			decrypted, err := DecryptTOTPSecret(cfg.Users[i].TOTPSecret, encKey)
+			if err != nil {
+				return UsersConfig{}, fmt.Errorf("failed to decrypt TOTP secret for user %q: %w", cfg.Users[i].Username, err)
+			}
+			cfg.Users[i].TOTPSecret = decrypted
+		}
+	}
+
+	// Enforce strict file permissions on users.toml. This file contains password
+	// hashes, TOTP secrets, and potentially the JWT signing key. Refuse to start
+	// if the file is readable by group or others.
 	usersFilePath := filepath.Join(configDir, "users.toml")
 	info, err := os.Stat(usersFilePath)
 	if err == nil {
 		perm := info.Mode().Perm()
-		if perm&0o177 != 0 {
-			log.Printf("WARNING: %s has permissions %o, which are more open than the recommended 0600. Consider running: chmod 600 %s", usersFilePath, perm, usersFilePath)
+		if perm&0o077 != 0 {
+			return UsersConfig{}, fmt.Errorf(
+				"%s has permissions %04o, which are too open. "+
+					"This file contains secrets and must not be accessible by group or others. "+
+					"Fix with: chmod 600 %s",
+				usersFilePath, perm, usersFilePath)
 		}
 	}
 
@@ -131,9 +159,42 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 
 // SaveUsersConfig marshals the given UsersConfig to TOML and writes it to
 // users.toml in the specified config directory with restrictive permissions (0600).
+// If the JWT secret was loaded from the JMAN_JWTSECRET environment variable,
+// it is not written to the file.
 func SaveUsersConfig(configDir string, cfg UsersConfig) error {
 	cfg.RLock()
 	defer cfg.RUnlock()
+
+	// Deep-copy the Users slice so encryption doesn't mutate the caller's data
+	// (slices share the underlying array even when the struct is passed by value).
+	usersCopy := make([]UserEntry, len(cfg.Users))
+	copy(usersCopy, cfg.Users)
+	cfg.Users = usersCopy
+
+	// Derive encryption key from the JWT secret BEFORE potentially clearing it.
+	// This ensures we can encrypt TOTP secrets even when the secret comes from env.
+	if cfg.JWTSecret != "" {
+		encKey, err := DeriveEncryptionKey(cfg.JWTSecret)
+		if err != nil {
+			return fmt.Errorf("failed to derive encryption key: %w", err)
+		}
+		for i := range cfg.Users {
+			if cfg.Users[i].TOTPSecret != "" && !IsEncryptedTOTPSecret(cfg.Users[i].TOTPSecret) {
+				encrypted, err := EncryptTOTPSecret(cfg.Users[i].TOTPSecret, encKey)
+				if err != nil {
+					return fmt.Errorf("failed to encrypt TOTP secret for user %q: %w", cfg.Users[i].Username, err)
+				}
+				cfg.Users[i].TOTPSecret = encrypted
+			}
+		}
+	}
+
+	// If the JWT secret is sourced from an environment variable, don't persist
+	// it to the file. This keeps the secret out of disk storage.
+	if os.Getenv("JMAN_JWTSECRET") != "" {
+		cfg.JWTSecret = ""
+	}
+
 	data, err := toml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("failed to marshal users config: %w", err)
