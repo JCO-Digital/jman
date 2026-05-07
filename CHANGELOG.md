@@ -1,6 +1,39 @@
 # Changelog
 
-## 5.6.0 (2026-05-05)
+## 5.8.0 (2026-05-07)
+
+#### Features
+
+- api: add proxy support and enhance security (253cd8e)
+- auth: introduce admin user level (53c8eea)
+- api: allow admins to update user passwords (23fa4be)
+
+#### Bug Fixes
+
+- api: security across authentication and database layers (abf4fae)
+- api: secure 2FA setup and implement rate limiting on password changes (1423687)
+- auth: implement token revocation and harden user management (4cb10b2)
+
+## v5.7.0 (2026-05-06)
+
+#### Features
+
+- api: add username normalization and validation (eff3f35)
+- api: implement user level validation and update CORS policies (7b3ad38)
+- api: implement get profile endpoint (65c8345)
+- api: enforce password strength requirements (f0358de)
+- api: implement user management and self-service features (d362aac)
+
+#### Bug Fixes
+
+- auth: increase minimum password entropy requirement (451b2ac)
+- api: require TOTP code for 2FA deactivation (1254376)
+
+#### Refactor
+
+- config: implement thread-safe access and atomic file writes (bc2da41)
+
+## v5.6.0 (2026-05-05)
 
 #### Features
 
