@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.14.0 (2026-05-06)
+## 1.15.0 (2026-05-07)
+
+#### Features
+
+- auth: add admin user level and restrict user management access (c5a0dca)
+- settings: allow password resets in user edit modal (caa9c6b)
+
+#### Refactor
+
+- settings: move ignored domains to separate component and tab (e9f54b2)
+
+#### Maintenance
+
+- docs: remove deprecated API_SPECS.md file (3b0f352)
+
+## v1.14.0 (2026-05-06)
 
 #### Features
 
