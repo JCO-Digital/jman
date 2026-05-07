@@ -86,7 +86,7 @@ func ValidatePasswordStrength(password string) error {
 // ValidateUserLevel ensures the provided level is a known valid level.
 func ValidateUserLevel(l config.UserLevel) error {
 	switch l {
-	case config.LevelBasic, config.LevelEdit, config.LevelExecute:
+	case config.LevelBasic, config.LevelEdit, config.LevelAdmin, config.LevelExecute:
 		return nil
 	default:
 		return fmt.Errorf("invalid user level: %s", l)

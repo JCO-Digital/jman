@@ -194,6 +194,13 @@ func TestAuthMiddleware(t *testing.T) {
 	usersCfg := &config.UsersConfig{
 		JWTSecret:          "yet-another-long-secret-key-for-testing",
 		TokenLifetimeHours: 1,
+		Users: []config.UserEntry{
+			{
+				Username:    "admin",
+				DisplayName: "Admin",
+				Level:       config.LevelBasic,
+			},
+		},
 	}
 
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -221,6 +228,28 @@ func TestAuthMiddleware(t *testing.T) {
 		if w.Code != http.StatusOK {
 			t.Errorf("Expected status OK, got %d", w.Code)
 		}
+	})
+
+	t.Run("Revoked Token (version mismatch)", func(t *testing.T) {
+		// Sign a token with current TokenVersion (0)
+		user := &config.UserEntry{Username: "admin", DisplayName: "Admin", Level: config.LevelBasic}
+		token, _, _ := signToken(usersCfg, user)
+
+		// Simulate a credential change by incrementing the stored version
+		usersCfg.Users[0].TokenVersion++
+
+		req := httptest.NewRequest("GET", "/api/protected", nil)
+		req.Header.Set("Authorization", "Bearer "+token)
+		w := httptest.NewRecorder()
+
+		middleware.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("Expected status 401, got %d", w.Code)
+		}
+
+		// Reset for other tests
+		usersCfg.Users[0].TokenVersion--
 	})
 }
 
