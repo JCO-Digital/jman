@@ -20,8 +20,9 @@ var (
 
 // TableDefinition represents the desired state of a database table.
 type TableDefinition struct {
-	Name    string
-	Columns map[string]string // Column name -> SQL type and constraints
+	Name       string
+	Columns    map[string]string // Column name -> SQL type and constraints
+	PrimaryKey []string          // Optional composite primary key
 }
 
 // Init initializes the SQLite database.
@@ -135,6 +136,19 @@ func initSchema() error {
 			},
 		},
 		{
+			Name: "site_plugins",
+			Columns: map[string]string{
+				"site_id":          "INTEGER NOT NULL",
+				"slug":             "TEXT NOT NULL",
+				"status":           "TEXT",
+				"version":          "TEXT",
+				"update_available": "TEXT",
+				"auto_update":      "BOOLEAN",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"site_id", "slug"},
+		},
+		{
 			Name: "slack_messages",
 			Columns: map[string]string{
 				"hash":      "TEXT PRIMARY KEY",
@@ -225,10 +239,11 @@ func initSchema() error {
 			Name: "site_organization_map",
 			Columns: map[string]string{
 				"site_id":         "INTEGER NOT NULL",
-				"organization_id": "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+				"organization_id": "INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE",
 				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"created_by":      "TEXT",
 			},
+			PrimaryKey: []string{"site_id", "organization_id"},
 		},
 		{
 			Name: "assets",
@@ -304,10 +319,7 @@ func initSchema() error {
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_organization_map ON site_organization_map(site_id, organization_id);")
-	if err != nil {
-		return err
-	}
+
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_organization_id ON contacts(organization_id);")
 	if err != nil {
 		return err
@@ -369,6 +381,9 @@ func migrateTable(def TableDefinition) error {
 	for _, name := range colNames {
 		newColsList = append(newColsList, fmt.Sprintf("%s %s", name, def.Columns[name]))
 	}
+	if len(def.PrimaryKey) > 0 {
+		newColsList = append(newColsList, fmt.Sprintf("PRIMARY KEY (%s)", strings.Join(def.PrimaryKey, ", ")))
+	}
 	newColsSQL := strings.Join(newColsList, ", ")
 
 	if !exists {
@@ -386,7 +401,8 @@ func migrateTable(def TableDefinition) error {
 	}
 	defer rows.Close()
 
-	currentCols := make(map[string]bool)
+	currentCols := make(map[string]int) // name -> notnull
+	currentPK := make(map[string]int)   // name -> pk index
 	for rows.Next() {
 		var cid int
 		var name, typeName string
@@ -395,18 +411,42 @@ func migrateTable(def TableDefinition) error {
 		if err := rows.Scan(&cid, &name, &typeName, &notnull, &dfltValue, &pk); err != nil {
 			return err
 		}
-		currentCols[name] = true
+		currentCols[name] = notnull
+		if pk > 0 {
+			currentPK[name] = pk
+		}
 	}
 
-	// 3. Determine if migration is needed (missing or extra columns)
+	// 3. Determine if migration is needed (missing or extra columns, or NOT NULL change)
 	needsMigration := false
 	if len(currentCols) != len(def.Columns) {
 		needsMigration = true
 	} else {
-		for name := range def.Columns {
-			if !currentCols[name] {
+		for name, colDef := range def.Columns {
+			notnull, exists := currentCols[name]
+			if !exists {
 				needsMigration = true
 				break
+			}
+			// Check for NOT NULL change. PRIMARY KEY also implies NOT NULL in many SQLite versions.
+			expectNotNull := strings.Contains(strings.ToUpper(colDef), "NOT NULL") || strings.Contains(strings.ToUpper(colDef), "PRIMARY KEY")
+			if (notnull == 1) != expectNotNull {
+				needsMigration = true
+				break
+			}
+		}
+	}
+
+	// Check Primary Key change
+	if !needsMigration && len(def.PrimaryKey) > 0 {
+		if len(def.PrimaryKey) != len(currentPK) {
+			needsMigration = true
+		} else {
+			for i, pkCol := range def.PrimaryKey {
+				if currentPK[pkCol] != i+1 {
+					needsMigration = true
+					break
+				}
 			}
 		}
 	}
