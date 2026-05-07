@@ -65,6 +65,8 @@ async function handleDelete(user: AdminUser) {
 
 function levelClass(level: string): string {
 	switch (level) {
+		case "admin":
+			return "level-admin";
 		case "execute":
 			return "level-execute";
 		case "edit":
@@ -232,6 +234,11 @@ function levelClass(level: string): string {
 }
 
 .level-execute {
+	background-color: var(--badge-must-use-bg);
+	color: var(--badge-must-use-text);
+}
+
+.level-admin {
 	background-color: var(--badge-active-bg);
 	color: var(--badge-active-text);
 }

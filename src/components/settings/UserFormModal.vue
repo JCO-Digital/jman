@@ -107,7 +107,7 @@ async function handleSubmit() {
 		if (isEditMode.value && props.editUser) {
 			const payload: UpdateUserPayload = {
 				displayName: displayName.value.trim(),
-				level: level.value as "basic" | "edit" | "execute",
+				level: level.value as "basic" | "edit" | "execute" | "admin",
 			};
 			if (password.value) {
 				payload.password = password.value;
@@ -118,7 +118,7 @@ async function handleSubmit() {
 				username: username.value.trim(),
 				password: password.value,
 				displayName: displayName.value.trim(),
-				level: level.value as "basic" | "edit" | "execute",
+				level: level.value as "basic" | "edit" | "execute" | "admin",
 			};
 			await userStore.createUser(payload);
 		}
@@ -298,6 +298,7 @@ async function handleSubmit() {
 								<option value="basic">Basic</option>
 								<option value="edit">Edit</option>
 								<option value="execute">Execute</option>
+								<option value="admin">Admin</option>
 							</select>
 						</div>
 					</form>
