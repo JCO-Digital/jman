@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.8.0 (2026-05-07)
+## 5.9.0 (2026-05-07)
+
+#### Features
+
+- backup: include duration in success log message (639cff0)
+- backup: implement automated hourly database backup scheduler (a19a269)
+
+## v5.8.0 (2026-05-07)
 
 #### Features
 
