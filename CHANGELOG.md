@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.9.0 (2026-05-07)
+### 5.9.1 (2026-05-07)
+
+#### Bug Fixes
+
+- db: correct column existence check during table migration (55b71cb)
+- db: add primary keys to schema and handle potential errors in plugin checks (542f4e1)
+
+#### Refactor
+
+- db: migrate plugin cache from JSON files to SQLite (8064bae)
+
+## v5.9.0 (2026-05-07)
 
 #### Features
 
