@@ -106,7 +106,10 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 	}
 
 	// Skip remote fetches for mu-plugins and dropins as they won't have metadata on WP.org or via 'plugin get'
-	if isSpecialPlugin(slug, nil) {
+	special, err := isSpecialPlugin(slug, nil)
+	if err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to check if plugin %s is special: %v\n", slug, err)
+	} else if special {
 		verb.Printf(verb.Verbose, "Skipping remote metadata fetch for special plugin (mu/dropin): %s\n", slug)
 		return existing
 	}
@@ -125,7 +128,11 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 		verb.Printf(verb.Verbose, "Plugin %s not found on WordPress.org, trying WP-CLI...\n", slug)
 
 		// Pre-fetch site list for fallback
-		sites, _ := GetSiteList()
+		sites, err := GetSiteList()
+		if err != nil {
+			verb.PrintErrorf(verb.Verbose, "Warning: failed to get site list for WP-CLI fallback: %v\n", err)
+			return existing
+		}
 		siteMap := make(map[int]models.CliSite)
 		for _, s := range sites {
 			siteMap[s.ID] = s
@@ -157,7 +164,10 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 	}
 
 	// Pre-fetch site list once to avoid redundant cache/DB hits in the fallback loop.
-	sites, _ := GetSiteList()
+	sites, err := GetSiteList()
+	if err != nil {
+		return fmt.Errorf("failed to get site list for refresh: %w", err)
+	}
 	siteMap := make(map[int]models.CliSite)
 	for _, s := range sites {
 		siteMap[s.ID] = s
@@ -209,7 +219,10 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			if isSpecialPlugin(slug, specialOnlyMap) {
+			special, err := isSpecialPlugin(slug, specialOnlyMap)
+			if err != nil {
+				verb.PrintErrorf(verb.Verbose, "Warning: failed to check if plugin %s is special: %v\n", slug, err)
+			} else if special {
 				return
 			}
 
@@ -244,26 +257,32 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 	return nil
 }
 
-func isSpecialPlugin(slug string, specialOnlyMap map[string]bool) bool {
+func isSpecialPlugin(slug string, specialOnlyMap map[string]bool) (bool, error) {
 	if specialOnlyMap != nil {
-		return specialOnlyMap[slug]
+		return specialOnlyMap[slug], nil
 	}
 
 	// If it's found as a regular plugin anywhere, we don't treat it as special for fetching purposes.
-	siteIDs, _ := db.GetSitesWithPlugin(slug)
+	siteIDs, err := db.GetSitesWithPlugin(slug)
+	if err != nil {
+		return false, fmt.Errorf("failed to check sites for plugin %s: %w", slug, err)
+	}
 	if len(siteIDs) > 0 {
-		return false
+		return false, nil
 	}
 
 	dbConn := db.GetDB()
 	if dbConn == nil {
-		return false
+		return false, fmt.Errorf("database not initialized")
 	}
 
 	var exists bool
 	query := "SELECT EXISTS(SELECT 1 FROM site_plugins WHERE slug = ? AND (status = 'must-use' OR status = 'dropin'))"
-	_ = dbConn.QueryRow(query, slug).Scan(&exists)
-	return exists
+	err = dbConn.QueryRow(query, slug).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("failed to query special status for %s: %w", slug, err)
+	}
+	return exists, nil
 }
 
 // fetchPluginInfoFromSites attempts to get plugin metadata from a site where it is installed.

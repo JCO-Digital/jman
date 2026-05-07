@@ -199,7 +199,10 @@ func GetFastCachedPlugins() ([]models.WPPlugin, error) {
 // GetCachedVulnerabilities fetches vulnerability data for a specific plugin from the cache or the WPVulnerability API.
 // Note: This still uses JSON files for individual plugin vulnerabilities.
 func GetCachedVulnerabilities(plugin string, ttl ...time.Duration) (*models.VulnResponse, error) {
-	if isSpecialPlugin(plugin, nil) {
+	special, err := isSpecialPlugin(plugin, nil)
+	if err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to check if plugin %s is special: %v\n", plugin, err)
+	} else if special {
 		return nil, nil
 	}
 
