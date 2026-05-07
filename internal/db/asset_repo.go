@@ -96,6 +96,9 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 		}
 		assets = append(assets, a)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return assets, nil
 }
 
@@ -221,6 +224,9 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 		}
 		oas = append(oas, oa)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return oas, nil
 }
 
@@ -258,6 +264,9 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 			return nil, err
 		}
 		oas = append(oas, oa)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return oas, nil
 }
@@ -326,6 +335,9 @@ func GetAssetPaymentsByAsset(orgAssetID int) ([]models.AssetPayment, error) {
 			return nil, err
 		}
 		payments = append(payments, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 	return payments, nil
 }

@@ -2,12 +2,12 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/monitor"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // MonitorHistoryHandler returns aggregated history from monitor_history.
@@ -23,7 +23,8 @@ func MonitorHistoryHandler(w http.ResponseWriter, r *http.Request) {
 
 	history, err := db.GetMonitorHistory(hours)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch monitor history: %v", err))
+		verb.LogPrintf(verb.Normal, "MonitorHistoryHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -38,7 +39,8 @@ func MonitorStatusHandler(w http.ResponseWriter, r *http.Request) {
 	if domain != "" {
 		status, err := db.GetMonitorStatus(domain)
 		if err != nil {
-			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+			verb.LogPrintf(verb.Normal, "MonitorStatusHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 		if status == nil {
@@ -58,7 +60,8 @@ func MonitorStatusHandler(w http.ResponseWriter, r *http.Request) {
 
 	statuses, err := db.GetAllMonitorStatuses()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch monitor statuses: %v", err))
+		verb.LogPrintf(verb.Normal, "MonitorStatusHandler: failed to fetch all statuses: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, statuses)
@@ -70,7 +73,8 @@ func IgnoredSitesHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		sites, err := db.GetIgnoredSites()
 		if err != nil {
-			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to fetch ignored sites: %v", err))
+			verb.LogPrintf(verb.Normal, "IgnoredSitesHandler: failed to fetch ignored sites: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 		WriteJSON(w, http.StatusOK, sites)
@@ -93,7 +97,8 @@ func IgnoredSitesHandler(w http.ResponseWriter, r *http.Request) {
 		monitor.NotifyIfAlertingSiteIgnored(req.Domain, req.Reason)
 
 		if err := db.IgnoreSite(req.Domain, req.Reason); err != nil {
-			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to ignore site: %v", err))
+			verb.LogPrintf(verb.Normal, "IgnoredSitesHandler: failed to ignore site: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
 		WriteJSON(w, http.StatusCreated, map[string]string{"status": "site ignored"})
@@ -119,7 +124,8 @@ func UnignoreSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.UnignoreSite(domain); err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to unignore site: %v", err))
+		verb.LogPrintf(verb.Normal, "UnignoreSiteHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 

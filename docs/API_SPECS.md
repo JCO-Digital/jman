@@ -10,7 +10,8 @@ This document provides a comprehensive technical specification for the `jman-api
 - **User Levels**:
   - `basic`: Read-only access to most data.
   - `edit`: Read/Write access to database records (Organizations, Assets, etc.).
-  - `execute`: Administrative access (User management, system commands).
+  - `execute`: Execution of maintenance commands on sites.
+  - `admin`: Full system access, including user management.
 - **Password Strength**:
   - Enforced using an entropy-based calculation: `poolSize ^ length`.
   - Required minimum variations: 200,000,000,000,000.
@@ -67,11 +68,11 @@ Exchanges a valid, non-expired JWT for a new one.
 
 ## User Management (Admin)
 
-These endpoints are restricted to users with the **`execute`** level.
+These endpoints are restricted to users with the **`admin`** level (or higher).
 
 ### List All Users
 
-`GET /users` (Protected: `execute`)
+`GET /users` (Protected: `admin`)
 
 Returns a detailed list of all users in the system.
 
@@ -82,7 +83,7 @@ Returns a detailed list of all users in the system.
 	{
 		"username": "admin",
 		"displayName": "Administrator",
-		"level": "execute",
+		"level": "admin",
 		"has2FA": true
 	}
 ]
@@ -90,7 +91,7 @@ Returns a detailed list of all users in the system.
 
 ### Create User
 
-`POST /users` (Protected: `execute`)
+`POST /users` (Protected: `admin`)
 
 **Request Body**
 | Field | Type | Required | Description |
@@ -98,21 +99,22 @@ Returns a detailed list of all users in the system.
 | `username` | string | Yes | |
 | `password` | string | Yes | Must meet entropy requirements |
 | `displayName` | string | Yes | |
-| `level` | string | No | `basic`, `edit`, or `execute` (default: `basic`) |
+| `level` | string | No | `basic`, `edit`, `admin`, or `execute` (default: `basic`) |
 
 ### Update User
 
-`PATCH /users/{username}` (Protected: `execute`)
+`PATCH /users/{username}` (Protected: `admin`)
 
 **Request Body**
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `displayName` | string | No | |
 | `level` | string | No | |
+| `password` | string | No | Must meet entropy requirements |
 
 ### Delete User
 
-`DELETE /users/{username}` (Protected: `execute`)
+`DELETE /users/{username}` (Protected: `admin`)
 
 Deletes a user. Cannot delete self or the last administrator.
 

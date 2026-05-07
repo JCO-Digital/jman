@@ -44,6 +44,9 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 		}
 		history = append(history, h)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 
 	return history, nil
 }
@@ -121,6 +124,9 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 			s.LastAlertTime = &lastAlertTime.Time
 		}
 		statuses = append(statuses, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
 	return statuses, nil

@@ -9,8 +9,8 @@ import (
 // RegisterHandlers registers all API routes to the provided mux.
 // Authentication is mandatory: all data endpoints are protected by JWT middleware,
 // while health and login endpoints remain public.
-func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersConfig) {
-	limiter := NewLoginRateLimiter()
+func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersConfig, behindProxy bool) {
+	limiter := NewLoginRateLimiter(behindProxy)
 
 	// --- Public routes (no auth required) ---
 	mux.HandleFunc("GET /api/health", HealthHandler(version))
@@ -23,10 +23,9 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	edit := func(h http.HandlerFunc) http.Handler {
 		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelEdit)(h))
 	}
-	execute := func(h http.HandlerFunc) http.Handler {
-		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelExecute)(h))
+	admin := func(h http.HandlerFunc) http.Handler {
+		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelAdmin)(h))
 	}
-
 	mux.Handle("POST /api/auth/refresh", basic(RefreshHandler(&usersCfg)))
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
 	mux.Handle("GET /api/plugininfo", basic(PluginInfoHandler))
@@ -35,16 +34,16 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/vulns", basic(VulnsHandler))
 
 	// --- User Management (Admin) ---
-	mux.Handle("GET /api/users", execute(AdminListUsersHandler(&usersCfg)))
-	mux.Handle("POST /api/users", execute(CreateUserHandler(&usersCfg)))
-	mux.Handle("PATCH /api/users/{username}", execute(UpdateUserHandler(&usersCfg)))
-	mux.Handle("DELETE /api/users/{username}", execute(DeleteUserHandler(&usersCfg)))
+	mux.Handle("GET /api/users", admin(AdminListUsersHandler(&usersCfg)))
+	mux.Handle("POST /api/users", admin(CreateUserHandler(&usersCfg)))
+	mux.Handle("PATCH /api/users/{username}", admin(UpdateUserHandler(&usersCfg)))
+	mux.Handle("DELETE /api/users/{username}", admin(DeleteUserHandler(&usersCfg)))
 
 	// --- User Self-Service ---
 	mux.Handle("GET /api/user/profile", basic(GetProfileHandler(&usersCfg)))
 	mux.Handle("PATCH /api/user/profile", basic(UpdateProfileHandler(&usersCfg)))
-	mux.Handle("POST /api/user/password", basic(ChangePasswordHandler(&usersCfg)))
-	mux.Handle("POST /api/user/2fa/setup", basic(Setup2FAHandler))
+	mux.Handle("POST /api/user/password", basic(ChangePasswordHandler(&usersCfg, limiter)))
+	mux.Handle("POST /api/user/2fa/setup", basic(Setup2FAHandler(&usersCfg)))
 	mux.Handle("POST /api/user/2fa/activate", basic(Activate2FAHandler(&usersCfg)))
 	mux.Handle("POST /api/user/2fa/deactivate", basic(Deactivate2FAHandler(&usersCfg)))
 

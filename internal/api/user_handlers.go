@@ -33,6 +33,11 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		if err := ValidateDisplayName(req.DisplayName); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
 		if err := ValidateUsername(req.Username); err != nil {
 			WriteError(w, http.StatusBadRequest, err.Error())
 			return
@@ -51,7 +56,7 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), BcryptCost)
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
@@ -68,6 +73,12 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		usersCfg.Lock()
+		// Re-check under write lock to prevent TOCTOU race condition.
+		if config.FindUser(usersCfg, req.Username) != nil {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusConflict, "User already exists")
+			return
+		}
 		usersCfg.Users = append(usersCfg.Users, config.UserEntry{
 			Username:     req.Username,
 			PasswordHash: string(hash),
@@ -89,6 +100,7 @@ func CreateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 type updateUserRequest struct {
 	DisplayName string           `json:"displayName"`
 	Level       config.UserLevel `json:"level"`
+	Password    string           `json:"password"`
 }
 
 // UpdateUserHandler allows an admin to modify user details.
@@ -115,6 +127,11 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		if req.DisplayName != "" {
+			if err := ValidateDisplayName(req.DisplayName); err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			user.DisplayName = req.DisplayName
 		}
 		if req.Level != "" {
@@ -123,7 +140,38 @@ func UpdateUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 				WriteError(w, http.StatusBadRequest, err.Error())
 				return
 			}
+			// Prevent demoting the last admin/execute user.
+			if (user.Level == config.LevelAdmin || user.Level == config.LevelExecute) &&
+				req.Level != config.LevelAdmin && req.Level != config.LevelExecute {
+				adminCount := 0
+				for _, u := range usersCfg.Users {
+					if u.Level == config.LevelAdmin || u.Level == config.LevelExecute {
+						adminCount++
+					}
+				}
+				if adminCount <= 1 {
+					usersCfg.Unlock()
+					WriteError(w, http.StatusForbidden, "Cannot demote the last administrator")
+					return
+				}
+			}
 			user.Level = req.Level
+			user.TokenVersion++
+		}
+		if req.Password != "" {
+			if err := ValidatePasswordStrength(req.Password); err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
+			hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), BcryptCost)
+			if err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusInternalServerError, "Internal server error")
+				return
+			}
+			user.PasswordHash = string(hash)
+			user.TokenVersion++
 		}
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
@@ -150,13 +198,13 @@ func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		usersCfg.Lock()
 		userIndex := -1
-		execCount := 0
+		adminCount := 0
 		for i, u := range usersCfg.Users {
 			if u.Username == username {
 				userIndex = i
 			}
-			if u.Level == config.LevelExecute {
-				execCount++
+			if u.Level == config.LevelAdmin || u.Level == config.LevelExecute {
+				adminCount++
 			}
 		}
 
@@ -167,7 +215,8 @@ func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		// Prevent locking out the system
-		if usersCfg.Users[userIndex].Level == config.LevelExecute && execCount <= 1 {
+		targetLevel := usersCfg.Users[userIndex].Level
+		if (targetLevel == config.LevelAdmin || targetLevel == config.LevelExecute) && adminCount <= 1 {
 			usersCfg.Unlock()
 			WriteError(w, http.StatusForbidden, "Cannot delete the last administrator")
 			return
@@ -277,6 +326,11 @@ func UpdateProfileHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		if req.DisplayName != "" {
+			if err := ValidateDisplayName(req.DisplayName); err != nil {
+				usersCfg.Unlock()
+				WriteError(w, http.StatusBadRequest, err.Error())
+				return
+			}
 			user.DisplayName = req.DisplayName
 		}
 		cfgSnapshot := *usersCfg
@@ -297,11 +351,17 @@ type changePasswordRequest struct {
 }
 
 // ChangePasswordHandler allows the logged-in user to change their own password.
-func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+func ChangePasswordHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
 		if claims == nil {
 			WriteError(w, http.StatusUnauthorized, "Authentication required")
+			return
+		}
+
+		clientIP := limiter.ClientIP(r)
+		if !limiter.Allow(clientIP) {
+			WriteError(w, http.StatusTooManyRequests, "Too many attempts, please try again later")
 			return
 		}
 
@@ -321,6 +381,7 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
 			usersCfg.Unlock()
+			limiter.RecordFailure(clientIP)
 			WriteError(w, http.StatusUnauthorized, "Invalid current password")
 			return
 		}
@@ -331,7 +392,7 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), BcryptCost)
 		if err != nil {
 			usersCfg.Unlock()
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
@@ -339,6 +400,7 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		user.PasswordHash = string(hash)
+		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
 
@@ -347,39 +409,59 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		limiter.Reset(clientIP)
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "password updated"})
 	}
 }
 
 // Setup2FAHandler generates a temporary TOTP secret for the user to set up their app.
-func Setup2FAHandler(w http.ResponseWriter, r *http.Request) {
-	claims := GetAuthClaims(r.Context())
-	if claims == nil {
-		WriteError(w, http.StatusUnauthorized, "Authentication required")
-		return
-	}
+// The secret is stored as a pending secret on the user record until activation.
+func Setup2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := GetAuthClaims(r.Context())
+		if claims == nil {
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
+			return
+		}
 
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "jman-api",
-		AccountName: claims.Username,
-	})
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
+		key, err := totp.Generate(totp.GenerateOpts{
+			Issuer:      "jman-api",
+			AccountName: claims.Username,
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
 
-	WriteJSON(w, http.StatusOK, map[string]string{
-		"secret": key.Secret(),
-		"uri":    key.URL(),
-	})
+		usersCfg.Lock()
+		user := config.FindUser(usersCfg, claims.Username)
+		if user == nil {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			return
+		}
+		user.PendingTOTPSecret = key.Secret()
+		cfgSnapshot := *usersCfg
+		usersCfg.Unlock()
+
+		if err := config.SaveUsersConfig(config.RunData.ConfigDir, cfgSnapshot); err != nil {
+			WriteError(w, http.StatusInternalServerError, "Failed to save configuration")
+			return
+		}
+
+		WriteJSON(w, http.StatusOK, map[string]string{
+			"secret": key.Secret(),
+			"uri":    key.URL(),
+		})
+	}
 }
 
 type activate2FARequest struct {
-	Secret string `json:"secret"`
-	Code   string `json:"code"`
+	Code string `json:"code"`
 }
 
 // Activate2FAHandler verifies a setup code and persists the TOTP secret.
+// It uses the pending secret stored during setup rather than accepting a client-supplied secret.
 func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
@@ -394,13 +476,8 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		if req.Secret == "" || req.Code == "" {
-			WriteError(w, http.StatusBadRequest, "Secret and code are required")
-			return
-		}
-
-		if !totp.Validate(req.Code, req.Secret) {
-			WriteError(w, http.StatusBadRequest, "Invalid verification code")
+		if req.Code == "" {
+			WriteError(w, http.StatusBadRequest, "Code is required")
 			return
 		}
 
@@ -412,7 +489,21 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		user.TOTPSecret = req.Secret
+		if user.PendingTOTPSecret == "" {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusBadRequest, "No pending 2FA setup. Call setup first.")
+			return
+		}
+
+		if !totp.Validate(req.Code, user.PendingTOTPSecret) {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusBadRequest, "Invalid verification code")
+			return
+		}
+
+		user.TOTPSecret = user.PendingTOTPSecret
+		user.PendingTOTPSecret = ""
+		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
 
@@ -439,6 +530,13 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		// Decode body before acquiring lock to avoid holding the lock during I/O.
+		var req deactivate2FARequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			WriteError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
 		usersCfg.Lock()
 		user := config.FindUser(usersCfg, claims.Username)
 		if user == nil {
@@ -449,12 +547,6 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		// If 2FA is enabled, require a valid code to disable it.
 		if user.TOTPSecret != "" {
-			var req deactivate2FARequest
-			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-				usersCfg.Unlock()
-				WriteError(w, http.StatusBadRequest, "Invalid request body")
-				return
-			}
 			if !totp.Validate(req.Code, user.TOTPSecret) {
 				usersCfg.Unlock()
 				WriteError(w, http.StatusBadRequest, "Invalid verification code")
@@ -463,6 +555,7 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		user.TOTPSecret = ""
+		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()
 

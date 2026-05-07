@@ -35,7 +35,13 @@ func setupTestUsersConfig(t *testing.T) (*config.UsersConfig, string) {
 				Username:     "admin",
 				PasswordHash: string(hash),
 				DisplayName:  "Admin User",
-				Level:        config.LevelExecute,
+				Level:        config.LevelAdmin,
+			},
+			{
+				Username:     "admin2",
+				PasswordHash: string(hash),
+				DisplayName:  "Admin User 2",
+				Level:        config.LevelAdmin,
 			},
 			{
 				Username:     "user",
@@ -68,8 +74,8 @@ func TestAdminListUsersHandler(t *testing.T) {
 		t.Fatalf("Failed to decode response: %v", err)
 	}
 
-	if len(users) != 2 {
-		t.Errorf("Expected 2 users, got %d", len(users))
+	if len(users) != 3 {
+		t.Errorf("Expected 3 users, got %d", len(users))
 	}
 }
 
@@ -202,6 +208,28 @@ func TestUpdateUserHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("Admin Password Update", func(t *testing.T) {
+		reqBody := updateUserRequest{
+			Password: "new-admin-password-123456",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("PATCH", "/api/users/user", bytes.NewBuffer(body))
+		req.SetPathValue("username", "user")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Expected status 200, got %d", w.Code)
+		}
+
+		user := config.FindUser(cfg, "user")
+		err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte("new-admin-password-123456"))
+		if err != nil {
+			t.Error("Password was not updated correctly by admin")
+		}
+	})
+
 	t.Run("User Not Found", func(t *testing.T) {
 		reqBody := updateUserRequest{DisplayName: "Nobody"}
 		body, _ := json.Marshal(reqBody)
@@ -244,7 +272,7 @@ func TestDeleteUserHandler(t *testing.T) {
 		req.SetPathValue("username", "user")
 
 		// Set admin claims in context
-		claims := &AuthClaims{Username: "admin", Level: config.LevelExecute}
+		claims := &AuthClaims{Username: "admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req = req.WithContext(ctx)
 
@@ -264,7 +292,7 @@ func TestDeleteUserHandler(t *testing.T) {
 		req := httptest.NewRequest("DELETE", "/api/users/admin", nil)
 		req.SetPathValue("username", "admin")
 
-		claims := &AuthClaims{Username: "admin", Level: config.LevelExecute}
+		claims := &AuthClaims{Username: "admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req = req.WithContext(ctx)
 
@@ -277,12 +305,22 @@ func TestDeleteUserHandler(t *testing.T) {
 	})
 
 	t.Run("Delete Last Admin Forbidden", func(t *testing.T) {
-		// Only "admin" is left as LevelExecute
+		// Remove admin2 first so admin is the last admin
+		cfg.Lock()
+		for i, u := range cfg.Users {
+			if u.Username == "admin2" {
+				cfg.Users = append(cfg.Users[:i], cfg.Users[i+1:]...)
+				break
+			}
+		}
+		cfg.Unlock()
+
+		// Only "admin" is left as LevelAdmin
 		req := httptest.NewRequest("DELETE", "/api/users/admin", nil)
 		req.SetPathValue("username", "admin")
 
 		// Use a different admin for the claim to bypass "delete self" check if there were multiple
-		claims := &AuthClaims{Username: "other-admin", Level: config.LevelExecute}
+		claims := &AuthClaims{Username: "other-admin", Level: config.LevelAdmin}
 		ctx := contextWithClaims(context.Background(), claims)
 		req = req.WithContext(ctx)
 
@@ -367,7 +405,9 @@ func TestChangePasswordHandler(t *testing.T) {
 	cfg, tempDir := setupTestUsersConfig(t)
 	defer os.RemoveAll(tempDir)
 
-	handler := ChangePasswordHandler(cfg)
+	limiter := NewLoginRateLimiter(false)
+	defer limiter.Stop()
+	handler := ChangePasswordHandler(cfg, limiter)
 
 	t.Run("Successful Change", func(t *testing.T) {
 		reqBody := changePasswordRequest{
@@ -447,7 +487,7 @@ func TestTOTPFlow(t *testing.T) {
 	setupReq := httptest.NewRequest("POST", "/api/user/2fa/setup", nil)
 	setupReq = setupReq.WithContext(ctx)
 	setupW := httptest.NewRecorder()
-	Setup2FAHandler(setupW, setupReq)
+	Setup2FAHandler(cfg)(setupW, setupReq)
 
 	if setupW.Code != http.StatusOK {
 		t.Errorf("Setup failed with %d", setupW.Code)
@@ -464,8 +504,7 @@ func TestTOTPFlow(t *testing.T) {
 	// 2. Activate (with a valid code)
 	code, _ := totp.GenerateCode(secret, time.Now())
 	activateBody, _ := json.Marshal(activate2FARequest{
-		Secret: secret,
-		Code:   code,
+		Code: code,
 	})
 	activateReq := httptest.NewRequest("POST", "/api/user/2fa/activate", bytes.NewBuffer(activateBody))
 	activateReq = activateReq.WithContext(ctx)
