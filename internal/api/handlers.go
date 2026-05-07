@@ -42,8 +42,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- User Self-Service ---
 	mux.Handle("GET /api/user/profile", basic(GetProfileHandler(&usersCfg)))
 	mux.Handle("PATCH /api/user/profile", basic(UpdateProfileHandler(&usersCfg)))
-	mux.Handle("POST /api/user/password", basic(ChangePasswordHandler(&usersCfg)))
-	mux.Handle("POST /api/user/2fa/setup", basic(Setup2FAHandler))
+	mux.Handle("POST /api/user/password", basic(ChangePasswordHandler(&usersCfg, limiter)))
+	mux.Handle("POST /api/user/2fa/setup", basic(Setup2FAHandler(&usersCfg)))
 	mux.Handle("POST /api/user/2fa/activate", basic(Activate2FAHandler(&usersCfg)))
 	mux.Handle("POST /api/user/2fa/deactivate", basic(Deactivate2FAHandler(&usersCfg)))
 

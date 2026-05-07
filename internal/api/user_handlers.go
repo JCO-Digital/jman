@@ -351,11 +351,17 @@ type changePasswordRequest struct {
 }
 
 // ChangePasswordHandler allows the logged-in user to change their own password.
-func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+func ChangePasswordHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
 		if claims == nil {
 			WriteError(w, http.StatusUnauthorized, "Authentication required")
+			return
+		}
+
+		clientIP := limiter.ClientIP(r)
+		if !limiter.Allow(clientIP) {
+			WriteError(w, http.StatusTooManyRequests, "Too many attempts, please try again later")
 			return
 		}
 
@@ -375,6 +381,7 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.CurrentPassword)); err != nil {
 			usersCfg.Unlock()
+			limiter.RecordFailure(clientIP)
 			WriteError(w, http.StatusUnauthorized, "Invalid current password")
 			return
 		}
@@ -402,39 +409,59 @@ func ChangePasswordHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		limiter.Reset(clientIP)
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "password updated"})
 	}
 }
 
 // Setup2FAHandler generates a temporary TOTP secret for the user to set up their app.
-func Setup2FAHandler(w http.ResponseWriter, r *http.Request) {
-	claims := GetAuthClaims(r.Context())
-	if claims == nil {
-		WriteError(w, http.StatusUnauthorized, "Authentication required")
-		return
-	}
+// The secret is stored as a pending secret on the user record until activation.
+func Setup2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		claims := GetAuthClaims(r.Context())
+		if claims == nil {
+			WriteError(w, http.StatusUnauthorized, "Authentication required")
+			return
+		}
 
-	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      "jman-api",
-		AccountName: claims.Username,
-	})
-	if err != nil {
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
+		key, err := totp.Generate(totp.GenerateOpts{
+			Issuer:      "jman-api",
+			AccountName: claims.Username,
+		})
+		if err != nil {
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
 
-	WriteJSON(w, http.StatusOK, map[string]string{
-		"secret": key.Secret(),
-		"uri":    key.URL(),
-	})
+		usersCfg.Lock()
+		user := config.FindUser(usersCfg, claims.Username)
+		if user == nil {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			return
+		}
+		user.PendingTOTPSecret = key.Secret()
+		cfgSnapshot := *usersCfg
+		usersCfg.Unlock()
+
+		if err := config.SaveUsersConfig(config.RunData.ConfigDir, cfgSnapshot); err != nil {
+			WriteError(w, http.StatusInternalServerError, "Failed to save configuration")
+			return
+		}
+
+		WriteJSON(w, http.StatusOK, map[string]string{
+			"secret": key.Secret(),
+			"uri":    key.URL(),
+		})
+	}
 }
 
 type activate2FARequest struct {
-	Secret string `json:"secret"`
-	Code   string `json:"code"`
+	Code string `json:"code"`
 }
 
 // Activate2FAHandler verifies a setup code and persists the TOTP secret.
+// It uses the pending secret stored during setup rather than accepting a client-supplied secret.
 func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
@@ -449,13 +476,8 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		if req.Secret == "" || req.Code == "" {
-			WriteError(w, http.StatusBadRequest, "Secret and code are required")
-			return
-		}
-
-		if !totp.Validate(req.Code, req.Secret) {
-			WriteError(w, http.StatusBadRequest, "Invalid verification code")
+		if req.Code == "" {
+			WriteError(w, http.StatusBadRequest, "Code is required")
 			return
 		}
 
@@ -467,7 +489,20 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
-		user.TOTPSecret = req.Secret
+		if user.PendingTOTPSecret == "" {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusBadRequest, "No pending 2FA setup. Call setup first.")
+			return
+		}
+
+		if !totp.Validate(req.Code, user.PendingTOTPSecret) {
+			usersCfg.Unlock()
+			WriteError(w, http.StatusBadRequest, "Invalid verification code")
+			return
+		}
+
+		user.TOTPSecret = user.PendingTOTPSecret
+		user.PendingTOTPSecret = ""
 		user.TokenVersion++
 		cfgSnapshot := *usersCfg
 		usersCfg.Unlock()

@@ -22,7 +22,8 @@ type loginAttemptRecord struct {
 // LoginRateLimiter provides in-memory per-IP rate limiting for the login endpoint.
 type LoginRateLimiter struct {
 	BehindProxy bool
-	entries     sync.Map
+	mu          sync.Mutex
+	entries     map[string]loginAttemptRecord
 	stop        chan struct{}
 }
 
@@ -32,6 +33,7 @@ type LoginRateLimiter struct {
 func NewLoginRateLimiter(behindProxy bool) *LoginRateLimiter {
 	rl := &LoginRateLimiter{
 		BehindProxy: behindProxy,
+		entries:     make(map[string]loginAttemptRecord),
 		stop:        make(chan struct{}),
 	}
 	go rl.cleanupLoop()
@@ -74,16 +76,17 @@ func (rl *LoginRateLimiter) ClientIP(r *http.Request) string {
 // 5 failed attempts in the current 15-minute window. If the window has
 // expired, the counter is reset and the request is allowed.
 func (rl *LoginRateLimiter) Allow(key string) bool {
-	val, ok := rl.entries.Load(key)
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	record, ok := rl.entries[key]
 	if !ok {
 		return true
 	}
 
-	record := val.(loginAttemptRecord)
-
 	// If the lockout window has expired, reset and allow.
 	if time.Since(record.FirstAttempt) > loginLockoutWindow {
-		rl.entries.Delete(key)
+		delete(rl.entries, key)
 		return true
 	}
 
@@ -93,34 +96,38 @@ func (rl *LoginRateLimiter) Allow(key string) bool {
 // RecordFailure increments the failure counter for the given key. If this is
 // the first failure, FirstAttempt is set to the current time.
 func (rl *LoginRateLimiter) RecordFailure(key string) {
-	val, ok := rl.entries.Load(key)
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	record, ok := rl.entries[key]
 	if !ok {
-		rl.entries.Store(key, loginAttemptRecord{
+		rl.entries[key] = loginAttemptRecord{
 			Attempts:     1,
 			FirstAttempt: time.Now(),
-		})
+		}
 		return
 	}
 
-	record := val.(loginAttemptRecord)
-
 	// If the window has expired, start a new tracking period.
 	if time.Since(record.FirstAttempt) > loginLockoutWindow {
-		rl.entries.Store(key, loginAttemptRecord{
+		rl.entries[key] = loginAttemptRecord{
 			Attempts:     1,
 			FirstAttempt: time.Now(),
-		})
+		}
 		return
 	}
 
 	record.Attempts++
-	rl.entries.Store(key, record)
+	rl.entries[key] = record
 }
 
 // Reset deletes the entry for the given key. This should be called on
 // successful login.
 func (rl *LoginRateLimiter) Reset(key string) {
-	rl.entries.Delete(key)
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	delete(rl.entries, key)
 }
 
 // Stop terminates the background cleanup goroutine. Call this when the rate
@@ -147,12 +154,13 @@ func (rl *LoginRateLimiter) cleanupLoop() {
 
 // evictExpired removes all entries whose lockout window has expired.
 func (rl *LoginRateLimiter) evictExpired() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
 	now := time.Now()
-	rl.entries.Range(func(key, value any) bool {
-		record := value.(loginAttemptRecord)
+	for key, record := range rl.entries {
 		if now.Sub(record.FirstAttempt) > loginLockoutWindow {
-			rl.entries.Delete(key)
+			delete(rl.entries, key)
 		}
-		return true
-	})
+	}
 }
