@@ -2,13 +2,13 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // getUsername extracts the username from the JWT context.
@@ -27,7 +27,8 @@ func ListOrganizationsHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	organizations, err := db.GetAllOrganizations(search)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListOrganizationsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, organizations)
@@ -50,7 +51,8 @@ func CreateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveOrganization(&org, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateOrganizationHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusCreated, org)
@@ -67,7 +69,8 @@ func GetOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 
 	org, err := db.GetOrganization(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "GetOrganizationHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if org == nil {
@@ -94,7 +97,8 @@ func UpdateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 
 	org, err := db.GetOrganization(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateOrganizationHandler: failed to get organization: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if org == nil {
@@ -110,7 +114,8 @@ func UpdateOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveOrganization(org, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateOrganizationHandler: failed to save organization: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, org)
@@ -126,7 +131,8 @@ func DeleteOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteOrganization(id); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "DeleteOrganizationHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -145,7 +151,8 @@ func ListContactsHandler(w http.ResponseWriter, r *http.Request) {
 
 	contacts, err := db.GetContactsByOrganization(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListContactsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, contacts)
@@ -162,14 +169,16 @@ func ListOrganizationSitesHandler(w http.ResponseWriter, r *http.Request) {
 
 	siteIDs, err := db.GetSitesByOrganization(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListOrganizationSitesHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	// Load all sites from cache to return full site objects
 	allSites := []models.Site{}
 	if err := cache.ReadJSONCache("sites", &allSites, -1); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
+		verb.LogPrintf(verb.Normal, "ListOrganizationSitesHandler: cache read failed: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -203,7 +212,8 @@ func CreateContactHandler(w http.ResponseWriter, r *http.Request) {
 
 	org, err := db.GetOrganization(contact.OrganizationID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateContactHandler: failed to get organization: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if org == nil {
@@ -216,7 +226,8 @@ func CreateContactHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveContact(&contact, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateContactHandler: failed to save contact: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusCreated, contact)
@@ -239,7 +250,8 @@ func UpdateContactHandler(w http.ResponseWriter, r *http.Request) {
 
 	contact, err := db.GetContact(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateContactHandler: failed to get contact: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if contact == nil {
@@ -258,7 +270,8 @@ func UpdateContactHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveContact(contact, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateContactHandler: failed to save contact: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, contact)
@@ -274,7 +287,8 @@ func DeleteContactHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteContact(id); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "DeleteContactHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -293,7 +307,8 @@ func GetSiteOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 
 	org, err := db.GetOrganizationBySite(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "GetSiteOrganizationHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if org == nil {
@@ -322,7 +337,8 @@ func LinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.LinkSiteToOrganization(siteID, body.OrganizationID, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "LinkSiteHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -339,7 +355,8 @@ func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 
 	org, err := db.GetOrganizationBySite(siteID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UnlinkSiteHandler: failed to get organization: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if org == nil {
@@ -348,7 +365,8 @@ func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.UnlinkSiteFromOrganization(siteID, org.ID); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UnlinkSiteHandler: failed to unlink site: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -373,7 +391,8 @@ func ListNotesHandler(w http.ResponseWriter, r *http.Request) {
 
 	notes, err := db.GetNotes(parentType, parentID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "ListNotesHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, notes)
@@ -399,7 +418,8 @@ func CreateNoteHandler(w http.ResponseWriter, r *http.Request) {
 
 	username := getUsername(r)
 	if err := db.SaveNote(&note, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "CreateNoteHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusCreated, note)
@@ -424,7 +444,8 @@ func UpdateNoteHandler(w http.ResponseWriter, r *http.Request) {
 
 	note, err := db.GetNote(id)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateNoteHandler: failed to get note: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	if note == nil {
@@ -435,7 +456,8 @@ func UpdateNoteHandler(w http.ResponseWriter, r *http.Request) {
 	note.Content = updates.Content
 	username := getUsername(r)
 	if err := db.SaveNote(note, username); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "UpdateNoteHandler: failed to save note: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, note)
@@ -451,7 +473,8 @@ func DeleteNoteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.DeleteNote(id); err != nil {
-		WriteError(w, http.StatusInternalServerError, err.Error())
+		verb.LogPrintf(verb.Normal, "DeleteNoteHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

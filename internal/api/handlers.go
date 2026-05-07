@@ -9,8 +9,8 @@ import (
 // RegisterHandlers registers all API routes to the provided mux.
 // Authentication is mandatory: all data endpoints are protected by JWT middleware,
 // while health and login endpoints remain public.
-func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersConfig) {
-	limiter := NewLoginRateLimiter()
+func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersConfig, behindProxy bool) {
+	limiter := NewLoginRateLimiter(behindProxy)
 
 	// --- Public routes (no auth required) ---
 	mux.HandleFunc("GET /api/health", HealthHandler(version))

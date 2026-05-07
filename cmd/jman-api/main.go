@@ -43,7 +43,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	mux := http.NewServeMux()
 
 	// Register API routes from the internal/api package
-	api.RegisterHandlers(mux, config.AppVersion, usersCfg)
+	api.RegisterHandlers(mux, config.AppVersion, usersCfg, config.Cfg.BehindProxy)
 
 	// Wrap mux with middleware
 	handler := api.LoggingMiddleware(

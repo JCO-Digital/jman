@@ -155,8 +155,9 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			return
 		}
 
-		// Rate limiting check.
-		if !limiter.Allow(req.Username) {
+		// Rate limiting check (per client IP).
+		clientIP := limiter.ClientIP(r)
+		if !limiter.Allow(clientIP) {
 			WriteError(w, http.StatusTooManyRequests, "Too many login attempts, try again later")
 			return
 		}
@@ -171,22 +172,16 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		}
 		usersCfg.RUnlock()
 		if err := bcrypt.CompareHashAndPassword(hashToCompare, []byte(req.Password)); err != nil || user == nil {
-			limiter.RecordFailure(req.Username)
+			limiter.RecordFailure(clientIP)
 			WriteError(w, http.StatusUnauthorized, "Invalid credentials")
 			return
 		}
 
 		// TOTP validation (only if the user has a TOTP secret configured).
 		if user.TOTPSecret != "" {
-			if req.TOTP == "" {
-				// Don't record as a failure — the client may retry with the code.
-				WriteError(w, http.StatusUnauthorized, "TOTP code required")
-				return
-			}
-			valid := totp.Validate(req.TOTP, user.TOTPSecret)
-			if !valid {
-				limiter.RecordFailure(req.Username)
-				WriteError(w, http.StatusUnauthorized, "Invalid TOTP code")
+			if req.TOTP == "" || !totp.Validate(req.TOTP, user.TOTPSecret) {
+				limiter.RecordFailure(clientIP)
+				WriteError(w, http.StatusUnauthorized, "Invalid credentials")
 				return
 			}
 		}
@@ -199,7 +194,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			return
 		}
 
-		limiter.Reset(req.Username)
+		limiter.Reset(clientIP)
 
 		// Re-calculate effective level for response (must match what's in the token).
 		effectiveLevel := user.Level

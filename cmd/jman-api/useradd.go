@@ -97,7 +97,7 @@ func runUseradd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	hash, err := bcrypt.GenerateFromPassword(pw1, 12)
+	hash, err := bcrypt.GenerateFromPassword(pw1, api.BcryptCost)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}

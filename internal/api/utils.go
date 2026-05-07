@@ -12,6 +12,9 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
+// BcryptCost is the bcrypt cost factor used for all password hashing operations.
+const BcryptCost = 12
+
 // ErrorResponse represents a standard JSON error response.
 type ErrorResponse struct {
 	Error string `json:"error"`
@@ -109,4 +112,12 @@ func ValidateUsername(username string) error {
 // NormalizeUsername trims whitespace and converts to lowercase.
 func NormalizeUsername(username string) string {
 	return strings.ToLower(strings.TrimSpace(username))
+}
+
+// ValidateDisplayName checks that the display name meets length requirements.
+func ValidateDisplayName(name string) error {
+	if len(name) > 100 {
+		return fmt.Errorf("display name must be 100 characters or fewer")
+	}
+	return nil
 }
