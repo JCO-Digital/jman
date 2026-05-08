@@ -306,6 +306,17 @@ func initSchema() error {
 				"updated_by":  "TEXT",
 			},
 		},
+		{
+			Name: "settings",
+			Columns: map[string]string{
+				"user_id":    "TEXT NOT NULL",
+				"key":        "TEXT NOT NULL",
+				"value":      "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"user_id", "key"},
+		},
 	}
 
 	for _, table := range tables {
