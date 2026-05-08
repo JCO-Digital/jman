@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.16.0 (2026-05-08)
+## 1.17.0 (2026-05-08)
+
+#### Features
+
+- settings: synchronize settings with API (f687387)
+
+## v1.16.0 (2026-05-08)
 
 #### Features
 
