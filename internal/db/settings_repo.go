@@ -18,7 +18,7 @@ func GetSetting(userID, key string) (*models.Setting, error) {
 
 	query := `SELECT user_id, key, value, created_at, updated_at FROM settings WHERE user_id = ? AND key = ?`
 	var s models.Setting
-	var valueJSON string
+	var valueJSON sql.NullString
 
 	err := db.QueryRow(query, userID, key).Scan(&s.UserID, &s.Key, &valueJSON, &s.CreatedAt, &s.UpdatedAt)
 	if err == sql.ErrNoRows {
@@ -28,8 +28,10 @@ func GetSetting(userID, key string) (*models.Setting, error) {
 		return nil, fmt.Errorf("failed to get setting: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(valueJSON), &s.Value); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal setting value: %w", err)
+	if valueJSON.Valid {
+		if err := json.Unmarshal([]byte(valueJSON.String), &s.Value); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal setting value: %w", err)
+		}
 	}
 
 	return &s, nil
@@ -52,12 +54,14 @@ func GetAllSettings(userID string) ([]models.Setting, error) {
 	var settings []models.Setting
 	for rows.Next() {
 		var s models.Setting
-		var valueJSON string
+		var valueJSON sql.NullString
 		if err := rows.Scan(&s.UserID, &s.Key, &valueJSON, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
-		if err := json.Unmarshal([]byte(valueJSON), &s.Value); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal setting value for key %s: %w", s.Key, err)
+		if valueJSON.Valid {
+			if err := json.Unmarshal([]byte(valueJSON.String), &s.Value); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal setting value for key %s: %w", s.Key, err)
+			}
 		}
 		settings = append(settings, s)
 	}
