@@ -1,6 +1,21 @@
 # Changelog
 
-### 5.9.1 (2026-05-07)
+## 5.10.0 (2026-05-08)
+
+#### Features
+
+- api: implement user settings management endpoints (ebd2e3a)
+
+#### Bug Fixes
+
+- api: return 404 for missing settings on PATCH requests (e6337bf)
+- db: enforce non-null value constraint and handle optional settings safely (f08b986)
+
+#### Tests
+
+- api: add unit tests for settings handlers (f7c7ffd)
+
+### v5.9.1 (2026-05-07)
 
 #### Bug Fixes
 
