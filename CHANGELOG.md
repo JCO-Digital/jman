@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.15.0 (2026-05-07)
+## 1.16.0 (2026-05-08)
+
+#### Features
+
+- dashboard: add vulnerability dashboard widget (d3e7ad9)
+
+## v1.15.0 (2026-05-07)
 
 #### Features
 
