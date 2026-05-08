@@ -119,22 +119,22 @@ func PatchSettingHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if existing == nil {
+		WriteError(w, http.StatusNotFound, "Setting not found")
+		return
+	}
+
 	var finalValue any
-	if existing != nil {
-		// If both are maps, merge them
-		existingMap, ok1 := existing.Value.(map[string]any)
-		patchMap, ok2 := patchValue.(map[string]any)
-		if ok1 && ok2 {
-			for k, v := range patchMap {
-				existingMap[k] = v
-			}
-			finalValue = existingMap
-		} else {
-			// If either is not a map, PATCH behaves like POST (replace)
-			finalValue = patchValue
+	// If both are maps, merge them
+	existingMap, ok1 := existing.Value.(map[string]any)
+	patchMap, ok2 := patchValue.(map[string]any)
+	if ok1 && ok2 {
+		for k, v := range patchMap {
+			existingMap[k] = v
 		}
+		finalValue = existingMap
 	} else {
-		// No existing setting, just use the new value
+		// If either is not a map, PATCH behaves like POST (replace)
 		finalValue = patchValue
 	}
 

@@ -307,16 +307,16 @@ Returns a specific setting by key.
 Creates a new setting or completely replaces an existing one.
 
 **Request Body**
-Any valid JSON object.
+Any valid JSON value.
 
 ### Merge Update Setting
 
 `PATCH /settings/{key}` (Protected: `basic`)
 
-Merges the provided JSON object with the existing setting. If both the current value and the new value are JSON objects (maps), they are merged. Otherwise, the value is replaced.
+Merges the provided JSON object with the existing setting. If both the current value and the new value are JSON objects (maps), they are merged. Otherwise, the value is replaced. Returns `404 Not Found` if the setting does not exist.
 
 **Request Body**
-Any valid JSON object.
+Any valid JSON value.
 
 ### Delete Setting
 
