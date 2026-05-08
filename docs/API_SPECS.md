@@ -258,6 +258,74 @@ These endpoints require at least **`basic`** level.
 
 ---
 
+## Settings Management
+
+These endpoints allow users to store arbitrary key/value pairs for frontend configuration or personal preferences. Settings are private to each user.
+
+### List All Settings
+
+`GET /settings` (Protected: `basic`)
+
+Returns all settings for the authenticated user.
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"user_id": "username",
+		"key": "theme",
+		"value": { "dark": true },
+		"created_at": "datetime",
+		"updated_at": "datetime"
+	}
+]
+```
+
+### Get Setting
+
+`GET /settings/{key}` (Protected: `basic`)
+
+Returns a specific setting by key.
+
+**Response (200 OK)**
+
+```json
+{
+	"user_id": "username",
+	"key": "theme",
+	"value": { "dark": true },
+	"created_at": "datetime",
+	"updated_at": "datetime"
+}
+```
+
+### Create or Replace Setting
+
+`POST /settings/{key}` (Protected: `basic`)
+
+Creates a new setting or completely replaces an existing one.
+
+**Request Body**
+Any valid JSON value.
+
+### Merge Update Setting
+
+`PATCH /settings/{key}` (Protected: `basic`)
+
+Merges the provided JSON object with the existing setting. If both the current value and the new value are JSON objects (maps), they are merged. Otherwise, the value is replaced. Returns `404 Not Found` if the setting does not exist.
+
+**Request Body**
+Any valid JSON value.
+
+### Delete Setting
+
+`DELETE /settings/{key}` (Protected: `basic`)
+
+Removes the setting with the specified key.
+
+---
+
 ## Error Handling
 
 The API returns a standard error object for all non-2xx/3xx responses:

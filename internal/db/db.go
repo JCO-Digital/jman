@@ -14,7 +14,6 @@ import (
 
 var (
 	dbInstance *sql.DB
-	once       sync.Once
 	dbMutex    sync.Mutex
 )
 
@@ -28,54 +27,58 @@ type TableDefinition struct {
 // Init initializes the SQLite database.
 // It creates the database file in the data directory if it doesn't exist.
 func Init() error {
-	var err error
-	once.Do(func() {
-		dbPath := filepath.Join(config.RunData.DataDir, "jman.db")
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
 
-		// Open the database connection.
-		db, openErr := sql.Open("sqlite", dbPath)
-		if openErr != nil {
-			err = fmt.Errorf("failed to open database: %w", openErr)
-			return
+	if dbInstance != nil {
+		return nil
+	}
+
+	dbPath := filepath.Join(config.RunData.DataDir, "jman.db")
+
+	// Open the database connection.
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %w", err)
+	}
+
+	// Limit to a single connection to avoid "database is locked" errors.
+	// SQLite works best with a single connection when performing concurrent writes.
+	db.SetMaxOpenConns(1)
+
+	// Set pragmas for better concurrency and reliability.
+	// WAL mode allows multiple readers and one writer simultaneously.
+	// Busy timeout ensures it retries before failing with SQLITE_BUSY.
+	pragmas := []string{
+		"PRAGMA journal_mode=WAL",
+		"PRAGMA synchronous=NORMAL",
+		"PRAGMA busy_timeout=5000",
+		"PRAGMA foreign_keys=ON",
+	}
+
+	for _, p := range pragmas {
+		if _, pragmaErr := db.Exec(p); pragmaErr != nil {
+			db.Close()
+			return fmt.Errorf("failed to set pragma %q: %w", p, pragmaErr)
 		}
+	}
 
-		// Limit to a single connection to avoid "database is locked" errors.
-		// SQLite works best with a single connection when performing concurrent writes.
-		db.SetMaxOpenConns(1)
+	// Check connection
+	if pingErr := db.Ping(); pingErr != nil {
+		db.Close()
+		return fmt.Errorf("failed to ping database: %w", pingErr)
+	}
 
-		// Set pragmas for better concurrency and reliability.
-		// WAL mode allows multiple readers and one writer simultaneously.
-		// Busy timeout ensures it retries before failing with SQLITE_BUSY.
-		pragmas := []string{
-			"PRAGMA journal_mode=WAL",
-			"PRAGMA synchronous=NORMAL",
-			"PRAGMA busy_timeout=5000",
-			"PRAGMA foreign_keys=ON",
-		}
+	dbInstance = db
 
-		for _, p := range pragmas {
-			if _, pragmaErr := db.Exec(p); pragmaErr != nil {
-				err = fmt.Errorf("failed to set pragma %q: %w", p, pragmaErr)
-				return
-			}
-		}
+	// Initialize schemas with migration support
+	if schemaErr := initSchema(); schemaErr != nil {
+		db.Close()
+		dbInstance = nil
+		return fmt.Errorf("failed to initialize schema: %w", schemaErr)
+	}
 
-		// Check connection
-		if pingErr := db.Ping(); pingErr != nil {
-			err = fmt.Errorf("failed to ping database: %w", pingErr)
-			return
-		}
-
-		dbInstance = db
-
-		// Initialize schemas with migration support
-		if schemaErr := initSchema(); schemaErr != nil {
-			err = fmt.Errorf("failed to initialize schema: %w", schemaErr)
-			return
-		}
-	})
-
-	return err
+	return nil
 }
 
 // GetDB returns the global database instance.
@@ -305,6 +308,17 @@ func initSchema() error {
 				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"updated_by":  "TEXT",
 			},
+		},
+		{
+			Name: "settings",
+			Columns: map[string]string{
+				"user_id":    "TEXT NOT NULL",
+				"key":        "TEXT NOT NULL",
+				"value":      "TEXT NOT NULL",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"user_id", "key"},
 		},
 	}
 
