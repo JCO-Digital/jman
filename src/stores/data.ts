@@ -72,6 +72,14 @@ export const useDataStore = defineStore("data", () => {
 		return map;
 	});
 
+	const pluginNameMap = computed(() => {
+		const map = new Map<string, string>();
+		for (const info of enrichedPlugins.value) {
+			map.set(info.slug, info.name);
+		}
+		return map;
+	});
+
 	const sitesByIdMap = computed(() => {
 		const map = new Map<number, Site>();
 		for (const s of sites.value) {
@@ -363,6 +371,7 @@ export const useDataStore = defineStore("data", () => {
 		vulnerabilitiesBySiteId,
 		pluginsBySiteIdMap,
 		pluginsBySlugMap,
+		pluginNameMap,
 		sitesByIdMap,
 		serversByIdMap,
 		getSiteById,

@@ -6,12 +6,16 @@ const LS_SETTINGS = "jman_settings";
 interface AppSettings {
 	monitorRefreshInterval: number;
 	dataRefreshInterval: number;
+	vulnCvssThreshold: number;
+	vulnTotalThreshold: number;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
 	// State
 	const monitorRefreshInterval = ref(60); // Default 60 seconds
 	const dataRefreshInterval = ref(300); // Default 300 seconds
+	const vulnCvssThreshold = ref(7); // Default CVSS 7
+	const vulnTotalThreshold = ref(8); // Default 8 vulnerabilities
 
 	// Initialize from localStorage
 	function initialize() {
@@ -25,6 +29,12 @@ export const useSettingsStore = defineStore("settings", () => {
 				if (data.dataRefreshInterval) {
 					dataRefreshInterval.value = data.dataRefreshInterval;
 				}
+				if (data.vulnCvssThreshold !== undefined) {
+					vulnCvssThreshold.value = data.vulnCvssThreshold;
+				}
+				if (data.vulnTotalThreshold !== undefined) {
+					vulnTotalThreshold.value = data.vulnTotalThreshold;
+				}
 			} catch (e) {
 				console.error("Failed to parse settings from localStorage", e);
 			}
@@ -33,13 +43,20 @@ export const useSettingsStore = defineStore("settings", () => {
 
 	// Persist changes
 	watch(
-		[() => monitorRefreshInterval.value, () => dataRefreshInterval.value],
-		([monitorInterval, dataInterval]) => {
+		[
+			() => monitorRefreshInterval.value,
+			() => dataRefreshInterval.value,
+			() => vulnCvssThreshold.value,
+			() => vulnTotalThreshold.value,
+		],
+		([monitorInterval, dataInterval, cvssThreshold, totalThreshold]) => {
 			localStorage.setItem(
 				LS_SETTINGS,
 				JSON.stringify({
 					monitorRefreshInterval: monitorInterval,
 					dataRefreshInterval: dataInterval,
+					vulnCvssThreshold: cvssThreshold,
+					vulnTotalThreshold: totalThreshold,
 				}),
 			);
 		},
@@ -48,6 +65,8 @@ export const useSettingsStore = defineStore("settings", () => {
 	return {
 		monitorRefreshInterval,
 		dataRefreshInterval,
+		vulnCvssThreshold,
+		vulnTotalThreshold,
 		initialize,
 	};
 });

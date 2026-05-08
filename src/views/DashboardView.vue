@@ -5,6 +5,7 @@ import { useAssetStore } from "../stores/assetStore";
 import type { OrganizationAsset } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import StatCard from "../components/StatCard.vue";
+import VulnerabilityWidget from "../components/VulnerabilityWidget.vue";
 
 const dataStore = useDataStore();
 const assetStore = useAssetStore();
@@ -90,6 +91,8 @@ const formatDate = (dateString: string | null) => {
 				}"
 			/>
 		</main>
+
+		<VulnerabilityWidget />
 
 		<section
 			v-if="upcomingRenewals.length > 0 || isRenewalsLoading"

@@ -43,6 +43,43 @@ const settingsStore = useSettingsStore();
 					reloaded (Default: 300s).
 				</p>
 			</div>
+
+			<div class="setting-group refresh-interval-group">
+				<label for="vuln-cvss-threshold"
+					>Vulnerability CVSS Threshold</label
+				>
+				<input
+					id="vuln-cvss-threshold"
+					v-model.number="settingsStore.vulnCvssThreshold"
+					type="number"
+					min="0"
+					max="10"
+					step="0.1"
+					class="refresh-input"
+				/>
+				<p class="help-text">
+					Minimum CVSS score to show site in vulnerability widget
+					(Default: 7.0).
+				</p>
+			</div>
+
+			<div class="setting-group refresh-interval-group">
+				<label for="vuln-total-threshold"
+					>Total Vulnerabilities Threshold</label
+				>
+				<input
+					id="vuln-total-threshold"
+					v-model.number="settingsStore.vulnTotalThreshold"
+					type="number"
+					min="1"
+					max="100"
+					class="refresh-input"
+				/>
+				<p class="help-text">
+					Minimum number of vulnerabilities to show site in
+					vulnerability widget (Default: 8).
+				</p>
+			</div>
 		</div>
 	</section>
 </template>
