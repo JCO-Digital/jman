@@ -311,7 +311,7 @@ func initSchema() error {
 			Columns: map[string]string{
 				"user_id":    "TEXT NOT NULL",
 				"key":        "TEXT NOT NULL",
-				"value":      "TEXT",
+				"value":      "TEXT NOT NULL",
 				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
