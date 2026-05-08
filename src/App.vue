@@ -16,7 +16,6 @@ const settingsStore = useSettingsStore();
 const userStore = useUserStore();
 
 authStore.initialize();
-settingsStore.initialize();
 
 const monitorStore = useMonitorStore();
 
@@ -53,6 +52,7 @@ const stopIntervals = () => {
 watch(
 	() => authStore.isAuthenticated,
 	(authenticated) => {
+		settingsStore.initialize();
 		if (authenticated) {
 			dataStore.initData();
 			startIntervals();
