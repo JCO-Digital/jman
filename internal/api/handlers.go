@@ -92,6 +92,13 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/notes", edit(CreateNoteHandler))
 	mux.Handle("PATCH /api/notes/{id}", edit(UpdateNoteHandler))
 	mux.Handle("DELETE /api/notes/{id}", edit(DeleteNoteHandler))
+
+	// --- Settings routes ---
+	mux.Handle("GET /api/settings", basic(ListSettingsHandler))
+	mux.Handle("GET /api/settings/{key}", basic(GetSettingHandler))
+	mux.Handle("POST /api/settings/{key}", basic(SaveSettingHandler))
+	mux.Handle("PATCH /api/settings/{key}", basic(PatchSettingHandler))
+	mux.Handle("DELETE /api/settings/{key}", basic(DeleteSettingHandler))
 }
 
 // HealthHandler returns a simple health check response.
