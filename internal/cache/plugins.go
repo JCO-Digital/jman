@@ -27,9 +27,10 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 		return nil, fmt.Errorf("failed to get existing plugins from database: %w", err)
 	}
 
-	hasPlugins := make(map[int]bool)
-	for _, p := range existingPlugins {
-		hasPlugins[p.SiteID] = true
+	lastUpdates, err := db.GetSitePluginLastUpdates()
+	if err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to get plugin last updates from database: %v\n", err)
+		lastUpdates = make(map[int]string)
 	}
 
 	sites, err := GetSiteList()
@@ -43,9 +44,17 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	var mu sync.Mutex
 
 	for _, site := range sites {
-		// Skip sites that already have cached plugins unless forcing a refresh.
-		if hasPlugins[site.ID] && !force {
-			continue
+		// Skip sites that already have cached plugins unless forcing a refresh or expired.
+		if !force {
+			if lastUpdate, ok := lastUpdates[site.ID]; ok && lastUpdate != "" {
+				if t == -1 {
+					continue
+				}
+				lu, err := time.ParseInLocation("2006-01-02 15:04:05", lastUpdate, time.UTC)
+				if err == nil && time.Now().UTC().Sub(lu) < t {
+					continue
+				}
+			}
 		}
 
 		site := site
