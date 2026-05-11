@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -155,4 +156,31 @@ func GetSitesWithPlugin(slug string) ([]int, error) {
 	}
 
 	return siteIDs, nil
+}
+
+// GetSitePluginLastUpdates returns a map of site IDs to their last plugin update timestamp.
+func GetSitePluginLastUpdates() (map[int]string, error) {
+	db := GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	query := `SELECT site_id, MAX(updated_at) FROM site_plugins GROUP BY site_id`
+	rows, err := db.Query(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query plugin updates: %w", err)
+	}
+	defer rows.Close()
+
+	updates := make(map[int]string)
+	for rows.Next() {
+		var siteID int
+		var updatedAt sql.NullString
+		if err := rows.Scan(&siteID, &updatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan plugin update: %w", err)
+		}
+		updates[siteID] = updatedAt.String
+	}
+
+	return updates, nil
 }
