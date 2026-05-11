@@ -65,7 +65,7 @@ var (
 				}
 
 				if fetchPlugins {
-					verb.Print(verb.Verbose, "Fetching plugins.")
+					verb.PrintErrorln(verb.Normal, "Fetching plugins.")
 				}
 
 				plugins, err := cache.GetCachedPlugins(pTTL)
