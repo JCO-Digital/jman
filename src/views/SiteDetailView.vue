@@ -521,7 +521,9 @@ const unlinkOrganization = async () => {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	margin-bottom: 0;
+	margin-bottom: 16px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border-color);
 }
 
 .plugins-header h2 {
