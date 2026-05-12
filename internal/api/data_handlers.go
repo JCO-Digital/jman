@@ -12,6 +12,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -245,21 +246,13 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	result := results[0]
 
-	// Persist the new version and clear the pending update flag in the DB.
-	if result.Status == "Updated" {
-		sitePlugins, dbErr := db.GetSitePlugins(site.ID)
-		if dbErr == nil {
-			for _, p := range sitePlugins {
-				if p.Name == body.Plugin {
-					p.Version = result.NewVersion
-					p.Update = ""
-					_ = db.SaveSitePlugin(p)
-					cache.UpdatePluginInfo(p.Name, "", result.NewVersion)
-					break
-				}
-			}
+	// Refresh the full plugin list for this site so all versions and
+	// update_available flags reflect the post-update state.
+	go func() {
+		if err := cache.UpdateSitePluginCache(*site); err != nil {
+			verb.PrintErrorf(verb.Normal, "Failed to refresh plugin cache for site %s after update: %v\n", site.Name, err)
 		}
-	}
+	}()
 
 	WriteJSON(w, http.StatusOK, result)
 }
