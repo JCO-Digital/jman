@@ -11,6 +11,7 @@ import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
+import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 
 const props = defineProps<{
 	id: string;
@@ -135,6 +136,8 @@ const goToOrganization = () => {
 		});
 	}
 };
+
+const showPluginUpdateModal = ref(false);
 
 const showLinkModal = ref(false);
 const organizationSearchQuery = ref("");
@@ -318,7 +321,16 @@ const unlinkOrganization = async () => {
 			<MonitorHistoryCard :history="history" :domain="site.domain" />
 
 			<section class="card">
-				<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
+				<div class="plugins-header">
+					<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
+					<button
+						v-if="authStore.canExecute"
+						class="btn btn-primary btn-sm"
+						@click="showPluginUpdateModal = true"
+					>
+						Check Updates
+					</button>
+				</div>
 				<div class="table-container">
 					<table class="data-table">
 						<thead>
@@ -385,6 +397,13 @@ const unlinkOrganization = async () => {
 				</div>
 			</div>
 		</main>
+
+		<!-- Plugin Update Modal -->
+		<PluginUpdateModal
+			:visible="showPluginUpdateModal"
+			:site-id="siteId"
+			@close="showPluginUpdateModal = false"
+		/>
 
 		<!-- Link Organization Modal -->
 		<div
@@ -496,6 +515,21 @@ const unlinkOrganization = async () => {
 
 .empty-dash {
 	color: #999;
+}
+
+.plugins-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.plugins-header h2 {
+	margin: 0;
+	border-bottom: none;
+	padding-bottom: 0;
 }
 
 .not-found-back-btn {
