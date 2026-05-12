@@ -326,6 +326,69 @@ Removes the setting with the specified key.
 
 ---
 
+## Plugin Update Operations
+
+These endpoints allow a UI to perform plugin updates one at a time, so progress can be displayed per plugin. Both require the **`execute`** level.
+
+### Get Available Plugin Updates for a Site
+
+`GET /sites/{id}/plugin-updates` (Protected: `execute`)
+
+Calls WP-CLI live to fetch the current list of plugins that have updates available on the specified site.
+
+**Path Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `id` | integer | Site ID |
+
+**Response (200 OK)**
+
+```json
+[
+  {
+    "site_id": 123,
+    "name": "akismet",
+    "status": "active",
+    "version": "5.0.0",
+    "update": "5.1.0",
+    "autoUpdate": false
+  }
+]
+```
+
+Returns an empty array if no updates are available.
+
+### Update a Single Plugin on a Site
+
+`POST /sites/{id}/plugin-updates` (Protected: `execute`)
+
+Updates one plugin on the site. The plugin cache is refreshed in the background after the call returns.
+
+**Path Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `id` | integer | Site ID |
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `plugin` | string | Yes | Plugin slug to update |
+
+**Response (200 OK)**
+
+```json
+{
+  "name": "akismet",
+  "old_version": "5.0.0",
+  "new_version": "5.1.0",
+  "status": "Updated"
+}
+```
+
+Returns an empty array if the plugin had no update available. The `status` field reflects the WP-CLI result (e.g. `"Updated"`).
+
+---
+
 ## Error Handling
 
 The API returns a standard error object for all non-2xx/3xx responses:
