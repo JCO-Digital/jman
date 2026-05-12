@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
-import { useAuthStore } from "../stores/auth";
+import { ref, computed, watch } from "vue";
+import { usePluginUpdatesStore } from "../stores/pluginUpdates";
 import type { PluginUpdate, PluginUpdateResult } from "../types";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 const props = defineProps<{
 	visible: boolean;
@@ -14,7 +12,7 @@ const emit = defineEmits<{
 	(e: "close"): void;
 }>();
 
-const authStore = useAuthStore();
+const pluginUpdatesStore = usePluginUpdatesStore();
 
 const isLoading = ref(false);
 const updates = ref<PluginUpdate[]>([]);
@@ -25,6 +23,15 @@ const pluginStatus = ref<Record<string, UpdateStatus>>({});
 const pluginError = ref<Record<string, string>>({});
 const pluginResult = ref<Record<string, PluginUpdateResult>>({});
 const isUpdatingAll = ref(false);
+const isAnyUpdating = computed(() =>
+	Object.values(pluginStatus.value).some((s) => s === "updating"),
+);
+const hasUpdatesRemaining = computed(() =>
+	updates.value.some((p) => {
+		const s = pluginStatus.value[p.name];
+		return s !== "success" && s !== "updating";
+	}),
+);
 
 async function fetchUpdates() {
 	isLoading.value = true;
@@ -35,15 +42,7 @@ async function fetchUpdates() {
 	pluginResult.value = {};
 
 	try {
-		const res = await fetch(
-			`${BASE_URL}/sites/${props.siteId}/plugin-updates`,
-			{ headers: authStore.authHeader },
-		);
-		if (!res.ok) {
-			const data = await res.json().catch(() => ({}));
-			throw new Error(data.error || `Request failed (${res.status})`);
-		}
-		updates.value = await res.json();
+		updates.value = await pluginUpdatesStore.fetchPluginUpdates(props.siteId);
 	} catch (e: any) {
 		fetchError.value = e.message || "Failed to fetch plugin updates";
 	} finally {
@@ -56,22 +55,10 @@ async function updatePlugin(pluginName: string): Promise<boolean> {
 	pluginError.value[pluginName] = "";
 
 	try {
-		const res = await fetch(
-			`${BASE_URL}/sites/${props.siteId}/plugin-updates`,
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...authStore.authHeader,
-				},
-				body: JSON.stringify({ plugin: pluginName }),
-			},
+		const result = await pluginUpdatesStore.updatePlugin(
+			props.siteId,
+			pluginName,
 		);
-		if (!res.ok) {
-			const data = await res.json().catch(() => ({}));
-			throw new Error(data.error || `Request failed (${res.status})`);
-		}
-		const result: PluginUpdateResult = await res.json();
 		pluginResult.value[pluginName] = result;
 		pluginStatus.value[pluginName] = "success";
 		return true;
@@ -84,9 +71,10 @@ async function updatePlugin(pluginName: string): Promise<boolean> {
 
 async function updateAll() {
 	isUpdatingAll.value = true;
-	const pending = updates.value.filter(
-		(p) => pluginStatus.value[p.name] !== "success",
-	);
+	const pending = updates.value.filter((p) => {
+		const s = pluginStatus.value[p.name];
+		return s !== "success" && s !== "updating";
+	});
 	for (const plugin of pending) {
 		await updatePlugin(plugin.name);
 	}
@@ -138,10 +126,12 @@ watch(
 						<tbody>
 							<tr v-for="plugin in updates" :key="plugin.name">
 								<td class="plugin-name">{{ plugin.name }}</td>
-								<td class="version-col">
-									<span class="version-old">{{ plugin.version }}</span>
-									<span class="arrow">→</span>
-									<span class="version-new">{{ plugin.update }}</span>
+								<td>
+									<span class="version-col">
+										<span class="version-old">{{ plugin.version }}</span>
+										<span class="arrow">→</span>
+										<span class="version-new">{{ plugin.update }}</span>
+									</span>
 								</td>
 								<td class="action-col">
 									<span
@@ -182,7 +172,7 @@ watch(
 					<button
 						v-if="updates.length > 0"
 						class="btn btn-primary"
-						:disabled="isUpdatingAll || isLoading"
+						:disabled="isUpdatingAll || isAnyUpdating || isLoading || !hasUpdatesRemaining"
 						@click="updateAll"
 					>
 						{{ isUpdatingAll ? "Updating…" : "Update All" }}
@@ -299,10 +289,10 @@ watch(
 }
 
 .version-col {
-	white-space: nowrap;
-	display: flex;
+	display: inline-flex;
 	align-items: center;
 	gap: 6px;
+	white-space: nowrap;
 }
 
 .version-old {
