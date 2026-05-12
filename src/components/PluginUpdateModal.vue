@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
-import type { PluginUpdate, PluginUpdateResult } from "../types";
+import type { Plugin, PluginUpdateResult } from "../types";
 
 const props = defineProps<{
 	visible: boolean;
@@ -15,7 +15,7 @@ const emit = defineEmits<{
 const pluginUpdatesStore = usePluginUpdatesStore();
 
 const isLoading = ref(false);
-const updates = ref<PluginUpdate[]>([]);
+const updates = ref<Plugin[]>([]);
 const fetchError = ref<string | null>(null);
 
 type UpdateStatus = "idle" | "updating" | "success" | "error";

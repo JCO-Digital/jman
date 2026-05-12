@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
-import type { PluginUpdate, PluginUpdateResult } from "../types";
+import type { Plugin, PluginUpdateResult } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -22,7 +22,7 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 		throw new Error(message);
 	}
 
-	async function fetchPluginUpdates(siteId: number): Promise<PluginUpdate[]> {
+	async function fetchPluginUpdates(siteId: number): Promise<Plugin[]> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
 			headers: authStore.authHeader,
 		});
