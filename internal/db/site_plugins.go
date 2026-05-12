@@ -181,6 +181,9 @@ func GetSitePluginLastUpdates() (map[int]string, error) {
 		}
 		updates[siteID] = updatedAt.String
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating plugin updates: %w", err)
+	}
 
 	return updates, nil
 }
