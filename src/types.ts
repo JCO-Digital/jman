@@ -325,6 +325,22 @@ export interface UpdateUserPayload {
 	password?: string;
 }
 
+export interface PluginUpdate {
+	site_id: number;
+	name: string;
+	status: string;
+	version: string;
+	update: string;
+	autoUpdate: boolean;
+}
+
+export interface PluginUpdateResult {
+	name: string;
+	old_version: string;
+	new_version: string;
+	status: string;
+}
+
 export interface TwoFactorSetupResponse {
 	secret: string;
 	uri: string;
