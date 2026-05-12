@@ -1,6 +1,21 @@
 # Changelog
 
-## 1.17.0 (2026-05-08)
+## 1.18.0 (2026-05-13)
+
+#### Features
+
+- plugin: add update modal for site plugins (d65431c)
+
+#### Refactor
+
+- types: replace PluginUpdate with Plugin interface (c0746ca)
+- plugin: move update logic to Pinia store (3012723)
+
+#### Styles
+
+- site: add visual separator to plugins header (10c2b70)
+
+## v1.17.0 (2026-05-08)
 
 #### Features
 
@@ -75,9 +90,6 @@
 #### Styles
 
 - ui: implement responsive design for mobile screens (a5f5db7)
-
-### Misc
-- v1.10.0 (29063de)
 
 ## v1.10.0 (2026-05-03)
 
