@@ -1,16 +1,25 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/vuln"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 )
+
+// pluginSlugRegex matches valid WordPress plugin slugs. The first character must be
+// alphanumeric, which rejects flag-like values such as --all or -p outright.
+var pluginSlugRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9_\-/]*$`)
 
 // PluginsHandler returns the list of cached WordPress plugins.
 func PluginsHandler(w http.ResponseWriter, r *http.Request) {
@@ -147,4 +156,122 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, response)
+}
+
+// SitePluginUpdatesHandler returns the list of plugins with available updates for a site.
+// It calls WP-CLI live so the result reflects the current state of the site.
+func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	site, err := getSiteByID(siteID)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		return
+	}
+
+	plugins, err := wpcli.GetPlugins(*site, false)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get plugins: %v", err))
+		return
+	}
+
+	// Persist the freshly-fetched plugin state for this site.
+	// Delete first to remove plugins that are no longer installed; if that
+	// fails, log and continue — SaveSitePlugin uses ON CONFLICT UPDATE so
+	// existing rows are still refreshed and updated_at is kept current.
+	if err := db.DeleteSitePlugins(site.ID); err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: failed to clear plugin cache for site %s: %v\n", site.Name, err)
+	}
+	for _, p := range plugins {
+		if err := db.SaveSitePlugin(p); err != nil {
+			verb.PrintErrorf(verb.Normal, "Warning: failed to save plugin %s for site %s: %v\n", p.Name, site.Name, err)
+		}
+		if p.Status != "must-use" && p.Status != "dropin" {
+			bestVer := p.Version
+			if p.Update != "" {
+				bestVer = p.Update
+			}
+			cache.UpdatePluginInfo(p.Name, "", bestVer)
+		}
+	}
+
+	updates := []models.WPPlugin{}
+	for _, p := range plugins {
+		if p.Update != "" {
+			updates = append(updates, p)
+		}
+	}
+
+	WriteJSON(w, http.StatusOK, updates)
+}
+
+// SitePluginUpdateHandler updates a single plugin on a site and refreshes the plugin cache.
+func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	var body struct {
+		Plugin string `json:"plugin"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if body.Plugin == "" {
+		WriteError(w, http.StatusBadRequest, "Plugin name is required")
+		return
+	}
+	if !pluginSlugRegex.MatchString(body.Plugin) {
+		WriteError(w, http.StatusBadRequest, "Invalid plugin slug: must start with a letter or digit and contain only [a-z0-9_-/]")
+		return
+	}
+
+	site, err := getSiteByID(siteID)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		return
+	}
+
+	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update plugin: %v", err))
+		return
+	}
+
+	if len(results) == 0 {
+		WriteJSON(w, http.StatusOK, []wpcli.UpdateResult{})
+		return
+	}
+
+	result := results[0]
+
+	// Refresh the full plugin list for this site so all versions and
+	// update_available flags reflect the post-update state.
+	go func() {
+		if err := cache.UpdateSitePluginCache(*site); err != nil {
+			verb.PrintErrorf(verb.Normal, "Failed to refresh plugin cache for site %s after update: %v\n", site.Name, err)
+		}
+	}()
+
+	WriteJSON(w, http.StatusOK, result)
+}
+
+func getSiteByID(id int) (*models.CliSite, error) {
+	sites, err := cache.GetFastSiteList()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get site list: %w", err)
+	}
+	for _, s := range sites {
+		if s.ID == id {
+			return &s, nil
+		}
+	}
+	return nil, fmt.Errorf("site with ID %d not found", id)
 }
