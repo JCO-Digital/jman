@@ -1,6 +1,21 @@
 # Changelog
 
-## 5.10.0 (2026-05-08)
+## 5.11.0 (2026-05-12)
+
+#### Features
+
+- api: add endpoints to list and update site plugins (4d5aaa1)
+
+#### Bug Fixes
+
+- api: handle plugin save errors and improve cache persistence logic (2441e22)
+- db: handle iteration errors in GetSitePluginLastUpdates (7d5eb93)
+- api: refresh plugin cache after site update (5688003)
+- api: validate plugin slug format in SitePluginUpdateHandler (8683ff0)
+- cache: prevent unnecessary plugin re-fetches when timestamps are missing (36ff4c4)
+- cache: implement TTL-based plugin fetching logic (4b83e5e)
+
+## v5.10.0 (2026-05-08)
 
 #### Features
 
@@ -206,13 +221,6 @@
 - github: update foonver action version to v0.9.1 (a6766b3)
 - migrate release pipeline to foonver (0ab53be)
 
-#### Maintenance
-
-- release: v4.27.0 [skip ci] (860ff21)
-
-### Misc
-- v5.0.0 (12c4ad1)
-
 ## v4.26.0 (2026-04-27)
 
 #### Features
@@ -232,29 +240,17 @@
 
 - wp: cache command dump and add timeout for completions (c364171)
 
-#### Maintenance
-
-- release: v4.26.0 [skip ci] (b93e8f1)
-
 ## v4.25.0 (2026-04-24)
 
 #### Features
 
 - update: add signed releases and client-side signature verification (3b6e8b1)
 
-#### Maintenance
-
-- release: v4.25.0 [skip ci] (6392753)
-
 ## v4.24.0 (2026-04-23)
 
 #### Features
 
 - monitor: add monitorCacheBypass option to bypass frontend caches (3322275)
-
-#### Maintenance
-
-- release: v4.24.0 [skip ci] (acaadc3)
 
 ### v4.23.1 (2026-04-23)
 
@@ -264,7 +260,6 @@
 
 #### Maintenance
 
-- release: v4.23.1 [skip ci] (3244a37)
 - systemd: add jman-api.service systemd unit (f98a48a)
 
 ## v4.23.0 (2026-04-23)
@@ -285,10 +280,6 @@
 
 - models: remove duplicate IgnoredSite struct (71d1566)
 
-#### Maintenance
-
-- release: v4.23.0 [skip ci] (15c6a3c)
-
 ## v4.22.0 (2026-04-21)
 
 #### Features
@@ -298,10 +289,6 @@
 #### Bug Fixes
 
 - monitor: return pending status for unchecked sites and clean up stale statuses (869563c)
-
-#### Maintenance
-
-- release: v4.22.0 [skip ci] (7862af2)
 
 ### v4.21.1 (2026-04-20)
 
@@ -313,10 +300,6 @@
 
 - internal: add unit tests for auth, users config, and http utils (5fb6c1d)
 
-#### Maintenance
-
-- release: v4.21.1 [skip ci] (7141676)
-
 ## v4.21.0 (2026-04-20)
 
 #### Features
@@ -327,19 +310,11 @@
 
 - api: add security headers middleware and add timeouts to HTTP clients (dacfa29)
 
-#### Maintenance
-
-- release: v4.21.0 [skip ci] (55be457)
-
 ### v4.20.2 (2026-04-16)
 
 #### Bug Fixes
 
 - set SQLite pragmas and avoid holding lock while sending Slack alerts (cfa6a66)
-
-#### Maintenance
-
-- release: v4.20.2 [skip ci] (29ec17f)
 
 ### v4.20.1 (2026-04-15)
 
@@ -351,10 +326,6 @@
 
 - cache: reduce concurrency limit for plugin cache refresh to 12 (21c8b26)
 
-#### Maintenance
-
-- release: v4.20.1 [skip ci] (4bf32d4)
-
 ## v4.20.0 (2026-04-15)
 
 #### Features
@@ -365,20 +336,12 @@
 
 - wpcli: add --force when installing zip plugins (cef2aed)
 
-#### Maintenance
-
-- release: v4.20.0 [skip ci] (93dcf81)
-
 ### v4.19.1 (2026-04-15)
 
 #### Bug Fixes
 
 - wpvuln: return Error 0 for invalid plugin slug (7716ba3)
 - fetch: validate plugin slugs before fetching (c29f830)
-
-#### Maintenance
-
-- release: v4.19.1 [skip ci] (be72a95)
 
 ## v4.19.0 (2026-04-15)
 
@@ -387,19 +350,11 @@
 - api: Add slug and name fields to the vuln API. (8162c75)
 - vuln: enrich and filter vulnerability reports by affected sites (c56c906)
 
-#### Maintenance
-
-- release: v4.19.0 [skip ci] (d03bcd0)
-
 ## v4.18.0 (2026-04-01)
 
 #### Features
 
 - plugin: Resolve Satispress aliases for plugin installation (1c11f3f)
-
-#### Maintenance
-
-- release: v4.18.0 [skip ci] (1934f27)
 
 ### v4.17.1 (2026-03-30)
 
@@ -412,20 +367,11 @@
 - makefile: Simplify the build-pkg target. (b7bf87c)
 - makefile: Add build-pkg target for package managers (053316c)
 
-#### Maintenance
-
-- release: v4.17.1 [skip ci] (862470b)
-- release: v4.17.0 [skip ci] (09f53e4)
-
 ## v4.17.0 (2026-03-27)
 
 #### Features
 
 - plugin: Add info subcommand to get plugin details (fc78e7d)
-
-#### Maintenance
-
-- release: v4.17.0 [skip ci] (1324262)
 
 ## v4.16.0 (2026-03-26)
 
@@ -440,10 +386,6 @@
 
 - github: Remove release commit collection from workflow (c0c76d7)
 - github: Update CI to use #jman_dev channel (1b4d00c)
-
-#### Maintenance
-
-- release: v4.16.0 [skip ci] (341f356)
 
 ## v4.15.0 (2026-03-23)
 
@@ -461,11 +403,7 @@
 
 #### Maintenance
 
-- release: v4.15.0 [skip ci] (6d51f4d)
 - fixed version oopsie. (94cff62)
-- release: v4.14.0 [skip ci] (5b72dcb)
-- release: v4.13.0 [skip ci] (dbea3ba)
-- release: v4.12.1 [skip ci] (5b0b84e)
 
 ### v4.14.1 (2026-03-23)
 
@@ -482,10 +420,6 @@
 
 - Add prerequisites to README (0d6a432)
 - Update installation instructions (371a014)
-
-#### Maintenance
-
-- release: v4.14.1 [skip ci] (66b03e7)
 
 ## v4.14.0 (2026-03-22)
 
@@ -505,10 +439,6 @@
 
 - cache: make JSON cache TTL configurable (6648422)
 
-#### Maintenance
-
-- release: v4.14.0 [skip ci] (8c939de)
-
 ## v4.13.0 (2026-03-20)
 
 #### Features
@@ -516,19 +446,11 @@
 - cmd: Add CLI tools for user and credential management (ebcd5c7)
 - api: Implement JWT authentication and rate limiting (5f14d56)
 
-#### Maintenance
-
-- release: v4.13.0 [skip ci] (cc52714)
-
 ### v4.12.1 (2026-03-20)
 
 #### Bug Fixes
 
 - update: Use AppVersion for current version check (218093b)
-
-#### Maintenance
-
-- release: v4.12.1 [skip ci] (7ae2041)
 
 ## v4.12.0 (2026-03-20)
 
@@ -545,10 +467,6 @@
 - wpcli: Improve error handling for WP-CLI commands (f51f99e)
 - plugin: Improve error handling for plugin operations (114b17d)
 
-#### Maintenance
-
-- release: v4.12.0 [skip ci] (d846159)
-
 ## v4.11.0 (2026-03-19)
 
 #### Features
@@ -564,19 +482,11 @@
 - verb: Rename ansi to verb and move ANSI color functions (ec587e5)
 - verbosity: Rename verbosity package to verb (ca2481f)
 
-#### Maintenance
-
-- release: v4.11.0 [skip ci] (1e19c14)
-
 ### v4.10.1 (2026-03-19)
 
 #### Bug Fixes
 
 - wpcli: Disable skip in RunWP for plugin actions (bbededb)
-
-#### Maintenance
-
-- release: v4.10.1 [skip ci] (bd72baf)
 
 ## v4.10.0 (2026-03-19)
 
@@ -598,10 +508,6 @@
 
 - makefile: Inject app version into LDFLAGS via config (55640a7)
 
-#### Maintenance
-
-- release: v4.10.0 [skip ci] (337ed81)
-
 ## v4.9.0 (2026-03-10)
 
 #### Features
@@ -619,19 +525,11 @@
 
 - fetch: remove redundant pointer indirection (7954c9c)
 
-#### Maintenance
-
-- release: v4.9.0 [skip ci] (0171443)
-
 ## v4.8.0 (2026-03-09)
 
 #### Features
 
 - config: integrate viper for configuration and environment support (358d962)
-
-#### Maintenance
-
-- release: v4.8.0 [skip ci] (2c93eaf)
 
 ## v4.7.0 (2026-03-03)
 
@@ -650,7 +548,6 @@
 
 #### Maintenance
 
-- release: v4.7.0 [skip ci] (b6765ec)
 - remove accidental copy of the entrypoint. (f0f8a28)
 
 ## v4.6.0 (2026-02-27)
@@ -658,10 +555,6 @@
 #### Features
 
 - monitor: set custom User-Agent header for monitoring requests (ede2b9b)
-
-#### Maintenance
-
-- release: v4.6.0 [skip ci] (29579bf)
 
 ## v4.5.0 (2026-02-27)
 
@@ -683,7 +576,6 @@
 
 #### Maintenance
 
-- release: v4.5.0 [skip ci] (1525eca)
 - rename internal/api package to internal/fetch (a9cfc43)
 
 ## v4.4.0 (2026-02-26)
@@ -704,10 +596,6 @@
 #### Continuous Integration
 
 - github: add jman-monitor to release artifacts (8832a8b)
-
-#### Maintenance
-
-- release: v4.4.0 [skip ci] (3707c51)
 
 ## v4.3.0 (2026-02-26)
 
@@ -732,7 +620,6 @@
 
 #### Maintenance
 
-- release: v4.3.0 [skip ci] (8c7da53)
 - remove MainWP integration and rename Slack config (60c2936)
 - remove MainWP integration and rename Slack config (13f5fed)
 
@@ -748,7 +635,6 @@
 
 #### Maintenance
 
-- release: v4.2.0 [skip ci] (1863b94)
 - zed: remove editor settings (fffcde4)
 
 ## v4.1.0 (2026-02-24)
@@ -766,10 +652,6 @@
 - remove build and release workflow (a21ecbd)
 - github: update release workflow with build and notifications (e5824d4)
 
-#### Maintenance
-
-- release: v4.1.0 [skip ci] (1b2974b)
-
 ### v4.0.1 (2026-02-24)
 
 #### Bug Fixes
@@ -785,10 +667,6 @@
 
 - github: update version-file path to version.json (7fbe45a)
 - add automated release workflow and version file (e36ad4c)
-
-#### Maintenance
-
-- release: v4.0.1 [skip ci] (9843ebc)
 
 ### Misc
 - Refactor verbosity API and improve output handling (ced9cec)
