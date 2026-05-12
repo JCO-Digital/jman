@@ -33,6 +33,14 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 		lastUpdates = make(map[int]string)
 	}
 
+	// Build a presence set from existing rows so that a missing or failed
+	// lastUpdates lookup doesn't cause every site to be re-fetched when the
+	// caller requested no refresh (t == -1) or when data clearly exists.
+	sitesWithData := make(map[int]bool, len(existingPlugins))
+	for _, p := range existingPlugins {
+		sitesWithData[p.SiteID] = true
+	}
+
 	sites, err := GetSiteList()
 	if err != nil {
 		return existingPlugins, fmt.Errorf("failed to get site list: %w", err)
@@ -54,6 +62,9 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 				if err == nil && time.Now().UTC().Sub(lu) < t {
 					continue
 				}
+			} else if t == -1 && sitesWithData[site.ID] {
+				// No timestamp available but data exists and caller requested no refresh.
+				continue
 			}
 		}
 
