@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 
@@ -14,6 +15,10 @@ import (
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
+
+// pluginSlugRegex matches valid WordPress plugin slugs. The first character must be
+// alphanumeric, which rejects flag-like values such as --all or -p outright.
+var pluginSlugRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9_\-/]*$`)
 
 // PluginsHandler returns the list of cached WordPress plugins.
 func PluginsHandler(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +219,10 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.Plugin == "" {
 		WriteError(w, http.StatusBadRequest, "Plugin name is required")
+		return
+	}
+	if !pluginSlugRegex.MatchString(body.Plugin) {
+		WriteError(w, http.StatusBadRequest, "Invalid plugin slug: must start with a letter or digit and contain only [a-z0-9_-/]")
 		return
 	}
 
