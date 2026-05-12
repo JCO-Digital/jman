@@ -26,6 +26,9 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	admin := func(h http.HandlerFunc) http.Handler {
 		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelAdmin)(h))
 	}
+	execute := func(h http.HandlerFunc) http.Handler {
+		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelExecute)(h))
+	}
 	mux.Handle("POST /api/auth/refresh", basic(RefreshHandler(&usersCfg)))
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
 	mux.Handle("GET /api/plugininfo", basic(PluginInfoHandler))
@@ -86,6 +89,10 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/sites/{id}/organization", basic(GetSiteOrganizationHandler))
 	mux.Handle("POST /api/sites/{id}/link", edit(LinkSiteHandler))
 	mux.Handle("DELETE /api/sites/{id}/link", edit(UnlinkSiteHandler))
+
+	// --- Plugin update routes ---
+	mux.Handle("GET /api/sites/{id}/plugin-updates", execute(SitePluginUpdatesHandler))
+	mux.Handle("POST /api/sites/{id}/plugin-updates", execute(SitePluginUpdateHandler))
 
 	// --- Note routes ---
 	mux.Handle("GET /api/notes", basic(ListNotesHandler))
