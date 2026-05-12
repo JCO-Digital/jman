@@ -180,16 +180,22 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Persist the freshly-fetched plugin state for this site.
-	if err := db.DeleteSitePlugins(site.ID); err == nil {
-		for _, p := range plugins {
-			_ = db.SaveSitePlugin(p)
-			if p.Status != "must-use" && p.Status != "dropin" {
-				bestVer := p.Version
-				if p.Update != "" {
-					bestVer = p.Update
-				}
-				cache.UpdatePluginInfo(p.Name, "", bestVer)
+	// Delete first to remove plugins that are no longer installed; if that
+	// fails, log and continue — SaveSitePlugin uses ON CONFLICT UPDATE so
+	// existing rows are still refreshed and updated_at is kept current.
+	if err := db.DeleteSitePlugins(site.ID); err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: failed to clear plugin cache for site %s: %v\n", site.Name, err)
+	}
+	for _, p := range plugins {
+		if err := db.SaveSitePlugin(p); err != nil {
+			verb.PrintErrorf(verb.Normal, "Warning: failed to save plugin %s for site %s: %v\n", p.Name, site.Name, err)
+		}
+		if p.Status != "must-use" && p.Status != "dropin" {
+			bestVer := p.Version
+			if p.Update != "" {
+				bestVer = p.Update
 			}
+			cache.UpdatePluginInfo(p.Name, "", bestVer)
 		}
 	}
 
