@@ -1,0 +1,50 @@
+import { defineStore } from "pinia";
+import { useAuthStore } from "./auth";
+import type { PluginUpdate, PluginUpdateResult } from "../types";
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+
+export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
+	const authStore = useAuthStore();
+
+	async function handleErrorResponse(res: Response): Promise<never> {
+		if (res.status === 401) {
+			authStore.logout();
+			throw new Error("Unauthorized");
+		}
+		let message: string;
+		try {
+			const data = await res.json();
+			message = data.error || `Request failed (${res.status})`;
+		} catch {
+			message = `Request failed (${res.status})`;
+		}
+		throw new Error(message);
+	}
+
+	async function fetchPluginUpdates(siteId: number): Promise<PluginUpdate[]> {
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
+			headers: authStore.authHeader,
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		return res.json();
+	}
+
+	async function updatePlugin(
+		siteId: number,
+		pluginName: string,
+	): Promise<PluginUpdateResult> {
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				...authStore.authHeader,
+			},
+			body: JSON.stringify({ plugin: pluginName }),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		return res.json();
+	}
+
+	return { fetchPluginUpdates, updatePlugin };
+});
