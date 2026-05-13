@@ -433,9 +433,20 @@ func migrateTable(def TableDefinition) error {
 
 	// 3. Determine if migration is needed (missing or extra columns, or NOT NULL change)
 	needsMigration := false
-	if len(currentCols) != len(def.Columns) {
+
+	// Self-healing: Check if the table definition accidentally refers to temporary migration tables.
+	// This can happen if a previous migration was interrupted or performed with foreign keys enabled
+	// while target tables were temporarily renamed.
+	var currentSQL string
+	if err := tx.QueryRow(fmt.Sprintf("SELECT sql FROM sqlite_master WHERE type='table' AND name='%s'", def.Name)).Scan(&currentSQL); err == nil {
+		if strings.Contains(currentSQL, "_old") || strings.Contains(currentSQL, "_new") {
+			needsMigration = true
+		}
+	}
+
+	if !needsMigration && len(currentCols) != len(def.Columns) {
 		needsMigration = true
-	} else {
+	} else if !needsMigration {
 		for name, colDef := range def.Columns {
 			notnull, exists := currentCols[name]
 			if !exists {
@@ -471,18 +482,16 @@ func migrateTable(def TableDefinition) error {
 
 	// 4. Perform robust migration using a temporary table
 	// This handles non-constant defaults and dropped columns safely.
-	tempTableName := fmt.Sprintf("_%s_old", def.Name)
+	// We create a new table with a temporary name, copy data, drop the old one, and rename.
+	// This prevents foreign keys in other tables from being "redirected" to the old table name,
+	// which happens in SQLite if we rename the existing table first.
+	tempTableName := fmt.Sprintf("_%s_new", def.Name)
 
 	// Drop temp table if it somehow exists
 	_, _ = tx.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", tempTableName))
 
-	// Rename current table to temp
-	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", def.Name, tempTableName)); err != nil {
-		return fmt.Errorf("failed to rename table for migration: %w", err)
-	}
-
-	// Create new table with desired schema
-	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", def.Name, newColsSQL)
+	// Create new table with desired schema under temporary name
+	createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", tempTableName, newColsSQL)
 	if _, err := tx.Exec(createSQL); err != nil {
 		return fmt.Errorf("failed to create new table schema: %w", err)
 	}
@@ -497,15 +506,20 @@ func migrateTable(def TableDefinition) error {
 
 	if len(commonCols) > 0 {
 		colsCSV := strings.Join(commonCols, ", ")
-		copySQL := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", def.Name, colsCSV, colsCSV, tempTableName)
+		copySQL := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s", tempTableName, colsCSV, colsCSV, def.Name)
 		if _, err := tx.Exec(copySQL); err != nil {
 			return fmt.Errorf("failed to copy data to new table: %w", err)
 		}
 	}
 
-	// Drop the temporary table
-	if _, err := tx.Exec(fmt.Sprintf("DROP TABLE %s", tempTableName)); err != nil {
-		return fmt.Errorf("failed to drop temporary table: %w", err)
+	// Drop the old table
+	if _, err := tx.Exec(fmt.Sprintf("DROP TABLE %s", def.Name)); err != nil {
+		return fmt.Errorf("failed to drop old table: %w", err)
+	}
+
+	// Rename the temporary table to the final name
+	if _, err := tx.Exec(fmt.Sprintf("ALTER TABLE %s RENAME TO %s", tempTableName, def.Name)); err != nil {
+		return fmt.Errorf("failed to rename temporary table to final name: %w", err)
 	}
 
 	return tx.Commit()
