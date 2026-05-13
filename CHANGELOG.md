@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.21.0 (2026-05-13)
+## 1.22.0 (2026-05-13)
+
+#### Features
+
+- ui: display update result status in modal badges (0cd7b68)
+
+## v1.21.0 (2026-05-13)
 
 #### Features
 
