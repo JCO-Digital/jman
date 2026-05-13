@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.18.0 (2026-05-13)
+## 1.19.0 (2026-05-13)
+
+#### Features
+
+- data: update local plugin version after successful update request (b668783)
+
+## v1.18.0 (2026-05-13)
 
 #### Features
 
