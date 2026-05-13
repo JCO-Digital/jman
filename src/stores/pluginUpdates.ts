@@ -1,11 +1,13 @@
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
+import { useDataStore } from "./data";
 import type { Plugin, PluginUpdateResult } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	const authStore = useAuthStore();
+	const dataStore = useDataStore();
 
 	async function handleErrorResponse(res: Response): Promise<never> {
 		if (res.status === 401) {
@@ -43,7 +45,9 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 			body: JSON.stringify({ plugin: pluginName }),
 		});
 		if (!res.ok) await handleErrorResponse(res);
-		return res.json();
+		const result: PluginUpdateResult = await res.json();
+		dataStore.applyPluginUpdate(siteId, pluginName, result.new_version);
+		return result;
 	}
 
 	return { fetchPluginUpdates, updatePlugin };
