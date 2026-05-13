@@ -35,7 +35,7 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	async function updatePlugin(
 		siteId: number,
 		pluginName: string,
-	): Promise<PluginUpdateResult> {
+	): Promise<PluginUpdateResult | null> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
 			method: "POST",
 			headers: {
@@ -45,7 +45,9 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 			body: JSON.stringify({ plugin: pluginName }),
 		});
 		if (!res.ok) await handleErrorResponse(res);
-		const result: PluginUpdateResult = await res.json();
+		const body = await res.json();
+		if (Array.isArray(body)) return null;
+		const result = body as PluginUpdateResult;
 		dataStore.applyPluginUpdate(siteId, pluginName, result.new_version);
 		return result;
 	}
