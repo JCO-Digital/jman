@@ -320,6 +320,30 @@ func initSchema() error {
 			},
 			PrimaryKey: []string{"user_id", "key"},
 		},
+		{
+			Name: "tasks",
+			Columns: map[string]string{
+				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"type":            "TEXT NOT NULL",
+				"status":          "TEXT NOT NULL DEFAULT 'pending'",
+				"priority":        "TEXT NOT NULL DEFAULT 'medium'",
+				"title":           "TEXT NOT NULL",
+				"description":     "TEXT",
+				"site_id":         "INTEGER",
+				"server_id":       "INTEGER",
+				"organization_id": "INTEGER",
+				"plugin_slug":     "TEXT",
+				"assigned_to":     "TEXT",
+				"metadata":        "TEXT",
+				"interval":        "TEXT",
+				"due_date":        "DATETIME",
+				"reminder_date":   "DATETIME",
+				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"completed_at":    "DATETIME",
+				"created_by":      "TEXT",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
 	}
 
 	for _, table := range tables {
@@ -347,6 +371,18 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_asset_payments_asset_id ON asset_payments(org_asset_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_site_id ON tasks(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);")
 	return err
 }
 

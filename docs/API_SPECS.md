@@ -120,6 +120,94 @@ Deletes a user. Cannot delete self or the last administrator.
 
 ---
 
+## Task Management
+
+Tasks represent units of work or reminders and can be linked to Sites, Servers, Organizations, or Plugins.
+
+### List Tasks
+
+`GET /tasks` (Protected: `basic`)
+
+Returns a list of tasks matching the provided filters.
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `status` | string | Filter by status (`pending`, `in_progress`, `completed`, `skipped`, `overdue`) |
+| `priority` | string | Filter by priority (`low`, `medium`, `high`) |
+| `assigned_to` | string | Filter by assigned username |
+| `site_id` | integer | Filter by linked Site ID |
+| `organization_id` | integer | Filter by linked Organization ID |
+| `server_id` | integer | Filter by linked Server ID |
+| `search` | string | Search in title or description |
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"id": 1,
+		"type": "one-time",
+		"status": "pending",
+		"priority": "high",
+		"title": "Security Vulnerabilities - example.com",
+		"description": "...",
+		"site_id": 123,
+		"assigned_to": "niklas",
+		"metadata": "{\"vuln_uuids\":[\"...\"]}",
+		"due_date": "2024-03-20T12:00:00Z",
+		"reminder_date": "2024-03-13T12:00:00Z",
+		"created_at": "2024-03-13T12:00:00Z",
+		"updated_at": "2024-03-13T12:00:00Z",
+		"created_by": "system"
+	}
+]
+```
+
+### Get Task
+
+`GET /tasks/{id}` (Protected: `basic`)
+
+### Create Task
+
+`POST /tasks` (Protected: `edit`)
+
+**Request Body**
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `type` | string | No | `one-time` (default), `repeating`, `dynamic` |
+| `status` | string | No | Default: `pending` |
+| `priority` | string | No | Default: `medium` |
+| `title` | string | Yes | |
+| `description` | string | No | |
+| `site_id` | integer | No | |
+| `server_id` | integer | No | |
+| `organization_id` | integer | No | |
+| `plugin_slug` | string | No | |
+| `assigned_to` | string | No | Username |
+| `interval` | string | No | e.g., `30d`, `1w`, `1m`, `1y` (required for repeating/dynamic) |
+| `due_date` | datetime | No | |
+| `reminder_date` | datetime | No | |
+| `metadata` | string | No | JSON string |
+
+### Update Task
+
+`PATCH /tasks/{id}` (Protected: `edit`)
+
+Updates specific fields of a task.
+
+### Complete Task
+
+`POST /tasks/{id}/complete` (Protected: `edit`)
+
+Marks a task as completed. If the task is `repeating` or `dynamic`, a new task instance is automatically generated based on the `interval`.
+
+### Delete Task
+
+`DELETE /tasks/{id}` (Protected: `edit`)
+
+---
+
 ## User Self-Service
 
 These endpoints allow any authenticated user to manage their own account.
@@ -345,14 +433,14 @@ Calls WP-CLI live to fetch the current list of plugins that have updates availab
 
 ```json
 [
-  {
-    "site_id": 123,
-    "name": "akismet",
-    "status": "active",
-    "version": "5.0.0",
-    "update": "5.1.0",
-    "autoUpdate": false
-  }
+	{
+		"site_id": 123,
+		"name": "akismet",
+		"status": "active",
+		"version": "5.0.0",
+		"update": "5.1.0",
+		"autoUpdate": false
+	}
 ]
 ```
 
@@ -378,10 +466,10 @@ Updates one plugin on the site. The plugin cache is refreshed in the background 
 
 ```json
 {
-  "name": "akismet",
-  "old_version": "5.0.0",
-  "new_version": "5.1.0",
-  "status": "Updated"
+	"name": "akismet",
+	"old_version": "5.0.0",
+	"new_version": "5.1.0",
+	"status": "Updated"
 }
 ```
 
