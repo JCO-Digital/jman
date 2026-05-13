@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.11.0 (2026-05-12)
+### 5.11.1 (2026-05-13)
+
+#### Bug Fixes
+
+- wpcli: use json.Decoder for robust output parsing (e8ae39a)
+- wpcli: sanitize output before JSON unmarshaling to handle stray notices (95ecc88)
+
+## v5.11.0 (2026-05-12)
 
 #### Features
 
