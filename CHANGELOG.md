@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.19.0 (2026-05-13)
+## 1.20.0 (2026-05-13)
+
+#### Features
+
+- plugin: add modal to update plugin across sites (d3dba88)
+
+## v1.19.0 (2026-05-13)
 
 #### Features
 
