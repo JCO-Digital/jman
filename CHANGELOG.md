@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.11.1 (2026-05-13)
+### 5.11.2 (2026-05-13)
+
+#### Bug Fixes
+
+- db: improve table migration robustness (fa3ca21)
+
+### v5.11.1 (2026-05-13)
 
 #### Bug Fixes
 
