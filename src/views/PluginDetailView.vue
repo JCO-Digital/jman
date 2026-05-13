@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useAssetStore } from "../stores/assetStore";
@@ -8,6 +8,7 @@ import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
 import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
+import PluginSiteUpdateModal from "../components/PluginSiteUpdateModal.vue";
 
 const props = defineProps<{
 	name: string;
@@ -53,6 +54,14 @@ const sitesWithPlugin = computed(() => {
 		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
 });
+
+const showUpdateModal = ref(false);
+
+const sitesWithUpdates = computed(() =>
+	(dataStore.pluginsBySlugMap.get(props.name) || []).some(
+		(p) => p.update !== "",
+	),
+);
 
 const goBack = () => {
 	router.push({ name: "plugins" });
@@ -145,7 +154,16 @@ const manageAssetTemplate = () => {
 			/>
 
 			<section class="card">
-				<h2>Installed on Sites</h2>
+				<div class="sites-header">
+					<h2>Installed on Sites</h2>
+					<button
+						v-if="authStore.canExecute && sitesWithUpdates"
+						class="btn btn-primary btn-sm"
+						@click="showUpdateModal = true"
+					>
+						Update Available
+					</button>
+				</div>
 				<div class="table-container">
 					<table class="data-table">
 						<thead>
@@ -205,6 +223,11 @@ const manageAssetTemplate = () => {
 				</div>
 			</div>
 		</main>
+		<PluginSiteUpdateModal
+			:visible="showUpdateModal"
+			:plugin-slug="name"
+			@close="showUpdateModal = false"
+		/>
 	</div>
 </template>
 
@@ -212,6 +235,21 @@ const manageAssetTemplate = () => {
 /* All specific styles moved to components or available in style.css */
 .empty-dash {
 	color: #999;
+}
+
+.sites-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 16px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.sites-header h2 {
+	margin: 0;
+	border-bottom: none;
+	padding-bottom: 0;
 }
 
 .not-found-back-btn {
