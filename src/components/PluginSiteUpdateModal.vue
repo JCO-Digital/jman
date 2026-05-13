@@ -6,6 +6,7 @@ import type { Plugin } from "../types";
 
 interface UpdateEntry extends Plugin {
 	site_domain: string;
+	isVulnerable: boolean;
 }
 
 const props = defineProps<{
@@ -26,31 +27,45 @@ type UpdateStatus = "idle" | "updating" | "success" | "error";
 const siteStatus = ref<Record<number, UpdateStatus>>({});
 const siteError = ref<Record<number, string>>({});
 const isUpdatingAll = ref(false);
-const showConfirm = ref(false);
+const confirmMode = ref<"all" | "vulnerable" | null>(null);
 
 const isAnyUpdating = computed(() =>
 	Object.values(siteStatus.value).some((s) => s === "updating"),
 );
 
+const isPending = (u: UpdateEntry) => {
+	const s = siteStatus.value[u.site_id];
+	return s !== "success" && s !== "updating";
+};
+
 const hasUpdatesRemaining = computed(() =>
-	updates.value.some((u) => {
-		const s = siteStatus.value[u.site_id];
-		return s !== "success" && s !== "updating";
-	}),
+	updates.value.some(isPending),
+);
+
+const hasVulnerableUpdatesRemaining = computed(() =>
+	updates.value.some((u) => u.isVulnerable && isPending(u)),
 );
 
 function snapshot() {
 	const instances = dataStore.pluginsBySlugMap.get(props.pluginSlug) || [];
+	const enriched = dataStore.enrichedPlugins.find(
+		(p) => p.slug === props.pluginSlug,
+	);
+	const vulnerableSiteIds = new Set(
+		enriched?.vulnerabilities.flatMap((v) => v.sites.map((s) => s.site_id)) ??
+			[],
+	);
 	updates.value = instances
 		.filter((p) => p.update !== "")
 		.map((p) => ({
 			...p,
 			site_domain: dataStore.getSiteById(p.site_id)?.domain ?? "Unknown Site",
+			isVulnerable: vulnerableSiteIds.has(p.site_id),
 		}))
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
 	siteStatus.value = {};
 	siteError.value = {};
-	showConfirm.value = false;
+	confirmMode.value = null;
 	isUpdatingAll.value = false;
 }
 
@@ -66,17 +81,21 @@ async function updateSite(entry: UpdateEntry): Promise<void> {
 	}
 }
 
-async function updateAll() {
-	showConfirm.value = false;
+async function runUpdates(entries: UpdateEntry[]) {
+	confirmMode.value = null;
 	isUpdatingAll.value = true;
-	const pending = updates.value.filter((u) => {
-		const s = siteStatus.value[u.site_id];
-		return s !== "success" && s !== "updating";
-	});
-	for (const entry of pending) {
+	for (const entry of entries) {
 		await updateSite(entry);
 	}
 	isUpdatingAll.value = false;
+}
+
+async function updateAll() {
+	await runUpdates(updates.value.filter(isPending));
+}
+
+async function updateVulnerable() {
+	await runUpdates(updates.value.filter((u) => u.isVulnerable && isPending(u)));
 }
 
 watch(
@@ -109,6 +128,7 @@ watch(
 								<tr>
 									<th>Site</th>
 									<th>Version</th>
+									<th class="hide-mobile">Vuln</th>
 									<th></th>
 								</tr>
 							</thead>
@@ -130,6 +150,15 @@ watch(
 												entry.update
 											}}</span>
 										</span>
+									</td>
+									<td class="hide-mobile">
+										<span
+											v-if="entry.isVulnerable"
+											class="status-badge error"
+										>
+											Yes
+										</span>
+										<span v-else class="empty-dash">—</span>
 									</td>
 									<td class="action-col">
 										<span
@@ -173,24 +202,36 @@ watch(
 							</tbody>
 						</table>
 
-						<div v-if="showConfirm" class="confirm-banner">
-							<p>
+						<div v-if="confirmMode" class="confirm-banner">
+							<p v-if="confirmMode === 'all'">
 								<strong>Are you sure?</strong> Updating the plugin
 								on all sites should only be used as an emergency
 								measure in case of vulnerabilities.
 							</p>
+							<p v-else>
+								<strong>Are you sure?</strong> This will update
+								the plugin on all sites with vulnerable versions.
+							</p>
 							<div class="confirm-actions">
 								<button
 									class="btn btn-cancel"
-									@click="showConfirm = false"
+									@click="confirmMode = null"
 								>
 									Cancel
 								</button>
 								<button
 									class="btn btn-danger"
-									@click="updateAll"
+									@click="
+										confirmMode === 'all'
+											? updateAll()
+											: updateVulnerable()
+									"
 								>
-									Confirm Update All
+									{{
+										confirmMode === "all"
+											? "Confirm Update All"
+											: "Confirm Update Vulnerable"
+									}}
 								</button>
 							</div>
 						</div>
@@ -202,15 +243,27 @@ watch(
 						Close
 					</button>
 					<button
+						v-if="hasVulnerableUpdatesRemaining"
+						class="btn btn-danger"
+						:disabled="
+							isUpdatingAll ||
+							isAnyUpdating ||
+							confirmMode !== null
+						"
+						@click="confirmMode = 'vulnerable'"
+					>
+						Update Vulnerable
+					</button>
+					<button
 						v-if="updates.length > 0"
 						class="btn btn-danger"
 						:disabled="
 							isUpdatingAll ||
 							isAnyUpdating ||
 							!hasUpdatesRemaining ||
-							showConfirm
+							confirmMode !== null
 						"
-						@click="showConfirm = true"
+						@click="confirmMode = 'all'"
 					>
 						{{ isUpdatingAll ? "Updating…" : "Update All" }}
 					</button>
