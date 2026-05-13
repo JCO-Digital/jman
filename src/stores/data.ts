@@ -338,6 +338,20 @@ export const useDataStore = defineStore("data", () => {
 		return vulnerabilitiesBySlug.value.get(slug) || [];
 	}
 
+	function applyPluginUpdate(
+		siteId: number,
+		pluginName: string,
+		newVersion: string,
+	) {
+		const plugin = plugins.value.find(
+			(p) => p.site_id === siteId && p.name === pluginName,
+		);
+		if (plugin) {
+			plugin.version = newVersion;
+			plugin.update = "";
+		}
+	}
+
 	function setSiteOrganizationLink(
 		siteId: number,
 		organizationId: number | undefined,
@@ -379,6 +393,7 @@ export const useDataStore = defineStore("data", () => {
 		getPluginsBySiteId,
 		getVulnerabilitiesBySlug,
 		setSiteOrganizationLink,
+		applyPluginUpdate,
 		// Actions
 		initData,
 		refreshData,
