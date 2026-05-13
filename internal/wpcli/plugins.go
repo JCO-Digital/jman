@@ -23,11 +23,10 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 	}
 
 	idx := strings.Index(output, "[")
-	if idx != -1 {
-		output = output[idx:]
-	} else {
+	if idx == -1 {
 		return nil, fmt.Errorf("no valid JSON array found in output")
 	}
+	output = output[idx:]
 
 	type rawPlugin struct {
 		Name          string `json:"name"`
@@ -38,7 +37,8 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 	}
 
 	var raw []rawPlugin
-	if err := json.Unmarshal([]byte(output), &raw); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(output))
+	if err := decoder.Decode(&raw); err != nil {
 		return nil, fmt.Errorf("failed to parse plugins JSON: %w", err)
 	}
 
@@ -111,14 +111,16 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 
 	// wp-cli might output non-JSON text before the JSON array (e.g. update notices)
 	idx := strings.Index(output, "[")
-	if idx != -1 {
-		output = output[idx:]
-	} else if strings.Contains(output, "Success:") {
-		return nil, nil
+	if idx == -1 {
+		if strings.Contains(output, "Success:") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to parse update result: no JSON array found")
 	}
 
 	var updates []UpdateResult
-	if err := json.Unmarshal([]byte(output), &updates); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(output[idx:]))
+	if err := decoder.Decode(&updates); err != nil {
 		return nil, fmt.Errorf("failed to parse update result: %w", err)
 	}
 	for _, update := range updates {
@@ -155,9 +157,7 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 
 	output := strings.TrimSpace(res.Output)
 	idx := strings.Index(output, "{")
-	if idx != -1 {
-		output = output[idx:]
-	} else {
+	if idx == -1 {
 		return nil, fmt.Errorf("no valid JSON object found in output")
 	}
 
@@ -171,7 +171,8 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 	}
 
 	var info rawInfo
-	if err := json.Unmarshal([]byte(output), &info); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(output[idx:]))
+	if err := decoder.Decode(&info); err != nil {
 		return nil, fmt.Errorf("failed to parse plugin info JSON: %w", err)
 	}
 
