@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.20.0 (2026-05-13)
+## 1.21.0 (2026-05-13)
+
+#### Features
+
+- PluginSiteUpdateModal: add support for updating only vulnerable plugin instances (40cc4bc)
+
+## v1.20.0 (2026-05-13)
 
 #### Features
 
