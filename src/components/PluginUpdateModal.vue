@@ -21,7 +21,7 @@ const fetchError = ref<string | null>(null);
 type UpdateStatus = "idle" | "updating" | "success" | "error";
 const pluginStatus = ref<Record<string, UpdateStatus>>({});
 const pluginError = ref<Record<string, string>>({});
-const pluginResult = ref<Record<string, PluginUpdateResult>>({});
+const pluginResult = ref<Record<string, PluginUpdateResult | null>>({});
 const isUpdatingAll = ref(false);
 const isAnyUpdating = computed(() =>
 	Object.values(pluginStatus.value).some((s) => s === "updating"),
@@ -136,9 +136,16 @@ watch(
 								<td class="action-col">
 									<span
 										v-if="pluginStatus[plugin.name] === 'success'"
-										class="status-badge active"
+										:class="[
+											'status-badge',
+											pluginResult[plugin.name] ? 'active' : 'default',
+										]"
 									>
-										{{ pluginResult[plugin.name]?.status || "Updated" }}
+										{{
+											pluginResult[plugin.name]
+												? pluginResult[plugin.name]!.status
+												: "Up to date"
+										}}
 									</span>
 									<span
 										v-else-if="pluginStatus[plugin.name] === 'error'"

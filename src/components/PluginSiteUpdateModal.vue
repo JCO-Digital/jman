@@ -2,7 +2,7 @@
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
-import type { Plugin } from "../types";
+import type { Plugin, PluginUpdateResult } from "../types";
 
 interface UpdateEntry extends Plugin {
 	site_domain: string;
@@ -26,6 +26,7 @@ const updates = ref<UpdateEntry[]>([]);
 type UpdateStatus = "idle" | "updating" | "success" | "error";
 const siteStatus = ref<Record<number, UpdateStatus>>({});
 const siteError = ref<Record<number, string>>({});
+const siteResult = ref<Record<number, PluginUpdateResult | null>>({});
 const isUpdatingAll = ref(false);
 const confirmMode = ref<"all" | "vulnerable" | null>(null);
 
@@ -65,6 +66,7 @@ function snapshot() {
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
 	siteStatus.value = {};
 	siteError.value = {};
+	siteResult.value = {};
 	confirmMode.value = null;
 	isUpdatingAll.value = false;
 }
@@ -73,7 +75,8 @@ async function updateSite(entry: UpdateEntry): Promise<void> {
 	siteStatus.value[entry.site_id] = "updating";
 	siteError.value[entry.site_id] = "";
 	try {
-		await pluginUpdatesStore.updatePlugin(entry.site_id, entry.name);
+		const result = await pluginUpdatesStore.updatePlugin(entry.site_id, entry.name);
+		siteResult.value[entry.site_id] = result;
 		siteStatus.value[entry.site_id] = "success";
 	} catch (e: any) {
 		siteStatus.value[entry.site_id] = "error";
@@ -166,9 +169,18 @@ watch(
 												siteStatus[entry.site_id] ===
 												'success'
 											"
-											class="status-badge active"
+											:class="[
+												'status-badge',
+												siteResult[entry.site_id]
+													? 'active'
+													: 'default',
+											]"
 										>
-											Updated
+											{{
+												siteResult[entry.site_id]
+													? siteResult[entry.site_id]!.status
+													: "Up to date"
+											}}
 										</span>
 										<span
 											v-else-if="
