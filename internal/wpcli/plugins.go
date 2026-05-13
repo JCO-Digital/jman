@@ -17,7 +17,11 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 		return nil, err
 	}
 
-	output := res.Output
+	output := strings.TrimSpace(res.Output)
+	if output == "" || output == "[]" {
+		return nil, nil
+	}
+
 	idx := strings.Index(output, "[")
 	if idx != -1 {
 		output = output[idx:]
@@ -99,8 +103,22 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
+
+	output := strings.TrimSpace(res.Output)
+	if output == "" || strings.Contains(output, "Success: Plugin already up to date") || strings.Contains(output, "Success: Plugins already up to date") {
+		return nil, nil
+	}
+
+	// wp-cli might output non-JSON text before the JSON array (e.g. update notices)
+	idx := strings.Index(output, "[")
+	if idx != -1 {
+		output = output[idx:]
+	} else if strings.Contains(output, "Success:") {
+		return nil, nil
+	}
+
 	var updates []UpdateResult
-	if err := json.Unmarshal([]byte(res.Output), &updates); err != nil {
+	if err := json.Unmarshal([]byte(output), &updates); err != nil {
 		return nil, fmt.Errorf("failed to parse update result: %w", err)
 	}
 	for _, update := range updates {
@@ -135,6 +153,14 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 		return nil, err
 	}
 
+	output := strings.TrimSpace(res.Output)
+	idx := strings.Index(output, "{")
+	if idx != -1 {
+		output = output[idx:]
+	} else {
+		return nil, fmt.Errorf("no valid JSON object found in output")
+	}
+
 	type rawInfo struct {
 		Slug        string `json:"name"`
 		Name        string `json:"title"`
@@ -145,7 +171,7 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 	}
 
 	var info rawInfo
-	if err := json.Unmarshal([]byte(res.Output), &info); err != nil {
+	if err := json.Unmarshal([]byte(output), &info); err != nil {
 		return nil, fmt.Errorf("failed to parse plugin info JSON: %w", err)
 	}
 
