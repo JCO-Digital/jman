@@ -66,17 +66,15 @@ Exchanges a valid, non-expired JWT for a new one.
 
 ---
 
-## User Management (Admin)
-
-These endpoints are restricted to users with the **`admin`** level (or higher).
+## User Management
 
 ### List All Users
 
-`GET /users` (Protected: `admin`)
+`GET /users` (Protected: `basic`)
 
-Returns a detailed list of all users in the system.
+Returns a list of all users in the system. To prevent data leakage, sensitive fields like `level` and `has2FA` are only returned for users with the **`admin`** level.
 
-**Response (200 OK)**
+**Response (200 OK - Admin)**
 
 ```json
 [
@@ -85,6 +83,17 @@ Returns a detailed list of all users in the system.
 		"displayName": "Administrator",
 		"level": "admin",
 		"has2FA": true
+	}
+]
+```
+
+**Response (200 OK - Basic)**
+
+```json
+[
+	{
+		"username": "admin",
+		"displayName": "Administrator"
 	}
 ]
 ```
