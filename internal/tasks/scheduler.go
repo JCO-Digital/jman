@@ -229,13 +229,19 @@ func cleanupOrphanedTasks() error {
 		return err
 	}
 
-	sites, _ := cache.GetFastSiteList()
+	sites, err := cache.GetFastSiteList()
+	if err != nil {
+		return fmt.Errorf("load site cache for orphaned task cleanup: %w", err)
+	}
 	siteExists := make(map[int]bool)
 	for _, s := range sites {
 		siteExists[s.ID] = true
 	}
 
-	servers, _ := cache.GetFastCachedServers()
+	servers, err := cache.GetFastCachedServers()
+	if err != nil {
+		return fmt.Errorf("load server cache for orphaned task cleanup: %w", err)
+	}
 	serverExists := make(map[int]bool)
 	for _, s := range servers {
 		serverExists[s.ID] = true
