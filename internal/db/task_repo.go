@@ -189,6 +189,10 @@ func CompleteTask(id int, username string) error {
 		return ErrTaskNotFound
 	}
 
+	if task.Status == models.TaskStatusCompleted {
+		return nil
+	}
+
 	now := time.Now()
 	task.Status = models.TaskStatusCompleted
 	task.CompletedAt = &now
