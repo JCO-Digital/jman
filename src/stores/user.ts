@@ -10,6 +10,7 @@ import type {
 } from "../types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const CACHE_KEY_USERS = "jman_users";
 
 // Deprecated: use AdminUser from ../types instead. Kept for backward compatibility.
 export interface User {
@@ -102,12 +103,27 @@ export const useUserStore = defineStore("user", () => {
 			if (!res.ok) throw new Error("Failed to fetch users");
 			const data = await res.json();
 			users.value = data;
+			sessionStorage.setItem(CACHE_KEY_USERS, JSON.stringify(data));
 		} catch (e: any) {
 			error.value = e.message;
 			console.error("Error fetching users:", e);
 		} finally {
 			isLoading.value = false;
 		}
+	}
+
+	async function ensureUsers() {
+		if (users.value.length > 0) return;
+		try {
+			const cached = sessionStorage.getItem(CACHE_KEY_USERS);
+			if (cached) {
+				users.value = JSON.parse(cached);
+				return;
+			}
+		} catch {
+			// ignore parse errors
+		}
+		await fetchUsers();
 	}
 
 	// ---------------------------------------------------------------------------
@@ -271,6 +287,7 @@ export const useUserStore = defineStore("user", () => {
 		profile.value = null;
 		profileError.value = null;
 		error.value = null;
+		sessionStorage.removeItem(CACHE_KEY_USERS);
 	}
 
 	return {
@@ -287,6 +304,7 @@ export const useUserStore = defineStore("user", () => {
 		fetchProfile,
 		// List
 		fetchUsers,
+		ensureUsers,
 		// Admin CRUD
 		createUser,
 		updateUser,

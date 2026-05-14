@@ -343,3 +343,61 @@ export interface UserProfile {
 	level: UserLevel;
 	has2FA: boolean;
 }
+
+export type TaskType = "one-time" | "repeating" | "dynamic";
+export type TaskStatus =
+	| "pending"
+	| "in_progress"
+	| "completed"
+	| "skipped"
+	| "overdue";
+export type TaskPriority = "low" | "medium" | "high";
+
+export interface Task {
+	id: number;
+	type: TaskType;
+	status: TaskStatus;
+	priority: TaskPriority;
+	title: string;
+	description: string | null;
+	site_id: number | null;
+	server_id: number | null;
+	organization_id: number | null;
+	plugin_slug: string | null;
+	assigned_to: string | null;
+	interval: string | null;
+	metadata: string | null;
+	due_date: string | null;
+	reminder_date: string | null;
+	created_at: string;
+	updated_at: string;
+	created_by: string;
+}
+
+export interface CreateTaskPayload {
+	type?: TaskType;
+	status?: TaskStatus;
+	priority?: TaskPriority;
+	title: string;
+	description?: string;
+	site_id?: number | null;
+	server_id?: number | null;
+	organization_id?: number | null;
+	plugin_slug?: string | null;
+	assigned_to?: string | null;
+	interval?: string | null;
+	due_date?: string | null;
+	reminder_date?: string | null;
+}
+
+export type UpdateTaskPayload = Partial<CreateTaskPayload>;
+
+export interface TaskFilters {
+	status?: TaskStatus | "";
+	priority?: TaskPriority | "";
+	assigned_to?: string;
+	site_id?: number;
+	organization_id?: number;
+	server_id?: number;
+	search?: string;
+}
