@@ -112,17 +112,30 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updates models.Task
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+	var raw map[string]interface{}
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
-	// Simple field updates
+	// Re-decode into struct for type-safe field access
+	updateData, _ := json.Marshal(raw)
+	var updates models.Task
+	if err := json.Unmarshal(updateData, &updates); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Helper to check for key presence in JSON
+	has := func(key string) bool {
+		_, ok := raw[key]
+		return ok
+	}
+
 	if updates.Title != "" {
 		existing.Title = updates.Title
 	}
-	if updates.Description != nil {
+	if has("description") {
 		existing.Description = updates.Description
 	}
 	if updates.Status != "" {
@@ -131,16 +144,16 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if updates.Priority != "" {
 		existing.Priority = updates.Priority
 	}
-	if updates.AssignedTo != nil {
+	if has("assigned_to") {
 		existing.AssignedTo = updates.AssignedTo
 	}
-	if updates.DueDate != nil {
+	if has("due_date") {
 		existing.DueDate = updates.DueDate
 	}
-	if updates.ReminderDate != nil {
+	if has("reminder_date") {
 		existing.ReminderDate = updates.ReminderDate
 	}
-	if updates.Metadata != nil {
+	if has("metadata") {
 		existing.Metadata = updates.Metadata
 	}
 
