@@ -1,6 +1,17 @@
 # Changelog
 
-### 1.23.1 (2026-05-14)
+### 1.23.2 (2026-05-14)
+
+#### Refactor
+
+- style: modularize and standardize CSS architecture (511f415)
+- dashboard: move vulnerability widget position (7047a7d)
+
+#### Documentation
+
+- add project styling guidelines documentation (3baab7b)
+
+### v1.23.1 (2026-05-14)
 
 #### Bug Fixes
 
