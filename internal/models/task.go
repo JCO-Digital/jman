@@ -51,10 +51,11 @@ type Task struct {
 
 	Interval *string `json:"interval,omitempty"` // e.g., "30d", "1y"
 
-	DueDate      *time.Time `json:"due_date,omitempty"`
-	ReminderDate *time.Time `json:"reminder_date,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	DueDate        *time.Time `json:"due_date,omitempty"`
+	ReminderDate   *time.Time `json:"reminder_date,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	LastNotifiedAt *time.Time `json:"last_notified_at,omitempty"`
 
 	CreatedBy string    `json:"created_by"`
 	UpdatedAt time.Time `json:"updated_at"`

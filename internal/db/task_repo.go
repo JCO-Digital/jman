@@ -2,11 +2,14 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
+
+var ErrTaskNotFound = errors.New("task not found")
 
 // SaveTask inserts or updates a task in the database.
 func SaveTask(task *models.Task, username string) error {
@@ -22,14 +25,14 @@ func SaveTask(task *models.Task, username string) error {
 			type, status, priority, title, description,
 			site_id, server_id, organization_id, plugin_slug,
 			assigned_to, metadata, interval, due_date, reminder_date,
-			created_at, created_by, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, created_by, updated_at, last_notified_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		result, err := database.Exec(query,
 			task.Type, task.Status, task.Priority, task.Title, task.Description,
 			task.SiteID, task.ServerID, task.OrganizationID, task.PluginSlug,
 			task.AssignedTo, task.Metadata, task.Interval, task.DueDate, task.ReminderDate,
-			now, username, now,
+			now, username, now, task.LastNotifiedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert task: %w", err)
@@ -45,14 +48,14 @@ func SaveTask(task *models.Task, username string) error {
 			type = ?, status = ?, priority = ?, title = ?, description = ?,
 			site_id = ?, server_id = ?, organization_id = ?, plugin_slug = ?,
 			assigned_to = ?, metadata = ?, interval = ?, due_date = ?, reminder_date = ?,
-			completed_at = ?, updated_at = ?
+			completed_at = ?, updated_at = ?, last_notified_at = ?
 		WHERE id = ?
 		`
 		_, err := database.Exec(query,
 			task.Type, task.Status, task.Priority, task.Title, task.Description,
 			task.SiteID, task.ServerID, task.OrganizationID, task.PluginSlug,
 			task.AssignedTo, task.Metadata, task.Interval, task.DueDate, task.ReminderDate,
-			task.CompletedAt, now, task.ID,
+			task.CompletedAt, now, task.LastNotifiedAt, task.ID,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
@@ -74,7 +77,7 @@ func GetTask(id int) (*models.Task, error) {
 		id, type, status, priority, title, description,
 		site_id, server_id, organization_id, plugin_slug,
 		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, created_by, updated_at
+		created_at, completed_at, created_by, updated_at, last_notified_at
 	FROM tasks WHERE id = ?`
 
 	var t models.Task
@@ -82,7 +85,7 @@ func GetTask(id int) (*models.Task, error) {
 		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
 		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-		&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt,
+		&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -116,7 +119,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 		id, type, status, priority, title, description,
 		site_id, server_id, organization_id, plugin_slug,
 		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, created_by, updated_at
+		created_at, completed_at, created_by, updated_at, last_notified_at
 	FROM tasks WHERE 1=1`
 
 	var args []interface{}
@@ -166,7 +169,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 			&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
 			&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 			&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-			&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt,
+			&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -183,7 +186,7 @@ func CompleteTask(id int, username string) error {
 		return err
 	}
 	if task == nil {
-		return fmt.Errorf("task not found")
+		return ErrTaskNotFound
 	}
 
 	now := time.Now()
@@ -208,11 +211,12 @@ func createNextRecurringTask(prevTask *models.Task, username string) error {
 		return nil
 	}
 
-	duration, err := time.ParseDuration(*prevTask.Interval)
+	// Try custom parser first (d, w, m, y) to avoid Go's ParseDuration
+	// interpreting 'm' as minutes instead of months.
+	duration, err := parseCustomDuration(*prevTask.Interval)
 	if err != nil {
-		// If it's not a standard Go duration, we might want to handle custom formats like "30d"
-		// For now, let's try to handle "d" and "y" simply if ParseDuration fails
-		duration, err = parseCustomDuration(*prevTask.Interval)
+		// Fall back to standard Go duration (e.g., "1h", "10s")
+		duration, err = time.ParseDuration(*prevTask.Interval)
 		if err != nil {
 			return fmt.Errorf("invalid interval format: %w", err)
 		}
@@ -306,7 +310,7 @@ func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
 		id, type, status, priority, title, description,
 		site_id, server_id, organization_id, plugin_slug,
 		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, created_by, updated_at
+		created_at, completed_at, created_by, updated_at, last_notified_at
 	FROM tasks
 	WHERE site_id = ? AND status != 'completed' AND status != 'skipped' AND title LIKE 'Security Vulnerabilities%'
 	LIMIT 1`
@@ -316,7 +320,7 @@ func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
 		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
 		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-		&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt,
+		&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil

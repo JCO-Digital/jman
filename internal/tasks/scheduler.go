@@ -185,7 +185,7 @@ func processReminders() error {
 	now := time.Now()
 	for _, task := range tasks {
 		if (task.Priority == models.TaskPriorityHigh || task.Priority == models.TaskPriorityMedium) &&
-			task.ReminderDate != nil && task.ReminderDate.Before(now) {
+			task.ReminderDate != nil && task.ReminderDate.Before(now) && task.LastNotifiedAt == nil {
 			sendSlackReminder(&task)
 		}
 	}
@@ -193,6 +193,10 @@ func processReminders() error {
 }
 
 func sendSlackReminder(task *models.Task) {
+	now := time.Now()
+	task.LastNotifiedAt = &now
+	_ = db.SaveTask(task, "system")
+
 	message := fmt.Sprintf("🔔 *Task Reminder: %s*\nPriority: %s", task.Title, task.Priority)
 	if task.DueDate != nil {
 		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
