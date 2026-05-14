@@ -70,6 +70,11 @@ const router = createRouter({
 			component: () => import("../views/Assets/TemplatesView.vue"),
 		},
 		{
+			path: "/tasks",
+			name: "tasks",
+			component: () => import("../views/TasksView.vue"),
+		},
+		{
 			path: "/",
 			name: "home",
 			component: () => import("../views/DashboardView.vue"),
