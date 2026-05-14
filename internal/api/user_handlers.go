@@ -236,7 +236,8 @@ func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	}
 }
 
-// AdminListUsersHandler provides an enhanced user list for admin management.
+// ListUsersHandler returns a user list for basic and admin users, including
+// admin-only fields such as level and 2FA status when the requester is an admin.
 func ListUsersHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
