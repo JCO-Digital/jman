@@ -1,0 +1,50 @@
+# Project Styling Guidelines
+
+To maintain a unified visual style and clean architecture, all agents and developers must adhere to the following styling guidelines for the `jman-ui` project.
+
+## 1. Modular CSS Architecture
+Styles are modularized into specific files within `src/styles/`. Avoid a monolithic `style.css`.
+- `variables.css`: Global CSS custom properties (colors, spacing, z-index).
+- `base.css`: HTML resets, base element styles (input, select, a), and generic text utilities.
+- `layout.css`: Layout containers (`view-container`, `grid-2-cols`), flex helpers, and app shell styles.
+- `components.css`: Shared component styles (buttons, cards, tables, badges, tabs, accordions).
+- `modals.css`: Standardized modal overlay and content styles.
+- `auth.css`: Styles specific to the login and authentication flow.
+- `toasts.css`: Toast notification styles and animations.
+
+## 2. CSS Custom Properties (Variables)
+**NEVER** use hardcoded hex, RGB, or HSL values in components or views. Always use CSS custom properties defined in `variables.css`.
+- **Colors**: Use `var(--primary)`, `var(--text-main)`, `var(--bg-card)`, etc.
+- **State**: Use status variables like `var(--error-text)`, `var(--badge-active-bg)`.
+- **Dark Mode**: Support is handled automatically through these variables via `@media (prefers-color-scheme: dark)`.
+
+## 3. Location of Styles
+- **Views (`src/views/`)**: Must **NOT** contain `<style>` sections. Use global utility classes or component classes defined in the modular CSS files.
+- **Components (`src/components/`)**: Scoped styles are permitted **ONLY** if the style is strictly unique to that specific component. If a style can be reused, move it to `src/styles/components.css`.
+- **Inline Styles**: Avoid `style="..."` attributes. Use utility classes (e.g., `mt-4`, `flex-row`, `font-medium`) instead.
+
+## 4. Standardized Components
+Use existing class structures to ensure UI consistency:
+- **Buttons**: Use `.btn` with modifiers like `.btn-primary`, `.btn-outline`, `.btn-text`, or `.btn-danger`.
+- **Cards**: Use `.card` for standard containers and `.card-header` for titles with actions.
+- **Tables**: Use `.data-table` inside a `.table-container`. Use `.clickable-row` for rows that navigate.
+- **Badges**: Use `.status-badge` with state classes (`.active`, `.error`, `.info`, `.badge-sm`).
+- **Modals**: Use `.modal-overlay` and `.modal-content.card`. Use `.modal-header` with `.modal-close`.
+
+## 5. Responsive Utilities
+- Use `.hide-mobile` and `.show-mobile` for simple toggling.
+- Use responsive table utilities like `.hide-col-3-sm` to drop less important columns on small screens.
+- Prefer CSS Grid (`.grid-2-cols`) and Flexbox over fixed widths.
+
+## 6. CSS Nesting
+The project uses modern CSS nesting. You can nest selectors inside their parents to improve readability:
+```css
+.card {
+    padding: 20px;
+    & h2 {
+        margin-top: 0;
+    }
+}
+```
+
+When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.
