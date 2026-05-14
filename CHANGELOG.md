@@ -1,6 +1,19 @@
 # Changelog
 
-### 5.11.2 (2026-05-13)
+## 5.12.0 (2026-05-14)
+
+#### Features
+
+- task: add last_notified_at field and prevent duplicate reminders (340624b)
+- tasks: implement task management system (4ebce87)
+
+#### Bug Fixes
+
+- scheduler: handle errors when fetching cache during orphaned task cleanup (05ebd31)
+- db: prevent redundant update when completing already completed task (7d49ce6)
+- scheduler: use correct site version when grouping vulnerabilities (d09ed96)
+
+### v5.11.2 (2026-05-13)
 
 #### Bug Fixes
 
