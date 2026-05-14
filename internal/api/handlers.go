@@ -100,6 +100,14 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PATCH /api/notes/{id}", edit(UpdateNoteHandler))
 	mux.Handle("DELETE /api/notes/{id}", edit(DeleteNoteHandler))
 
+	// --- Task routes ---
+	mux.Handle("GET /api/tasks", basic(ListTasksHandler))
+	mux.Handle("GET /api/tasks/{id}", basic(GetTaskHandler))
+	mux.Handle("POST /api/tasks", edit(CreateTaskHandler))
+	mux.Handle("PATCH /api/tasks/{id}", edit(UpdateTaskHandler))
+	mux.Handle("POST /api/tasks/{id}/complete", edit(CompleteTaskHandler))
+	mux.Handle("DELETE /api/tasks/{id}", edit(DeleteTaskHandler))
+
 	// --- Settings routes ---
 	mux.Handle("GET /api/settings", basic(ListSettingsHandler))
 	mux.Handle("GET /api/settings/{key}", basic(GetSettingHandler))
