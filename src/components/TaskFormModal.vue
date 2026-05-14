@@ -91,7 +91,10 @@ function toIso(
 	seconds: number,
 ): string | null {
 	if (!value) return null;
-	const [year, month, day] = value.split("-").map(Number);
+	const parts = value.split("-");
+	const year = Number(parts[0]);
+	const month = Number(parts[1]);
+	const day = Number(parts[2]);
 	return new Date(year, month - 1, day, hours, minutes, seconds, 0).toISOString();
 }
 
