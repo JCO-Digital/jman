@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.23.0 (2026-05-14)
+### 1.23.1 (2026-05-14)
+
+#### Bug Fixes
+
+- ui: improve date parsing logic in TaskFormModal (de2cfff)
+
+## v1.23.0 (2026-05-14)
 
 #### Features
 
