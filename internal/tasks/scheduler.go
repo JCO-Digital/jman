@@ -94,11 +94,19 @@ func syncVulnerabilities() error {
 				maxCvss = cvss
 			}
 
+			siteVersion := ""
+			for _, site := range report.Sites {
+				if site.SiteID == siteID {
+					siteVersion = site.Version
+					break
+				}
+			}
+
 			// Group for description
 			if _, ok := pluginMap[report.Slug]; !ok {
 				pluginMap[report.Slug] = &models.VulnPlugin{
 					PluginName: report.PluginName,
-					Version:    report.Sites[0].Version,
+					Version:    siteVersion,
 					Cvss:       &cvss,
 				}
 			} else {
