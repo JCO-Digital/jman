@@ -122,7 +122,7 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if updates.Title != "" {
 		existing.Title = updates.Title
 	}
-	if updates.Description != "" {
+	if updates.Description != nil {
 		existing.Description = updates.Description
 	}
 	if updates.Status != "" {

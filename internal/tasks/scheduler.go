@@ -153,7 +153,7 @@ func syncVulnerabilities() error {
 		if task != nil {
 			// Update existing task
 			task.Priority = priority
-			task.Description = description
+			task.Description = &description
 			task.Metadata = &metadataStr
 			if err := db.SaveTask(task, "system"); err != nil {
 				log.Printf("Error updating vuln task for site %d: %v", siteID, err)
@@ -168,7 +168,7 @@ func syncVulnerabilities() error {
 				Status:       models.TaskStatusPending,
 				Priority:     priority,
 				Title:        fmt.Sprintf("Security Vulnerabilities - %s", siteName),
-				Description:  description,
+				Description:  &description,
 				SiteID:       &siteID,
 				Metadata:     &metadataStr,
 				ReminderDate: &now,
