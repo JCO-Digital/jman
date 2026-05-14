@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -112,17 +113,21 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var raw map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid request body")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "Failed to read request body")
 		return
 	}
 
-	// Re-decode into struct for type-safe field access
-	updateData, _ := json.Marshal(raw)
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request JSON")
+		return
+	}
+
 	var updates models.Task
-	if err := json.Unmarshal(updateData, &updates); err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid request body")
+	if err := json.Unmarshal(body, &updates); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request format")
 		return
 	}
 
@@ -132,16 +137,28 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return ok
 	}
 
-	if updates.Title != "" {
+	if has("title") {
+		if updates.Title == "" {
+			WriteError(w, http.StatusBadRequest, "Title cannot be empty")
+			return
+		}
 		existing.Title = updates.Title
 	}
 	if has("description") {
 		existing.Description = updates.Description
 	}
-	if updates.Status != "" {
+	if has("status") {
+		if updates.Status == "" {
+			WriteError(w, http.StatusBadRequest, "Status cannot be empty")
+			return
+		}
 		existing.Status = updates.Status
 	}
-	if updates.Priority != "" {
+	if has("priority") {
+		if updates.Priority == "" {
+			WriteError(w, http.StatusBadRequest, "Priority cannot be empty")
+			return
+		}
 		existing.Priority = updates.Priority
 	}
 	if has("assigned_to") {
