@@ -14,9 +14,8 @@ const router = useRouter();
 const authStore = useAuthStore();
 
 const validTabs = computed(() => {
-	const tabs = ["general"];
+	const tabs = ["account", "general"];
 	if (authStore.canEdit) tabs.push("ignored");
-	tabs.push("account");
 	if (authStore.canAdmin) tabs.push("users");
 	return tabs;
 });
@@ -26,7 +25,7 @@ const activeTab = ref(getInitialTab());
 function getInitialTab(): string {
 	const tab = route.query.tab as string;
 	if (tab && validTabs.value.includes(tab)) return tab;
-	return "general";
+	return "account";
 }
 
 // Sync tab to URL query parameter

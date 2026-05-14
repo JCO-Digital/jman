@@ -3,6 +3,7 @@ import { ref, reactive, computed, watch, onMounted } from "vue";
 import { useTaskStore } from "../stores/tasks";
 import { useDataStore } from "../stores/data";
 import { useOrganizationStore } from "../stores/organization";
+import { useUserStore } from "../stores/user";
 import type { Task, TaskType, TaskPriority } from "../types";
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
 const taskStore = useTaskStore();
 const dataStore = useDataStore();
 const orgStore = useOrganizationStore();
+const userStore = useUserStore();
 
 const isEditing = computed(() => !!props.task);
 const isSaving = ref(false);
@@ -37,14 +39,11 @@ const form = reactive({
 	reminder_date: "",
 });
 
-function toDatetimeLocal(iso: string | null): string {
+function toDateInput(iso: string | null): string {
 	if (!iso) return "";
 	const d = new Date(iso);
 	const pad = (n: number) => String(n).padStart(2, "0");
-	return (
-		`${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` +
-		`T${pad(d.getHours())}:${pad(d.getMinutes())}`
-	);
+	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 function resetForm() {
@@ -59,8 +58,8 @@ function resetForm() {
 		form.organization_id = props.task.organization_id ?? "";
 		form.plugin_slug = props.task.plugin_slug ?? "";
 		form.interval = props.task.interval ?? "";
-		form.due_date = toDatetimeLocal(props.task.due_date);
-		form.reminder_date = toDatetimeLocal(props.task.reminder_date);
+		form.due_date = toDateInput(props.task.due_date);
+		form.reminder_date = toDateInput(props.task.reminder_date);
 	} else {
 		form.title = "";
 		form.description = "";
@@ -82,14 +81,29 @@ watch(() => props.task, resetForm, { immediate: true });
 onMounted(() => {
 	if (!dataStore.isLoaded) dataStore.initData();
 	if (orgStore.organizations.length === 0) orgStore.fetchOrganizations();
+	userStore.ensureUsers();
 });
+
+function toIso(
+	value: string,
+	hours: number,
+	minutes: number,
+	seconds: number,
+): string | null {
+	if (!value) return null;
+	const [year, month, day] = value.split("-").map(Number);
+	return new Date(year, month - 1, day, hours, minutes, seconds, 0).toISOString();
+}
 
 async function save() {
 	if (!form.title.trim()) {
 		saveError.value = "Title is required.";
 		return;
 	}
-	if ((form.type === "repeating" || form.type === "dynamic") && !form.interval.trim()) {
+	if (
+		(form.type === "repeating" || form.type === "dynamic") &&
+		!form.interval.trim()
+	) {
 		saveError.value = "Interval is required for repeating/dynamic tasks.";
 		return;
 	}
@@ -99,7 +113,7 @@ async function save() {
 
 	const payload = {
 		title: form.title.trim(),
-		description: form.description.trim() || undefined,
+		description: form.description.trim() || "",
 		type: form.type,
 		priority: form.priority,
 		assigned_to: form.assigned_to.trim() || null,
@@ -110,12 +124,8 @@ async function save() {
 		plugin_slug: form.plugin_slug.trim() || null,
 		interval:
 			form.type !== "one-time" ? form.interval.trim() || null : null,
-		due_date: form.due_date
-			? new Date(form.due_date).toISOString()
-			: null,
-		reminder_date: form.reminder_date
-			? new Date(form.reminder_date).toISOString()
-			: null,
+		due_date: toIso(form.due_date, 23, 59, 59),
+		reminder_date: toIso(form.reminder_date, 0, 0, 0),
 	};
 
 	try {
@@ -144,7 +154,9 @@ async function save() {
 
 				<form class="modal-body" @submit.prevent="save">
 					<div class="form-group">
-						<label for="task-title">Title <span class="required">*</span></label>
+						<label for="task-title"
+							>Title <span class="required">*</span></label
+						>
 						<input
 							id="task-title"
 							v-model="form.title"
@@ -169,7 +181,11 @@ async function save() {
 					<div class="form-row">
 						<div class="form-group">
 							<label for="task-type">Type</label>
-							<select id="task-type" v-model="form.type" class="form-input">
+							<select
+								id="task-type"
+								v-model="form.type"
+								class="form-input"
+							>
 								<option value="one-time">One-time</option>
 								<option value="repeating">Repeating</option>
 								<option value="dynamic">Dynamic</option>
@@ -191,7 +207,9 @@ async function save() {
 					</div>
 
 					<div
-						v-if="form.type === 'repeating' || form.type === 'dynamic'"
+						v-if="
+							form.type === 'repeating' || form.type === 'dynamic'
+						"
 						class="form-group"
 					>
 						<label for="task-interval">
@@ -212,7 +230,7 @@ async function save() {
 							<input
 								id="task-due"
 								v-model="form.due_date"
-								type="datetime-local"
+								type="date"
 								class="form-input"
 							/>
 						</div>
@@ -222,7 +240,7 @@ async function save() {
 							<input
 								id="task-reminder"
 								v-model="form.reminder_date"
-								type="datetime-local"
+								type="date"
 								class="form-input"
 							/>
 						</div>
@@ -230,19 +248,30 @@ async function save() {
 
 					<div class="form-group">
 						<label for="task-assigned">Assigned To</label>
-						<input
+						<select
 							id="task-assigned"
 							v-model="form.assigned_to"
-							type="text"
 							class="form-input"
-							placeholder="Username"
-						/>
+						>
+							<option value="">— Unassigned —</option>
+							<option
+								v-for="user in userStore.users"
+								:key="user.username"
+								:value="user.username"
+							>
+								{{ user.displayName }}
+							</option>
+						</select>
 					</div>
 
 					<div class="form-row">
 						<div class="form-group">
 							<label for="task-site">Site</label>
-							<select id="task-site" v-model="form.site_id" class="form-input">
+							<select
+								id="task-site"
+								v-model="form.site_id"
+								class="form-input"
+							>
 								<option value="">— None —</option>
 								<option
 									v-for="site in dataStore.sites"
@@ -321,7 +350,13 @@ async function save() {
 						:disabled="isSaving"
 						@click="save"
 					>
-						{{ isSaving ? "Saving…" : isEditing ? "Save Changes" : "Create Task" }}
+						{{
+							isSaving
+								? "Saving…"
+								: isEditing
+									? "Save Changes"
+									: "Create Task"
+						}}
 					</button>
 				</footer>
 			</div>

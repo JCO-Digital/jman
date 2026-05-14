@@ -3,6 +3,7 @@ import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useAssetStore } from "../stores/assetStore";
+import { useAuthStore } from "../stores/auth";
 import { useTaskStore } from "../stores/tasks";
 import type { OrganizationAsset, Task } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
@@ -12,6 +13,7 @@ import TaskInfoModal from "../components/TaskInfoModal.vue";
 
 const dataStore = useDataStore();
 const assetStore = useAssetStore();
+const authStore = useAuthStore();
 const taskStore = useTaskStore();
 
 const upcomingRenewals = ref<OrganizationAsset[]>([]);
@@ -221,6 +223,7 @@ const formatDate = (dateString: string | null) => {
 							</td>
 							<td class="action-col" @click.stop>
 								<button
+									v-if="authStore.canEdit"
 									class="btn btn-primary btn-sm"
 									@click="completeTask(task)"
 								>

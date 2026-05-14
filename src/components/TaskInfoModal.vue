@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
+import { useUserStore } from "../stores/user";
 import type { Task, TaskStatus } from "../types";
 
 const props = defineProps<{
@@ -18,6 +19,7 @@ const emit = defineEmits<{
 
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
+const userStore = useUserStore();
 
 const isActioning = ref(false);
 const actionError = ref<string | null>(null);
@@ -65,10 +67,7 @@ async function handleDelete() {
 
 function formatDate(d: string | null) {
 	if (!d) return "—";
-	return new Date(d).toLocaleString("de-DE", {
-		dateStyle: "medium",
-		timeStyle: "short",
-	});
+	return new Date(d).toLocaleDateString("de-DE", { dateStyle: "medium" });
 }
 
 const priorityClass: Record<string, string> = {
@@ -120,7 +119,7 @@ const canComplete = (s: string) =>
 						<div class="info-row">
 							<span class="info-label">Assigned to</span>
 							<span class="info-value">{{
-								task.assigned_to ?? "—"
+								userStore.resolveDisplayName(task.assigned_to)
 							}}</span>
 						</div>
 						<div class="info-row">
@@ -243,10 +242,11 @@ const canComplete = (s: string) =>
 								Skip
 							</button>
 						</div>
-						<p v-if="actionError" class="action-error">
-							{{ actionError }}
-						</p>
 					</div>
+
+					<p v-if="actionError" class="action-error">
+						{{ actionError }}
+					</p>
 				</div>
 
 				<footer class="modal-footer">
