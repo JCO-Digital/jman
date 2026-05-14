@@ -160,8 +160,6 @@ const formatDate = (dateString: string | null) => {
 			/>
 		</main>
 
-		<VulnerabilityWidget />
-
 		<section
 			v-if="reminderTasks.length > 0 || isTasksLoading"
 			class="card tasks-widget"
@@ -235,6 +233,8 @@ const formatDate = (dateString: string | null) => {
 				</table>
 			</div>
 		</section>
+
+		<VulnerabilityWidget />
 
 		<section
 			v-if="upcomingRenewals.length > 0 || isRenewalsLoading"
