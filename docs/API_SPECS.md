@@ -98,10 +98,6 @@ Returns a list of all users in the system. To prevent data leakage, sensitive fi
 ]
 ```
 
-### Create User (Admin Only)
-
-`POST /users` (Protected: `admin`)
-
 ### Create User
 
 `POST /users` (Protected: `admin`)
