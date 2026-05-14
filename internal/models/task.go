@@ -38,7 +38,7 @@ type Task struct {
 	Status      TaskStatus   `json:"status"`
 	Priority    TaskPriority `json:"priority"`
 	Title       string       `json:"title"`
-	Description string       `json:"description"`
+	Description *string      `json:"description,omitempty"`
 
 	// Linkage
 	SiteID         *int    `json:"site_id,omitempty"`

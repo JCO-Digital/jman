@@ -236,25 +236,34 @@ func DeleteUserHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	}
 }
 
-// AdminListUsersHandler provides an enhanced user list for admin management.
-func AdminListUsersHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+// ListUsersHandler returns a user list for basic and admin users, including
+// admin-only fields such as level and 2FA status when the requester is an admin.
+func ListUsersHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		claims := GetAuthClaims(r.Context())
+		isAdmin := claims != nil && claims.Level == config.LevelAdmin
+
 		type userListItem struct {
-			Username    string           `json:"username"`
-			DisplayName string           `json:"displayName"`
-			Level       config.UserLevel `json:"level"`
-			Has2FA      bool             `json:"has2FA"`
+			Username    string            `json:"username"`
+			DisplayName string            `json:"displayName"`
+			Level       *config.UserLevel `json:"level,omitempty"`
+			Has2FA      *bool             `json:"has2FA,omitempty"`
 		}
 
 		usersCfg.RLock()
-		var resp []userListItem
+		resp := make([]userListItem, 0, len(usersCfg.Users))
 		for _, u := range usersCfg.Users {
-			resp = append(resp, userListItem{
+			item := userListItem{
 				Username:    u.Username,
 				DisplayName: u.DisplayName,
-				Level:       u.Level,
-				Has2FA:      u.TOTPSecret != "",
-			})
+			}
+			if isAdmin {
+				l := u.Level
+				h := u.TOTPSecret != ""
+				item.Level = &l
+				item.Has2FA = &h
+			}
+			resp = append(resp, item)
 		}
 		usersCfg.RUnlock()
 		WriteJSON(w, http.StatusOK, resp)

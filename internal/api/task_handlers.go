@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -112,35 +113,64 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updates models.Task
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid request body")
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "Failed to read request body")
 		return
 	}
 
-	// Simple field updates
-	if updates.Title != "" {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(body, &raw); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request JSON")
+		return
+	}
+
+	var updates models.Task
+	if err := json.Unmarshal(body, &updates); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request format")
+		return
+	}
+
+	// Helper to check for key presence in JSON
+	has := func(key string) bool {
+		_, ok := raw[key]
+		return ok
+	}
+
+	if has("title") {
+		if updates.Title == "" {
+			WriteError(w, http.StatusBadRequest, "Title cannot be empty")
+			return
+		}
 		existing.Title = updates.Title
 	}
-	if updates.Description != "" {
+	if has("description") {
 		existing.Description = updates.Description
 	}
-	if updates.Status != "" {
+	if has("status") {
+		if updates.Status == "" {
+			WriteError(w, http.StatusBadRequest, "Status cannot be empty")
+			return
+		}
 		existing.Status = updates.Status
 	}
-	if updates.Priority != "" {
+	if has("priority") {
+		if updates.Priority == "" {
+			WriteError(w, http.StatusBadRequest, "Priority cannot be empty")
+			return
+		}
 		existing.Priority = updates.Priority
 	}
-	if updates.AssignedTo != nil {
+	if has("assigned_to") {
 		existing.AssignedTo = updates.AssignedTo
 	}
-	if updates.DueDate != nil {
+	if has("due_date") {
 		existing.DueDate = updates.DueDate
 	}
-	if updates.ReminderDate != nil {
+	if has("reminder_date") {
 		existing.ReminderDate = updates.ReminderDate
 	}
-	if updates.Metadata != nil {
+	if has("metadata") {
 		existing.Metadata = updates.Metadata
 	}
 

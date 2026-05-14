@@ -36,8 +36,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/sites", basic(SitesHandler))
 	mux.Handle("GET /api/vulns", basic(VulnsHandler))
 
-	// --- User Management (Admin) ---
-	mux.Handle("GET /api/users", admin(AdminListUsersHandler(&usersCfg)))
+	// --- User Management ---
+	mux.Handle("GET /api/users", basic(ListUsersHandler(&usersCfg)))
 	mux.Handle("POST /api/users", admin(CreateUserHandler(&usersCfg)))
 	mux.Handle("PATCH /api/users/{username}", admin(UpdateUserHandler(&usersCfg)))
 	mux.Handle("DELETE /api/users/{username}", admin(DeleteUserHandler(&usersCfg)))
