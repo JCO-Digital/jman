@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
+import { useUserStore } from "../stores/user";
 import type { Task, TaskStatus, TaskPriority, TaskType } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import TaskInfoModal from "../components/TaskInfoModal.vue";
@@ -9,6 +10,7 @@ import TaskFormModal from "../components/TaskFormModal.vue";
 
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
+const userStore = useUserStore();
 
 const selectedTask = ref<Task | null>(null);
 const showInfoModal = ref(false);
@@ -25,10 +27,13 @@ const filterDueDate = ref<"" | "past" | "week" | "month" | "quarter">("");
 
 onMounted(() => {
 	taskStore.fetchTasks();
+	userStore.ensureUsers();
 });
 
+const now = new Date();
+
 function getDueDateBound(option: string): Date | null {
-	const d = new Date();
+	const d = new Date(now);
 	if (option === "week") {
 		d.setDate(d.getDate() + 7);
 		return d;
@@ -267,7 +272,7 @@ function formatDate(d: string | null) {
 						</td>
 						<td class="hide-mobile">{{ task.type }}</td>
 						<td class="hide-mobile">
-							{{ task.assigned_to ?? "—" }}
+							{{ userStore.resolveDisplayName(task.assigned_to) }}
 						</td>
 						<td
 							class="hide-mobile"
