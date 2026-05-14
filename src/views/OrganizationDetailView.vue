@@ -754,15 +754,16 @@ const sitesAudit = computed(() => {
 									<th>PHP</th>
 									<th
 										v-if="authStore.canEdit"
-										class="actions-cell"
-									>
-										Actions
-									</th>
+										class="text-right"
+									></th>
 								</tr>
 							</thead>
 							<tbody>
 								<tr v-if="linkedSites.length === 0">
-									<td colspan="3" class="empty-state">
+									<td
+										:colspan="authStore.canEdit ? 4 : 3"
+										class="empty-state"
+									>
 										No sites linked to this organization.
 									</td>
 								</tr>
@@ -770,20 +771,38 @@ const sitesAudit = computed(() => {
 									<td>
 										<a
 											href="#"
-											class="site-link"
+											class="site-link font-medium"
 											@click.prevent="goToSite(site.id)"
 										>
-											<strong>{{ site.domain }}</strong>
+											{{ site.domain }}
 										</a>
 									</td>
-									<td>{{ site.php_version }}</td>
+									<td>
+										<span
+											class="status-badge badge-sm"
+											:class="
+												site.is_wordpress
+													? 'info'
+													: 'default'
+											"
+										>
+											{{
+												site.is_wordpress
+													? "WordPress"
+													: "App"
+											}}
+										</span>
+									</td>
+									<td class="text-muted">
+										{{ site.php_version }}
+									</td>
 									<td
 										v-if="authStore.canEdit"
-										class="actions-cell"
+										class="text-right"
 									>
-										<div class="row-actions">
+										<div class="flex-row gap-2 justify-end">
 											<button
-												class="icon-btn-sm delete"
+												class="icon-btn icon-btn-sm danger"
 												title="Unlink Site"
 												@click="
 													handleUnlinkSite(site.id)
@@ -864,15 +883,16 @@ const sitesAudit = computed(() => {
 									<th>Status</th>
 									<th
 										v-if="authStore.canEdit"
-										class="actions-cell"
-									>
-										Actions
-									</th>
+										class="text-right"
+									></th>
 								</tr>
 							</thead>
 							<tbody>
 								<tr v-if="orgAssets.length === 0">
-									<td colspan="6" class="empty-state">
+									<td
+										:colspan="authStore.canEdit ? 7 : 6"
+										class="empty-state"
+									>
 										No assets linked to this organization.
 									</td>
 								</tr>
@@ -934,7 +954,7 @@ const sitesAudit = computed(() => {
 												</svg>
 											</button>
 											<button
-												class="icon-btn-sm"
+												class="icon-btn icon-btn-sm"
 												title="Record Payment"
 												@click="openPaymentModal(oa)"
 											>
@@ -965,7 +985,7 @@ const sitesAudit = computed(() => {
 												</svg>
 											</button>
 											<button
-												class="icon-btn-sm delete"
+												class="icon-btn icon-btn-sm danger"
 												title="Unlink Asset"
 												@click="
 													handleUnlinkAsset(oa.id)
@@ -1021,10 +1041,8 @@ const sitesAudit = computed(() => {
 									<th>Plugin</th>
 									<th
 										v-if="authStore.canEdit"
-										class="actions-cell"
-									>
-										Actions
-									</th>
+										class="text-right"
+									></th>
 								</tr>
 							</thead>
 							<tbody>
