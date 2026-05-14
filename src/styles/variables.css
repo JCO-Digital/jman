@@ -1,0 +1,95 @@
+:root {
+	/* Base / Layout */
+	--bg-body: #f3f4f6;
+	--bg-card: #ffffff;
+	--border-color: #e5e7eb;
+	--border-input: #d1d5db;
+
+	/* Typography */
+	--text-main: #1f2937;
+	--text-muted: #6b7280;
+	--text-placeholder: #9ca3af;
+	--text-heading: #111827;
+
+	/* Primary Brand */
+	--primary: #4f46e5;
+	--primary-hover: #4338ca;
+	--primary-text: #ffffff;
+
+	/* Table / Interactive */
+	--bg-table-header: #f9fafb;
+	--text-table-header: #374151;
+	--bg-hover: #f3f4f6;
+	--bg-disabled: #f3f4f6;
+	--text-disabled: #9ca3af;
+
+	/* Error / Validation */
+	--error-bg: #fee2e2;
+	--error-border: #ef4444;
+	--error-text: #991b1b;
+	--warning-bg: #fef3c7;
+	--warning-border: #f59e0b;
+	--warning-text: #92400e;
+
+	/* Status Badges */
+	--badge-default-bg: #f3f4f6;
+	--badge-default-text: #374151;
+	--badge-active-bg: #d1fae5;
+	--badge-active-text: #065f46;
+	--badge-inactive-bg: #fee2e2;
+	--badge-inactive-text: #991b1b;
+	--badge-must-use-bg: #e0e7ff;
+	--badge-must-use-text: #3730a3;
+	--badge-drop-in-bg: #fef3c7;
+	--badge-drop-in-text: #92400e;
+
+	/* Z-index */
+	--z-modal: 1000;
+	--z-toast: 1100;
+
+	@media (prefers-color-scheme: dark) {
+		/* Base / Layout */
+		--bg-body: #111827;
+		--bg-card: #1f2937;
+		--border-color: #374151;
+		--border-input: #4b5563;
+
+		/* Typography */
+		--text-main: #f9fafb;
+		--text-muted: #9ca3af;
+		--text-placeholder: #6b7280;
+		--text-heading: #f3f4f6;
+
+		/* Primary Brand */
+		--primary: #6366f1;
+		--primary-hover: #818cf8;
+		--primary-text: #ffffff;
+
+		/* Table / Interactive */
+		--bg-table-header: #111827;
+		--text-table-header: #e5e7eb;
+		--bg-hover: #374151;
+		--bg-disabled: #374151;
+		--text-disabled: #6b7280;
+
+		/* Error / Validation */
+		--error-bg: #7f1d1d;
+		--error-border: #dc2626;
+		--error-text: #fca5a5;
+		--warning-bg: #78350f;
+		--warning-border: #d97706;
+		--warning-text: #fbbf24;
+
+		/* Status Badges */
+		--badge-default-bg: #374151;
+		--badge-default-text: #e5e7eb;
+		--badge-active-bg: #064e3b;
+		--badge-active-text: #34d399;
+		--badge-inactive-bg: #7f1d1d;
+		--badge-inactive-text: #f87171;
+		--badge-must-use-bg: #312e81;
+		--badge-must-use-text: #818cf8;
+		--badge-drop-in-bg: #78350f;
+		--badge-drop-in-text: #fbbf24;
+	}
+}

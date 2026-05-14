@@ -57,30 +57,32 @@ const formatDate = (dateStr: string) => {
 
 <template>
 	<section class="card">
-		<h2>Ignored Domains</h2>
-		<p class="section-desc">
+		<div class="card-header">
+			<h2>Ignored Domains</h2>
+		</div>
+		<p class="sub-text mb-4">
 			Sites in this list are excluded from uptime monitoring.
 		</p>
 
 		<!-- Add form -->
 		<form
 			v-if="authStore.canEdit"
-			class="add-ignored-form"
+			class="card-muted mb-4"
 			@submit.prevent="handleAddIgnored"
 		>
-			<div class="input-group">
+			<div class="flex-row gap-3">
 				<input
 					v-model="newDomain"
 					type="text"
 					placeholder="domain.com"
 					required
-					class="text-input"
+					style="flex: 1"
 				/>
 				<input
 					v-model="newReason"
 					type="text"
 					placeholder="Reason (optional)"
-					class="text-input"
+					style="flex: 1"
 				/>
 				<button
 					type="submit"
@@ -90,10 +92,10 @@ const formatDate = (dateStr: string) => {
 					{{ isSubmitting ? "Adding..." : "Add to list" }}
 				</button>
 			</div>
-			<p v-if="error" class="error-text small">{{ error }}</p>
+			<p v-if="error" class="text-error font-xs mt-2">{{ error }}</p>
 		</form>
 
-		<div v-if="monitorStore.isLoadingIgnored" class="state-container">
+		<div v-if="monitorStore.isLoadingIgnored" class="loading-state">
 			<LoadingSpinner message="Loading ignored domains..." />
 		</div>
 
@@ -117,14 +119,16 @@ const formatDate = (dateStr: string) => {
 						v-for="site in monitorStore.ignoredDomains"
 						:key="site.domain"
 					>
-						<td class="font-medium">{{ site.domain }}</td>
-						<td class="hide-mobile">{{ site.reason || "-" }}</td>
-						<td class="text-muted small hide-mobile">
-							{{ formatDate(site.created_at) }}
+						<td class="font-medium text-main">{{ site.domain }}</td>
+						<td class="hide-mobile">{{ site.reason || "—" }}</td>
+						<td class="hide-mobile">
+							<span class="sub-text">{{
+								formatDate(site.created_at)
+							}}</span>
 						</td>
 						<td v-if="authStore.canEdit" class="text-right">
 							<button
-								class="btn-text danger"
+								class="btn btn-text danger"
 								@click="handleRemoveIgnored(site.domain)"
 							>
 								Remove
@@ -135,89 +139,12 @@ const formatDate = (dateStr: string) => {
 			</table>
 		</div>
 
-		<div v-else class="state-container">
-			<p class="empty-text">No domains are currently ignored.</p>
+		<div v-else class="loading-state">
+			<p class="text-muted">No domains are currently ignored.</p>
 		</div>
 	</section>
 </template>
 
 <style scoped>
-.text-input {
-	padding: 8px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 14px;
-}
-
-.add-ignored-form {
-	margin-bottom: 24px;
-	background: var(--bg-body);
-	padding: 16px;
-	border-radius: 6px;
-}
-
-.input-group {
-	display: flex;
-	gap: 12px;
-
-	@media (max-width: 640px) {
-		flex-direction: column;
-	}
-}
-
-.input-group .text-input {
-	flex: 1;
-}
-
-.font-medium {
-	font-weight: 500;
-}
-
-.small {
-	font-size: 0.85em;
-}
-
-.error-text.small {
-	margin-top: 8px;
-	color: var(--error-text);
-}
-
-.section-desc {
-	color: var(--text-muted);
-	margin-bottom: 20px;
-}
-
-.state-container {
-	padding: 40px;
-	text-align: center;
-	color: var(--text-muted);
-}
-
-.empty-text {
-	margin: 0;
-	font-style: italic;
-}
-
-.text-right {
-	text-align: right;
-}
-
-.btn-text {
-	background: none;
-	border: none;
-	color: var(--primary);
-	cursor: pointer;
-	font-size: 14px;
-	padding: 0;
-	font-weight: 500;
-}
-
-.btn-text.danger {
-	color: var(--error-text);
-}
-
-.btn-text:disabled {
-	color: var(--text-disabled);
-	cursor: not-allowed;
-}
+/* Scoped styles removed in favor of global utility classes and component styles */
 </style>

@@ -142,7 +142,7 @@ const manageAssetTemplate = () => {
 			</template>
 		</ViewHeader>
 
-		<main v-if="sitesWithPlugin.length > 0 || info" class="content">
+		<main v-if="sitesWithPlugin.length > 0 || info" class="content mt-4">
 			<PluginInfoCard
 				:info="info"
 				:installation-count="sitesWithPlugin.length"
@@ -154,7 +154,7 @@ const manageAssetTemplate = () => {
 			/>
 
 			<section class="card">
-				<div class="sites-header">
+				<div class="card-header">
 					<h2>Installed on Sites</h2>
 					<button
 						v-if="authStore.canExecute && sitesWithUpdates"
@@ -181,7 +181,9 @@ const manageAssetTemplate = () => {
 								class="clickable-row"
 								@click="goToSite(item.site_id)"
 							>
-								<td>{{ item.site_domain }}</td>
+								<td class="font-medium">
+									{{ item.site_domain }}
+								</td>
 								<td class="hide-mobile">{{ item.version }}</td>
 								<td class="hide-mobile">
 									<span
@@ -200,7 +202,7 @@ const manageAssetTemplate = () => {
 									>
 										Yes
 									</span>
-									<span v-else class="empty-dash">—</span>
+									<span v-else class="text-muted">—</span>
 								</td>
 							</tr>
 						</tbody>
@@ -209,7 +211,7 @@ const manageAssetTemplate = () => {
 			</section>
 		</main>
 
-		<main v-else class="content">
+		<main v-else class="content mt-4">
 			<div class="card">
 				<LoadingSpinner
 					v-if="dataStore.isLoading"
@@ -217,7 +219,7 @@ const manageAssetTemplate = () => {
 				/>
 				<div v-else class="empty-state">
 					<p>Plugin details not found.</p>
-					<button class="back-btn not-found-back-btn" @click="goBack">
+					<button class="back-btn mt-4" @click="goBack">
 						Go back to plugins
 					</button>
 				</div>
@@ -232,43 +234,7 @@ const manageAssetTemplate = () => {
 </template>
 
 <style scoped>
-/* All specific styles moved to components or available in style.css */
-.empty-dash {
-	color: #999;
-}
-
-.sites-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.sites-header h2 {
-	margin: 0;
-	border-bottom: none;
-	padding-bottom: 0;
-}
-
-.not-found-back-btn {
-	margin-top: 16px;
-}
-
 .btn {
-	display: flex;
-	align-items: center;
 	gap: 8px;
-}
-
-.btn-outline {
-	background-color: transparent;
-	border: 1px solid var(--border-input);
-	color: var(--text-main);
-}
-
-.btn-outline:hover {
-	background-color: var(--bg-hover);
 }
 </style>

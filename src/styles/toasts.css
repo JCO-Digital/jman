@@ -1,0 +1,94 @@
+.toast-container {
+	position: fixed;
+	bottom: 24px;
+	right: 24px;
+	z-index: var(--z-toast);
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	max-width: 400px;
+	width: calc(100% - 48px);
+}
+
+.toast {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px 16px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+	font-size: 14px;
+	font-weight: 500;
+	animation: toast-in 0.3s ease-out;
+}
+
+.toast--error {
+	background-color: var(--error-bg);
+	border-color: var(--error-border);
+	color: var(--error-text);
+}
+
+.toast--success {
+	background-color: var(--badge-active-bg);
+	border-color: transparent;
+	color: var(--badge-active-text);
+}
+
+.toast--info {
+	background-color: var(--bg-card);
+	border-color: var(--border-color);
+	color: var(--text-main);
+}
+
+.toast-message {
+	flex: 1;
+	margin-right: 12px;
+	line-height: 1.4;
+}
+
+.toast-dismiss {
+	background: none;
+	border: none;
+	color: inherit;
+	font-size: 20px;
+	cursor: pointer;
+	padding: 0 4px;
+	line-height: 1;
+	opacity: 0.6;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: opacity 0.2s;
+
+	&:hover {
+		opacity: 1;
+	}
+}
+
+/* Transition classes for Vue TransitionGroup */
+.toast-enter-active,
+.toast-leave-active {
+	transition: all 0.3s ease;
+}
+
+.toast-enter-from {
+	opacity: 0;
+	transform: translateX(30px);
+}
+
+.toast-leave-to {
+	opacity: 0;
+	transform: scale(0.9);
+}
+
+@keyframes toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}

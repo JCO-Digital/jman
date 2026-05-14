@@ -37,9 +37,9 @@ const copyToClipboard = async (
 <template>
 	<section class="card">
 		<h2>{{ title }}</h2>
-		<div class="info-grid">
+		<div class="info-grid mt-4">
 			<div v-for="(item, index) in items" :key="index" class="info-item">
-				<span class="label">{{ item.label }}:</span>
+				<span class="label">{{ item.label }}</span>
 				<div class="value-container">
 					<span
 						class="value"
@@ -54,7 +54,7 @@ const copyToClipboard = async (
 						{{
 							item.value !== undefined && item.value !== null
 								? item.value
-								: "-"
+								: "—"
 						}}
 						<span v-if="copiedIndex === index" class="copy-feedback"
 							>Copied!</span
@@ -92,72 +92,3 @@ const copyToClipboard = async (
 		</div>
 	</section>
 </template>
-
-<style scoped>
-.info-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 16px;
-	margin-top: 16px;
-}
-
-.info-item {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.label {
-	font-size: 0.85em;
-	color: var(--text-muted);
-	font-weight: 500;
-}
-
-.value-container {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.value {
-	font-weight: 500;
-	word-break: break-word;
-	position: relative;
-}
-
-.value.copyable {
-	cursor: pointer;
-	transition: color 0.2s;
-}
-
-.value.copyable:hover {
-	color: var(--primary);
-}
-
-.copy-feedback {
-	position: absolute;
-	bottom: 100%;
-	left: 50%;
-	transform: translateX(-50%);
-	background: var(--bg-card);
-	color: var(--primary);
-	padding: 2px 6px;
-	border-radius: 4px;
-	font-size: 0.7em;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-	pointer-events: none;
-	white-space: nowrap;
-	z-index: 10;
-}
-
-.external-link {
-	color: var(--text-muted);
-	display: flex;
-	align-items: center;
-	transition: color 0.2s;
-}
-
-.external-link:hover {
-	color: var(--primary);
-}
-</style>

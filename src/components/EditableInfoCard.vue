@@ -77,24 +77,24 @@ const copyToClipboard = async (value: any, index: number) => {
 	<section class="card">
 		<div class="card-header">
 			<h2>{{ title }}</h2>
-			<div v-if="!isLoading && editable !== false" class="header-actions">
+			<div v-if="!isLoading && editable !== false" class="flex-row gap-3">
 				<button
 					v-if="!isEditing"
-					class="text-btn"
+					class="btn btn-text"
 					@click="startEditing"
 				>
 					Edit
 				</button>
 				<template v-else>
 					<button
-						class="text-btn cancel"
+						class="btn btn-text text-muted"
 						:disabled="isSaving"
 						@click="cancelEditing"
 					>
 						Cancel
 					</button>
 					<button
-						class="primary-btn-sm"
+						class="btn btn-primary btn-sm"
 						:disabled="isSaving"
 						@click="handleSave"
 					>
@@ -104,13 +104,13 @@ const copyToClipboard = async (value: any, index: number) => {
 			</div>
 		</div>
 
-		<div v-if="!isEditing" class="info-grid">
+		<div v-if="!isEditing" class="info-grid mt-4">
 			<div
 				v-for="(item, index) in items"
 				:key="item.key"
 				class="info-item"
 			>
-				<span class="label">{{ item.label }}:</span>
+				<span class="label">{{ item.label }}</span>
 				<div class="value-container">
 					<span
 						class="value"
@@ -131,7 +131,7 @@ const copyToClipboard = async (value: any, index: number) => {
 			</div>
 		</div>
 
-		<div v-else class="edit-form">
+		<div v-else class="info-grid mt-4">
 			<div
 				v-for="item in items"
 				:key="item.key"
@@ -176,167 +176,7 @@ const copyToClipboard = async (value: any, index: number) => {
 </template>
 
 <style scoped>
-.card-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 20px;
-}
-
-.card-header h2 {
-	margin: 0;
-	font-size: 1.1rem;
-}
-
-.header-actions {
-	display: flex;
-	gap: 12px;
-}
-
-.info-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 20px;
-}
-
-.info-item {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.label {
-	font-size: 0.85em;
-	color: var(--text-muted);
-	font-weight: 500;
-}
-
-.value-container {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.value {
-	font-weight: 500;
-	word-break: break-word;
-	position: relative;
-}
-
-.value.copyable {
-	cursor: pointer;
-	transition: color 0.2s;
-}
-
-.value.copyable:hover {
-	color: var(--primary);
-}
-
-.copy-feedback {
-	position: absolute;
-	bottom: 100%;
-	left: 50%;
-	transform: translateX(-50%);
-	background: var(--bg-card);
-	color: var(--primary);
-	padding: 2px 6px;
-	border-radius: 4px;
-	font-size: 0.7em;
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-	pointer-events: none;
-	white-space: nowrap;
-	z-index: 10;
-}
-
-.edit-form {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-	gap: 20px;
-}
-
-.form-group {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
 .form-group.full-width {
 	grid-column: 1 / -1;
-}
-
-.form-group label {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--text-muted);
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-	padding: 10px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 6px;
-	background: var(--bg-main);
-	color: var(--text-main);
-	font-size: 0.95rem;
-	transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-	outline: none;
-	border-color: var(--primary);
-}
-
-.form-group textarea {
-	min-height: 100px;
-	resize: vertical;
-}
-
-.text-btn {
-	background: none;
-	border: none;
-	color: var(--primary);
-	font-weight: 600;
-	cursor: pointer;
-	padding: 6px 12px;
-	font-size: 0.9rem;
-	border-radius: 4px;
-	transition: background-color 0.2s;
-}
-
-.text-btn:hover:not(:disabled) {
-	background-color: var(--bg-hover);
-}
-
-.text-btn.cancel {
-	color: var(--text-muted);
-}
-
-.text-btn:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-}
-
-.primary-btn-sm {
-	padding: 6px 16px;
-	background-color: var(--primary);
-	color: white;
-	border: none;
-	border-radius: 4px;
-	cursor: pointer;
-	font-size: 0.9rem;
-	font-weight: 600;
-	transition: filter 0.2s;
-}
-
-.primary-btn-sm:hover:not(:disabled) {
-	filter: brightness(1.1);
-}
-
-.primary-btn-sm:disabled {
-	opacity: 0.7;
-	cursor: not-allowed;
 }
 </style>

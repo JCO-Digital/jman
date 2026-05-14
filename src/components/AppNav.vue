@@ -23,8 +23,8 @@ const handleRefresh = () => {
 
 <template>
 	<nav v-if="authStore.isAuthenticated" class="app-nav">
-		<div class="nav-container">
-			<div class="nav-links">
+		<div class="nav-container flex-between">
+			<div class="flex-row">
 				<RouterLink
 					to="/"
 					class="nav-item"
@@ -86,9 +86,9 @@ const handleRefresh = () => {
 					Assets
 				</RouterLink>
 			</div>
-			<div class="nav-actions">
+			<div class="flex-row gap-4">
 				<button
-					class="icon-btn refresh-btn"
+					class="icon-btn"
 					:disabled="dataStore.isLoading"
 					title="Refresh data"
 					@click="handleRefresh"
@@ -114,7 +114,7 @@ const handleRefresh = () => {
 				</button>
 				<RouterLink
 					to="/settings"
-					class="icon-btn settings-btn"
+					class="icon-btn"
 					:class="{ active: route.name === 'settings' }"
 					title="Settings"
 				>
@@ -135,14 +135,17 @@ const handleRefresh = () => {
 						></path>
 					</svg>
 				</RouterLink>
-				<div class="nav-user">
+				<div class="flex-row gap-3">
 					<span
 						v-if="authStore.user"
-						class="user-display-name hide-mobile"
+						class="sub-text font-medium hide-mobile"
 					>
 						{{ authStore.user.displayName }}
 					</span>
-					<button class="logout-btn" @click="handleLogout">
+					<button
+						class="btn btn-outline btn-sm"
+						@click="handleLogout"
+					>
 						Logout
 					</button>
 				</div>
@@ -150,93 +153,3 @@ const handleRefresh = () => {
 		</div>
 	</nav>
 </template>
-
-<style scoped>
-.nav-container {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.nav-links {
-	display: flex;
-	gap: 24px;
-
-	@media (max-width: 768px) {
-		gap: 16px;
-	}
-}
-
-.nav-actions {
-	display: flex;
-	align-items: center;
-	gap: 16px;
-
-	@media (max-width: 768px) {
-		gap: 8px;
-	}
-}
-
-.nav-user {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-
-	@media (max-width: 640px) {
-		gap: 8px;
-	}
-}
-
-.user-display-name {
-	font-size: 14px;
-	color: var(--text-muted);
-	font-weight: 500;
-}
-
-.icon-btn {
-	background: none;
-	border: none;
-	padding: 8px;
-	cursor: pointer;
-	color: var(--text-muted);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	border-radius: 4px;
-	transition:
-		background-color 0.2s,
-		color 0.2s;
-}
-
-.icon-btn:hover:not(:disabled),
-.icon-btn.active {
-	background-color: var(--bg-hover);
-	color: var(--primary);
-}
-
-.icon-btn:disabled {
-	cursor: not-allowed;
-	opacity: 0.6;
-}
-
-.logout-btn {
-	padding: 6px 14px;
-	background-color: transparent;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	color: var(--text-main);
-	font-size: 13px;
-	font-weight: 500;
-	cursor: pointer;
-	transition: background-color 0.2s;
-
-	@media (max-width: 640px) {
-		padding: 6px 10px;
-		font-size: 12px;
-	}
-}
-
-.logout-btn:hover {
-	background-color: var(--bg-hover);
-}
-</style>
