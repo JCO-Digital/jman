@@ -27,10 +27,8 @@ onMounted(() => {
 	taskStore.fetchTasks();
 });
 
-const now = new Date();
-
 function getDueDateBound(option: string): Date | null {
-	const d = new Date(now);
+	const d = new Date();
 	if (option === "week") {
 		d.setDate(d.getDate() + 7);
 		return d;
@@ -72,9 +70,7 @@ const filteredTasks = computed(() => {
 
 	if (filterAssignedTo.value) {
 		const q = filterAssignedTo.value.toLowerCase();
-		result = result.filter((t) =>
-			t.assigned_to?.toLowerCase().includes(q),
-		);
+		result = result.filter((t) => t.assigned_to?.toLowerCase().includes(q));
 	}
 
 	if (filterDueDate.value) {
@@ -232,10 +228,12 @@ function formatDate(d: string | null) {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-if="taskStore.isLoading && taskStore.tasks.length === 0">
-						<td colspan="6" class="center-state">
-							Loading tasks…
-						</td>
+					<tr
+						v-if="
+							taskStore.isLoading && taskStore.tasks.length === 0
+						"
+					>
+						<td colspan="6" class="center-state">Loading tasks…</td>
 					</tr>
 					<tr v-else-if="filteredTasks.length === 0">
 						<td colspan="6" class="empty-state">No tasks found.</td>
