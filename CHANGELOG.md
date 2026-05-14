@@ -1,6 +1,17 @@
 # Changelog
 
-## 1.22.0 (2026-05-13)
+## 1.23.0 (2026-05-14)
+
+#### Features
+
+- task: improve task management and user assignment (9a4e7d0)
+- tasks: implement task management system (9336b04)
+
+#### Bug Fixes
+
+- tasks: update current date reference and improve code formatting (84beac5)
+
+## v1.22.0 (2026-05-13)
 
 #### Features
 
