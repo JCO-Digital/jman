@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -162,6 +163,10 @@ func CompleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.CompleteTask(id, claims.Username); err != nil {
+		if errors.Is(err, db.ErrTaskNotFound) {
+			WriteError(w, http.StatusNotFound, "Task not found")
+			return
+		}
 		WriteError(w, http.StatusInternalServerError, "Failed to complete task")
 		return
 	}
