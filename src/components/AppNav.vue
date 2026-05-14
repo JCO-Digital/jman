@@ -68,6 +68,13 @@ const handleRefresh = () => {
 					Organizations
 				</RouterLink>
 				<RouterLink
+					to="/tasks"
+					class="nav-item"
+					:class="{ active: route.name === 'tasks' }"
+				>
+					Tasks
+				</RouterLink>
+				<RouterLink
 					to="/inventory"
 					class="nav-item"
 					:class="{
