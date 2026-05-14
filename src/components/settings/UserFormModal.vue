@@ -31,7 +31,9 @@ const isEditMode = computed(() => !!props.editUser);
 const modalTitle = computed(() =>
 	isEditMode.value ? "Edit User" : "Create User",
 );
-const submitLabel = computed(() => (isEditMode.value ? "Save" : "Create"));
+const submitLabel = computed(() =>
+	isEditMode.value ? "Save Changes" : "Create User",
+);
 
 const passwordStrength = computed(() => {
 	if (!password.value) {
@@ -50,9 +52,9 @@ const passwordStrength = computed(() => {
 
 const strengthBarColor = computed(() => {
 	const score = passwordStrength.value.score;
-	if (score < 33) return "#ef4444";
-	if (score < 55) return "#f59e0b";
-	return "#10b981";
+	if (score < 33) return "var(--error-border)";
+	if (score < 55) return "var(--warning-border)";
+	return "var(--badge-active-text)";
 });
 
 const canSubmit = computed(() => {
@@ -136,369 +138,210 @@ async function handleSubmit() {
 <template>
 	<Teleport to="body">
 		<div v-if="visible" class="modal-overlay" @click="handleOverlayClick">
-			<div class="modal-card">
+			<div class="modal-content card">
 				<header class="modal-header">
-					<h3>{{ modalTitle }}</h3>
+					<h2>{{ modalTitle }}</h2>
+					<button class="modal-close" @click="emit('close')">
+						&times;
+					</button>
 				</header>
 
-				<div class="modal-body">
+				<div class="content">
 					<div v-if="errorMessage" class="error-banner">
 						<p>{{ errorMessage }}</p>
 					</div>
 
-					<form class="modal-form" @submit.prevent="handleSubmit">
-						<!-- Username -->
-						<div class="form-group">
-							<label for="user-username">Username</label>
-							<input
-								v-if="!isEditMode"
-								id="user-username"
-								v-model="username"
-								type="text"
-								placeholder="Enter username"
-								required
-								autocomplete="off"
-							/>
-							<span v-else class="readonly-value">{{
-								username
-							}}</span>
-						</div>
+					<form @submit.prevent="handleSubmit">
+						<div class="content">
+							<!-- Username -->
+							<div class="form-group">
+								<label for="user-username">Username</label>
+								<input
+									v-if="!isEditMode"
+									id="user-username"
+									v-model="username"
+									type="text"
+									placeholder="Enter username"
+									required
+									autocomplete="off"
+								/>
+								<span v-else class="readonly-value">{{
+									username
+								}}</span>
+							</div>
 
-						<!-- Display Name -->
-						<div class="form-group">
-							<label for="user-displayname">Display Name</label>
-							<input
-								id="user-displayname"
-								v-model="displayName"
-								type="text"
-								placeholder="Enter display name"
-								required
-							/>
-						</div>
+							<!-- Display Name -->
+							<div class="form-group">
+								<label for="user-displayname"
+									>Display Name</label
+								>
+								<input
+									id="user-displayname"
+									v-model="displayName"
+									type="text"
+									placeholder="Enter display name"
+									required
+								/>
+							</div>
 
-						<!-- Password (create mode) -->
-						<div v-if="!isEditMode" class="form-group">
-							<label for="user-password">Password</label>
-							<input
-								id="user-password"
-								v-model="password"
-								type="password"
-								placeholder="Enter password"
-								required
-								autocomplete="new-password"
-							/>
+							<!-- Password (create mode) -->
+							<div v-if="!isEditMode" class="form-group">
+								<label for="user-password">Password</label>
+								<input
+									id="user-password"
+									v-model="password"
+									type="password"
+									placeholder="Enter password"
+									required
+									autocomplete="new-password"
+								/>
 
-							<!-- Password strength indicator -->
-							<div
-								v-if="password.length > 0"
-								class="strength-indicator"
-							>
-								<div class="strength-bar-track">
-									<div
-										class="strength-bar-fill"
-										:style="{
-											width: passwordStrength.score + '%',
-											backgroundColor: strengthBarColor,
-										}"
-									></div>
-								</div>
-								<div class="strength-classes">
-									<span
-										:class="{
-											active: passwordStrength.hasLowercase,
-										}"
-										>a-z</span
-									>
-									<span
-										:class="{
-											active: passwordStrength.hasUppercase,
-										}"
-										>A-Z</span
-									>
-									<span
-										:class="{
-											active: passwordStrength.hasNumbers,
-										}"
-										>0-9</span
-									>
-									<span
-										:class="{
-											active: passwordStrength.hasSpecial,
-										}"
-										>!@#</span
-									>
+								<!-- Password strength indicator -->
+								<div
+									v-if="password.length > 0"
+									class="strength-indicator"
+								>
+									<div class="strength-bar-track">
+										<div
+											class="strength-bar-fill"
+											:style="{
+												width:
+													passwordStrength.score +
+													'%',
+												backgroundColor:
+													strengthBarColor,
+											}"
+										></div>
+									</div>
+									<div class="strength-classes">
+										<span
+											:class="{
+												active: passwordStrength.hasLowercase,
+											}"
+											>a-z</span
+										>
+										<span
+											:class="{
+												active: passwordStrength.hasUppercase,
+											}"
+											>A-Z</span
+										>
+										<span
+											:class="{
+												active: passwordStrength.hasNumbers,
+											}"
+											>0-9</span
+										>
+										<span
+											:class="{
+												active: passwordStrength.hasSpecial,
+											}"
+											>!@#</span
+										>
+									</div>
 								</div>
 							</div>
-						</div>
 
-						<!-- Password (edit mode - optional reset) -->
-						<div v-if="isEditMode" class="form-group">
-							<label for="user-password-edit"
-								>Reset Password</label
-							>
-							<input
-								id="user-password-edit"
-								v-model="password"
-								type="password"
-								placeholder="Leave blank to keep current"
-								autocomplete="new-password"
-							/>
-							<p class="help-text">
-								Only fill this in if you want to change the
-								user's password.
-							</p>
+							<!-- Password (edit mode - optional reset) -->
+							<div v-if="isEditMode" class="form-group">
+								<label for="user-password-edit"
+									>Reset Password</label
+								>
+								<input
+									id="user-password-edit"
+									v-model="password"
+									type="password"
+									placeholder="Leave blank to keep current"
+									autocomplete="new-password"
+								/>
+								<p class="help-text">
+									Only fill this in if you want to change the
+									user's password.
+								</p>
 
-							<!-- Password strength indicator -->
-							<div
-								v-if="password.length > 0"
-								class="strength-indicator"
-							>
-								<div class="strength-bar-track">
-									<div
-										class="strength-bar-fill"
-										:style="{
-											width: passwordStrength.score + '%',
-											backgroundColor: strengthBarColor,
-										}"
-									></div>
-								</div>
-								<div class="strength-classes">
-									<span
-										:class="{
-											active: passwordStrength.hasLowercase,
-										}"
-										>a-z</span
-									>
-									<span
-										:class="{
-											active: passwordStrength.hasUppercase,
-										}"
-										>A-Z</span
-									>
-									<span
-										:class="{
-											active: passwordStrength.hasNumbers,
-										}"
-										>0-9</span
-									>
-									<span
-										:class="{
-											active: passwordStrength.hasSpecial,
-										}"
-										>!@#</span
-									>
+								<!-- Password strength indicator -->
+								<div
+									v-if="password.length > 0"
+									class="strength-indicator"
+								>
+									<div class="strength-bar-track">
+										<div
+											class="strength-bar-fill"
+											:style="{
+												width:
+													passwordStrength.score +
+													'%',
+												backgroundColor:
+													strengthBarColor,
+											}"
+										></div>
+									</div>
+									<div class="strength-classes">
+										<span
+											:class="{
+												active: passwordStrength.hasLowercase,
+											}"
+											>a-z</span
+										>
+										<span
+											:class="{
+												active: passwordStrength.hasUppercase,
+											}"
+											>A-Z</span
+										>
+										<span
+											:class="{
+												active: passwordStrength.hasNumbers,
+											}"
+											>0-9</span
+										>
+										<span
+											:class="{
+												active: passwordStrength.hasSpecial,
+											}"
+											>!@#</span
+										>
+									</div>
 								</div>
 							</div>
-						</div>
 
-						<!-- Level -->
-						<div class="form-group">
-							<label for="user-level">Level</label>
-							<select id="user-level" v-model="level">
-								<option value="basic">Basic</option>
-								<option value="edit">Edit</option>
-								<option value="execute">Execute</option>
-								<option value="admin">Admin</option>
-							</select>
+							<!-- Level -->
+							<div class="form-group">
+								<label for="user-level">Permission Level</label>
+								<select id="user-level" v-model="level">
+									<option value="basic">Basic</option>
+									<option value="edit">Edit</option>
+									<option value="execute">Execute</option>
+									<option value="admin">Admin</option>
+								</select>
+							</div>
+
+							<div class="form-actions mt-4">
+								<button
+									type="button"
+									class="btn btn-outline"
+									@click="emit('close')"
+								>
+									Cancel
+								</button>
+								<button
+									type="submit"
+									class="btn btn-primary"
+									:disabled="!canSubmit"
+								>
+									{{
+										isSubmitting ? "Saving..." : submitLabel
+									}}
+								</button>
+							</div>
 						</div>
 					</form>
 				</div>
-
-				<footer class="modal-footer">
-					<button
-						type="button"
-						class="btn btn-cancel"
-						@click="emit('close')"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary"
-						:disabled="!canSubmit"
-						@click="handleSubmit"
-					>
-						{{ isSubmitting ? "Saving..." : submitLabel }}
-					</button>
-				</footer>
 			</div>
 		</div>
 	</Teleport>
 </template>
 
 <style scoped>
-.modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(0, 0, 0, 0.5);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 1000;
-	padding: 16px;
-}
-
-.modal-card {
-	background: var(--bg-card);
-	border: 1px solid var(--border-color);
-	border-radius: 8px;
-	width: 100%;
-	max-width: 480px;
-	max-height: 90vh;
-	overflow-y: auto;
-	display: flex;
-	flex-direction: column;
-}
-
-.modal-header {
-	padding: 20px 24px 16px;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-	margin: 0;
-	font-size: 18px;
-	color: var(--text-heading);
-}
-
-.modal-body {
-	padding: 20px 24px;
-	flex: 1;
-}
-
-.modal-form {
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-}
-
-.form-group {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.form-group label {
-	font-size: 14px;
-	font-weight: 600;
-	color: var(--text-heading);
-}
-
-.help-text {
-	font-size: 12px;
-	color: var(--text-muted);
-	margin: 0;
-}
-
-.form-group input,
-.form-group select {
-	padding: 8px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 14px;
-	background: var(--bg-card);
-	color: var(--text-main);
-}
-
-.form-group input:focus,
-.form-group select:focus {
-	outline: none;
-	border-color: var(--primary);
-	box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
-}
-
-.readonly-value {
-	padding: 8px 12px;
-	border: 1px solid var(--border-color);
-	border-radius: 4px;
-	font-size: 14px;
-	color: var(--text-muted);
-	background: var(--bg-body);
-}
-
-/* Password strength indicator */
-.strength-indicator {
-	margin-top: 4px;
-}
-
-.strength-bar-track {
-	width: 100%;
-	height: 4px;
-	background: var(--border-color);
-	border-radius: 2px;
-	overflow: hidden;
-}
-
-.strength-bar-fill {
-	height: 100%;
-	border-radius: 2px;
-	transition:
-		width 0.3s ease,
-		background-color 0.3s ease;
-}
-
-.strength-classes {
-	display: flex;
-	gap: 8px;
-	margin-top: 6px;
-	font-size: 12px;
-}
-
-.strength-classes span {
-	color: var(--text-muted);
-	padding: 1px 6px;
-	border-radius: 3px;
-	background: var(--bg-body);
-	border: 1px solid var(--border-color);
-	transition: all 0.2s;
-}
-
-.strength-classes span.active {
-	color: var(--badge-active-text);
-	background: var(--badge-active-bg);
-	border-color: var(--badge-active-text);
-}
-
-/* Error banner */
-.error-banner {
-	background-color: var(--error-bg);
-	border-left: 4px solid var(--error-border);
-	color: var(--error-text);
-	padding: 10px 14px;
-	margin-bottom: 16px;
-	border-radius: 4px;
-}
-
-.error-banner p {
-	margin: 0;
-	font-size: 14px;
-}
-
-/* Footer */
-.modal-footer {
-	padding: 16px 24px 20px;
-	border-top: 1px solid var(--border-color);
-	display: flex;
-	justify-content: flex-end;
-	gap: 12px;
-}
-
-.btn-cancel {
-	padding: 8px 16px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	background: var(--bg-card);
-	color: var(--text-main);
-	cursor: pointer;
-	font-weight: 500;
-	font-size: 14px;
-	transition: background-color 0.2s;
-}
-
-.btn-cancel:hover {
-	background-color: var(--bg-hover);
-}
+/* Scoped styles removed in favor of global modal, form, and utility classes */
 </style>

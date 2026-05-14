@@ -66,31 +66,33 @@ async function handleDelete(user: AdminUser) {
 function levelClass(level: string): string {
 	switch (level) {
 		case "admin":
-			return "level-admin";
+			return "active";
 		case "execute":
-			return "level-execute";
 		case "edit":
-			return "level-edit";
+			return "info";
 		default:
-			return "level-basic";
+			return "";
 	}
 }
 </script>
 
 <template>
 	<section class="card">
-		<div class="section-header">
+		<div class="card-header">
 			<h2>User Management</h2>
 			<button class="btn btn-primary" @click="openCreateModal">
 				Create User
 			</button>
 		</div>
 
-		<div v-if="userStore.isLoading" class="state-container">
+		<div v-if="userStore.isLoading" class="loading-state">
 			<LoadingSpinner message="Loading users..." />
 		</div>
 
-		<div v-else-if="userStore.users.length > 0" class="table-container">
+		<div
+			v-else-if="userStore.users.length > 0"
+			class="table-container mt-4"
+		>
 			<table class="data-table">
 				<thead>
 					<tr>
@@ -103,44 +105,57 @@ function levelClass(level: string): string {
 				</thead>
 				<tbody>
 					<tr v-for="user in userStore.users" :key="user.username">
-						<td class="font-medium">{{ user.username }}</td>
-						<td>{{ user.displayName }}</td>
+						<td class="font-medium text-main">
+							{{ user.username }}
+						</td>
+						<td class="text-main">{{ user.displayName }}</td>
 						<td>
 							<span
-								:class="['level-badge', levelClass(user.level)]"
+								:class="[
+									'status-badge',
+									'badge-sm',
+									levelClass(user.level),
+								]"
 							>
 								{{ user.level }}
 							</span>
 						</td>
 						<td class="hide-mobile">
-							<span v-if="user.has2FA" class="twofa-enabled">
+							<span
+								v-if="user.has2FA"
+								class="flex-row gap-1 text-success font-sm font-medium"
+							>
 								<svg
-									class="check-icon"
-									viewBox="0 0 20 20"
-									fill="currentColor"
+									xmlns="http://www.w3.org/2000/svg"
 									width="16"
 									height="16"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
 								>
-									<path
-										fill-rule="evenodd"
-										d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-										clip-rule="evenodd"
-									/>
+									<polyline
+										points="20 6 9 17 4 12"
+									></polyline>
 								</svg>
 								Enabled
 							</span>
-							<span v-else class="twofa-disabled">Disabled</span>
+							<span v-else class="text-muted font-sm"
+								>Disabled</span
+							>
 						</td>
 						<td class="text-right">
-							<div class="actions-cell">
+							<div class="flex-row gap-2 justify-end">
 								<button
-									class="btn-text"
+									class="btn btn-text"
 									@click="openEditModal(user)"
 								>
 									Edit
 								</button>
 								<button
-									class="btn-text danger"
+									class="btn btn-text danger"
 									:disabled="
 										user.username ===
 										authStore.user?.username
@@ -162,8 +177,8 @@ function levelClass(level: string): string {
 			</table>
 		</div>
 
-		<div v-else class="state-container">
-			<p class="empty-text">No users found.</p>
+		<div v-else class="loading-state">
+			<p class="text-muted">No users found.</p>
 		</div>
 	</section>
 
@@ -176,107 +191,5 @@ function levelClass(level: string): string {
 </template>
 
 <style scoped>
-.section-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-}
-
-.section-header h2 {
-	margin: 0;
-	border-bottom: none;
-	padding-bottom: 0;
-}
-
-.state-container {
-	padding: 40px;
-	text-align: center;
-	color: var(--text-muted);
-}
-
-.empty-text {
-	margin: 0;
-	font-style: italic;
-}
-
-.font-medium {
-	font-weight: 500;
-}
-
-.text-right {
-	text-align: right;
-}
-
-.actions-cell {
-	display: inline-flex;
-	justify-content: flex-end;
-	gap: 12px;
-}
-
-.level-badge {
-	display: inline-block;
-	padding: 2px 10px;
-	border-radius: 9999px;
-	font-size: 12px;
-	font-weight: 500;
-	text-transform: capitalize;
-}
-
-.level-basic {
-	background-color: var(--badge-default-bg);
-	color: var(--badge-default-text);
-}
-
-.level-edit {
-	background-color: var(--badge-must-use-bg);
-	color: var(--badge-must-use-text);
-}
-
-.level-execute {
-	background-color: var(--badge-must-use-bg);
-	color: var(--badge-must-use-text);
-}
-
-.level-admin {
-	background-color: var(--badge-active-bg);
-	color: var(--badge-active-text);
-}
-
-.twofa-enabled {
-	display: inline-flex;
-	align-items: center;
-	gap: 4px;
-	color: var(--badge-active-text);
-	font-size: 13px;
-	font-weight: 500;
-}
-
-.check-icon {
-	flex-shrink: 0;
-}
-
-.twofa-disabled {
-	color: var(--text-muted);
-	font-size: 13px;
-}
-
-.btn-text {
-	background: none;
-	border: none;
-	color: var(--primary);
-	cursor: pointer;
-	font-size: 14px;
-	padding: 0;
-	font-weight: 500;
-}
-
-.btn-text.danger {
-	color: var(--error-text);
-}
-
-.btn-text:disabled {
-	color: var(--text-disabled);
-	cursor: not-allowed;
-}
+/* Scoped styles removed in favor of global utility classes and component styles */
 </style>

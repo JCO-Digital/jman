@@ -110,7 +110,7 @@ const handleCreateOrganization = async () => {
 					<tr>
 						<th>Name</th>
 						<th class="hide-mobile">Linked Sites</th>
-						<th class="actions-cell"></th>
+						<th class="text-right"></th>
 					</tr>
 				</thead>
 				<tbody>
@@ -163,7 +163,7 @@ const handleCreateOrganization = async () => {
 							}}</strong>
 						</td>
 						<td class="hide-mobile">
-							<div class="sites-list">
+							<div class="flex-row gap-1 font-sm">
 								<template
 									v-if="
 										getLinkedSites(organization.id).length >
@@ -175,7 +175,7 @@ const handleCreateOrganization = async () => {
 											organization.id,
 										).slice(0, 5)"
 										:key="site.id"
-										class="site-pill"
+										class="status-badge badge-sm"
 									>
 										{{ site.domain }}
 									</span>
@@ -184,7 +184,7 @@ const handleCreateOrganization = async () => {
 											getLinkedSites(organization.id)
 												.length > 5
 										"
-										class="site-pill others-tag"
+										class="status-badge info badge-sm"
 									>
 										+{{
 											getLinkedSites(organization.id)
@@ -193,10 +193,10 @@ const handleCreateOrganization = async () => {
 										others
 									</span>
 								</template>
-								<span v-else class="empty-text">—</span>
+								<span v-else class="text-muted">—</span>
 							</div>
 						</td>
-						<td class="actions-cell">
+						<td class="text-right text-muted">
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								width="16"
@@ -207,7 +207,7 @@ const handleCreateOrganization = async () => {
 								stroke-width="2"
 								stroke-linecap="round"
 								stroke-linejoin="round"
-								class="chevron-icon"
+								class="opacity-50"
 							>
 								<polyline points="9 18 15 12 9 6"></polyline>
 							</svg>
@@ -226,7 +226,7 @@ const handleCreateOrganization = async () => {
 			<div class="modal-content card">
 				<h2>Add New Organization</h2>
 				<form
-					class="form-layout"
+					class="content"
 					@submit.prevent="handleCreateOrganization"
 				>
 					<div class="form-group">
@@ -259,7 +259,7 @@ const handleCreateOrganization = async () => {
 					<div class="form-actions">
 						<button
 							type="button"
-							class="back-btn"
+							class="btn btn-outline"
 							@click="showCreateModal = false"
 						>
 							Cancel
@@ -280,147 +280,3 @@ const handleCreateOrganization = async () => {
 		</div>
 	</div>
 </template>
-
-<style scoped>
-.controls {
-	display: flex;
-	gap: 16px;
-	margin-bottom: 24px;
-
-	@media (max-width: 640px) {
-		flex-direction: column;
-		align-items: stretch;
-	}
-}
-
-.search-input {
-	flex: 1;
-}
-
-.sites-list {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 4px;
-	font-size: 0.85rem;
-	max-width: 500px;
-}
-
-.site-pill {
-	background-color: var(--badge-default-bg);
-	color: var(--badge-default-text);
-	padding: 2px 8px;
-	border-radius: 9999px;
-	font-size: 11px;
-	font-weight: 500;
-	white-space: nowrap;
-}
-
-.others-tag {
-	background-color: transparent;
-	border: 1px solid var(--primary);
-	color: var(--primary);
-}
-
-.empty-text {
-	color: var(--text-disabled);
-}
-
-.actions-cell {
-	width: 40px;
-	text-align: right;
-	color: var(--text-muted);
-}
-
-.chevron-icon {
-	opacity: 0.5;
-}
-
-.clickable-row:hover .chevron-icon {
-	opacity: 1;
-	color: var(--primary);
-}
-
-/* Modal styles */
-.modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(0, 0, 0, 0.6);
-	backdrop-filter: blur(2px);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 1000;
-}
-
-.modal-content {
-	width: 100%;
-	max-width: 550px;
-	padding: 24px;
-	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-
-	@media (max-width: 640px) {
-		width: 95%;
-		padding: 20px 16px;
-		max-height: 90vh;
-		overflow-y: auto;
-	}
-}
-
-.modal-content h2 {
-	margin-top: 0;
-	margin-bottom: 20px;
-	font-size: 1.25rem;
-	border-bottom: none;
-	padding-bottom: 0;
-}
-
-.form-layout {
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-}
-
-.form-group {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.form-group label {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--text-muted);
-}
-
-.form-group input,
-.form-group textarea {
-	padding: 10px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 6px;
-	background: var(--bg-body);
-	color: var(--text-main);
-	font-size: 0.95rem;
-	transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group textarea:focus {
-	outline: none;
-	border-color: var(--primary);
-}
-
-.form-group textarea {
-	min-height: 120px;
-	resize: vertical;
-}
-
-.form-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 12px;
-	margin-top: 8px;
-}
-</style>

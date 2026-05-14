@@ -48,14 +48,14 @@ watch(
 	<div class="view-container">
 		<ViewHeader title="Settings" />
 
-		<main class="content">
+		<main class="content mt-4">
 			<SettingsTabs
 				v-model="activeTab"
 				:show-users-tab="authStore.canAdmin"
 				:show-ignored-tab="authStore.canEdit"
 			/>
 
-			<div class="tab-content">
+			<div class="settings-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
 				<IgnoredDomains v-else-if="activeTab === 'ignored'" />
 				<AccountSettings v-else-if="activeTab === 'account'" />
@@ -66,9 +66,3 @@ watch(
 		</main>
 	</div>
 </template>
-
-<style scoped>
-.tab-content {
-	margin-top: 24px;
-}
-</style>

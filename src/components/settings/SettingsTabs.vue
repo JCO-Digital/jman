@@ -35,11 +35,11 @@ function selectTab(id: string) {
 </script>
 
 <template>
-	<nav class="settings-tabs">
+	<nav class="tabs">
 		<button
 			v-for="tab in visibleTabs()"
 			:key="tab.id"
-			class="settings-tab"
+			class="tab"
 			:class="{ active: modelValue === tab.id }"
 			@click="selectTab(tab.id)"
 		>
@@ -49,42 +49,5 @@ function selectTab(id: string) {
 </template>
 
 <style scoped>
-.settings-tabs {
-	display: flex;
-	border-bottom: 1px solid var(--border-color);
-	background: var(--bg-card);
-	gap: 0;
-}
-
-.settings-tab {
-	padding: 0.75rem 1.25rem;
-	font-size: 0.95rem;
-	font-weight: 500;
-	border: none;
-	border-bottom: 2px solid transparent;
-	background: none;
-	color: var(--text-muted);
-	cursor: pointer;
-	transition:
-		color 0.2s,
-		border-color 0.2s,
-		background-color 0.2s;
-}
-
-.settings-tab:hover {
-	background-color: var(--bg-hover);
-	color: var(--text-heading);
-}
-
-.settings-tab.active {
-	color: var(--text-heading);
-	border-bottom-color: var(--primary);
-}
-
-@media (max-width: 600px) {
-	.settings-tab {
-		padding: 0.6rem 0.85rem;
-		font-size: 0.85rem;
-	}
-}
+/* Scoped styles removed in favor of global .tabs and .tab classes in components.css */
 </style>

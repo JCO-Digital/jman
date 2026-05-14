@@ -32,10 +32,7 @@ const loadReminderTasks = async () => {
 		const now = new Date();
 		reminderTasks.value = taskStore.tasks.filter((t) => {
 			if (!t.reminder_date) return false;
-			if (
-				t.status === "completed" ||
-				t.status === "skipped"
-			)
+			if (t.status === "completed" || t.status === "skipped")
 				return false;
 			return new Date(t.reminder_date) <= now;
 		});
@@ -133,7 +130,7 @@ const formatDate = (dateString: string | null) => {
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
 		</div>
 
-		<main class="dashboard-grid">
+		<main class="dashboard-grid mt-4">
 			<StatCard
 				title="Sites"
 				:value="dataStore.sites.length"
@@ -151,18 +148,13 @@ const formatDate = (dateString: string | null) => {
 				:value="dataStore.vulnerabilities.length"
 				label="Active vulnerabilities detected"
 				:loading="dataStore.isVulnsLoading"
-				:value-style="{
-					color:
-						dataStore.vulnerabilities.length > 0
-							? '#d32f2f'
-							: 'inherit',
-				}"
+				:class="{ 'error-text': dataStore.vulnerabilities.length > 0 }"
 			/>
 		</main>
 
 		<section
 			v-if="reminderTasks.length > 0 || isTasksLoading"
-			class="card tasks-widget"
+			class="card mt-4"
 		>
 			<div class="card-header">
 				<h2>Tasks Needing Attention</h2>
@@ -219,7 +211,7 @@ const formatDate = (dateString: string | null) => {
 										: "—"
 								}}
 							</td>
-							<td class="action-col" @click.stop>
+							<td class="text-right" @click.stop>
 								<button
 									v-if="authStore.canEdit"
 									class="btn btn-primary btn-sm"
@@ -234,11 +226,13 @@ const formatDate = (dateString: string | null) => {
 			</div>
 		</section>
 
-		<VulnerabilityWidget />
+		<div class="mt-4">
+			<VulnerabilityWidget />
+		</div>
 
 		<section
 			v-if="upcomingRenewals.length > 0 || isRenewalsLoading"
-			class="card renewals-widget"
+			class="card mt-4"
 		>
 			<div class="card-header">
 				<h2>Upcoming Renewals (30 Days)</h2>
@@ -290,68 +284,3 @@ const formatDate = (dateString: string | null) => {
 		/>
 	</div>
 </template>
-
-<style scoped>
-.dashboard-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-	gap: 24px;
-	margin-top: 24px;
-}
-
-.tasks-widget,
-.renewals-widget {
-	margin-top: 32px;
-}
-
-.card-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-.tasks-widget h2,
-.renewals-widget h2 {
-	font-size: 1.25rem;
-	margin: 0;
-}
-
-.view-all-link {
-	font-size: 13px;
-	color: var(--primary);
-	text-decoration: none;
-}
-
-.view-all-link:hover {
-	text-decoration: underline;
-}
-
-.loading-state {
-	padding: 2rem;
-	text-align: center;
-	color: var(--text-muted);
-}
-
-.task-title-cell {
-	font-weight: 500;
-	max-width: 260px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.action-col {
-	text-align: right;
-	white-space: nowrap;
-}
-
-.btn-sm {
-	padding: 4px 12px;
-	font-size: 13px;
-}
-
-.overdue {
-	color: var(--error-text);
-	font-weight: 600;
-}
-</style>

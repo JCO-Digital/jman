@@ -219,10 +219,10 @@ const goToPlugin = (name: string) => {
 						@click="goToPlugin(plugin.slug)"
 					>
 						<td>
-							<div class="plugin-name">
+							<div class="plugin-title">
 								{{ plugin.shortName }}
 							</div>
-							<div class="plugin-slug">
+							<div class="sub-text">
 								{{ plugin.slug }}
 							</div>
 						</td>
@@ -237,7 +237,7 @@ const goToPlugin = (name: string) => {
 							>
 								{{ plugin.vulnerabilities.length }}
 							</span>
-							<span v-else class="empty-dash">—</span>
+							<span v-else class="text-muted">—</span>
 						</td>
 					</tr>
 				</tbody>
@@ -254,19 +254,3 @@ const goToPlugin = (name: string) => {
 		</main>
 	</div>
 </template>
-
-<style scoped>
-.plugin-name {
-	font-weight: 500;
-}
-
-.plugin-slug {
-	font-size: 0.85em;
-	color: #666;
-}
-
-.empty-dash {
-	color: #999;
-}
-/* All specific styles moved to components or available in style.css */
-</style>

@@ -10,24 +10,23 @@ defineProps<{
 <template>
 	<section class="card">
 		<h2>Plugin Information</h2>
-		<div class="info-grid">
+		<div class="info-grid mt-4">
 			<div class="info-item">
-				<span class="label">Plugin Name:</span>
+				<span class="label">Plugin Name</span>
 				<span class="value">{{ info?.name }}</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Slug:</span>
+				<span class="label">Slug</span>
 				<span class="value">{{ info.slug }}</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Author:</span>
+				<span class="label">Author</span>
 				<span class="value">
 					<a
 						v-if="info.author_profile"
 						:href="info.author_profile"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="link"
 					>
 						{{ info.author }}
 					</a>
@@ -35,38 +34,37 @@ defineProps<{
 				</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Version:</span>
+				<span class="label">Version</span>
 				<span class="value">{{ info.version }}</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Requires:</span>
+				<span class="label">Requires</span>
 				<span class="value">WP {{ info.requires }}</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Tested up to:</span>
+				<span class="label">Tested up to</span>
 				<span class="value">WP {{ info.tested }}</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Last Updated:</span>
+				<span class="label">Last Updated</span>
 				<span class="value">{{ info.last_updated }}</span>
 			</div>
 			<div v-if="info" class="info-item">
-				<span class="label">Homepage:</span>
+				<span class="label">Homepage</span>
 				<span class="value">
 					<a
 						v-if="info.homepage"
 						:href="info.homepage"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="link"
 					>
 						View Plugin Page
 					</a>
-					<span v-else>-</span>
+					<span v-else>—</span>
 				</span>
 			</div>
 			<div class="info-item">
-				<span class="label">Total Installations:</span>
+				<span class="label">Total Installations</span>
 				<span class="value">{{ installationCount }}</span>
 			</div>
 		</div>
@@ -74,36 +72,5 @@ defineProps<{
 </template>
 
 <style scoped>
-.info-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-	gap: 16px;
-	margin-top: 16px;
-}
-
-.info-item {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.label {
-	font-size: 0.85em;
-	color: var(--text-muted);
-	font-weight: 500;
-}
-
-.value {
-	font-weight: 500;
-	word-break: break-word;
-}
-
-.link {
-	color: var(--primary);
-	text-decoration: none;
-}
-
-.link:hover {
-	text-decoration: underline;
-}
+/* Scoped styles removed in favor of global .info-grid and .info-item classes in components.css */
 </style>

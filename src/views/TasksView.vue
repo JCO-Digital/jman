@@ -177,7 +177,7 @@ function formatDate(d: string | null) {
 				class="search-input"
 			/>
 
-			<select v-model="filterStatus" class="filter-select">
+			<select v-model="filterStatus">
 				<option value="">All Statuses</option>
 				<option value="pending">Pending</option>
 				<option value="in_progress">In Progress</option>
@@ -186,21 +186,21 @@ function formatDate(d: string | null) {
 				<option value="skipped">Skipped</option>
 			</select>
 
-			<select v-model="filterPriority" class="filter-select">
+			<select v-model="filterPriority">
 				<option value="">All Priorities</option>
 				<option value="high">High</option>
 				<option value="medium">Medium</option>
 				<option value="low">Low</option>
 			</select>
 
-			<select v-model="filterType" class="filter-select">
+			<select v-model="filterType">
 				<option value="">All Types</option>
 				<option value="one-time">One-time</option>
 				<option value="repeating">Repeating</option>
 				<option value="dynamic">Dynamic</option>
 			</select>
 
-			<select v-model="filterDueDate" class="filter-select">
+			<select v-model="filterDueDate">
 				<option value="">Any Due Date</option>
 				<option value="past">Past Due</option>
 				<option value="week">Due This Week</option>
@@ -212,7 +212,7 @@ function formatDate(d: string | null) {
 				v-model="filterAssignedTo"
 				type="text"
 				placeholder="Assigned to..."
-				class="search-input filter-narrow"
+				class="search-input max-w-160"
 			/>
 		</div>
 
@@ -238,7 +238,9 @@ function formatDate(d: string | null) {
 							taskStore.isLoading && taskStore.tasks.length === 0
 						"
 					>
-						<td colspan="6" class="center-state">Loading tasks…</td>
+						<td colspan="6" class="loading-state">
+							Loading tasks…
+						</td>
 					</tr>
 					<tr v-else-if="filteredTasks.length === 0">
 						<td colspan="6" class="empty-state">No tasks found.</td>
@@ -249,7 +251,9 @@ function formatDate(d: string | null) {
 						class="clickable-row"
 						@click="openTask(task)"
 					>
-						<td class="task-title">{{ task.title }}</td>
+						<td class="max-w-320 truncate font-medium">
+							{{ task.title }}
+						</td>
 						<td>
 							<span
 								:class="[
@@ -308,45 +312,3 @@ function formatDate(d: string | null) {
 		/>
 	</div>
 </template>
-
-<style scoped>
-.controls {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 10px;
-	margin-bottom: 20px;
-}
-
-.filter-select {
-	padding: 8px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	background: var(--bg-input);
-	color: var(--text-main);
-	font-size: 14px;
-	cursor: pointer;
-}
-
-.filter-narrow {
-	max-width: 160px;
-}
-
-.task-title {
-	font-weight: 500;
-	max-width: 320px;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.center-state {
-	text-align: center;
-	padding: 2rem;
-	color: var(--text-muted);
-}
-
-.overdue {
-	color: var(--error-text);
-	font-weight: 600;
-}
-</style>

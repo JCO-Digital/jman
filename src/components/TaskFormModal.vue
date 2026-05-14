@@ -95,7 +95,15 @@ function toIso(
 	const year = Number(parts[0]);
 	const month = Number(parts[1]);
 	const day = Number(parts[2]);
-	return new Date(year, month - 1, day, hours, minutes, seconds, 0).toISOString();
+	return new Date(
+		year,
+		month - 1,
+		day,
+		hours,
+		minutes,
+		seconds,
+		0,
+	).toISOString();
 }
 
 async function save() {
@@ -150,21 +158,23 @@ async function save() {
 <template>
 	<Teleport to="body">
 		<div class="modal-overlay" @click.self="emit('close')">
-			<div class="modal-card">
+			<div class="modal-content card">
 				<header class="modal-header">
-					<h3>{{ isEditing ? "Edit Task" : "New Task" }}</h3>
+					<h2>{{ isEditing ? "Edit Task" : "New Task" }}</h2>
+					<button class="modal-close" @click="emit('close')">
+						&times;
+					</button>
 				</header>
 
-				<form class="modal-body" @submit.prevent="save">
+				<form class="content" @submit.prevent="save">
 					<div class="form-group">
-						<label for="task-title"
-							>Title <span class="required">*</span></label
-						>
+						<label for="task-title">
+							Title <span class="text-error">*</span>
+						</label>
 						<input
 							id="task-title"
 							v-model="form.title"
 							type="text"
-							class="form-input"
 							placeholder="Task title"
 							required
 						/>
@@ -175,20 +185,15 @@ async function save() {
 						<textarea
 							id="task-desc"
 							v-model="form.description"
-							class="form-input form-textarea"
 							placeholder="Optional description"
 							rows="3"
-						/>
+						></textarea>
 					</div>
 
 					<div class="form-row">
 						<div class="form-group">
 							<label for="task-type">Type</label>
-							<select
-								id="task-type"
-								v-model="form.type"
-								class="form-input"
-							>
+							<select id="task-type" v-model="form.type">
 								<option value="one-time">One-time</option>
 								<option value="repeating">Repeating</option>
 								<option value="dynamic">Dynamic</option>
@@ -197,11 +202,7 @@ async function save() {
 
 						<div class="form-group">
 							<label for="task-priority">Priority</label>
-							<select
-								id="task-priority"
-								v-model="form.priority"
-								class="form-input"
-							>
+							<select id="task-priority" v-model="form.priority">
 								<option value="low">Low</option>
 								<option value="medium">Medium</option>
 								<option value="high">High</option>
@@ -216,13 +217,12 @@ async function save() {
 						class="form-group"
 					>
 						<label for="task-interval">
-							Interval <span class="required">*</span>
+							Interval <span class="text-error">*</span>
 						</label>
 						<input
 							id="task-interval"
 							v-model="form.interval"
 							type="text"
-							class="form-input"
 							placeholder="e.g. 30d, 1w, 1m, 1y"
 						/>
 					</div>
@@ -234,7 +234,6 @@ async function save() {
 								id="task-due"
 								v-model="form.due_date"
 								type="date"
-								class="form-input"
 							/>
 						</div>
 
@@ -244,18 +243,13 @@ async function save() {
 								id="task-reminder"
 								v-model="form.reminder_date"
 								type="date"
-								class="form-input"
 							/>
 						</div>
 					</div>
 
 					<div class="form-group">
 						<label for="task-assigned">Assigned To</label>
-						<select
-							id="task-assigned"
-							v-model="form.assigned_to"
-							class="form-input"
-						>
+						<select id="task-assigned" v-model="form.assigned_to">
 							<option value="">— Unassigned —</option>
 							<option
 								v-for="user in userStore.users"
@@ -270,11 +264,7 @@ async function save() {
 					<div class="form-row">
 						<div class="form-group">
 							<label for="task-site">Site</label>
-							<select
-								id="task-site"
-								v-model="form.site_id"
-								class="form-input"
-							>
+							<select id="task-site" v-model="form.site_id">
 								<option value="">— None —</option>
 								<option
 									v-for="site in dataStore.sites"
@@ -288,11 +278,7 @@ async function save() {
 
 						<div class="form-group">
 							<label for="task-server">Server</label>
-							<select
-								id="task-server"
-								v-model="form.server_id"
-								class="form-input"
-							>
+							<select id="task-server" v-model="form.server_id">
 								<option value="">— None —</option>
 								<option
 									v-for="server in dataStore.servers"
@@ -311,7 +297,6 @@ async function save() {
 							<select
 								id="task-org"
 								v-model="form.organization_id"
-								class="form-input"
 							>
 								<option value="">— None —</option>
 								<option
@@ -330,162 +315,43 @@ async function save() {
 								id="task-plugin"
 								v-model="form.plugin_slug"
 								type="text"
-								class="form-input"
 								placeholder="plugin-slug"
 							/>
 						</div>
 					</div>
 
-					<p v-if="saveError" class="save-error">{{ saveError }}</p>
-				</form>
+					<div v-if="saveError" class="error-banner">
+						<p>{{ saveError }}</p>
+					</div>
 
-				<footer class="modal-footer">
-					<button
-						type="button"
-						class="btn btn-cancel"
-						@click="emit('close')"
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary"
-						:disabled="isSaving"
-						@click="save"
-					>
-						{{
-							isSaving
-								? "Saving…"
-								: isEditing
-									? "Save Changes"
-									: "Create Task"
-						}}
-					</button>
-				</footer>
+					<footer class="form-actions">
+						<button
+							type="button"
+							class="btn btn-outline"
+							@click="emit('close')"
+						>
+							Cancel
+						</button>
+						<button
+							type="submit"
+							class="btn btn-primary"
+							:disabled="isSaving"
+						>
+							{{
+								isSaving
+									? "Saving…"
+									: isEditing
+										? "Save Changes"
+										: "Create Task"
+							}}
+						</button>
+					</footer>
+				</form>
 			</div>
 		</div>
 	</Teleport>
 </template>
 
 <style scoped>
-.modal-overlay {
-	position: fixed;
-	inset: 0;
-	background: rgba(0, 0, 0, 0.5);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 1000;
-	padding: 16px;
-}
-
-.modal-card {
-	background: var(--bg-card);
-	border: 1px solid var(--border-color);
-	border-radius: 8px;
-	width: 100%;
-	max-width: 640px;
-	max-height: 90vh;
-	overflow-y: auto;
-	display: flex;
-	flex-direction: column;
-}
-
-.modal-header {
-	padding: 20px 24px 16px;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-	margin: 0;
-	font-size: 18px;
-	color: var(--text-heading);
-}
-
-.modal-body {
-	padding: 20px 24px;
-	flex: 1;
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-}
-
-.form-row {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 16px;
-}
-
-@media (max-width: 480px) {
-	.form-row {
-		grid-template-columns: 1fr;
-	}
-}
-
-.form-group {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.form-group label {
-	font-size: 13px;
-	font-weight: 500;
-	color: var(--text-muted);
-}
-
-.required {
-	color: var(--error-text);
-}
-
-.form-input {
-	padding: 8px 10px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	background: var(--bg-input);
-	color: var(--text-main);
-	font-size: 14px;
-	width: 100%;
-	box-sizing: border-box;
-}
-
-.form-input:focus {
-	outline: none;
-	border-color: var(--primary);
-}
-
-.form-textarea {
-	resize: vertical;
-	font-family: inherit;
-}
-
-.save-error {
-	color: var(--error-text);
-	font-size: 13px;
-	margin: 0;
-}
-
-.modal-footer {
-	padding: 16px 24px 20px;
-	border-top: 1px solid var(--border-color);
-	display: flex;
-	justify-content: flex-end;
-	gap: 12px;
-}
-
-.btn-cancel {
-	padding: 8px 16px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	background: var(--bg-card);
-	color: var(--text-main);
-	cursor: pointer;
-	font-weight: 500;
-	font-size: 14px;
-	transition: background-color 0.2s;
-}
-
-.btn-cancel:hover {
-	background-color: var(--bg-hover);
-}
+/* Scoped styles removed in favor of global modal and form classes */
 </style>

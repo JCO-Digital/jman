@@ -540,8 +540,7 @@ const sitesAudit = computed(() => {
 		>
 			<template #actions>
 				<button
-					v-if="organization && authStore.canEdit"
-					class="btn-danger"
+					class="btn btn-outline danger"
 					@click="handleDeleteOrganization"
 				>
 					Delete Organization
@@ -593,7 +592,7 @@ const sitesAudit = computed(() => {
 					</div>
 
 					<div class="table-container">
-						<table class="data-table">
+						<table class="data-table hide-col-3-sm hide-col-4-sm">
 							<thead>
 								<tr>
 									<th>Name</th>
@@ -602,10 +601,8 @@ const sitesAudit = computed(() => {
 									<th>Phone</th>
 									<th
 										v-if="authStore.canEdit"
-										class="actions-cell"
-									>
-										Actions
-									</th>
+										class="text-right"
+									></th>
 								</tr>
 							</thead>
 							<tbody>
@@ -618,29 +615,31 @@ const sitesAudit = computed(() => {
 									v-for="contact in contacts"
 									:key="contact.id"
 								>
-									<td>
-										<strong>{{ contact.name }}</strong>
+									<td class="font-medium">
+										{{ contact.name }}
 									</td>
 									<td>
 										<span
 											:class="[
 												'status-badge',
+												'badge-sm',
 												contact.type.toLowerCase(),
 											]"
 										>
 											{{ contact.type }}
 										</span>
 									</td>
-									<td>{{ contact.email || "—" }}</td>
-									<td>{{ contact.phone || "—" }}</td>
-									<td
-										v-if="authStore.canEdit"
-										class="actions-cell"
-									>
-										<div class="row-actions">
+									<td class="text-muted">
+										{{ contact.email || "—" }}
+									</td>
+									<td class="text-muted">
+										{{ contact.phone || "—" }}
+									</td>
+									<td class="text-right">
+										<div class="flex-row gap-2 justify-end">
 											<button
-												class="icon-btn-sm"
-												title="Edit"
+												class="icon-btn icon-btn-sm"
+												title="Edit Contact"
 												@click="
 													openEditContact(contact)
 												"
@@ -747,10 +746,11 @@ const sitesAudit = computed(() => {
 					</div>
 
 					<div class="table-container">
-						<table class="data-table">
+						<table class="data-table hide-col-2-sm">
 							<thead>
 								<tr>
 									<th>Domain</th>
+									<th>Type</th>
 									<th>PHP</th>
 									<th
 										v-if="authStore.canEdit"
@@ -906,11 +906,11 @@ const sitesAudit = computed(() => {
 									</td>
 									<td
 										v-if="authStore.canEdit"
-										class="actions-cell"
+										class="text-right"
 									>
-										<div class="row-actions">
+										<div class="flex-row gap-2 justify-end">
 											<button
-												class="icon-btn-sm"
+												class="icon-btn icon-btn-sm"
 												title="Edit Asset"
 												@click="openEditAsset(oa)"
 											>
@@ -1038,7 +1038,7 @@ const sitesAudit = computed(() => {
 									</td>
 									<td
 										v-if="authStore.canEdit"
-										class="actions-cell"
+										class="text-right"
 									>
 										<button
 											class="btn btn-primary btn-sm"
@@ -1399,286 +1399,3 @@ const sitesAudit = computed(() => {
 		</div>
 	</div>
 </template>
-
-<style scoped>
-.site-link {
-	color: var(--primary);
-	text-decoration: none;
-}
-
-.site-link:hover {
-	text-decoration: underline;
-}
-
-.card-group {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.card-footer-audit {
-	font-size: 0.7rem;
-	color: var(--text-muted);
-	padding: 0 8px;
-	opacity: 0.8;
-}
-
-.search-results-list {
-	margin-top: 12px;
-	border: 1px solid var(--border-color);
-	border-radius: 6px;
-	max-height: 250px;
-	overflow-y: auto;
-}
-
-.search-result-item {
-	padding: 10px 16px;
-	cursor: pointer;
-	transition: background-color 0.2s;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.search-result-item:last-child {
-	border-bottom: none;
-}
-
-.search-result-item:hover {
-	background-color: var(--bg-hover);
-}
-
-.res-name {
-	font-weight: 600;
-	color: var(--text-main);
-}
-
-.card-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-	flex-wrap: wrap;
-	gap: 12px;
-}
-
-.card-header h2 {
-	margin: 0;
-	font-size: 1.1rem;
-}
-
-.actions-cell {
-	width: 100px;
-	text-align: right;
-}
-
-.row-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 8px;
-}
-
-.icon-btn-sm {
-	background: none;
-	border: none;
-	color: var(--text-muted);
-	padding: 4px;
-	border-radius: 4px;
-	cursor: pointer;
-	display: flex;
-	align-items: center;
-	transition: all 0.2s;
-}
-
-.icon-btn-sm:hover {
-	background-color: var(--bg-hover);
-	color: var(--primary);
-}
-
-.icon-btn-sm.delete:hover {
-	color: #ef4444;
-}
-
-.btn-sm {
-	padding: 6px 12px;
-	font-size: 13px;
-}
-
-/* Status badges for contact types */
-.status-badge.main {
-	background-color: rgba(59, 130, 246, 0.1);
-	color: #3b82f6;
-}
-
-.status-badge.technical {
-	background-color: rgba(16, 185, 129, 0.1);
-	color: #10b981;
-}
-
-.status-badge.billing {
-	background-color: rgba(245, 158, 11, 0.1);
-	color: #f59e0b;
-}
-
-/* Modal styles */
-.modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(0, 0, 0, 0.6);
-	backdrop-filter: blur(2px);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 1000;
-}
-
-.modal-content {
-	width: 100%;
-	max-width: 550px;
-	padding: 24px;
-	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-
-	@media (max-width: 640px) {
-		width: 95%;
-		padding: 20px 16px;
-		max-height: 90vh;
-		overflow-y: auto;
-	}
-}
-
-.modal-content h2 {
-	margin-top: 0;
-	margin-bottom: 20px;
-	font-size: 1.25rem;
-	border-bottom: none;
-	padding-bottom: 0;
-}
-
-.form-layout {
-	display: flex;
-	flex-direction: column;
-	gap: 1.5rem;
-}
-
-.form-row {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 1rem;
-}
-
-.sub-text {
-	font-size: 0.8rem;
-	color: var(--text-muted);
-	margin-top: 0.2rem;
-}
-
-.unlinked-count {
-	font-size: 0.8rem;
-	background-color: var(--bg-muted);
-	color: var(--text-muted);
-	padding: 2px 8px;
-	border-radius: 10px;
-	font-weight: 500;
-}
-
-.status-badge.active {
-	background-color: var(--badge-active-bg);
-	color: var(--badge-active-text);
-}
-
-.status-badge.paused {
-	background-color: var(--badge-drop-in-bg);
-	color: var(--badge-drop-in-text);
-}
-
-.status-badge.cancelled {
-	background-color: var(--badge-inactive-bg);
-	color: var(--badge-inactive-text);
-}
-
-.form-group {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5rem;
-}
-
-.form-group label {
-	font-weight: 600;
-	font-size: 0.875rem;
-	color: var(--text-muted);
-}
-
-.form-group input,
-.form-group select,
-.form-group textarea {
-	padding: 0.625rem;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 0.875rem;
-	width: 100%;
-	background-color: var(--bg-card);
-	color: var(--text-main);
-}
-
-.form-group textarea {
-	resize: vertical;
-	min-height: 80px;
-	font-family: inherit;
-}
-
-.form-actions {
-	display: flex;
-	justify-content: flex-end;
-	gap: 12px;
-	margin-top: 8px;
-}
-
-.btn-danger {
-	padding: 8px 16px;
-	background-color: transparent;
-	border: 1px solid #ef4444;
-	color: #ef4444;
-	border-radius: 4px;
-	cursor: pointer;
-	font-weight: 500;
-	font-size: 14px;
-	transition: all 0.2s;
-}
-
-.btn-danger:hover {
-	background-color: #ef4444;
-	color: white;
-}
-
-.error-banner {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-}
-
-@media (max-width: 640px) {
-	/* Hide Email and Phone in contacts table on mobile */
-	section:nth-of-type(1) .data-table th:nth-child(3),
-	section:nth-of-type(1) .data-table td:nth-child(3),
-	section:nth-of-type(1) .data-table th:nth-child(4),
-	section:nth-of-type(1) .data-table td:nth-child(4) {
-		display: none;
-	}
-
-	/* Hide Type in sites table on mobile */
-	section:nth-of-type(2) .data-table th:nth-child(2),
-	section:nth-of-type(2) .data-table td:nth-child(2) {
-		display: none;
-	}
-}
-
-.text-btn {
-	background: none;
-	border: none;
-	color: var(--primary);
-	font-weight: 600;
-	cursor: pointer;
-	text-decoration: underline;
-}
-</style>

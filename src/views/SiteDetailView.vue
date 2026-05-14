@@ -225,7 +225,7 @@ const unlinkOrganization = async () => {
 			:back-button="{ text: 'Back to Sites', onClick: goBack }"
 		/>
 
-		<main v-if="site" class="content">
+		<main v-if="site" class="content mt-4">
 			<div class="grid-2-cols">
 				<InfoCard title="Site Information" :items="siteInfoItems" />
 				<InfoCard
@@ -235,20 +235,20 @@ const unlinkOrganization = async () => {
 				/>
 			</div>
 
-			<section class="card organization-section">
-				<div class="organization-header">
-					<h2 class="organization-title">Organization Information</h2>
-					<div class="header-actions">
+			<section class="card mt-4">
+				<div class="card-header">
+					<h2>Organization Information</h2>
+					<div class="flex-row gap-3">
 						<button
 							v-if="organization && authStore.canEdit"
-							class="text-btn unlink-btn"
+							class="btn btn-text danger"
 							@click="unlinkOrganization"
 						>
 							Unlink
 						</button>
 						<button
 							v-if="organization"
-							class="back-btn view-org-btn"
+							class="btn btn-outline btn-sm"
 							@click="goToOrganization"
 						>
 							View Organization
@@ -266,19 +266,19 @@ const unlinkOrganization = async () => {
 				<div v-if="organization">
 					<div class="info-grid">
 						<div class="info-item">
-							<span class="label">Name:</span>
+							<span class="label">Name</span>
 							<span class="value">{{ organization.name }}</span>
 						</div>
 						<div v-if="organization.vat_number" class="info-item">
-							<span class="label">VAT Number:</span>
+							<span class="label">VAT Number</span>
 							<span class="value">{{
 								organization.vat_number
 							}}</span>
 						</div>
 					</div>
 
-					<div v-if="contacts.length > 0" class="contacts-preview">
-						<h3>Contacts</h3>
+					<div v-if="contacts.length > 0" class="mt-4">
+						<h3 class="sub-text font-medium mb-4">Contacts</h3>
 						<div class="table-container">
 							<table class="data-table">
 								<thead>
@@ -293,18 +293,21 @@ const unlinkOrganization = async () => {
 										v-for="contact in contacts"
 										:key="contact.id"
 									>
-										<td>{{ contact.name }}</td>
+										<td class="font-medium">
+											{{ contact.name }}
+										</td>
 										<td>
 											<span
 												:class="[
 													'status-badge',
+													'badge-sm',
 													contact.type.toLowerCase(),
 												]"
 											>
 												{{ contact.type }}
 											</span>
 										</td>
-										<td class="hide-mobile">
+										<td class="hide-mobile text-muted">
 											{{ contact.email || "—" }}
 										</td>
 									</tr>
@@ -318,10 +321,12 @@ const unlinkOrganization = async () => {
 				</div>
 			</section>
 
-			<MonitorHistoryCard :history="history" :domain="site.domain" />
+			<div class="mt-4">
+				<MonitorHistoryCard :history="history" :domain="site.domain" />
+			</div>
 
-			<section class="card">
-				<div class="plugins-header">
+			<section class="card mt-4">
+				<div class="card-header">
 					<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
 					<button
 						v-if="authStore.canExecute"
@@ -353,14 +358,15 @@ const unlinkOrganization = async () => {
 								class="clickable-row"
 								@click="goToPlugin(plugin.name)"
 							>
-								<td>{{ plugin.name }}</td>
-								<td class="hide-mobile">
+								<td class="font-medium">{{ plugin.name }}</td>
+								<td class="hide-mobile text-muted">
 									{{ plugin.version }}
 								</td>
 								<td class="hide-mobile">
 									<span
 										:class="[
 											'status-badge',
+											'badge-sm',
 											plugin.status.toLowerCase(),
 										]"
 									>
@@ -370,12 +376,12 @@ const unlinkOrganization = async () => {
 								<td>
 									<span
 										v-if="plugin.vulnerabilities.length > 0"
-										class="status-badge error"
+										class="status-badge error badge-sm"
 										:title="`${plugin.vulnerabilities.length} vulnerabilities detected`"
 									>
 										{{ plugin.vulnerabilities.length }}
 									</span>
-									<span v-else class="empty-dash">—</span>
+									<span v-else class="text-muted">—</span>
 								</td>
 							</tr>
 						</tbody>
@@ -383,7 +389,7 @@ const unlinkOrganization = async () => {
 				</div>
 			</section>
 		</main>
-		<main v-else class="content">
+		<main v-else class="content mt-4">
 			<div class="card">
 				<LoadingSpinner
 					v-if="dataStore.isLoading"
@@ -391,7 +397,7 @@ const unlinkOrganization = async () => {
 				/>
 				<div v-else class="empty-state">
 					<p>Site not found.</p>
-					<button class="back-btn not-found-back-btn" @click="goBack">
+					<button class="back-btn mt-4" @click="goBack">
 						Go back to sites
 					</button>
 				</div>
@@ -413,7 +419,7 @@ const unlinkOrganization = async () => {
 		>
 			<div class="modal-content card">
 				<h2>Link Organization to Site</h2>
-				<div class="form-layout">
+				<div class="content">
 					<div class="form-group">
 						<label for="org-search">Search Organization</label>
 						<input
@@ -427,19 +433,31 @@ const unlinkOrganization = async () => {
 
 					<div
 						v-if="searchResults.length > 0"
-						class="search-results-list"
+						class="table-container"
+						style="max-height: 300px"
 					>
-						<div
-							v-for="res in searchResults"
-							:key="res.id"
-							class="search-result-item"
-							@click="linkOrganization(res.id)"
-						>
-							<div class="res-name">{{ res.name }}</div>
-							<div v-if="res.vat_number" class="res-vat">
-								{{ res.vat_number }}
-							</div>
-						</div>
+						<table class="data-table">
+							<tbody>
+								<tr
+									v-for="res in searchResults"
+									:key="res.id"
+									class="clickable-row"
+									@click="linkOrganization(res.id)"
+								>
+									<td>
+										<div class="font-medium">
+											{{ res.name }}
+										</div>
+										<div
+											v-if="res.vat_number"
+											class="sub-text"
+										>
+											{{ res.vat_number }}
+										</div>
+									</td>
+								</tr>
+							</tbody>
+						</table>
 					</div>
 					<div
 						v-else-if="
@@ -454,7 +472,10 @@ const unlinkOrganization = async () => {
 					</div>
 
 					<div class="form-actions">
-						<button class="back-btn" @click="showLinkModal = false">
+						<button
+							class="btn btn-outline"
+							@click="showLinkModal = false"
+						>
 							Cancel
 						</button>
 					</div>
@@ -463,242 +484,3 @@ const unlinkOrganization = async () => {
 		</div>
 	</div>
 </template>
-
-<style scoped>
-.grid-2-cols {
-	display: grid;
-	grid-template-columns: 1fr 1fr;
-	gap: 24px;
-	margin-bottom: 24px;
-}
-
-@media (max-width: 1024px) {
-	.grid-2-cols {
-		grid-template-columns: 1fr;
-	}
-}
-
-.contacts-preview {
-	margin-top: 24px;
-}
-
-.contacts-preview h3 {
-	font-size: 0.95rem;
-	margin-bottom: 12px;
-	color: var(--text-muted);
-}
-
-.organization-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-	border-bottom: 1px solid var(--border-color);
-	padding-bottom: 8px;
-	flex-wrap: wrap;
-	gap: 12px;
-}
-
-.organization-title {
-	margin: 0;
-	border: none;
-}
-
-.unlink-btn {
-	color: #ef4444;
-}
-
-.view-org-btn {
-	padding: 4px 12px;
-	font-size: 13px;
-}
-
-.empty-dash {
-	color: #999;
-}
-
-.plugins-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.plugins-header h2 {
-	margin: 0;
-	border-bottom: none;
-	padding-bottom: 0;
-}
-
-.not-found-back-btn {
-	margin-top: 16px;
-}
-
-.header-actions {
-	display: flex;
-	gap: 12px;
-	align-items: center;
-}
-
-.text-btn {
-	background: none;
-	border: none;
-	font-weight: 600;
-	cursor: pointer;
-	padding: 4px 8px;
-	font-size: 0.9rem;
-	transition: opacity 0.2s;
-}
-
-.text-btn:hover {
-	opacity: 0.8;
-}
-
-.info-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-	gap: 16px;
-}
-
-.info-item {
-	display: flex;
-	flex-direction: column;
-}
-
-.label {
-	font-size: 0.85rem;
-	color: var(--text-muted);
-	font-weight: 600;
-	margin-bottom: 4px;
-}
-
-.value {
-	font-weight: 500;
-}
-
-/* Modal styles */
-.modal-overlay {
-	position: fixed;
-	top: 0;
-	left: 0;
-	right: 0;
-	bottom: 0;
-	background: rgba(0, 0, 0, 0.6);
-	backdrop-filter: blur(2px);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 1000;
-}
-
-.modal-content {
-	width: 100%;
-	max-width: 500px;
-	padding: 24px;
-	box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-
-	@media (max-width: 640px) {
-		width: 95%;
-		padding: 20px 16px;
-		max-height: 90vh;
-		overflow-y: auto;
-	}
-}
-
-.modal-content h2 {
-	margin-top: 0;
-	margin-bottom: 20px;
-	font-size: 1.25rem;
-	border-bottom: none;
-	padding-bottom: 0;
-}
-
-.search-results-list {
-	margin-top: 12px;
-	border: 1px solid var(--border-color);
-	border-radius: 6px;
-	max-height: 250px;
-	overflow-y: auto;
-}
-
-.search-result-item {
-	padding: 10px 16px;
-	cursor: pointer;
-	transition: background-color 0.2s;
-	border-bottom: 1px solid var(--border-color);
-}
-
-.search-result-item:last-child {
-	border-bottom: none;
-}
-
-.search-result-item:hover {
-	background-color: var(--bg-hover);
-}
-
-.res-name {
-	font-weight: 600;
-	color: var(--text-main);
-}
-
-.res-vat {
-	font-size: 0.85rem;
-	color: var(--text-muted);
-}
-
-.form-layout {
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-}
-
-.form-group {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.form-group label {
-	font-size: 0.85rem;
-	font-weight: 600;
-	color: var(--text-muted);
-}
-
-.form-group input {
-	padding: 10px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 6px;
-	background: var(--bg-body);
-	color: var(--text-main);
-	font-size: 0.95rem;
-}
-
-.form-actions {
-	display: flex;
-	justify-content: flex-end;
-	margin-top: 8px;
-}
-
-.btn-sm {
-	padding: 6px 12px;
-	font-size: 13px;
-}
-
-/* Status badges for contact types */
-.status-badge.main {
-	background-color: rgba(59, 130, 246, 0.1);
-	color: #3b82f6;
-}
-
-.status-badge.technical {
-	background-color: rgba(16, 185, 129, 0.1);
-	color: #10b981;
-}
-
-.status-badge.billing {
-	background-color: rgba(245, 158, 11, 0.1);
-	color: #f59e0b;
-}
-</style>

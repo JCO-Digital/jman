@@ -49,9 +49,9 @@ const passwordStrength = computed(() =>
 
 const strengthBarColor = computed(() => {
 	const score = passwordStrength.value.score;
-	if (score < 33) return "#ef4444"; // red — below minimum
-	if (score < 55) return "#f59e0b"; // orange — meets minimum
-	return "#10b981"; // green — strong
+	if (score < 33) return "var(--error-border)"; // red — below minimum
+	if (score < 55) return "var(--warning-border)"; // orange — meets minimum
+	return "var(--badge-active-text)"; // green — strong
 });
 
 const strengthLabel = computed(() => {
@@ -177,531 +177,310 @@ function cancelDisable() {
 </script>
 
 <template>
-	<!-- Section 1: Profile -->
-	<section class="card">
-		<h2>Profile</h2>
+	<div class="content mt-4">
+		<!-- Section 1: Profile -->
+		<section class="card">
+			<h2>Profile</h2>
 
-		<div class="form-group">
-			<label class="form-label">Username</label>
-			<span class="username-display">{{ authStore.user?.username }}</span>
-		</div>
-
-		<div class="form-group">
-			<label for="display-name" class="form-label">Display Name</label>
-			<input
-				id="display-name"
-				v-model="displayName"
-				type="text"
-				class="form-input"
-				placeholder="Enter display name"
-			/>
-		</div>
-
-		<div v-if="profileSuccess" class="feedback success">
-			{{ profileSuccess }}
-		</div>
-		<div v-if="profileError" class="feedback error">{{ profileError }}</div>
-
-		<button
-			class="btn btn-primary"
-			:disabled="profileSaving"
-			@click="saveProfile"
-		>
-			{{ profileSaving ? "Saving..." : "Save" }}
-		</button>
-	</section>
-
-	<!-- Section 2: Change Password -->
-	<section class="card">
-		<h2>Change Password</h2>
-
-		<div class="form-group">
-			<label for="current-password" class="form-label"
-				>Current Password</label
-			>
-			<input
-				id="current-password"
-				v-model="currentPassword"
-				type="password"
-				class="form-input"
-				placeholder="Enter current password"
-				autocomplete="current-password"
-			/>
-		</div>
-
-		<div class="form-group">
-			<label for="new-password" class="form-label">New Password</label>
-			<input
-				id="new-password"
-				v-model="newPassword"
-				type="password"
-				class="form-input"
-				placeholder="Enter new password"
-				autocomplete="new-password"
-			/>
-
-			<!-- Strength indicator -->
-			<div v-if="newPassword" class="strength-section">
-				<div class="strength-bar-track">
-					<div
-						class="strength-bar-fill"
-						:style="{
-							width: passwordStrength.score + '%',
-							backgroundColor: strengthBarColor,
-						}"
-					></div>
-				</div>
-				<span
-					class="strength-label"
-					:style="{ color: strengthBarColor }"
-				>
-					{{ strengthLabel }}
-				</span>
-
-				<ul class="strength-hints">
-					<li :class="{ met: passwordStrength.hasLowercase }">
-						Lowercase letter
-					</li>
-					<li :class="{ met: passwordStrength.hasUppercase }">
-						Uppercase letter
-					</li>
-					<li :class="{ met: passwordStrength.hasNumbers }">
-						Number
-					</li>
-					<li :class="{ met: passwordStrength.hasSpecial }">
-						Special character
-					</li>
-					<li :class="{ met: passwordStrength.valid }">
-						Meets minimum strength requirement
-					</li>
-				</ul>
+			<div class="form-group">
+				<label>Username</label>
+				<span class="font-medium text-main">{{
+					authStore.user?.username
+				}}</span>
 			</div>
-		</div>
 
-		<div class="form-group">
-			<label for="confirm-password" class="form-label"
-				>Confirm New Password</label
-			>
-			<input
-				id="confirm-password"
-				v-model="confirmPassword"
-				type="password"
-				class="form-input"
-				placeholder="Confirm new password"
-				autocomplete="new-password"
-			/>
-			<p v-if="!passwordsMatch" class="validation-error">
-				Passwords do not match.
-			</p>
-		</div>
+			<div class="form-group max-w-320">
+				<label for="display-name">Display Name</label>
+				<input
+					id="display-name"
+					v-model="displayName"
+					type="text"
+					placeholder="Enter display name"
+				/>
+			</div>
 
-		<div v-if="passwordSuccess" class="feedback success">
-			{{ passwordSuccess }}
-		</div>
-		<div v-if="passwordError" class="feedback error">
-			{{ passwordError }}
-		</div>
+			<div v-if="profileSuccess" class="feedback success">
+				{{ profileSuccess }}
+			</div>
+			<div v-if="profileError" class="feedback error">
+				{{ profileError }}
+			</div>
 
-		<button
-			class="btn btn-primary"
-			:disabled="!canChangePassword || passwordSaving"
-			@click="changePassword"
-		>
-			{{ passwordSaving ? "Changing..." : "Change Password" }}
-		</button>
-	</section>
-
-	<!-- Section 3: Two-Factor Authentication -->
-	<section class="card">
-		<h2>Two-Factor Authentication</h2>
-
-		<!-- Loading state -->
-		<div v-if="userStore.profileLoading" class="tfa-status-loading">
-			Loading 2FA status...
-		</div>
-
-		<!-- Error state -->
-		<div
-			v-else-if="!userStore.profile && userStore.profileError"
-			class="feedback error"
-		>
-			{{ userStore.profileError }}
 			<button
-				class="btn-text retry-btn"
-				@click="userStore.fetchProfile()"
+				class="btn btn-primary"
+				:disabled="profileSaving"
+				@click="saveProfile"
 			>
-				Retry
+				{{ profileSaving ? "Saving..." : "Save Profile" }}
 			</button>
-		</div>
+		</section>
 
-		<!-- Profile loaded -->
-		<template v-else-if="userStore.profile">
-			<div v-if="tfaSuccess" class="feedback success">
-				{{ tfaSuccess }}
+		<!-- Section 2: Change Password -->
+		<section class="card">
+			<h2>Change Password</h2>
+
+			<div class="form-group max-w-320">
+				<label for="current-password">Current Password</label>
+				<input
+					id="current-password"
+					v-model="currentPassword"
+					type="password"
+					placeholder="Enter current password"
+					autocomplete="current-password"
+				/>
 			</div>
-			<div v-if="tfaError" class="feedback error">{{ tfaError }}</div>
 
-			<!-- 2FA Enabled -->
-			<template v-if="userStore.profile.has2FA">
-				<p class="tfa-status enabled">
-					Two-factor authentication is enabled ✓
-				</p>
+			<div class="form-group max-w-320">
+				<label for="new-password">New Password</label>
+				<input
+					id="new-password"
+					v-model="newPassword"
+					type="password"
+					placeholder="Enter new password"
+					autocomplete="new-password"
+				/>
 
-				<div v-if="!showDisableInput">
-					<button
-						class="btn btn-danger"
-						:disabled="tfaLoading"
-						@click="showDisableInput = true"
+				<!-- Strength indicator -->
+				<div v-if="newPassword" class="strength-indicator">
+					<div class="strength-bar-track">
+						<div
+							class="strength-bar-fill"
+							:style="{
+								width: passwordStrength.score + '%',
+								backgroundColor: strengthBarColor,
+							}"
+						></div>
+					</div>
+					<span
+						class="strength-label"
+						:style="{ color: strengthBarColor }"
 					>
-						Disable 2FA
+						{{ strengthLabel }}
+					</span>
+
+					<ul class="strength-hints">
+						<li :class="{ met: passwordStrength.hasLowercase }">
+							Lowercase letter
+						</li>
+						<li :class="{ met: passwordStrength.hasUppercase }">
+							Uppercase letter
+						</li>
+						<li :class="{ met: passwordStrength.hasNumbers }">
+							Number
+						</li>
+						<li :class="{ met: passwordStrength.hasSpecial }">
+							Special character
+						</li>
+						<li :class="{ met: passwordStrength.valid }">
+							Meets minimum strength requirement
+						</li>
+					</ul>
+				</div>
+			</div>
+
+			<div class="form-group max-w-320">
+				<label for="confirm-password">Confirm New Password</label>
+				<input
+					id="confirm-password"
+					v-model="confirmPassword"
+					type="password"
+					placeholder="Confirm new password"
+					autocomplete="new-password"
+				/>
+				<p v-if="!passwordsMatch" class="text-error font-xs mt-1">
+					Passwords do not match.
+				</p>
+			</div>
+
+			<div v-if="passwordSuccess" class="feedback success">
+				{{ passwordSuccess }}
+			</div>
+			<div v-if="passwordError" class="feedback error">
+				{{ passwordError }}
+			</div>
+
+			<button
+				class="btn btn-primary"
+				:disabled="!canChangePassword || passwordSaving"
+				@click="changePassword"
+			>
+				{{ passwordSaving ? "Changing..." : "Change Password" }}
+			</button>
+		</section>
+
+		<!-- Section 3: Two-Factor Authentication -->
+		<section class="card">
+			<h2>Two-Factor Authentication</h2>
+
+			<!-- Loading state -->
+			<div v-if="userStore.profileLoading" class="loading-state">
+				<p>Loading 2FA status...</p>
+			</div>
+
+			<!-- Error state -->
+			<div
+				v-else-if="!userStore.profile && userStore.profileError"
+				class="feedback error"
+			>
+				<div class="flex-row gap-3">
+					<span>{{ userStore.profileError }}</span>
+					<button
+						class="btn btn-text font-sm"
+						@click="userStore.fetchProfile()"
+					>
+						Retry
 					</button>
 				</div>
+			</div>
 
-				<div v-else class="tfa-action-group">
-					<div class="form-group">
-						<label for="tfa-disable-code" class="form-label">
-							Enter your 6-digit code to confirm
-						</label>
-						<input
-							id="tfa-disable-code"
-							v-model="tfaDisableCode"
-							type="text"
-							class="form-input code-input"
-							placeholder="000000"
-							maxlength="6"
-							autocomplete="one-time-code"
-						/>
-					</div>
-					<div class="btn-group">
-						<button
-							class="btn btn-danger"
-							:disabled="!tfaDisableCode || tfaLoading"
-							@click="deactivateTFA"
-						>
-							{{
-								tfaLoading ? "Disabling..." : "Confirm Disable"
-							}}
-						</button>
-						<button
-							class="btn btn-secondary"
-							@click="cancelDisable"
-						>
-							Cancel
-						</button>
-					</div>
+			<!-- Profile loaded -->
+			<template v-else-if="userStore.profile">
+				<div v-if="tfaSuccess" class="feedback success">
+					{{ tfaSuccess }}
 				</div>
-			</template>
+				<div v-if="tfaError" class="feedback error">{{ tfaError }}</div>
 
-			<!-- 2FA Disabled -->
-			<template v-else>
-				<p class="tfa-status disabled">
-					Two-factor authentication is not enabled.
-				</p>
-
-				<!-- Setup not started -->
-				<div v-if="!tfaSetupData">
-					<button
-						class="btn btn-primary"
-						:disabled="tfaLoading"
-						@click="startSetup2FA"
-					>
-						{{
-							tfaLoading
-								? "Setting up..."
-								: "Enable Two-Factor Authentication"
-						}}
-					</button>
-				</div>
-
-				<!-- Setup in progress -->
-				<div v-else class="tfa-setup">
-					<p class="setup-instructions">
-						Scan the QR code with your authenticator app, or enter
-						the secret key manually.
+				<!-- 2FA Enabled -->
+				<template v-if="userStore.profile.has2FA">
+					<p class="text-success font-medium mb-4">
+						Two-factor authentication is enabled ✓
 					</p>
 
-					<div class="qr-container">
-						<canvas ref="qrCanvas"></canvas>
-					</div>
-
-					<div class="secret-key-group">
-						<label class="form-label"
-							>Secret Key (manual entry)</label
+					<div v-if="!showDisableInput">
+						<button
+							class="btn btn-outline danger"
+							:disabled="tfaLoading"
+							@click="showDisableInput = true"
 						>
-						<code class="secret-key">{{
-							tfaSetupData.secret
-						}}</code>
+							Disable 2FA
+						</button>
 					</div>
 
-					<div class="form-group">
-						<label for="tfa-setup-code" class="form-label">
-							Enter the 6-digit code from your app
-						</label>
-						<input
-							id="tfa-setup-code"
-							v-model="tfaSetupCode"
-							type="text"
-							class="form-input code-input"
-							placeholder="000000"
-							maxlength="6"
-							autocomplete="one-time-code"
-						/>
+					<div v-else class="content">
+						<div class="form-group max-w-320">
+							<label for="tfa-disable-code">
+								Enter your 6-digit code to confirm
+							</label>
+							<input
+								id="tfa-disable-code"
+								v-model="tfaDisableCode"
+								type="text"
+								placeholder="000000"
+								maxlength="6"
+								style="
+									text-align: center;
+									letter-spacing: 4px;
+									font-family: monospace;
+								"
+								autocomplete="one-time-code"
+							/>
+						</div>
+						<div class="flex-row gap-3">
+							<button
+								class="btn btn-danger"
+								:disabled="!tfaDisableCode || tfaLoading"
+								@click="deactivateTFA"
+							>
+								{{
+									tfaLoading
+										? "Disabling..."
+										: "Confirm Disable"
+								}}
+							</button>
+							<button
+								class="btn btn-outline"
+								@click="cancelDisable"
+							>
+								Cancel
+							</button>
+						</div>
 					</div>
+				</template>
 
-					<div class="btn-group">
+				<!-- 2FA Disabled -->
+				<template v-else>
+					<p class="text-muted mb-4">
+						Two-factor authentication is not enabled.
+					</p>
+
+					<!-- Setup not started -->
+					<div v-if="!tfaSetupData">
 						<button
 							class="btn btn-primary"
-							:disabled="!tfaSetupCode || tfaLoading"
-							@click="activateTFA"
+							:disabled="tfaLoading"
+							@click="startSetup2FA"
 						>
 							{{
 								tfaLoading
-									? "Verifying..."
-									: "Verify & Activate"
+									? "Setting up..."
+									: "Enable Two-Factor Authentication"
 							}}
 						</button>
-						<button class="btn btn-secondary" @click="cancelSetup">
-							Cancel
-						</button>
 					</div>
-				</div>
+
+					<!-- Setup in progress -->
+					<div v-else class="content">
+						<p class="sub-text">
+							Scan the QR code with your authenticator app, or
+							enter the secret key manually.
+						</p>
+
+						<div class="qr-container">
+							<canvas ref="qrCanvas"></canvas>
+						</div>
+
+						<div class="form-group">
+							<label>Secret Key (manual entry)</label>
+							<code class="secret-key">{{
+								tfaSetupData.secret
+							}}</code>
+						</div>
+
+						<div class="form-group max-w-320">
+							<label for="tfa-setup-code">
+								Enter the 6-digit code from your app
+							</label>
+							<input
+								id="tfa-setup-code"
+								v-model="tfaSetupCode"
+								type="text"
+								placeholder="000000"
+								maxlength="6"
+								style="
+									text-align: center;
+									letter-spacing: 4px;
+									font-family: monospace;
+								"
+								autocomplete="one-time-code"
+							/>
+						</div>
+
+						<div class="flex-row gap-3">
+							<button
+								class="btn btn-primary"
+								:disabled="!tfaSetupCode || tfaLoading"
+								@click="activateTFA"
+							>
+								{{
+									tfaLoading
+										? "Verifying..."
+										: "Verify & Activate"
+								}}
+							</button>
+							<button
+								class="btn btn-outline"
+								@click="cancelSetup"
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
+				</template>
 			</template>
-		</template>
-	</section>
+		</section>
+	</div>
 </template>
 
 <style scoped>
-.form-group {
-	margin-bottom: 16px;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-
-.form-label {
-	font-weight: 600;
-	font-size: 14px;
-	color: var(--text-heading);
-}
-
-.form-input {
-	padding: 8px 12px;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 14px;
-	max-width: 400px;
-
-	@media (max-width: 640px) {
-		max-width: none;
-	}
-}
-
-.code-input {
-	max-width: 160px;
-	font-family: monospace;
-	font-size: 18px;
-	letter-spacing: 4px;
-	text-align: center;
-}
-
-.username-display {
-	font-size: 15px;
-	color: var(--text-main);
-	font-weight: 500;
-}
-
-/* Feedback messages */
-.feedback {
-	padding: 10px 14px;
-	border-radius: 4px;
-	font-size: 14px;
-	margin-bottom: 16px;
-}
-
-.feedback.success {
-	background-color: var(--badge-active-bg);
-	color: var(--badge-active-text);
-	border: 1px solid var(--badge-active-text);
-}
-
-.feedback.error {
-	background-color: var(--error-bg);
-	color: var(--error-text);
-	border: 1px solid var(--error-border);
-}
-
-.validation-error {
-	color: var(--error-text);
-	font-size: 13px;
-	margin: 0;
-}
-
-/* Password strength */
-.strength-section {
-	margin-top: 8px;
-}
-
-.strength-bar-track {
-	height: 6px;
-	background-color: var(--bg-body);
-	border-radius: 3px;
-	overflow: hidden;
-	border: 1px solid var(--border-color);
-}
-
-.strength-bar-fill {
-	height: 100%;
-	border-radius: 3px;
-	transition:
-		width 0.3s ease,
-		background-color 0.3s ease;
-}
-
-.strength-label {
-	font-size: 12px;
-	font-weight: 600;
-	margin-top: 4px;
-	display: inline-block;
-}
-
-.strength-hints {
-	list-style: none;
-	padding: 0;
-	margin: 8px 0 0 0;
-	font-size: 12px;
-	color: var(--text-muted);
-}
-
-.strength-hints li {
-	padding: 2px 0;
-}
-
-.strength-hints li::before {
-	content: "✗ ";
-	color: var(--error-text);
-}
-
-.strength-hints li.met::before {
-	content: "✓ ";
-	color: #10b981;
-}
-
-.strength-hints li.met {
-	color: var(--text-main);
-}
-
-/* 2FA */
-.tfa-status {
-	font-size: 15px;
-	margin-bottom: 16px;
-}
-
-.tfa-status.enabled {
-	color: #10b981;
-	font-weight: 600;
-}
-
-.tfa-status.disabled {
-	color: var(--text-muted);
-}
-
-.tfa-status-loading {
-	color: var(--text-muted);
-	font-size: 14px;
-	font-style: italic;
-}
-
-.retry-btn {
-	margin-left: 12px;
-}
-
-.tfa-setup {
-	margin-top: 16px;
-}
-
-.setup-instructions {
-	color: var(--text-muted);
-	font-size: 14px;
-	margin-bottom: 16px;
-}
-
-.qr-container {
-	margin-bottom: 16px;
-	display: flex;
-	justify-content: center;
-	padding: 16px;
-	background: var(--bg-body);
-	border-radius: 8px;
-	border: 1px solid var(--border-color);
-	max-width: 240px;
-}
-
-.qr-container canvas {
-	display: block;
-}
-
-.secret-key-group {
-	margin-bottom: 16px;
-}
-
-.secret-key {
-	display: inline-block;
-	margin-top: 4px;
-	padding: 8px 12px;
-	background: var(--bg-body);
-	border: 1px solid var(--border-color);
-	border-radius: 4px;
-	font-size: 14px;
-	word-break: break-all;
-	user-select: all;
-}
-
-.tfa-action-group {
-	margin-top: 8px;
-}
-
-/* Buttons */
-.btn-group {
-	display: flex;
-	gap: 12px;
-	align-items: center;
-	flex-wrap: wrap;
-}
-
-.btn-secondary {
-	padding: 8px 16px;
-	border-radius: 4px;
-	cursor: pointer;
-	font-weight: 500;
-	font-size: 14px;
-	background-color: transparent;
-	border: 1px solid var(--border-input);
-	color: var(--text-main);
-	transition: background-color 0.2s;
-}
-
-.btn-secondary:hover {
-	background-color: var(--bg-hover);
-}
-
-.btn-danger {
-	padding: 8px 16px;
-	border-radius: 4px;
-	cursor: pointer;
-	font-weight: 500;
-	font-size: 14px;
-	background-color: var(--error-border);
-	color: #ffffff;
-	border: none;
-	transition: background-color 0.2s;
-}
-
-.btn-danger:hover {
-	opacity: 0.9;
-}
-
-.btn-danger:disabled {
-	opacity: 0.7;
-	cursor: not-allowed;
-}
+/* Scoped styles removed in favor of global utility classes and component styles */
 </style>
