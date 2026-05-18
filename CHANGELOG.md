@@ -1,6 +1,24 @@
 # Changelog
 
-### 5.13.1 (2026-05-18)
+## 5.14.0 (2026-05-18)
+
+#### Features
+
+- db: implement unified ignore system for monitor and vulnerabilities (896077b)
+
+#### Bug Fixes
+
+- api: force new ID on ignore entry creation (0fbf0df)
+
+#### Refactor
+
+- ignore: optimize ignore matching with in-memory matchers (ea2b087)
+
+#### Documentation
+
+- ignore: document the unified ignore list system (c02203e)
+
+### v5.13.1 (2026-05-18)
 
 #### Documentation
 
