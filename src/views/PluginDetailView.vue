@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import { useIgnoreStore } from "../stores/ignore";
 import { useAssetStore } from "../stores/assetStore";
 import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
@@ -17,11 +18,13 @@ const props = defineProps<{
 
 const router = useRouter();
 const dataStore = useDataStore();
+const ignoreStore = useIgnoreStore();
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
 
 onMounted(() => {
 	assetStore.fetchAssets();
+	ignoreStore.fetchIgnoreEntries();
 });
 
 const assetTemplate = computed(() => {
@@ -31,7 +34,29 @@ const assetTemplate = computed(() => {
 });
 
 const info = computed(() => {
-	return dataStore.enrichedPlugins.find((i) => i.slug === props.name);
+	const p = dataStore.enrichedPlugins.find((i) => i.slug === props.name);
+	if (!p) return undefined;
+
+	// Check if this specific plugin is ignored globally for vulnerabilities
+	const isPluginIgnored = ignoreStore.isIgnored({
+		pluginSlug: props.name,
+		purpose: "vuln",
+	});
+
+	if (isPluginIgnored) {
+		return { ...p, vulnerabilities: [] };
+	}
+
+	// Filter out specifically ignored vulnerability UUIDs
+	const vulns = p.vulnerabilities.filter((v) => {
+		return !ignoreStore.isIgnored({
+			pluginSlug: props.name,
+			vulnUuid: v.vulnerability.uuid,
+			purpose: "vuln",
+		});
+	});
+
+	return { ...p, vulnerabilities: vulns };
 });
 
 const sitesWithPlugin = computed(() => {
@@ -46,11 +71,23 @@ const sitesWithPlugin = computed(() => {
 	return instances
 		.map((p) => {
 			const site = dataStore.getSiteById(p.site_id);
+
+			// Check if this site specifically ignores vulnerabilities (either site or server level)
+			let isVulnerable = vulnerableSites.has(p.site_id);
+			if (isVulnerable && site) {
+				const isSiteIgnored = ignoreStore.isIgnored({
+					siteId: site.id,
+					serverId: site.server_id,
+					purpose: "vuln",
+				});
+				if (isSiteIgnored) isVulnerable = false;
+			}
+
 			return {
 				...p,
 				site_domain: site ? site.domain : "Unknown Site",
 				site_id: p.site_id,
-				isVulnerable: vulnerableSites.has(p.site_id),
+				isVulnerable,
 			};
 		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));

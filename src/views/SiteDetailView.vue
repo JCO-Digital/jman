@@ -5,6 +5,7 @@ import { useDataStore } from "../stores/data";
 import { useMonitorStore } from "../stores/monitor";
 import { useOrganizationStore } from "../stores/organization";
 import { useAuthStore } from "../stores/auth";
+import { useIgnoreStore } from "../stores/ignore";
 import { useToastStore } from "../stores/toast";
 import type { Organization, Contact } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
@@ -22,6 +23,7 @@ const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
 const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
+const ignoreStore = useIgnoreStore();
 const toast = useToastStore();
 
 const siteId = parseInt(props.id, 10);
@@ -31,7 +33,7 @@ const site = computed(() => dataStore.getSiteById(siteId));
 
 // Fetch initial data
 onMounted(async () => {
-	await dataStore.initData();
+	await Promise.all([dataStore.initData(), ignoreStore.fetchIgnoreEntries()]);
 });
 
 // Watch for domain changes to fetch monitor status
@@ -78,8 +80,41 @@ const history = computed(() =>
 
 const sitePlugins = computed(() => {
 	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
+
+	// Check if site or server is ignored for vulnerabilities
+	const isSiteVulnIgnored = site.value
+		? ignoreStore.isIgnored({
+				siteId: site.value.id,
+				serverId: site.value.server_id,
+				purpose: "vuln",
+			})
+		: false;
+
 	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
-		const vulns = siteVulns.filter((v) => v.slug === plugin.name);
+		if (isSiteVulnIgnored) {
+			return { ...plugin, vulnerabilities: [] };
+		}
+
+		// Check if this specific plugin is ignored for vulnerabilities
+		const isPluginIgnored = ignoreStore.isIgnored({
+			pluginSlug: plugin.name,
+			purpose: "vuln",
+		});
+
+		if (isPluginIgnored) {
+			return { ...plugin, vulnerabilities: [] };
+		}
+
+		const vulns = siteVulns.filter((v) => {
+			if (v.slug !== plugin.name) return false;
+
+			// Check if this specific vulnerability UUID is ignored
+			return !ignoreStore.isIgnored({
+				vulnUuid: v.vulnerability.uuid,
+				purpose: "vuln",
+			});
+		});
+
 		return {
 			...plugin,
 			vulnerabilities: vulns,
@@ -331,7 +366,12 @@ const unlinkOrganization = async () => {
 			</section>
 
 			<div class="mt-4">
-				<MonitorHistoryCard :history="history" :domain="site.domain" />
+				<MonitorHistoryCard
+					:history="history"
+					:domain="site.domain"
+					:site-id="site.id"
+					:server-id="site.server_id"
+				/>
 			</div>
 
 			<section class="card mt-4">
