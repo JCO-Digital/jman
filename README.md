@@ -86,7 +86,6 @@ slackChannel = "#alerts" # (optional, defaults to #testing)
 # Vulnerability scanning thresholds
 cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
 vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
-ignoreSites = ["example.com"] # (optional, list of domains to ignore during vulnerability scans)
 
 # Plugin aliases for shorthand installs
 [pluginAliases]
@@ -109,19 +108,19 @@ jman fetch
 
 ### Available Commands
 
-| Command   | Description                                                           |
-| :-------- | :-------------------------------------------------------------------- |
-| `fetch`   | Fetch latest data from SpinupWP and update local cache.               |
-| `wp`      | Run a `wp-cli` command on a target site.                              |
-| `core`    | Manage WordPress core (check, update, version) on target sites.       |
-| `search`  | Search for sites or plugins matching a query.                         |
-| `admin`   | Create a new administrator user on target sites.                      |
-| `plugin`  | Plugin actions (list, install, update, remove, info) on target sites. |
-| `mods`    | Set `DISALLOW_FILE_MODS` to true on target sites.                     |
-| `alias`   | Create SSH/WP-CLI alias files for all sites or a filtered collection. |
-| `vuln`    | Scan for plugin vulnerabilities across all sites.                     |
-| `monitor` | Manage site monitoring (ignore/unignore domains).                     |
-| `update`  | Check for and install updates for `jman` or its sidecar binaries.     |
+| Command  | Description                                                           |
+| :------- | :-------------------------------------------------------------------- |
+| `fetch`  | Fetch latest data from SpinupWP and update local cache.               |
+| `wp`     | Run a `wp-cli` command on a target site.                              |
+| `core`   | Manage WordPress core (check, update, version) on target sites.       |
+| `search` | Search for sites or plugins matching a query.                         |
+| `admin`  | Create a new administrator user on target sites.                      |
+| `plugin` | Plugin actions (list, install, update, remove, info) on target sites. |
+| `mods`   | Set `DISALLOW_FILE_MODS` to true on target sites.                     |
+| `alias`  | Create SSH/WP-CLI alias files for all sites or a filtered collection. |
+| `vuln`   | Scan for plugin vulnerabilities across all sites.                     |
+| `ignore` | Manage unified ignore list for monitoring and vulnerabilities.        |
+| `update` | Check for and install updates for `jman` or its sidecar binaries.     |
 
 ### Examples
 

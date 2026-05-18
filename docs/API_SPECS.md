@@ -345,13 +345,35 @@ These endpoints require at least **`basic`** level.
 `POST /organization-assets/{id}/payments` (Protected: `edit`)
 `DELETE /asset-payments/{id}` (Protected: `edit`)
 
+### Unified Ignore List
+
+`GET /ignore` (Protected: `basic`)
+`POST /ignore` (Protected: `edit`)
+`PATCH /ignore/{id}` (Protected: `edit`)
+`DELETE /ignore/{id}` (Protected: `edit`)
+
+**Ignore Entry Object**
+
+```json
+{
+	"id": 1,
+	"type": "site",
+	"target": "123",
+	"reason": "Maintenance",
+	"negated_site_ids": [456],
+	"use_for_monitor": true,
+	"use_for_vuln": true,
+	"created_at": "datetime",
+	"created_by": "username",
+	"updated_at": "datetime",
+	"updated_by": "username"
+}
+```
+
 ### Monitoring
 
 `GET /monitor/history` (Protected: `basic`)
 `GET /monitor/status` (Protected: `basic`)
-`GET /monitor/ignored` (Protected: `basic`)
-`POST /monitor/ignored` (Protected: `edit`)
-`DELETE /monitor/ignored/{domain}` (Protected: `edit`)
 
 ---
 

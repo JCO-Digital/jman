@@ -1,12 +1,10 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/db"
-	"github.com/JCO-Digital/jman/internal/monitor"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -65,69 +63,4 @@ func MonitorStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, statuses)
-}
-
-// IgnoredSitesHandler handles listing and adding ignored sites.
-func IgnoredSitesHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodGet:
-		sites, err := db.GetIgnoredSites()
-		if err != nil {
-			verb.LogPrintf(verb.Normal, "IgnoredSitesHandler: failed to fetch ignored sites: %v", err)
-			WriteError(w, http.StatusInternalServerError, "Internal server error")
-			return
-		}
-		WriteJSON(w, http.StatusOK, sites)
-
-	case http.MethodPost:
-		var req struct {
-			Domain string `json:"domain"`
-			Reason string `json:"reason"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			WriteError(w, http.StatusBadRequest, "Invalid request body")
-			return
-		}
-		if req.Domain == "" {
-			WriteError(w, http.StatusBadRequest, "Domain is required")
-			return
-		}
-
-		// Check if the site is currently alerting and notify Slack
-		monitor.NotifyIfAlertingSiteIgnored(req.Domain, req.Reason)
-
-		if err := db.IgnoreSite(req.Domain, req.Reason); err != nil {
-			verb.LogPrintf(verb.Normal, "IgnoredSitesHandler: failed to ignore site: %v", err)
-			WriteError(w, http.StatusInternalServerError, "Internal server error")
-			return
-		}
-		WriteJSON(w, http.StatusCreated, map[string]string{"status": "site ignored"})
-
-	default:
-		w.Header().Set("Allow", "GET, POST")
-		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
-	}
-}
-
-// UnignoreSiteHandler handles removing a site from the ignore list.
-func UnignoreSiteHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodDelete {
-		w.Header().Set("Allow", "DELETE")
-		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
-		return
-	}
-
-	domain := r.PathValue("domain")
-	if domain == "" {
-		WriteError(w, http.StatusBadRequest, "Domain is required")
-		return
-	}
-
-	if err := db.UnignoreSite(domain); err != nil {
-		verb.LogPrintf(verb.Normal, "UnignoreSiteHandler: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	WriteJSON(w, http.StatusOK, map[string]string{"status": "site unignored"})
 }

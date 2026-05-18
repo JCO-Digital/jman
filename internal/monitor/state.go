@@ -4,13 +4,13 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"os"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/models"
 )
 
 const (
@@ -33,6 +33,8 @@ type SiteStatus struct {
 	Mu       sync.Mutex `json:"-"`
 	InFlight bool       `json:"-"`
 
+	ID                   int       `json:"id"`
+	ServerID             int       `json:"server_id"`
 	Domain               string    `json:"domain"`
 	IsDown               bool      `json:"is_down"`
 	FailureCount         int       `json:"failure_count"`
@@ -56,10 +58,6 @@ func LoadState() (*State, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	migrationOnce.Do(func() {
-		migrateMonitorState(database)
-	})
-
 	state := &State{
 		Sites: make(map[string]*SiteStatus),
 	}
@@ -69,6 +67,13 @@ func LoadState() (*State, error) {
 		return nil, fmt.Errorf("failed to load monitor status: %w", err)
 	}
 	defer rows.Close()
+
+	// Fetch sites from cache to populate IDs
+	cachedSites, _ := cache.GetCachedSites()
+	siteMap := make(map[string]models.Site)
+	for _, s := range cachedSites {
+		siteMap[strings.ToLower(s.Domain)] = s
+	}
 
 	for rows.Next() {
 		var domain string
@@ -88,6 +93,11 @@ func LoadState() (*State, error) {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
 		}
 		status.Domain = domain
+
+		if s, ok := siteMap[strings.ToLower(domain)]; ok {
+			status.ID = s.ID
+			status.ServerID = s.ServerID
+		}
 
 		// Normalize mode based on is_down status to ensure continuity after migration.
 		// If a site is marked as down, it must be in Alert mode.
@@ -190,11 +200,24 @@ func (s *State) GetStatus(domain string) *SiteStatus {
 	if status, ok := s.Sites[domain]; ok {
 		return status
 	}
+
 	status := &SiteStatus{
 		Domain:      domain,
 		CurrentMode: ModeNormal,
 		NextCheckAt: time.Now(),
 	}
+
+	// Try to populate IDs from cache
+	if cachedSites, err := cache.GetCachedSites(); err == nil {
+		for _, cs := range cachedSites {
+			if strings.ToLower(cs.Domain) == domain {
+				status.ID = cs.ID
+				status.ServerID = cs.ServerID
+				break
+			}
+		}
+	}
+
 	s.Sites[domain] = status
 	return status
 }
@@ -253,47 +276,5 @@ func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
 		if err != nil {
 			log.Printf("Warning: failed to insert monitor history for %s: %v\n", domain, err)
 		}
-	}
-}
-
-// migrateMonitorState migrates from the old JSON state file if it exists.
-func migrateMonitorState(database *sql.DB) {
-	var state struct {
-		Sites map[string]struct {
-			FailureCount  int       `json:"failure_count"`
-			LastAlertTime time.Time `json:"last_alert_time"`
-			IsDown        bool      `json:"is_down"`
-		} `json:"sites"`
-	}
-	err := cache.ReadJSONData(monitorStateFile, &state)
-	if err != nil {
-		return
-	}
-
-	log.Printf("Migrating monitor state to database...\n")
-
-	for domain, oldStatus := range state.Sites {
-		status := &SiteStatus{
-			Domain:        domain,
-			IsDown:        oldStatus.IsDown,
-			FailureCount:  oldStatus.FailureCount,
-			LastAlertTime: oldStatus.LastAlertTime,
-			CurrentMode:   ModeNormal,
-			NextCheckAt:   time.Now(),
-		}
-		if status.IsDown {
-			status.CurrentMode = ModeAlert
-		}
-
-		err := SaveSiteStatus(status)
-		if err != nil {
-			log.Printf("Warning: failed to migrate monitor status for %s: %v\n", domain, err)
-		}
-	}
-
-	// Delete the old file after migration
-	oldPath := cache.GetDataFilePath(monitorStateFile)
-	if err := os.Remove(oldPath); err != nil {
-		log.Printf("Warning: failed to remove old monitor state file: %v\n", err)
 	}
 }
