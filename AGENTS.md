@@ -65,4 +65,10 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 - Usage: `<AppIcon name="settings" size="18" />`.
 - Add new icons as `.svg` files to `src/assets/icons/`.
 
+## 8. API Documentation
+
+For information regarding backend API endpoints, payloads, and authentication, refer to the official API specification:
+
+- [API Specification (API_SPECS.md)](https://github.com/JCO-Digital/jman/blob/main/docs/API_SPECS.md)
+
 When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.

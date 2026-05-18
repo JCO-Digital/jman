@@ -2,6 +2,7 @@
 import { ref, computed, watch } from "vue";
 import { useUserStore } from "../../stores/user";
 import { validatePasswordStrength } from "../../utils/passwordStrength";
+import AppIcon from "../AppIcon.vue";
 import type { CreateUserPayload, UpdateUserPayload } from "../../types";
 
 interface Props {
@@ -142,7 +143,7 @@ async function handleSubmit() {
 				<header class="modal-header">
 					<h2>{{ modalTitle }}</h2>
 					<button class="modal-close" @click="emit('close')">
-						&times;
+						<AppIcon name="x" size="20" />
 					</button>
 				</header>
 

@@ -8,9 +8,12 @@ import QRCode from "qrcode";
 const authStore = useAuthStore();
 const userStore = useUserStore();
 
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+
 // Fetch user profile on mount to get 2FA status
 onMounted(() => {
 	userStore.fetchProfile();
+	fetchSlackId();
 });
 
 // ─── Section 1: Profile ──────────────────────────────────────────────────────
@@ -31,6 +34,62 @@ async function saveProfile() {
 		profileError.value = e.message || "Failed to update profile.";
 	} finally {
 		profileSaving.value = false;
+	}
+}
+
+// ─── Section: Slack Integration ──────────────────────────────────────────────
+
+const slackId = ref("");
+const slackSaving = ref(false);
+const slackSuccess = ref("");
+const slackError = ref("");
+
+async function fetchSlackId() {
+	if (!authStore.isAuthenticated) return;
+	try {
+		const res = await fetch(`${BASE_URL}/settings/slack_id`, {
+			headers: authStore.authHeader,
+		});
+		if (res.ok) {
+			const data = await res.json();
+			// The API returns either a raw string or { value: "..." }
+			slackId.value =
+				typeof data === "object" && data !== null ? data.value : data;
+		}
+	} catch (e) {
+		console.error("Failed to fetch Slack ID", e);
+	}
+}
+
+function validateSlackId(id: string) {
+	return /^[UW][A-Z0-9]{8}$/.test(id);
+}
+
+async function saveSlackId() {
+	if (slackId.value && !validateSlackId(slackId.value)) {
+		slackError.value =
+			"Invalid Slack Member ID format. It should start with U or W followed by 8 alphanumeric characters.";
+		return;
+	}
+
+	slackSaving.value = true;
+	slackSuccess.value = "";
+	slackError.value = "";
+	try {
+		const res = await fetch(`${BASE_URL}/settings/slack_id`, {
+			method: "POST",
+			headers: {
+				...authStore.authHeader,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify(slackId.value),
+		});
+		if (!res.ok) throw new Error("Failed to save Slack ID");
+		slackSuccess.value = "Slack ID updated successfully.";
+	} catch (e: any) {
+		slackError.value = e.message || "Failed to update Slack ID.";
+	} finally {
+		slackSaving.value = false;
 	}
 }
 
@@ -213,6 +272,58 @@ function cancelDisable() {
 			>
 				{{ profileSaving ? "Saving..." : "Save Profile" }}
 			</button>
+		</section>
+
+		<!-- Section: Slack Integration -->
+		<section class="card">
+			<h2>Slack Integration</h2>
+			<p class="sub-text mb-4">
+				Connect your Slack account by providing your Member ID. This
+				allows you to receive notifications and assignments directly in
+				Slack.
+			</p>
+
+			<div class="form-group max-w-320">
+				<label for="slack-id">Slack Member ID</label>
+				<input
+					id="slack-id"
+					v-model="slackId"
+					type="text"
+					placeholder="e.g. U0G9QF9C6"
+					maxlength="9"
+					@input="slackId = slackId.toUpperCase()"
+				/>
+				<p class="help-text">
+					Format: U or W followed by 8 characters.
+				</p>
+			</div>
+
+			<div v-if="slackSuccess" class="feedback success">
+				{{ slackSuccess }}
+			</div>
+			<div v-if="slackError" class="feedback error">
+				{{ slackError }}
+			</div>
+
+			<button
+				class="btn btn-primary"
+				:disabled="slackSaving"
+				@click="saveSlackId"
+			>
+				{{ slackSaving ? "Saving..." : "Save Slack ID" }}
+			</button>
+
+			<div class="section-divider mt-6"></div>
+
+			<div class="mt-4">
+				<p class="font-medium">How to Find a Member ID</p>
+				<ol class="font-sm text-muted ml-4 mt-2">
+					<li>Click on the user's name in Slack</li>
+					<li>Select <strong>View full profile</strong></li>
+					<li>Click the overflow menu (⋮) under their avatar</li>
+					<li>Choose <strong>Copy member ID</strong></li>
+				</ol>
+			</div>
 		</section>
 
 		<!-- Section 2: Change Password -->

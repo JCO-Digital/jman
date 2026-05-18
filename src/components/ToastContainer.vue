@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useToastStore } from "../stores/toast";
+import AppIcon from "./AppIcon.vue";
 
 const toastStore = useToastStore();
 </script>
@@ -17,7 +18,7 @@ const toastStore = useToastStore();
 					class="toast-dismiss"
 					@click="toastStore.removeToast(toast.id)"
 				>
-					&times;
+					<AppIcon name="x" size="18" />
 				</button>
 			</div>
 		</TransitionGroup>

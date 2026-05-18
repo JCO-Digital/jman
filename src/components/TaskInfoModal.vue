@@ -4,6 +4,7 @@ import { RouterLink } from "vue-router";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
 import { useUserStore } from "../stores/user";
+import AppIcon from "./AppIcon.vue";
 import type { Task, TaskStatus } from "../types";
 
 const props = defineProps<{
@@ -121,7 +122,7 @@ const canComplete = (s: string) =>
 						<h2>{{ task.title }}</h2>
 					</div>
 					<button class="modal-close" @click="emit('close')">
-						&times;
+						<AppIcon name="x" size="20" />
 					</button>
 				</header>
 

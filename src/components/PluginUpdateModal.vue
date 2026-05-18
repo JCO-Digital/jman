@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
+import AppIcon from "./AppIcon.vue";
 import type { Plugin, PluginUpdateResult } from "../types";
 
 const props = defineProps<{
@@ -98,7 +99,7 @@ watch(
 				<header class="modal-header">
 					<h2>Plugin Updates</h2>
 					<button class="modal-close" @click="emit('close')">
-						&times;
+						<AppIcon name="x" size="20" />
 					</button>
 				</header>
 

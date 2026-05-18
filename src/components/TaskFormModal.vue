@@ -4,6 +4,7 @@ import { useTaskStore } from "../stores/tasks";
 import { useDataStore } from "../stores/data";
 import { useOrganizationStore } from "../stores/organization";
 import { useUserStore } from "../stores/user";
+import AppIcon from "./AppIcon.vue";
 import type { Task, TaskType, TaskPriority } from "../types";
 
 const props = defineProps<{
@@ -162,7 +163,7 @@ async function save() {
 				<header class="modal-header">
 					<h2>{{ isEditing ? "Edit Task" : "New Task" }}</h2>
 					<button class="modal-close" @click="emit('close')">
-						&times;
+						<AppIcon name="x" size="20" />
 					</button>
 				</header>
 
