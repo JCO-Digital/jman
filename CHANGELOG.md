@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.24.0 (2026-05-18)
+### 1.24.1 (2026-05-18)
+
+#### Refactor
+
+- view: type InfoItem for site info items in SiteDetailView (3054990)
+
+## v1.24.0 (2026-05-18)
 
 #### Features
 
