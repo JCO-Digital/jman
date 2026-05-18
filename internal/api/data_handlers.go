@@ -97,9 +97,14 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 // If a "plugin" query parameter is provided, it returns vulnerabilities for that plugin.
 // Otherwise, it returns all active vulnerabilities across all managed sites.
 func VulnsHandler(w http.ResponseWriter, r *http.Request) {
+	matcher, err := db.NewVulnIgnoreMatcher()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
+	}
+
 	pluginName := r.URL.Query().Get("plugin")
 	if pluginName == "" {
-		reports, err := vuln.ProcessVulnerabilities()
+		reports, err := vuln.ProcessVulnerabilities(matcher)
 		if err != nil {
 			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to process vulnerabilities: %v", err))
 			return
@@ -142,7 +147,7 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reports := vuln.GetVulnerabilityReportsForPlugin(pluginName, targetSites)
+	reports := vuln.GetVulnerabilityReportsForPlugin(pluginName, targetSites, matcher)
 
 	// Prepare the response data based on the original structure but filtered.
 	// We return a copy of VulnData with filtered and enriched vulnerabilities.

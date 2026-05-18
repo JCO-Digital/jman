@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -126,175 +127,144 @@ func DeleteIgnoreEntry(id int) error {
 	return err
 }
 
-// IsSiteIgnoredForMonitor checks if a site should be ignored for monitoring.
-func IsSiteIgnoredForMonitor(siteID, serverID int) (bool, error) {
-	db := GetDB()
-	if db == nil {
-		return false, fmt.Errorf("database not initialized")
-	}
-
-	// Check for site-specific ignore
-	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ignore_entries WHERE type = 'site' AND target = ? AND use_for_monitor = 1)`
-	err := db.QueryRow(query, fmt.Sprintf("%d", siteID)).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return true, nil
-	}
-
-	// Check for server-wide ignore
-	rows, err := db.Query(`SELECT negated_site_ids FROM ignore_entries WHERE type = 'server' AND target = ? AND use_for_monitor = 1`, fmt.Sprintf("%d", serverID))
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var negatedJSON string
-		if err := rows.Scan(&negatedJSON); err != nil {
-			continue
-		}
-		var negatedIDs []int
-		if err := json.Unmarshal([]byte(negatedJSON), &negatedIDs); err == nil {
-			isNegated := false
-			for _, id := range negatedIDs {
-				if id == siteID {
-					isNegated = true
-					break
-				}
-			}
-			if !isNegated {
-				return true, nil // Server is ignored and this site is NOT negated
-			}
-		} else {
-			// If JSON is invalid or empty, assume no negations
-			return true, nil
-		}
-	}
-
-	return false, nil
+// MonitorIgnoreMatcher provides efficient in-memory matching for monitor ignores.
+type MonitorIgnoreMatcher struct {
+	siteIgnores   map[int]bool
+	serverIgnores map[int][]int // serverID -> negated site IDs
 }
 
-// IsSiteIgnoredForVuln checks if a site should be ignored for vulnerabilities.
-func IsSiteIgnoredForVuln(siteID, serverID int) (bool, error) {
-	db := GetDB()
-	if db == nil {
-		return false, fmt.Errorf("database not initialized")
-	}
-
-	// Check for site-specific ignore
-	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ignore_entries WHERE type = 'site' AND target = ? AND use_for_vuln = 1)`
-	err := db.QueryRow(query, fmt.Sprintf("%d", siteID)).Scan(&exists)
+// NewMonitorIgnoreMatcher fetches all monitor ignore entries and returns a matcher.
+func NewMonitorIgnoreMatcher() (*MonitorIgnoreMatcher, error) {
+	entries, err := GetAllIgnoreEntries("")
 	if err != nil {
-		return false, err
-	}
-	if exists {
-		return true, nil
+		return nil, err
 	}
 
-	// Check for server-wide ignore
-	rows, err := db.Query(`SELECT negated_site_ids FROM ignore_entries WHERE type = 'server' AND target = ? AND use_for_vuln = 1`, fmt.Sprintf("%d", serverID))
-	if err != nil {
-		return false, err
+	matcher := &MonitorIgnoreMatcher{
+		siteIgnores:   make(map[int]bool),
+		serverIgnores: make(map[int][]int),
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var negatedJSON string
-		if err := rows.Scan(&negatedJSON); err != nil {
+	for _, e := range entries {
+		if !e.UseForMonitor {
 			continue
 		}
-		var negatedIDs []int
-		if err := json.Unmarshal([]byte(negatedJSON), &negatedIDs); err == nil {
-			isNegated := false
-			for _, id := range negatedIDs {
-				if id == siteID {
-					isNegated = true
-					break
-				}
-			}
-			if !isNegated {
-				return true, nil
-			}
-		} else {
-			return true, nil
-		}
-	}
 
-	return false, nil
-}
-
-// IsVulnerabilityIgnored checks if a vulnerability should be suppressed.
-func IsVulnerabilityIgnored(siteID, serverID int, pluginSlug, vulnUUID string) (bool, error) {
-	db := GetDB()
-	if db == nil {
-		return false, fmt.Errorf("database not initialized")
-	}
-
-	// 1. Check specific vulnerability UUID
-	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ignore_entries WHERE type = 'vulnerability' AND target = ? AND use_for_vuln = 1)`
-	err := db.QueryRow(query, vulnUUID).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return true, nil
-	}
-
-	// 2. Check plugin slug
-	if pluginSlug != "" {
-		query = `SELECT EXISTS(SELECT 1 FROM ignore_entries WHERE type = 'plugin' AND target = ? AND use_for_vuln = 1)`
-		err = db.QueryRow(query, pluginSlug).Scan(&exists)
+		targetID, err := strconv.Atoi(e.Target)
 		if err != nil {
-			return false, err
-		}
-		if exists {
-			return true, nil
-		}
-	}
-
-	// 3. Check site ID
-	query = `SELECT EXISTS(SELECT 1 FROM ignore_entries WHERE type = 'site' AND target = ? AND use_for_vuln = 1)`
-	err = db.QueryRow(query, fmt.Sprintf("%d", siteID)).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	if exists {
-		return true, nil
-	}
-
-	// 4. Check server ID with negations
-	rows, err := db.Query(`SELECT negated_site_ids FROM ignore_entries WHERE type = 'server' AND target = ? AND use_for_vuln = 1`, fmt.Sprintf("%d", serverID))
-	if err != nil {
-		return false, err
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var negatedJSON string
-		if err := rows.Scan(&negatedJSON); err != nil {
 			continue
 		}
-		var negatedIDs []int
-		if err := json.Unmarshal([]byte(negatedJSON), &negatedIDs); err == nil {
-			isNegated := false
-			for _, id := range negatedIDs {
-				if id == siteID {
-					isNegated = true
-					break
-				}
-			}
-			if !isNegated {
-				return true, nil
-			}
-		} else {
-			return true, nil
+
+		switch e.Type {
+		case "site":
+			matcher.siteIgnores[targetID] = true
+		case "server":
+			matcher.serverIgnores[targetID] = e.NegatedSiteIDs
 		}
 	}
 
-	return false, nil
+	return matcher, nil
+}
+
+// IsIgnored checks if a site is ignored according to the matcher's data.
+func (m *MonitorIgnoreMatcher) IsIgnored(siteID, serverID int) bool {
+	if m.siteIgnores[siteID] {
+		return true
+	}
+
+	if negatedIDs, ok := m.serverIgnores[serverID]; ok {
+		isNegated := false
+		for _, id := range negatedIDs {
+			if id == siteID {
+				isNegated = true
+				break
+			}
+		}
+		if !isNegated {
+			return true
+		}
+	}
+
+	return false
+}
+
+// VulnIgnoreMatcher provides efficient in-memory matching for vulnerability ignores.
+type VulnIgnoreMatcher struct {
+	siteIgnores          map[int]bool
+	serverIgnores        map[int][]int // serverID -> negated site IDs
+	pluginIgnores        map[string]bool
+	vulnerabilityIgnores map[string]bool
+}
+
+// NewVulnIgnoreMatcher fetches all vulnerability ignore entries and returns a matcher.
+func NewVulnIgnoreMatcher() (*VulnIgnoreMatcher, error) {
+	entries, err := GetAllIgnoreEntries("")
+	if err != nil {
+		return nil, err
+	}
+
+	matcher := &VulnIgnoreMatcher{
+		siteIgnores:          make(map[int]bool),
+		serverIgnores:        make(map[int][]int),
+		pluginIgnores:        make(map[string]bool),
+		vulnerabilityIgnores: make(map[string]bool),
+	}
+
+	for _, e := range entries {
+		if !e.UseForVuln {
+			continue
+		}
+
+		switch e.Type {
+		case "site":
+			if id, err := strconv.Atoi(e.Target); err == nil {
+				matcher.siteIgnores[id] = true
+			}
+		case "server":
+			if id, err := strconv.Atoi(e.Target); err == nil {
+				matcher.serverIgnores[id] = e.NegatedSiteIDs
+			}
+		case "plugin":
+			matcher.pluginIgnores[e.Target] = true
+		case "vulnerability":
+			matcher.vulnerabilityIgnores[e.Target] = true
+		}
+	}
+
+	return matcher, nil
+}
+
+// IsSiteIgnored checks if a site should be ignored for vulnerabilities.
+func (m *VulnIgnoreMatcher) IsSiteIgnored(siteID, serverID int) bool {
+	if m.siteIgnores[siteID] {
+		return true
+	}
+
+	if negatedIDs, ok := m.serverIgnores[serverID]; ok {
+		isNegated := false
+		for _, id := range negatedIDs {
+			if id == siteID {
+				isNegated = true
+				break
+			}
+		}
+		if !isNegated {
+			return true
+		}
+	}
+
+	return false
+}
+
+// IsVulnerabilityIgnored checks if a specific vulnerability should be ignored.
+func (m *VulnIgnoreMatcher) IsVulnerabilityIgnored(siteID, serverID int, pluginSlug, vulnUUID string) bool {
+	if m.vulnerabilityIgnores[vulnUUID] {
+		return true
+	}
+
+	if pluginSlug != "" && m.pluginIgnores[pluginSlug] {
+		return true
+	}
+
+	return m.IsSiteIgnored(siteID, serverID)
 }
