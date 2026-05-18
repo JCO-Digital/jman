@@ -9,7 +9,7 @@ import { useToastStore } from "../stores/toast";
 import type { Organization, Contact } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
-import InfoCard from "../components/InfoCard.vue";
+import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 
@@ -89,7 +89,7 @@ const sitePlugins = computed(() => {
 
 const siteInfoItems = computed(() => {
 	if (!site.value) return [];
-	const items = [
+	const items: InfoItem[] = [
 		{ label: "Site ID", value: site.value.id },
 		{
 			label: "Domain",
