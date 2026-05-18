@@ -213,6 +213,9 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 		const server = dataStore.getServerById(parseInt(target));
 		return server ? server.name : `Server ${target}`;
 	}
+	if (type === "vulnerability" && target.length > 12) {
+		return target.substring(0, 12) + "...";
+	}
 	return target;
 };
 </script>
@@ -220,7 +223,7 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 <template>
 	<section class="card">
 		<div class="card-header">
-			<h2>Unified Ignore List</h2>
+			<h2>Ignore List</h2>
 			<button
 				v-if="authStore.canEdit && !showAddForm"
 				class="btn btn-primary btn-sm"
@@ -464,7 +467,14 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 							}}</span>
 						</td>
 						<td>
-							<div class="font-medium text-main">
+							<div
+								class="font-medium text-main"
+								:title="
+									entry.type === 'vulnerability'
+										? entry.target
+										: ''
+								"
+							>
 								{{
 									resolveTargetName(entry.type, entry.target)
 								}}

@@ -17,7 +17,7 @@ const emit = defineEmits<{
 const tabs: Tab[] = [
 	{ id: "account", label: "My Account" },
 	{ id: "general", label: "General" },
-	{ id: "ignored", label: "Ignored Domains" },
+	{ id: "ignored", label: "Ignore List" },
 	{ id: "users", label: "Users" },
 ];
 
