@@ -4,6 +4,7 @@ import { useAuthStore } from "../../stores/auth";
 import { useUserStore } from "../../stores/user";
 import { useToastStore } from "../../stores/toast";
 import LoadingSpinner from "../LoadingSpinner.vue";
+import AppIcon from "../AppIcon.vue";
 import UserFormModal from "./UserFormModal.vue";
 import type { AdminUser } from "../../types";
 
@@ -125,21 +126,7 @@ function levelClass(level: string): string {
 								v-if="user.has2FA"
 								class="flex-row gap-1 text-success font-sm font-medium"
 							>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="16"
-									height="16"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-								>
-									<polyline
-										points="20 6 9 17 4 12"
-									></polyline>
-								</svg>
+								<AppIcon name="check" size="16" />
 								Enabled
 							</span>
 							<span v-else class="text-muted font-sm"

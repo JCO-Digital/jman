@@ -6,6 +6,7 @@ import { useDataStore } from "../stores/data";
 import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const router = useRouter();
 const organizationStore = useOrganizationStore();
@@ -197,20 +198,11 @@ const handleCreateOrganization = async () => {
 							</div>
 						</td>
 						<td class="text-right text-muted">
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
+							<AppIcon
+								name="chevron-right"
+								size="16"
 								class="opacity-50"
-							>
-								<polyline points="9 18 15 12 9 6"></polyline>
-							</svg>
+							/>
 						</td>
 					</tr>
 				</tbody>
