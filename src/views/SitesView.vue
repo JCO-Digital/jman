@@ -17,6 +17,12 @@ const router = useRouter();
 const dataStore = useDataStore();
 const ignoreStore = useIgnoreStore();
 
+const searchQuery = ref("");
+const sortKey = ref<keyof EnrichedSite>("domain");
+const sortOrder = ref<"asc" | "desc">("asc");
+const currentPage = ref(props.page || 1);
+const rowsPerPage = ref(props.rowsPerPage || 50);
+
 watch(
 	() => props.page,
 	(newVal) => {
@@ -53,12 +59,6 @@ const handleSort = (key: keyof EnrichedSite) => {
 		sortOrder.value = "asc";
 	}
 };
-
-const searchQuery = ref("");
-const sortKey = ref<keyof EnrichedSite>("domain");
-const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(props.page || 1);
-const rowsPerPage = ref(props.rowsPerPage || 50);
 
 const filteredAndSortedSites = computed(() => {
 	let result = dataStore.enrichedSites.map((site) => {
