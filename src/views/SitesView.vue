@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import { useIgnoreStore } from "../stores/ignore";
 import type { EnrichedSite } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import Pagination from "../components/Pagination.vue";
@@ -14,6 +15,7 @@ const props = defineProps<{
 
 const router = useRouter();
 const dataStore = useDataStore();
+const ignoreStore = useIgnoreStore();
 
 const searchQuery = ref("");
 const sortKey = ref<keyof EnrichedSite>("domain");
@@ -35,6 +37,10 @@ watch(
 	},
 );
 
+onMounted(() => {
+	ignoreStore.fetchIgnoreEntries();
+});
+
 const updateRoute = (page: number, rpp: number) => {
 	router.push({
 		name: "sites",
@@ -55,7 +61,23 @@ const handleSort = (key: keyof EnrichedSite) => {
 };
 
 const filteredAndSortedSites = computed(() => {
-	let result = dataStore.enrichedSites;
+	let result = dataStore.enrichedSites.map((site) => {
+		// Filter out ignored vulnerabilities
+		const vulns = site.vulnerabilities.filter((v) => {
+			return !ignoreStore.isIgnored({
+				siteId: site.id,
+				serverId: site.server_id,
+				pluginSlug: v.slug,
+				vulnUuid: v.vulnerability.uuid,
+				purpose: "vuln",
+			});
+		});
+
+		return {
+			...site,
+			vulnerabilities: vulns,
+		};
+	});
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();

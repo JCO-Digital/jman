@@ -3,21 +3,47 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import type { MonitorHistory } from "../types";
 import { useMonitorStore } from "../stores/monitor";
+import { useIgnoreStore } from "../stores/ignore";
+import { useDataStore } from "../stores/data";
 import LoadingSpinner from "./LoadingSpinner.vue";
 
 const props = defineProps<{
 	history: MonitorHistory[];
 	domain?: string;
+	siteId?: number;
+	serverId?: number;
 }>();
 
 const monitorStore = useMonitorStore();
+const ignoreStore = useIgnoreStore();
+const dataStore = useDataStore();
 
 const TOTAL_MINUTES = 1440; // 24 hours
 const MS_PER_MINUTE = 60000;
 
+const effectiveIds = computed(() => {
+	let sId = props.siteId;
+	let srvId = props.serverId;
+
+	// Fallback to domain-based lookup if IDs are missing
+	if ((sId === undefined || srvId === undefined) && props.domain) {
+		const site = dataStore.sites.find((s) => s.domain === props.domain);
+		if (site) {
+			sId = sId ?? site.id;
+			srvId = srvId ?? site.server_id;
+		}
+	}
+
+	return { siteId: sId, serverId: srvId };
+});
+
 const isIgnored = computed(() => {
-	if (!props.domain) return false;
-	return monitorStore.ignoredDomains.some((d) => d.domain === props.domain);
+	const ids = effectiveIds.value;
+	return ignoreStore.isIgnored({
+		siteId: ids.siteId,
+		serverId: ids.serverId,
+		purpose: "monitor",
+	});
 });
 
 const liveStatus = computed(() =>
