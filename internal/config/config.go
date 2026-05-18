@@ -29,6 +29,7 @@ type AppConfig struct {
 	TokenSlack          string            `toml:"slackToken" mapstructure:"slackToken"`
 	SlackChannel        string            `toml:"slackChannel" mapstructure:"slackChannel"`
 	SlackMonitorChannel string            `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
+	SlackTasksChannel   string            `toml:"slackTasksChannel" mapstructure:"slackTasksChannel"`
 	MonitorThreshold    int               `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
 	MonitorTimeout      int               `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
 	MonitorCacheBypass  bool              `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
@@ -73,6 +74,7 @@ func Init() error {
 func loadConfig() error {
 	// Set defaults
 	viper.SetDefault("slackChannel", "#testing")
+	viper.SetDefault("slackTasksChannel", "")
 	viper.SetDefault("monitorThreshold", 3)
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("monitorCacheBypass", false)
@@ -99,6 +101,7 @@ func loadConfig() error {
 		"slackToken":          "SLACKTOKEN",
 		"slackChannel":        "SLACKCHANNEL",
 		"slackMonitorChannel": "SLACKMONITORCHANNEL",
+		"slackTasksChannel":   "SLACKTASKSCHANNEL",
 		"monitorThreshold":    "MONITORTHRESHOLD",
 		"monitorTimeout":      "MONITORTIMEOUT",
 		"monitorCacheBypass":  "MONITORCACHEBYPASS",
