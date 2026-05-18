@@ -2,7 +2,6 @@ package vuln
 
 import (
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 
@@ -45,12 +44,20 @@ func ScanVulnerabilities(opts ScanOptions) error {
 // A site is reported when either:
 //   - its highest plugin CVSS meets or exceeds configured threshold, or
 //   - its total vulnerability count meets or exceeds config.Cfg.VulnThreshold.
-//
-// Site names listed in config.Cfg.IgnoreSites are skipped.
 func scanSites(opts ScanOptions) error {
 	sitesMap, err := buildSiteList()
 	if err != nil {
 		return err
+	}
+
+	// Fetch cached sites to get ServerIDs and check ignores
+	cachedSites, err := cache.GetCachedSites()
+	if err != nil {
+		return err
+	}
+	siteMeta := make(map[int]models.Site)
+	for _, s := range cachedSites {
+		siteMeta[s.ID] = s
 	}
 
 	// Sort site IDs for consistent output.
@@ -63,14 +70,17 @@ func scanSites(opts ScanOptions) error {
 	siteCount := 0
 	for _, siteID := range siteIDs {
 		plugins := sitesMap[siteID]
-		siteName, err := getSiteName(siteID)
-		if err != nil {
-			// If a site cannot be resolved from cache, skip it and continue.
+		s, ok := siteMeta[siteID]
+		if !ok {
 			continue
 		}
 
-		// Honor explicit site ignore list from config.
-		if slices.Contains(config.Cfg.IgnoreSites, siteName) {
+		// Check if site is ignored for vulnerabilities
+		ignored, err := db.IsSiteIgnoredForVuln(s.ID, s.ServerID)
+		if err != nil {
+			verb.LogPrintf(verb.Verbose, "Warning: failed to check ignore status for site %d: %v\n", s.ID, err)
+		}
+		if ignored {
 			continue
 		}
 
@@ -94,7 +104,7 @@ func scanSites(opts ScanOptions) error {
 		}
 
 		siteCount++
-		message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", siteName, totalVulns), plugins, false)
+		message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", s.Domain, totalVulns), plugins, false)
 		fmt.Println(message)
 
 		// If Slack is enabled, also send this site summary to Slack.
@@ -255,18 +265,14 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 		return reports
 	}
 
-	ignoredMap, err := db.GetIgnoredVulnMap()
-	if err != nil {
-		verb.Printf(verb.Verbose, "Warning: could not load vuln ignore list: %v\n", err)
-		ignoredMap = map[string]bool{}
+	// Load site metadata for server ID lookups
+	cachedSites, _ := cache.GetCachedSites()
+	siteMeta := make(map[int]models.Site)
+	for _, s := range cachedSites {
+		siteMeta[s.ID] = s
 	}
 
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
-		if ignoredMap[vulnerability.Uuid] {
-			verb.Printf(verb.Verbose, "Skipping ignored vulnerability: %s\n", vulnerability.Uuid)
-			continue
-		}
-
 		report := models.VulnReport{
 			Plugin:        pluginName,
 			Slug:          pluginName,
@@ -280,6 +286,19 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 
 		// Add every site whose installed plugin version falls inside the affected range.
 		for _, site := range sites {
+			s, ok := siteMeta[site.SiteID]
+			if !ok {
+				continue
+			}
+
+			ignored, err := db.IsVulnerabilityIgnored(s.ID, s.ServerID, pluginName, vulnerability.Uuid)
+			if err != nil {
+				verb.LogPrintf(verb.Verbose, "Warning: failed to check ignore status for vuln %s on site %d: %v\n", vulnerability.Uuid, s.ID, err)
+			}
+			if ignored {
+				continue
+			}
+
 			if IsVersionAffected(site.Version, vulnerability.Operator) {
 				report.Sites = append(report.Sites, site)
 			}

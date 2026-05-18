@@ -229,13 +229,17 @@ Authorization: Bearer <token>
 - `GET /api/sites` — Returns cached SpinupWP sites.
 - `GET /api/vulns?plugin=<slug>` — Returns cached vulnerability data for a specific plugin.
 
+### Ignore List Endpoints
+
+- `GET /api/ignore?type=...` — Returns all ignore entries (optional filter by type).
+- `POST /api/ignore` — Adds a new ignore entry. Requires JSON body: `{"type": "site", "target": "123", "reason": "...", "use_for_monitor": true, "use_for_vuln": true}`.
+- `PATCH /api/ignore/{id}` — Updates an existing ignore entry.
+- `DELETE /api/ignore/{id}` — Removes an ignore entry.
+
 ### Monitoring Endpoints
 
 - `GET /api/monitor/history?hours=48` — Returns aggregated status history for all sites.
 - `GET /api/monitor/status?domain=...` — Returns current status for a specific site (or all sites if domain is omitted).
-- `GET /api/monitor/ignored` — Returns a list of currently ignored sites.
-- `POST /api/monitor/ignored` — Adds a site to the ignore list. Requires JSON body: `{"domain": "example.com", "reason": "Maintenance"}`.
-- `DELETE /api/monitor/ignored/{domain}` — Removes a site from the ignore list.
 
 **Authentication error responses:**
 

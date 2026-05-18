@@ -53,9 +53,12 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Monitoring routes ---
 	mux.Handle("GET /api/monitor/history", basic(MonitorHistoryHandler))
 	mux.Handle("GET /api/monitor/status", basic(MonitorStatusHandler))
-	mux.Handle("GET /api/monitor/ignored", basic(IgnoredSitesHandler))
-	mux.Handle("POST /api/monitor/ignored", edit(IgnoredSitesHandler))
-	mux.Handle("DELETE /api/monitor/ignored/{domain}", edit(UnignoreSiteHandler))
+
+	// --- Ignore routes ---
+	mux.Handle("GET /api/ignore", basic(ListIgnoreEntriesHandler))
+	mux.Handle("POST /api/ignore", edit(CreateIgnoreEntryHandler))
+	mux.Handle("PATCH /api/ignore/{id}", edit(UpdateIgnoreEntryHandler))
+	mux.Handle("DELETE /api/ignore/{id}", edit(DeleteIgnoreEntryHandler))
 
 	// --- Organization & Contact routes ---
 	mux.Handle("GET /api/organizations", basic(ListOrganizationsHandler))
