@@ -1,6 +1,29 @@
 # Changelog
 
-## 5.12.0 (2026-05-14)
+## 5.13.0 (2026-05-18)
+
+#### Features
+
+- config: add SlackTasksChannel support for task notifications (5729e43)
+
+#### Bug Fixes
+
+- tasks: only update last notified timestamp if slack message is sent successfully (81ef046)
+- api: implement strict field validation for task updates (6726af0)
+- api: allow partial task updates by checking field presence in request body (53c8873)
+- api: allow basic access to user list and make task description nullable (47091fd)
+
+#### Documentation
+
+- project: add AGENTS.md documentation file (03222f4)
+- api: update documentation for ListUsersHandler functionality (c956765)
+- api: remove duplicate user creation documentation (ed10896)
+
+#### Continuous Integration
+
+- github: add CI workflow and rename release workflow (3a47d0a)
+
+## v5.12.0 (2026-05-14)
 
 #### Features
 
