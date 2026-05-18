@@ -201,33 +201,32 @@ func processReminders() error {
 }
 
 func sendSlackReminder(task *models.Task) {
-	now := time.Now()
-	task.LastNotifiedAt = &now
-	_ = db.SaveTask(task, "system")
-
 	message := fmt.Sprintf("🔔 *Task Reminder: %s*\nPriority: %s", task.Title, task.Priority)
 	if task.DueDate != nil {
 		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
 	}
 
-	channel := config.Cfg.SlackTasksChannel
-	if channel == "" {
-		channel = config.Cfg.SlackChannel
-	}
-
+	var sent bool
 	if task.AssignedTo != nil && *task.AssignedTo != "" {
 		setting, err := db.GetSetting(*task.AssignedTo, "slack_id")
 		if err == nil && setting != nil {
 			if slackID, ok := setting.Value.(string); ok && slackID != "" {
 				// Send as a direct message to the user
-				_ = slack.SendMessageToChannel(message, slackID, false)
+				if err := slack.SendMessageToChannel(message, slackID, false); err == nil {
+					sent = true
+				}
 			}
 		}
-		return
+	} else if config.Cfg.SlackTasksChannel != "" {
+		if err := slack.SendMessageToChannel(message, config.Cfg.SlackTasksChannel, false); err == nil {
+			sent = true
+		}
 	}
 
-	if config.Cfg.SlackTasksChannel != "" {
-		_ = slack.SendMessageToChannel(message, channel, false)
+	if sent {
+		now := time.Now()
+		task.LastNotifiedAt = &now
+		_ = db.SaveTask(task, "system")
 	}
 }
 
