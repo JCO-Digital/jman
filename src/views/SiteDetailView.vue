@@ -89,7 +89,7 @@ const sitePlugins = computed(() => {
 
 const siteInfoItems = computed(() => {
 	if (!site.value) return [];
-	return [
+	const items = [
 		{ label: "Site ID", value: site.value.id },
 		{
 			label: "Domain",
@@ -103,8 +103,18 @@ const siteInfoItems = computed(() => {
 		{ label: "PHP Version", value: site.value.php_version },
 		{ label: "Public Folder", value: site.value.public_folder },
 		{ label: "WordPress", value: site.value.is_wordpress ? "Yes" : "No" },
-		{ label: "Status", value: site.value.status },
 	];
+
+	if (site.value.database?.table_prefix) {
+		items.push({
+			label: "Table Prefix",
+			value: site.value.database.table_prefix,
+			copyable: true,
+		});
+	}
+
+	items.push({ label: "Status", value: site.value.status });
+	return items;
 });
 
 const serverInfoItems = computed(() => {
