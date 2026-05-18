@@ -102,13 +102,12 @@ A systemd service file is provided in the repository. To install it:
 
 ## Ignored Sites Management
 
-The list of ignored sites is now stored in the database. You can manage it using the `jman` CLI:
+The list of ignored sites is stored in the database and managed via the unified ignore system. You can manage it using the `jman` CLI:
 
-- **List ignored sites**: `jman monitor list`
-- **Ignore a site**: `jman monitor ignore <domain> [reason]`
-- **Unignore a site**: `jman monitor unignore <domain>`
-
-Sites previously defined in `config.toml` under `ignoreSites` are automatically migrated to the database on the first run of `jman-monitor`.
+- **List ignored items**: `jman ignore list`
+- **Ignore a site**: `jman ignore add site <domain> [reason] --monitor`
+- **Ignore a server**: `jman ignore add server <name> [reason] --monitor`
+- **Remove ignore**: `jman ignore remove <id>`
 
 ## API Endpoints
 
@@ -116,6 +115,4 @@ The `jman-api` provides several endpoints for monitoring data (all require JWT a
 
 - `GET /api/monitor/history?hours=48`: Returns status history for all sites for the last X hours.
 - `GET /api/monitor/status?domain=...`: Returns the current health status and failure count for a site.
-- `GET /api/monitor/ignored`: Lists all ignored sites and their reasons.
-- `POST /api/monitor/ignored`: Add a site to the ignore list.
-- `DELETE /api/monitor/ignored/{domain}`: Remove a site from the ignore list.
+- `GET /api/ignore?type=site`: Lists all ignored sites and their reasons.

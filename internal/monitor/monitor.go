@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -40,8 +39,6 @@ func Run() error {
 // RunService starts the continuous monitoring scheduler.
 // It staggers initial checks and runs until the context is cancelled.
 func RunService(ctx context.Context) error {
-	migrateIgnoredSites()
-
 	scheduler, err := NewScheduler()
 	if err != nil {
 		return err
@@ -52,8 +49,6 @@ func RunService(ctx context.Context) error {
 // RunOnce performs a single check of all configured sites and updates their states.
 // This is suitable for cron-based execution or manual troubleshooting.
 func RunOnce() error {
-	migrateIgnoredSites()
-
 	state, err := LoadState()
 	if err != nil {
 		return err
@@ -66,10 +61,9 @@ func RunOnce() error {
 	}
 
 	// Fetch ignored domains
-	ignoredDomains, err := db.GetIgnoredDomains()
+	ignoreMatcher, err := db.NewMonitorIgnoreMatcher()
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites from database: %v\n", err)
-		ignoredDomains = make(map[string]bool)
 	}
 
 	verb.LogPrintf(verb.Normal, "Monitoring %d sites (one-off mode)...\n", len(sites))
@@ -83,7 +77,7 @@ func RunOnce() error {
 	for _, site := range sites {
 		activeDomains[site.Domain] = true
 
-		if ignoredDomains[strings.ToLower(site.Domain)] {
+		if ignoreMatcher != nil && ignoreMatcher.IsIgnored(site.ID, site.ServerID) {
 			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}
@@ -120,30 +114,4 @@ func RunOnce() error {
 	}
 
 	return nil
-}
-
-// migrateIgnoredSites moves ignored sites from config.toml to the database if they are not already there.
-func migrateIgnoredSites() {
-	ignoredDomains, err := db.GetIgnoredDomains()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites during migration: %v\n", err)
-		return
-	}
-
-	if len(config.Cfg.IgnoreSites) > 0 {
-		migrated := false
-		for _, domain := range config.Cfg.IgnoreSites {
-			if !ignoredDomains[domain] {
-				if err := db.IgnoreSite(domain, "Migrated from config.toml"); err == nil {
-					ignoredDomains[domain] = true
-					migrated = true
-				} else {
-					verb.LogPrintf(verb.Normal, "Warning: failed to migrate ignored site %s: %v\n", domain, err)
-				}
-			}
-		}
-		if migrated {
-			verb.LogPrintf(verb.Normal, "Migration complete. You can now remove 'ignoreSites' from your config.toml.\n")
-		}
-	}
 }

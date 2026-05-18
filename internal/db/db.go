@@ -185,29 +185,19 @@ func initSchema() error {
 			},
 		},
 		{
-			Name: "monitor_ignored_sites",
+			Name: "ignore_entries",
 			Columns: map[string]string{
-				"domain":     "TEXT PRIMARY KEY COLLATE NOCASE",
-				"reason":     "TEXT",
-				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-			},
-		},
-		{
-			Name: "monitor_ignored_history",
-			Columns: map[string]string{
-				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"domain":     "TEXT COLLATE NOCASE",
-				"action":     "TEXT",
-				"reason":     "TEXT",
-				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
-			},
-		},
-		{
-			Name: "vuln_ignored",
-			Columns: map[string]string{
-				"uuid":       "TEXT PRIMARY KEY",
-				"reason":     "TEXT",
-				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"type":             "TEXT NOT NULL",
+				"target":           "TEXT NOT NULL",
+				"reason":           "TEXT",
+				"negated_site_ids": "TEXT",
+				"use_for_monitor":  "BOOLEAN DEFAULT 0",
+				"use_for_vuln":     "BOOLEAN DEFAULT 0",
+				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":       "TEXT",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":       "TEXT",
 			},
 		},
 		{
@@ -346,6 +336,11 @@ func initSchema() error {
 			},
 		},
 	}
+
+	// Drop old ignore tables if they exist
+	_, _ = dbInstance.Exec("DROP TABLE IF EXISTS monitor_ignored_sites")
+	_, _ = dbInstance.Exec("DROP TABLE IF EXISTS monitor_ignored_history")
+	_, _ = dbInstance.Exec("DROP TABLE IF EXISTS vuln_ignored")
 
 	for _, table := range tables {
 		if err := migrateTable(table); err != nil {
