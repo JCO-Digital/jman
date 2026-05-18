@@ -57,7 +57,7 @@
 
 ### Configuration
 
-- **Main Config**: `jman` uses a TOML file (typically `~/.config/jman/config.toml`) managed via `viper`.
+- **Main Config**: `jman` uses a TOML file (typically `~/.config/jman/config.toml`) managed via `viper`. Supports `slackChannel`, `slackMonitorChannel`, and `slackTasksChannel`.
 - **API Users**: `jman-api` uses a separate `users.toml` for authentication, storing bcrypt-hashed passwords and TOTP secrets.
 - **XDG Support**: Follows XDG Base Directory Specification for configuration and data storage.
 
