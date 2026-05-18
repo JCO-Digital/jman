@@ -1,6 +1,22 @@
 # Changelog
 
-### 1.23.2 (2026-05-14)
+## 1.24.0 (2026-05-18)
+
+#### Features
+
+- site: add database table prefix to site info details (ec8ae39)
+- settings: add slack integration and replace modal close buttons with icons (3dfe80e)
+- components: implement AppIcon component and replace inline SVGs (2963145)
+
+#### Bug Fixes
+
+- site: remove public folder field from site details (990df09)
+
+#### Refactor
+
+- ui: update organization tables to use standardized components and utilities (1752638)
+
+### v1.23.2 (2026-05-14)
 
 #### Refactor
 
