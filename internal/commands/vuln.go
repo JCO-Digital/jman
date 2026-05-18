@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 
-	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/spf13/cobra"
 )
@@ -79,73 +78,5 @@ func init() {
 
 	vulnCmd.AddCommand(vulnListCmd)
 	vulnCmd.AddCommand(vulnSitesCmd)
-	vulnCmd.AddCommand(vulnIgnoreCmd)
-	vulnIgnoreCmd.AddCommand(vulnIgnoreListCmd)
-	vulnIgnoreCmd.AddCommand(vulnIgnoreAddCmd)
-	vulnIgnoreCmd.AddCommand(vulnIgnoreRemoveCmd)
 	rootCmd.AddCommand(vulnCmd)
-}
-
-var vulnIgnoreCmd = &cobra.Command{
-	Use:   "ignore",
-	Short: "Manage the vulnerability ignore list",
-	Long:  `Add, remove, or list vulnerability UUIDs that should be suppressed from all scan output.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		return vulnIgnoreListCmd.RunE(vulnIgnoreListCmd, args)
-	},
-}
-
-var vulnIgnoreListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List ignored vulnerability UUIDs",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ignored, err := db.GetIgnoredVulns()
-		if err != nil {
-			return fmt.Errorf("error fetching ignore list: %w", err)
-		}
-		if len(ignored) == 0 {
-			fmt.Println("No vulnerabilities are currently ignored.")
-			return nil
-		}
-		for _, v := range ignored {
-			if v.Reason != "" {
-				fmt.Printf("%s  # %s\n", v.UUID, v.Reason)
-			} else {
-				fmt.Println(v.UUID)
-			}
-		}
-		return nil
-	},
-}
-
-var vulnIgnoreAddCmd = &cobra.Command{
-	Use:   "add <uuid> [reason]",
-	Short: "Add a vulnerability UUID to the ignore list",
-	Args:  cobra.RangeArgs(1, 2),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		uuid := args[0]
-		reason := ""
-		if len(args) > 1 {
-			reason = args[1]
-		}
-		if err := db.IgnoreVuln(uuid, reason); err != nil {
-			return fmt.Errorf("error adding to ignore list: %w", err)
-		}
-		fmt.Printf("Ignored vulnerability: %s\n", uuid)
-		return nil
-	},
-}
-
-var vulnIgnoreRemoveCmd = &cobra.Command{
-	Use:   "remove <uuid>",
-	Short: "Remove a vulnerability UUID from the ignore list",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		uuid := args[0]
-		if err := db.UnignoreVuln(uuid); err != nil {
-			return fmt.Errorf("error removing from ignore list: %w", err)
-		}
-		fmt.Printf("Removed vulnerability from ignore list: %s\n", uuid)
-		return nil
-	},
 }

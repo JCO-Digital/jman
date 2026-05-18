@@ -2,7 +2,6 @@ package vuln
 
 import (
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 
@@ -33,10 +32,15 @@ type ScanOptions struct {
 // If SiteSearch is provided with mode "list", only vulnerabilities affecting the matching site
 // are shown in full list format, without applying thresholds.
 func ScanVulnerabilities(opts ScanOptions) error {
-	if opts.Mode == "sites" {
-		return scanSites(opts)
+	matcher, err := db.NewVulnIgnoreMatcher()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
 	}
-	return scanReports(opts)
+
+	if opts.Mode == "sites" {
+		return scanSites(opts, matcher)
+	}
+	return scanReports(opts, matcher)
 }
 
 // scanSites builds a site-indexed vulnerability view, applies configured thresholds,
@@ -45,12 +49,21 @@ func ScanVulnerabilities(opts ScanOptions) error {
 // A site is reported when either:
 //   - its highest plugin CVSS meets or exceeds configured threshold, or
 //   - its total vulnerability count meets or exceeds config.Cfg.VulnThreshold.
-//
-// Site names listed in config.Cfg.IgnoreSites are skipped.
-func scanSites(opts ScanOptions) error {
-	sitesMap, err := buildSiteList()
+func scanSites(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
+	sitesMap, err := buildSiteList(matcher)
 	if err != nil {
 		return err
+	}
+
+	// Fetch cached sites to get ServerIDs and check ignores
+	cachedSites, err := cache.GetCachedSites()
+	siteMeta := make(map[int]models.Site)
+	if err == nil {
+		for _, s := range cachedSites {
+			siteMeta[s.ID] = s
+		}
+	} else {
+		verb.LogPrintf(verb.Normal, "Warning: failed to fetch site cache, site names and server-level ignores may be missing: %v\n", err)
 	}
 
 	// Sort site IDs for consistent output.
@@ -63,14 +76,19 @@ func scanSites(opts ScanOptions) error {
 	siteCount := 0
 	for _, siteID := range siteIDs {
 		plugins := sitesMap[siteID]
-		siteName, err := getSiteName(siteID)
-		if err != nil {
-			// If a site cannot be resolved from cache, skip it and continue.
-			continue
+		s, ok := siteMeta[siteID]
+
+		// Check if site is ignored for vulnerabilities
+		var ignored bool
+		if matcher != nil {
+			serverID := 0
+			if ok {
+				serverID = s.ServerID
+			}
+			ignored = matcher.IsSiteIgnored(siteID, serverID)
 		}
 
-		// Honor explicit site ignore list from config.
-		if slices.Contains(config.Cfg.IgnoreSites, siteName) {
+		if ignored {
 			continue
 		}
 
@@ -94,7 +112,11 @@ func scanSites(opts ScanOptions) error {
 		}
 
 		siteCount++
-		message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", siteName, totalVulns), plugins, false)
+		displayName := fmt.Sprintf("Site ID: %d", siteID)
+		if ok {
+			displayName = s.Domain
+		}
+		message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", displayName, totalVulns), plugins, false)
 		fmt.Println(message)
 
 		// If Slack is enabled, also send this site summary to Slack.
@@ -112,8 +134,8 @@ func scanSites(opts ScanOptions) error {
 // If SiteSearch is provided, only reports where at least one site name matches are shown,
 // the Affected Sites list is trimmed to matching sites only, and thresholds are not applied.
 // For Slack sending, "force" is enabled only when report CVSS is at/above the configured threshold.
-func scanReports(opts ScanOptions) error {
-	reports, err := ProcessVulnerabilities()
+func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
+	reports, err := ProcessVulnerabilities(matcher)
 	if err != nil {
 		return err
 	}
@@ -169,10 +191,10 @@ func scanReports(opts ScanOptions) error {
 //
 // Each VulnPlugin entry contains the plugin version found on that site,
 // the highest CVSS among matched vulnerabilities, and the vulnerability list.
-func buildSiteList() (map[int]map[string]*models.VulnPlugin, error) {
+func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[int]map[string]*models.VulnPlugin, error) {
 	sitesMap := make(map[int]map[string]*models.VulnPlugin)
 
-	reports, err := ProcessVulnerabilities()
+	reports, err := ProcessVulnerabilities(matcher)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +268,7 @@ func IsVersionAffected(ver string, op models.Operator) bool {
 
 // GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
 // Vulnerabilities whose UUID appears in the ignore list are silently skipped.
-func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite) []models.VulnReport {
+func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher) []models.VulnReport {
 	reports := []models.VulnReport{}
 
 	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
@@ -255,18 +277,18 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 		return reports
 	}
 
-	ignoredMap, err := db.GetIgnoredVulnMap()
-	if err != nil {
-		verb.Printf(verb.Verbose, "Warning: could not load vuln ignore list: %v\n", err)
-		ignoredMap = map[string]bool{}
+	// Load site metadata for server ID lookups
+	cachedSites, err := cache.GetCachedSites()
+	siteMeta := make(map[int]models.Site)
+	if err == nil {
+		for _, s := range cachedSites {
+			siteMeta[s.ID] = s
+		}
+	} else {
+		verb.LogPrintf(verb.Verbose, "Warning: failed to fetch site cache, server-level ignores may not be fully resolved: %v\n", err)
 	}
 
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
-		if ignoredMap[vulnerability.Uuid] {
-			verb.Printf(verb.Verbose, "Skipping ignored vulnerability: %s\n", vulnerability.Uuid)
-			continue
-		}
-
 		report := models.VulnReport{
 			Plugin:        pluginName,
 			Slug:          pluginName,
@@ -280,6 +302,19 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 
 		// Add every site whose installed plugin version falls inside the affected range.
 		for _, site := range sites {
+			var ignored bool
+			if matcher != nil {
+				serverID := 0
+				if s, ok := siteMeta[site.SiteID]; ok {
+					serverID = s.ServerID
+				}
+				ignored = matcher.IsVulnerabilityIgnored(site.SiteID, serverID, pluginName, vulnerability.Uuid)
+			}
+
+			if ignored {
+				continue
+			}
+
 			if IsVersionAffected(site.Version, vulnerability.Operator) {
 				report.Sites = append(report.Sites, site)
 			}
@@ -296,7 +331,7 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 
 // ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
 // determines which sites are affected by which vulnerabilities based on version ranges.
-func ProcessVulnerabilities() ([]models.VulnReport, error) {
+func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport, error) {
 	reports := []models.VulnReport{}
 
 	pluginData, err := cache.GetCachedPluginData()
@@ -306,7 +341,7 @@ func ProcessVulnerabilities() ([]models.VulnReport, error) {
 
 	for _, plugin := range pluginData {
 		verb.Printf(verb.Verbose, "Processing plugin: %s\n", plugin.Name)
-		reports = append(reports, GetVulnerabilityReportsForPlugin(plugin.Name, plugin.Sites)...)
+		reports = append(reports, GetVulnerabilityReportsForPlugin(plugin.Name, plugin.Sites, matcher)...)
 	}
 
 	return reports, nil

@@ -3,7 +3,6 @@ package monitor
 import (
 	"context"
 	"math/rand"
-	"strings"
 	"sync"
 	"time"
 
@@ -91,17 +90,16 @@ func (s *Scheduler) Run(ctx context.Context) error {
 				continue
 			}
 
-			// Fetch ignored domains to skip them
-			ignoredDomains, err := db.GetIgnoredDomains()
+			// Load ignore list once per tick for efficient O(n) checks
+			ignoreMatcher, err := db.NewMonitorIgnoreMatcher()
 			if err != nil {
-				verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites: %v\n", err)
-				ignoredDomains = make(map[string]bool)
+				verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
 			}
 
 			now := time.Now()
 			s.state.Mu.RLock()
 			for _, status := range s.state.Sites {
-				if ignoredDomains[strings.ToLower(status.Domain)] {
+				if ignoreMatcher != nil && ignoreMatcher.IsIgnored(status.ID, status.ServerID) {
 					continue
 				}
 
