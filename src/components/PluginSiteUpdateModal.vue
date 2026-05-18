@@ -2,6 +2,7 @@
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
+import AppIcon from "./AppIcon.vue";
 import type { Plugin, PluginUpdateResult } from "../types";
 
 interface UpdateEntry extends Plugin {
@@ -121,7 +122,7 @@ watch(
 				<header class="modal-header">
 					<h2>Update Plugin on Sites</h2>
 					<button class="modal-close" @click="emit('close')">
-						&times;
+						<AppIcon name="x" size="20" />
 					</button>
 				</header>
 
