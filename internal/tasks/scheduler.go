@@ -210,16 +210,25 @@ func sendSlackReminder(task *models.Task) {
 		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
 	}
 
+	channel := config.Cfg.SlackTasksChannel
+	if channel == "" {
+		channel = config.Cfg.SlackChannel
+	}
+
 	if task.AssignedTo != nil && *task.AssignedTo != "" {
 		setting, err := db.GetSetting(*task.AssignedTo, "slack_id")
 		if err == nil && setting != nil {
 			if slackID, ok := setting.Value.(string); ok && slackID != "" {
-				message = fmt.Sprintf("<@%s> %s", slackID, message)
+				// Send as a direct message to the user
+				_ = slack.SendMessageToChannel(message, slackID, false)
 			}
 		}
+		return
 	}
 
-	_ = slack.SendMessage(message, false)
+	if config.Cfg.SlackTasksChannel != "" {
+		_ = slack.SendMessageToChannel(message, channel, false)
+	}
 }
 
 // cleanupOrphanedTasks marks tasks as skipped if they are linked to non-existent entities.
