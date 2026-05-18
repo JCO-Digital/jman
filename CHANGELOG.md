@@ -1,6 +1,23 @@
 # Changelog
 
-### 1.24.1 (2026-05-18)
+## 1.25.0 (2026-05-19)
+
+#### Features
+
+- store: optimize ignore lookup logic using computed index (06c22cd)
+- settings: add edit functionality for ignore rules (b46a964)
+- ignore: implement unified ignore management system (b191593)
+
+#### Bug Fixes
+
+- components: add domain-based lookup fallback for monitor history ignore status (af1d51c)
+
+#### Refactor
+
+- components: reorder script blocks for consistency (d325282)
+- sites: reorder reactive state declarations in SitesView (8c91278)
+
+### v1.24.1 (2026-05-18)
 
 #### Refactor
 
