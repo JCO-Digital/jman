@@ -191,11 +191,32 @@ export interface MonitorStatus {
 	status_message?: string;
 }
 
-export interface IgnoredSite {
-	domain: string;
+export type IgnoreType = "site" | "server" | "plugin" | "vulnerability";
+
+export interface IgnoreEntry {
+	id: number;
+	type: IgnoreType;
+	target: string;
 	reason: string;
+	negated_site_ids: number[] | null;
+	use_for_monitor: boolean;
+	use_for_vuln: boolean;
 	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
 }
+
+export interface CreateIgnorePayload {
+	type: IgnoreType;
+	target: string;
+	reason?: string;
+	negated_site_ids?: number[];
+	use_for_monitor?: boolean;
+	use_for_vuln?: boolean;
+}
+
+export type UpdateIgnorePayload = Partial<CreateIgnorePayload>;
 
 export interface EnrichedSite extends Site {
 	server: string;
