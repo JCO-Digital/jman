@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
+import { useIgnoreStore } from "../stores/ignore";
 import ViewHeader from "../components/ViewHeader.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -13,6 +14,11 @@ const props = defineProps<{
 
 const router = useRouter();
 const dataStore = useDataStore();
+const ignoreStore = useIgnoreStore();
+
+onMounted(() => {
+	ignoreStore.fetchIgnoreEntries();
+});
 
 const searchQuery = ref("");
 const sortKey = ref<
@@ -58,7 +64,27 @@ const handleSort = (
 };
 
 const uniquePlugins = computed(() => {
-	let filtered = [...dataStore.enrichedPlugins];
+	let filtered = dataStore.enrichedPlugins.map((p) => {
+		// Filter out ignored vulnerabilities
+		const vulns = p.vulnerabilities.filter((v) => {
+			return !ignoreStore.isIgnored({
+				pluginSlug: p.slug,
+				vulnUuid: v.vulnerability.uuid,
+				purpose: "vuln",
+			});
+		});
+
+		// Check if the plugin itself is ignored for vulnerabilities
+		const isPluginIgnored = ignoreStore.isIgnored({
+			pluginSlug: p.slug,
+			purpose: "vuln",
+		});
+
+		return {
+			...p,
+			vulnerabilities: isPluginIgnored ? [] : vulns,
+		};
+	});
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();

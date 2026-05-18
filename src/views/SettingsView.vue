@@ -5,7 +5,7 @@ import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
 import SettingsTabs from "../components/settings/SettingsTabs.vue";
 import GeneralSettings from "../components/settings/GeneralSettings.vue";
-import IgnoredDomains from "../components/settings/IgnoredDomains.vue";
+import IgnoreManager from "../components/settings/IgnoreManager.vue";
 import AccountSettings from "../components/settings/AccountSettings.vue";
 import UserManagement from "../components/settings/UserManagement.vue";
 
@@ -57,7 +57,7 @@ watch(
 
 			<div class="settings-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
-				<IgnoredDomains v-else-if="activeTab === 'ignored'" />
+				<IgnoreManager v-else-if="activeTab === 'ignored'" />
 				<AccountSettings v-else-if="activeTab === 'account'" />
 				<UserManagement
 					v-else-if="activeTab === 'users' && authStore.canAdmin"

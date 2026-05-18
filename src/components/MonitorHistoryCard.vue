@@ -3,21 +3,28 @@ import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import type { MonitorHistory } from "../types";
 import { useMonitorStore } from "../stores/monitor";
+import { useIgnoreStore } from "../stores/ignore";
 import LoadingSpinner from "./LoadingSpinner.vue";
 
 const props = defineProps<{
 	history: MonitorHistory[];
 	domain?: string;
+	siteId?: number;
+	serverId?: number;
 }>();
 
 const monitorStore = useMonitorStore();
+const ignoreStore = useIgnoreStore();
 
 const TOTAL_MINUTES = 1440; // 24 hours
 const MS_PER_MINUTE = 60000;
 
 const isIgnored = computed(() => {
-	if (!props.domain) return false;
-	return monitorStore.ignoredDomains.some((d) => d.domain === props.domain);
+	return ignoreStore.isIgnored({
+		siteId: props.siteId,
+		serverId: props.serverId,
+		purpose: "monitor",
+	});
 });
 
 const liveStatus = computed(() =>
