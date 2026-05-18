@@ -101,7 +101,6 @@ const siteInfoItems = computed(() => {
 				: `https://${site.value.domain}`,
 		},
 		{ label: "PHP Version", value: site.value.php_version },
-		{ label: "Public Folder", value: site.value.public_folder },
 		{ label: "WordPress", value: site.value.is_wordpress ? "Yes" : "No" },
 	];
 
