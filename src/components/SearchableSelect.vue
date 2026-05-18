@@ -24,14 +24,6 @@ const searchQuery = ref("");
 const containerRef = ref<HTMLElement | null>(null);
 const searchInput = ref<HTMLInputElement | null>(null);
 
-watch(isOpen, (newVal) => {
-	if (newVal) {
-		nextTick(() => {
-			searchInput.value?.focus();
-		});
-	}
-});
-
 const filteredOptions = computed(() => {
 	if (!searchQuery.value) return props.options;
 	const q = searchQuery.value.toLowerCase();
@@ -41,6 +33,14 @@ const filteredOptions = computed(() => {
 const selectedLabel = computed(() => {
 	const option = props.options.find((o) => o.value === props.modelValue);
 	return option ? option.label : "";
+});
+
+watch(isOpen, (newVal) => {
+	if (newVal) {
+		nextTick(() => {
+			searchInput.value?.focus();
+		});
+	}
 });
 
 const selectOption = (option: Option) => {
