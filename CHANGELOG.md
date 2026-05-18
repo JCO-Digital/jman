@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.25.0 (2026-05-19)
+## 1.26.0 (2026-05-19)
+
+#### Features
+
+- vulnerability: add copy to clipboard functionality for vulnerability UUIDs (63b3313)
+
+## v1.25.0 (2026-05-19)
 
 #### Features
 
