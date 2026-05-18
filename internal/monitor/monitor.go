@@ -60,6 +60,12 @@ func RunOnce() error {
 		return err
 	}
 
+	// Fetch ignored domains
+	ignoreMatcher, err := db.NewMonitorIgnoreMatcher()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites from database: %v\n", err)
+	}
+
 	verb.LogPrintf(verb.Normal, "Monitoring %d sites (one-off mode)...\n", len(sites))
 
 	var wg sync.WaitGroup
@@ -71,11 +77,7 @@ func RunOnce() error {
 	for _, site := range sites {
 		activeDomains[site.Domain] = true
 
-		ignored, err := db.IsSiteIgnoredForMonitor(site.ID, site.ServerID)
-		if err != nil {
-			verb.LogPrintf(verb.Normal, "Warning: failed to check if site %s is ignored: %v\n", site.Domain, err)
-		}
-		if ignored {
+		if ignoreMatcher != nil && ignoreMatcher.IsIgnored(site.ID, site.ServerID) {
 			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}

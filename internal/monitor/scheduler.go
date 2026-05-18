@@ -90,14 +90,16 @@ func (s *Scheduler) Run(ctx context.Context) error {
 				continue
 			}
 
+			// Load ignore list once per tick for efficient O(n) checks
+			ignoreMatcher, err := db.NewMonitorIgnoreMatcher()
+			if err != nil {
+				verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
+			}
+
 			now := time.Now()
 			s.state.Mu.RLock()
 			for _, status := range s.state.Sites {
-				ignored, err := db.IsSiteIgnoredForMonitor(status.ID, status.ServerID)
-				if err != nil {
-					verb.LogPrintf(verb.Normal, "Warning: failed to check ignore status for %s: %v\n", status.Domain, err)
-				}
-				if ignored {
+				if ignoreMatcher != nil && ignoreMatcher.IsIgnored(status.ID, status.ServerID) {
 					continue
 				}
 

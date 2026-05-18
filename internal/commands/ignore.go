@@ -102,6 +102,9 @@ Identifier:
 	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		entryType := strings.ToLower(args[0])
+		if entryType == "vuln" {
+			entryType = "vulnerability"
+		}
 		identifier := args[1]
 		reason := ""
 		if len(args) > 2 {

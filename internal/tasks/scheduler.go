@@ -54,8 +54,13 @@ func runTick() {
 
 // syncVulnerabilities checks for vulnerabilities and updates or creates tasks accordingly.
 func syncVulnerabilities() error {
+	matcher, err := db.NewVulnIgnoreMatcher()
+	if err != nil {
+		log.Printf("Warning: failed to load ignore entries: %v", err)
+	}
+
 	// Build the site-centric vulnerability map using existing logic
-	reports, err := vuln.ProcessVulnerabilities()
+	reports, err := vuln.ProcessVulnerabilities(matcher)
 	if err != nil {
 		return err
 	}
