@@ -19,13 +19,6 @@ const showAddForm = ref(false);
 const editingEntryId = ref<number | null>(null);
 const negatedSitesSearch = ref("");
 
-const isSubmitDisabled = computed(() => {
-	if (!newEntry.value.target) return true;
-	if (!newEntry.value.use_for_monitor && !newEntry.value.use_for_vuln)
-		return true;
-	return isSubmitting.value;
-});
-
 const newEntry = ref<CreateIgnorePayload>({
 	type: "site",
 	target: "",
@@ -35,46 +28,12 @@ const newEntry = ref<CreateIgnorePayload>({
 	negated_site_ids: [],
 });
 
-const resetForm = () => {
-	newEntry.value = {
-		type: "site",
-		target: "",
-		reason: "",
-		use_for_monitor: true,
-		use_for_vuln: true,
-		negated_site_ids: [],
-	};
-	showAddForm.value = false;
-	editingEntryId.value = null;
-	negatedSitesSearch.value = "";
-};
-
-onMounted(() => {
-	ignoreStore.fetchIgnoreEntries();
-	dataStore.initData();
+const isSubmitDisabled = computed(() => {
+	if (!newEntry.value.target) return true;
+	if (!newEntry.value.use_for_monitor && !newEntry.value.use_for_vuln)
+		return true;
+	return isSubmitting.value;
 });
-
-watch(
-	() => [newEntry.value.type, newEntry.value.target],
-	(newVal, oldVal) => {
-		// Only clear if we are not in edit mode
-		// and the values actually changed (not just initialization)
-		if (editingEntryId.value) return;
-		if (oldVal && newVal[0] === oldVal[0] && newVal[1] === oldVal[1])
-			return;
-
-		newEntry.value.negated_site_ids = [];
-		negatedSitesSearch.value = "";
-
-		// Disable monitor if type is plugin or vulnerability
-		if (
-			newEntry.value.type === "plugin" ||
-			newEntry.value.type === "vulnerability"
-		) {
-			newEntry.value.use_for_monitor = false;
-		}
-	},
-);
 
 const sortedSites = computed(() => {
 	return [...dataStore.sites].sort((a, b) =>
@@ -140,6 +99,47 @@ const selectedNegatedSites = computed(() => {
 		.filter((s): s is any => !!s)
 		.sort((a, b) => a.domain.localeCompare(b.domain));
 });
+
+const resetForm = () => {
+	newEntry.value = {
+		type: "site",
+		target: "",
+		reason: "",
+		use_for_monitor: true,
+		use_for_vuln: true,
+		negated_site_ids: [],
+	};
+	showAddForm.value = false;
+	editingEntryId.value = null;
+	negatedSitesSearch.value = "";
+};
+
+onMounted(() => {
+	ignoreStore.fetchIgnoreEntries();
+	dataStore.initData();
+});
+
+watch(
+	() => [newEntry.value.type, newEntry.value.target],
+	(newVal, oldVal) => {
+		// Only clear if we are not in edit mode
+		// and the values actually changed (not just initialization)
+		if (editingEntryId.value) return;
+		if (oldVal && newVal[0] === oldVal[0] && newVal[1] === oldVal[1])
+			return;
+
+		newEntry.value.negated_site_ids = [];
+		negatedSitesSearch.value = "";
+
+		// Disable monitor if type is plugin or vulnerability
+		if (
+			newEntry.value.type === "plugin" ||
+			newEntry.value.type === "vulnerability"
+		) {
+			newEntry.value.use_for_monitor = false;
+		}
+	},
+);
 
 const toggleNegatedSite = (id: number) => {
 	if (!newEntry.value.negated_site_ids) {
