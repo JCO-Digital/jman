@@ -1,4 +1,4 @@
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import type {
 	IgnoreEntry,
@@ -14,6 +14,45 @@ export const useIgnoreStore = defineStore("ignore", () => {
 	const ignoreEntries = ref<IgnoreEntry[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
+
+	const ignoreLookups = computed(() => {
+		const monitor = {
+			sites: new Set<string>(),
+			servers: new Map<string, Set<number>>(),
+		};
+		const vuln = {
+			sites: new Set<string>(),
+			servers: new Map<string, Set<number>>(),
+			plugins: new Set<string>(),
+			vulnerabilities: new Set<string>(),
+		};
+
+		for (const entry of ignoreEntries.value) {
+			if (entry.use_for_monitor) {
+				if (entry.type === "site") monitor.sites.add(entry.target);
+				else if (entry.type === "server") {
+					monitor.servers.set(
+						entry.target,
+						new Set(entry.negated_site_ids || []),
+					);
+				}
+			}
+			if (entry.use_for_vuln) {
+				if (entry.type === "site") vuln.sites.add(entry.target);
+				else if (entry.type === "server") {
+					vuln.servers.set(
+						entry.target,
+						new Set(entry.negated_site_ids || []),
+					);
+				} else if (entry.type === "plugin")
+					vuln.plugins.add(entry.target);
+				else if (entry.type === "vulnerability")
+					vuln.vulnerabilities.add(entry.target);
+			}
+		}
+
+		return { monitor, vuln };
+	});
 
 	async function fetchIgnoreEntries(type?: string) {
 		isLoading.value = true;
@@ -137,52 +176,50 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		vulnUuid?: string;
 		purpose: "monitor" | "vuln";
 	}): boolean {
-		const entries = ignoreEntries.value;
+		const lookups = ignoreLookups.value[params.purpose];
 
-		return entries.some((entry) => {
-			// Check purpose
-			if (params.purpose === "monitor" && !entry.use_for_monitor)
-				return false;
-			if (params.purpose === "vuln" && !entry.use_for_vuln) return false;
+		// Site match
+		if (
+			params.siteId !== undefined &&
+			lookups.sites.has(params.siteId.toString())
+		) {
+			return true;
+		}
 
-			// Site match
-			if (entry.type === "site" && params.siteId !== undefined) {
-				if (entry.target === params.siteId.toString()) return true;
-			}
-
-			// Server match
-			if (entry.type === "server" && params.serverId !== undefined) {
-				if (entry.target === params.serverId.toString()) {
-					// Check for negation
-					if (params.siteId !== undefined && entry.negated_site_ids) {
-						if (entry.negated_site_ids.includes(params.siteId)) {
-							return false; // Negated, so NOT ignored
-						}
-					}
-					return true;
+		// Server match
+		if (params.serverId !== undefined) {
+			const serverIdStr = params.serverId.toString();
+			const negatedSites = lookups.servers.get(serverIdStr);
+			if (negatedSites) {
+				if (
+					params.siteId !== undefined &&
+					negatedSites.has(params.siteId)
+				) {
+					return false;
 				}
+				return true;
 			}
+		}
 
-			// Plugin match (vuln only)
+		if (params.purpose === "vuln") {
+			const vLookups = lookups as any;
+			// Plugin match
 			if (
-				params.purpose === "vuln" &&
-				entry.type === "plugin" &&
-				params.pluginSlug !== undefined
+				params.pluginSlug !== undefined &&
+				vLookups.plugins.has(params.pluginSlug)
 			) {
-				if (entry.target === params.pluginSlug) return true;
+				return true;
 			}
-
-			// Vulnerability match (vuln only)
+			// Vulnerability match
 			if (
-				params.purpose === "vuln" &&
-				entry.type === "vulnerability" &&
-				params.vulnUuid !== undefined
+				params.vulnUuid !== undefined &&
+				vLookups.vulnerabilities.has(params.vulnUuid)
 			) {
-				if (entry.target === params.vulnUuid) return true;
+				return true;
 			}
+		}
 
-			return false;
-		});
+		return false;
 	}
 
 	return {
