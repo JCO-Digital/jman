@@ -48,6 +48,9 @@ func CreateIgnoreEntryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Force creation of a new entry by ignoring any ID provided in the body.
+	entry.ID = 0
+
 	claims := GetAuthClaims(r.Context())
 	username := "api"
 	if claims != nil {
