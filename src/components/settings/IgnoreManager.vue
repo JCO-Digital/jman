@@ -4,6 +4,7 @@ import { useIgnoreStore } from "../../stores/ignore";
 import { useDataStore } from "../../stores/data";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
+import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import SearchableSelect from "../SearchableSelect.vue";
 import type { IgnoreType, CreateIgnorePayload } from "../../types";
@@ -15,6 +16,7 @@ const toast = useToastStore();
 
 const isSubmitting = ref(false);
 const showAddForm = ref(false);
+const editingEntryId = ref<number | null>(null);
 const negatedSitesSearch = ref("");
 
 const isSubmitDisabled = computed(() => {
@@ -33,6 +35,20 @@ const newEntry = ref<CreateIgnorePayload>({
 	negated_site_ids: [],
 });
 
+const resetForm = () => {
+	newEntry.value = {
+		type: "site",
+		target: "",
+		reason: "",
+		use_for_monitor: true,
+		use_for_vuln: true,
+		negated_site_ids: [],
+	};
+	showAddForm.value = false;
+	editingEntryId.value = null;
+	negatedSitesSearch.value = "";
+};
+
 onMounted(() => {
 	ignoreStore.fetchIgnoreEntries();
 	dataStore.initData();
@@ -40,7 +56,13 @@ onMounted(() => {
 
 watch(
 	() => [newEntry.value.type, newEntry.value.target],
-	() => {
+	(newVal, oldVal) => {
+		// Only clear if we are not in edit mode
+		// and the values actually changed (not just initialization)
+		if (editingEntryId.value) return;
+		if (oldVal && newVal[0] === oldVal[0] && newVal[1] === oldVal[1])
+			return;
+
 		newEntry.value.negated_site_ids = [];
 		negatedSitesSearch.value = "";
 
@@ -94,34 +116,81 @@ const sitesOnSelectedServer = computed(() => {
 });
 
 const filteredNegatedSites = computed(() => {
-	if (!negatedSitesSearch.value) return sitesOnSelectedServer.value;
+	let available = sitesOnSelectedServer.value;
+
+	// Filter out already selected sites
+	if (
+		newEntry.value.negated_site_ids &&
+		newEntry.value.negated_site_ids.length > 0
+	) {
+		available = available.filter(
+			(s) => !newEntry.value.negated_site_ids?.includes(s.id),
+		);
+	}
+
+	if (!negatedSitesSearch.value) return available;
 	const q = negatedSitesSearch.value.toLowerCase();
-	return sitesOnSelectedServer.value.filter((s) =>
-		s.domain.toLowerCase().includes(q),
-	);
+	return available.filter((s) => s.domain.toLowerCase().includes(q));
 });
+
+const selectedNegatedSites = computed(() => {
+	if (!newEntry.value.negated_site_ids) return [];
+	return newEntry.value.negated_site_ids
+		.map((id) => dataStore.getSiteById(id))
+		.filter((s): s is any => !!s)
+		.sort((a, b) => a.domain.localeCompare(b.domain));
+});
+
+const toggleNegatedSite = (id: number) => {
+	if (!newEntry.value.negated_site_ids) {
+		newEntry.value.negated_site_ids = [id];
+		return;
+	}
+	const index = newEntry.value.negated_site_ids.indexOf(id);
+	if (index === -1) {
+		newEntry.value.negated_site_ids.push(id);
+	} else {
+		newEntry.value.negated_site_ids.splice(index, 1);
+	}
+};
 
 const handleAddEntry = async () => {
 	if (!newEntry.value.target) return;
 
 	isSubmitting.value = true;
 	try {
-		await ignoreStore.addIgnoreEntry(newEntry.value);
-		newEntry.value = {
-			type: "site",
-			target: "",
-			reason: "",
-			use_for_monitor: true,
-			use_for_vuln: true,
-			negated_site_ids: [],
-		};
-		showAddForm.value = false;
-		toast.addToast("Ignore entry added", "success");
+		if (editingEntryId.value) {
+			await ignoreStore.updateIgnoreEntry(
+				editingEntryId.value,
+				newEntry.value,
+			);
+			toast.addToast("Ignore entry updated", "success");
+		} else {
+			await ignoreStore.addIgnoreEntry(newEntry.value);
+			toast.addToast("Ignore entry added", "success");
+		}
+		resetForm();
 	} catch (e: any) {
-		toast.addToast(e.message || "Failed to add ignore entry", "error");
+		toast.addToast(e.message || "Failed to save ignore entry", "error");
 	} finally {
 		isSubmitting.value = false;
 	}
+};
+
+const handleEditEntry = (entry: any) => {
+	editingEntryId.value = entry.id;
+	newEntry.value = {
+		type: entry.type,
+		target: entry.target,
+		reason: entry.reason,
+		use_for_monitor: entry.use_for_monitor,
+		use_for_vuln: entry.use_for_vuln,
+		negated_site_ids: entry.negated_site_ids
+			? [...entry.negated_site_ids]
+			: [],
+	};
+	showAddForm.value = true;
+	window.scrollTo({ top: 0, behavior: "smooth" });
 };
 
 const handleRemoveEntry = async (id: number) => {
@@ -167,20 +236,24 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 		<!-- Add form -->
 		<div v-if="showAddForm" class="card-muted mb-4">
 			<div class="flex-row justify-between items-center mb-3">
-				<h3 class="font-medium">Add New Ignore Rule</h3>
-				<button
-					class="btn btn-text btn-sm"
-					@click="showAddForm = false"
-				>
-					Cancel
-				</button>
+				<h3 class="font-medium">
+					{{
+						editingEntryId
+							? "Edit Ignore Rule"
+							: "Add New Ignore Rule"
+					}}
+				</h3>
 			</div>
 
 			<form @submit.prevent="handleAddEntry">
 				<div class="grid-2-cols gap-4">
 					<div class="form-group">
 						<label>Type</label>
-						<select v-model="newEntry.type" class="w-full">
+						<select
+							v-model="newEntry.type"
+							class="w-full"
+							:disabled="!!editingEntryId"
+						>
 							<option value="site">Site</option>
 							<option value="server">Server</option>
 							<option value="plugin">Plugin (slug)</option>
@@ -197,18 +270,21 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 							v-model="newEntry.target"
 							:options="siteOptions"
 							placeholder="Select Site"
+							:disabled="!!editingEntryId"
 						/>
 						<SearchableSelect
 							v-else-if="newEntry.type === 'server'"
 							v-model="newEntry.target"
 							:options="serverOptions"
 							placeholder="Select Server"
+							:disabled="!!editingEntryId"
 						/>
 						<SearchableSelect
 							v-else-if="newEntry.type === 'plugin'"
 							v-model="newEntry.target"
 							:options="pluginOptions"
 							placeholder="Select Plugin"
+							:disabled="!!editingEntryId"
 						/>
 						<input
 							v-else
@@ -217,6 +293,7 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 							placeholder="slug or UUID"
 							required
 							class="w-full"
+							:disabled="!!editingEntryId"
 						/>
 					</div>
 
@@ -235,35 +312,55 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 						class="form-group col-span-2"
 					>
 						<label>Negated Site IDs (Sites to NOT ignore)</label>
+
+						<!-- Selected Pills -->
+						<div
+							v-if="selectedNegatedSites.length > 0"
+							class="flex-row flex-wrap gap-2 mb-3"
+						>
+							<div
+								v-for="site in selectedNegatedSites"
+								:key="site.id"
+								class="site-pill"
+								@click="toggleNegatedSite(site.id)"
+							>
+								<span>{{ site.domain }}</span>
+								<AppIcon name="x" size="12" />
+							</div>
+						</div>
+
 						<div class="mb-2">
 							<input
 								v-model="negatedSitesSearch"
 								type="text"
-								placeholder="Filter sites..."
+								placeholder="Search sites to add..."
 								class="w-full font-sm"
 							/>
 						</div>
 						<div class="checkbox-list">
-							<label
+							<div
 								v-for="site in filteredNegatedSites"
 								:key="site.id"
 								class="checkbox-item"
+								@click="toggleNegatedSite(site.id)"
 							>
-								<input
-									v-model="newEntry.negated_site_ids"
-									type="checkbox"
-									:value="site.id"
+								<AppIcon
+									name="plus-circle"
+									size="14"
+									class="text-primary opacity-50"
 								/>
 								<span class="font-sm">{{ site.domain }}</span>
-							</label>
+							</div>
 							<div
 								v-if="filteredNegatedSites.length === 0"
-								class="text-muted font-xs p-2"
+								class="text-muted font-xs p-2 text-center"
 							>
 								{{
 									sitesOnSelectedServer.length === 0
 										? "No sites on this server."
-										: "No matches found."
+										: negatedSitesSearch
+											? "No matches found."
+											: "All sites on this server are negated."
 								}}
 							</div>
 						</div>
@@ -311,13 +408,26 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 					</div>
 				</div>
 
-				<div class="mt-6 text-right">
+				<div class="mt-6 flex-row justify-end gap-3">
+					<button
+						type="button"
+						class="btn btn-outline"
+						@click="resetForm"
+					>
+						Cancel
+					</button>
 					<button
 						type="submit"
 						class="btn btn-primary"
 						:disabled="isSubmitDisabled"
 					>
-						{{ isSubmitting ? "Adding..." : "Add Entry" }}
+						{{
+							isSubmitting
+								? "Saving..."
+								: editingEntryId
+									? "Update Entry"
+									: "Add Entry"
+						}}
 					</button>
 				</div>
 			</form>
@@ -390,12 +500,22 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 							{{ entry.reason || "—" }}
 						</td>
 						<td v-if="authStore.canEdit" class="text-right">
-							<button
-								class="btn btn-text danger"
-								@click="handleRemoveEntry(entry.id)"
-							>
-								Remove
-							</button>
+							<div class="flex-row justify-end gap-2">
+								<button
+									class="icon-btn"
+									title="Edit Entry"
+									@click="handleEditEntry(entry)"
+								>
+									<AppIcon name="edit" size="18" />
+								</button>
+								<button
+									class="icon-btn danger"
+									title="Remove Entry"
+									@click="handleRemoveEntry(entry.id)"
+								>
+									<AppIcon name="trash" size="18" />
+								</button>
+							</div>
 						</td>
 					</tr>
 				</tbody>
@@ -446,5 +566,27 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 
 .w-full {
 	width: 100%;
+}
+
+.flex-wrap {
+	flex-wrap: wrap;
+}
+
+.site-pill {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 10px;
+	background-color: var(--primary);
+	color: var(--primary-text);
+	border-radius: 16px;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: opacity 0.2s;
+
+	&:hover {
+		opacity: 0.8;
+	}
 }
 </style>
