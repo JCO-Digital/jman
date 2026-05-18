@@ -55,11 +55,11 @@ func setupTestUsersConfig(t *testing.T) (*config.UsersConfig, string) {
 	return cfg, tempDir
 }
 
-func TestAdminListUsersHandler(t *testing.T) {
+func TestListUsersHandler(t *testing.T) {
 	cfg, tempDir := setupTestUsersConfig(t)
 	defer os.RemoveAll(tempDir)
 
-	handler := AdminListUsersHandler(cfg)
+	handler := ListUsersHandler(cfg)
 	req := httptest.NewRequest("GET", "/api/users", nil)
 	w := httptest.NewRecorder()
 
