@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.13.0 (2026-05-18)
+### 5.13.1 (2026-05-18)
+
+#### Documentation
+
+- tasks: add task system specification documentation (82a9790)
+
+## v5.13.0 (2026-05-18)
 
 #### Features
 
