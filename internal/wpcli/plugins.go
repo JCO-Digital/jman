@@ -101,6 +101,15 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 
 	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, args...)
 	if err != nil {
+		// If the error message from RunWP is a specific WP-CLI error, return it
+		// without the full stderr blob to avoid noise from PHP warnings/notices.
+		if strings.HasPrefix(err.Error(), "Error:") || strings.HasPrefix(err.Error(), "Fatal error:") {
+			// For the specific "No plugins updated" failure, return a clean message.
+			if strings.Contains(err.Error(), "No plugins updated (1 failed)") {
+				return nil, fmt.Errorf("failed to update plugin")
+			}
+			return nil, fmt.Errorf("failed to update plugin: %w", err)
+		}
 		return nil, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 	}
 

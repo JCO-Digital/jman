@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -246,7 +247,14 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update plugin: %v", err))
+		msg := err.Error()
+		if msg == "" || msg == "failed to update plugin" || strings.Contains(msg, "(stderr:") {
+			WriteError(w, http.StatusInternalServerError, "Failed to update plugin")
+		} else {
+			// Capitalize first letter
+			formattedMsg := strings.ToUpper(msg[:1]) + msg[1:]
+			WriteError(w, http.StatusInternalServerError, formattedMsg)
+		}
 		return
 	}
 
