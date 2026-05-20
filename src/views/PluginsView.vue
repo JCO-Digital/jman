@@ -66,23 +66,25 @@ const handleSort = (
 const uniquePlugins = computed(() => {
 	let filtered = dataStore.enrichedPlugins.map((p) => {
 		// Filter out ignored vulnerabilities
-		const vulns = p.vulnerabilities.filter((v) => {
-			return !ignoreStore.isIgnored({
-				pluginSlug: p.slug,
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
+		const vulns = p.vulnerabilities
+			.filter((v) => {
+				return !ignoreStore.isIgnored({
+					vulnUuid: v.vulnerability.uuid,
+					purpose: "vuln",
+				});
+			})
+			.map((v) => {
+				// Check if the plugin itself is ignored for vulnerabilities
+				const isSuppressed = ignoreStore.isIgnored({
+					pluginSlug: p.slug,
+					purpose: "vuln",
+				});
+				return { ...v, isSuppressed };
 			});
-		});
-
-		// Check if the plugin itself is ignored for vulnerabilities
-		const isPluginIgnored = ignoreStore.isIgnored({
-			pluginSlug: p.slug,
-			purpose: "vuln",
-		});
 
 		return {
 			...p,
-			vulnerabilities: isPluginIgnored ? [] : vulns,
+			vulnerabilities: vulns,
 		};
 	});
 
@@ -258,7 +260,14 @@ const goToPlugin = (name: string) => {
 						<td>
 							<span
 								v-if="plugin.vulnerabilities.length > 0"
-								class="status-badge error"
+								class="status-badge"
+								:class="
+									plugin.vulnerabilities.every(
+										(v) => v.isSuppressed,
+									)
+										? 'warning'
+										: 'error'
+								"
 								title="Vulnerabilities detected"
 							>
 								{{ plugin.vulnerabilities.length }}

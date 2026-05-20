@@ -82,7 +82,7 @@ const sitePlugins = computed(() => {
 	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
 
 	// Check if site or server is ignored for vulnerabilities
-	const isSiteVulnIgnored = site.value
+	const isSiteLevelIgnored = site.value
 		? ignoreStore.isIgnored({
 				siteId: site.value.id,
 				serverId: site.value.server_id,
@@ -91,33 +91,31 @@ const sitePlugins = computed(() => {
 		: false;
 
 	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
-		if (isSiteVulnIgnored) {
-			return { ...plugin, vulnerabilities: [] };
-		}
-
 		// Check if this specific plugin is ignored for vulnerabilities
 		const isPluginIgnored = ignoreStore.isIgnored({
 			pluginSlug: plugin.name,
 			purpose: "vuln",
 		});
 
-		if (isPluginIgnored) {
-			return { ...plugin, vulnerabilities: [] };
-		}
+		const vulns = siteVulns
+			.filter((v) => {
+				if (v.slug !== plugin.name) return false;
 
-		const vulns = siteVulns.filter((v) => {
-			if (v.slug !== plugin.name) return false;
-
-			// Check if this specific vulnerability UUID is ignored
-			return !ignoreStore.isIgnored({
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
-			});
-		});
+				// ALWAYS filter out if this specific vulnerability UUID is ignored
+				return !ignoreStore.isIgnored({
+					vulnUuid: v.vulnerability.uuid,
+					purpose: "vuln",
+				});
+			})
+			.map((v) => ({
+				...v,
+				isSuppressed: isSiteLevelIgnored || isPluginIgnored,
+			}));
 
 		return {
 			...plugin,
 			vulnerabilities: vulns,
+			isSuppressed: isSiteLevelIgnored || isPluginIgnored,
 		};
 	});
 });
@@ -425,8 +423,13 @@ const unlinkOrganization = async () => {
 								<td>
 									<span
 										v-if="plugin.vulnerabilities.length > 0"
-										class="status-badge error badge-sm"
-										:title="`${plugin.vulnerabilities.length} vulnerabilities detected`"
+										class="status-badge badge-sm"
+										:class="
+											plugin.isSuppressed
+												? 'warning'
+												: 'error'
+										"
+										:title="`${plugin.vulnerabilities.length} vulnerabilities detected${plugin.isSuppressed ? ' (Suppressed)' : ''}`"
 									>
 										{{ plugin.vulnerabilities.length }}
 									</span>

@@ -62,16 +62,24 @@ const handleSort = (key: keyof EnrichedSite) => {
 
 const filteredAndSortedSites = computed(() => {
 	let result = dataStore.enrichedSites.map((site) => {
-		// Filter out ignored vulnerabilities
-		const vulns = site.vulnerabilities.filter((v) => {
-			return !ignoreStore.isIgnored({
-				siteId: site.id,
-				serverId: site.server_id,
-				pluginSlug: v.slug,
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
+		// Filter out specifically ignored vulnerability UUIDs
+		const vulns = site.vulnerabilities
+			.filter((v) => {
+				return !ignoreStore.isIgnored({
+					vulnUuid: v.vulnerability.uuid,
+					purpose: "vuln",
+				});
+			})
+			.map((v) => {
+				// Check if it's suppressed (ignored via site, server, or plugin)
+				const isSuppressed = ignoreStore.isIgnored({
+					siteId: site.id,
+					serverId: site.server_id,
+					pluginSlug: v.slug,
+					purpose: "vuln",
+				});
+				return { ...v, isSuppressed };
 			});
-		});
 
 		return {
 			...site,
@@ -241,8 +249,21 @@ const goToSite = (id: number) => {
 						<td>
 							<span
 								v-if="site.vulnerabilities.length > 0"
-								class="status-badge error"
-								title="Vulnerabilities detected"
+								class="status-badge"
+								:class="
+									site.vulnerabilities.every(
+										(v) => v.isSuppressed,
+									)
+										? 'warning'
+										: 'error'
+								"
+								:title="
+									site.vulnerabilities.every(
+										(v) => v.isSuppressed,
+									)
+										? 'All vulnerabilities are suppressed via ignore rules'
+										: `${site.vulnerabilities.length} vulnerabilities detected`
+								"
 							>
 								{{ site.vulnerabilities.length }}
 							</span>
