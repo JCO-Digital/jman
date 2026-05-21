@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.26.0 (2026-05-19)
+## 1.27.0 (2026-05-21)
+
+#### Features
+
+- style: add table column width and text alignment utility classes (4e9e16e)
+- vulnerability: implement suppression status for ignored vulnerabilities (94f0e3b)
+
+#### Bug Fixes
+
+- vulnerability: exclude suppressed vulnerabilities from display and data processing (6493610)
+- task: improve task filtering and vulnerability suppression naming (119ae13)
+
+#### Refactor
+
+- data: use backend-provided suppression status for vulnerabilities (e587d3c)
+
+## v1.26.0 (2026-05-19)
 
 #### Features
 
