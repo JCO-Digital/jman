@@ -97,8 +97,21 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const activeVulnerabilities = computed(() => {
-		// API already filters out specifically hidden (UUID) vulnerabilities
-		return vulnerabilities.value;
+		// Filter out vulnerabilities that are suppressed at the plugin level
+		// and only count sites where the vulnerability is not suppressed at the site/server level.
+		const active = [];
+		for (const v of vulnerabilities.value) {
+			if (v.suppressed) continue;
+
+			const activeSites = v.sites.filter((s) => !s.suppressed);
+			if (activeSites.length > 0) {
+				active.push({
+					...v,
+					sites: activeSites,
+				});
+			}
+		}
+		return active;
 	});
 
 	// Getters
