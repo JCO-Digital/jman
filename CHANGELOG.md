@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.14.0 (2026-05-18)
+## 5.15.0 (2026-05-21)
+
+#### Features
+
+- api: add granular vulnerability suppression logic and documentation (d1e6443)
+
+#### Bug Fixes
+
+- api: stop forcing capitalization on plugin update error messages (254bd34)
+- api: clean up plugin update error messages (1db7337)
+
+## v5.14.0 (2026-05-18)
 
 #### Features
 
