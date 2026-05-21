@@ -255,6 +255,47 @@
 	}
 }
 
+/* Table Column Utilities */
+.col-narrow {
+	width: 90px;
+	min-width: 90px;
+	max-width: 90px;
+}
+.col-version {
+	width: 120px;
+	min-width: 120px;
+	max-width: 120px;
+}
+.col-medium {
+	width: 180px;
+	min-width: 180px;
+	max-width: 180px;
+}
+.col-wide {
+	width: 240px;
+	min-width: 240px;
+	max-width: 240px;
+}
+.col-expand {
+	width: 100%;
+}
+.col-expand.truncate {
+	max-width: 0;
+}
+
+.text-center {
+	text-align: center !important;
+}
+.text-right {
+	text-align: right !important;
+}
+
+.truncate {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
 /* Badges */
 .status-badge {
 	display: inline-flex;
