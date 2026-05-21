@@ -252,9 +252,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		if msg == "" || msg == "failed to update plugin" || strings.Contains(msg, "(stderr:") {
 			WriteError(w, http.StatusInternalServerError, "Failed to update plugin")
 		} else {
-			// Capitalize first letter
-			formattedMsg := strings.ToUpper(msg[:1]) + msg[1:]
-			WriteError(w, http.StatusInternalServerError, formattedMsg)
+			WriteError(w, http.StatusInternalServerError, msg)
 		}
 		return
 	}
