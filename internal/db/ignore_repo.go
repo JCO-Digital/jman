@@ -256,15 +256,12 @@ func (m *VulnIgnoreMatcher) IsSiteIgnored(siteID, serverID int) bool {
 	return false
 }
 
-// IsVulnerabilityIgnored checks if a specific vulnerability should be ignored.
-func (m *VulnIgnoreMatcher) IsVulnerabilityIgnored(siteID, serverID int, pluginSlug, vulnUUID string) bool {
-	if m.vulnerabilityIgnores[vulnUUID] {
-		return true
-	}
+// IsVulnerabilityUUIDIgnored checks if a specific vulnerability UUID is ignored.
+func (m *VulnIgnoreMatcher) IsVulnerabilityUUIDIgnored(vulnUUID string) bool {
+	return m.vulnerabilityIgnores[vulnUUID]
+}
 
-	if pluginSlug != "" && m.pluginIgnores[pluginSlug] {
-		return true
-	}
-
-	return m.IsSiteIgnored(siteID, serverID)
+// IsPluginIgnored checks if a plugin is ignored for vulnerabilities.
+func (m *VulnIgnoreMatcher) IsPluginIgnored(pluginSlug string) bool {
+	return m.pluginIgnores[pluginSlug]
 }
