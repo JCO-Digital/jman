@@ -63,7 +63,7 @@ const sitesWithPlugin = computed(() => {
 				);
 				if (
 					siteVulns.length > 0 &&
-					siteVulns.every((v) => v.isSuppressed)
+					siteVulns.every((v) => v.suppressed)
 				) {
 					isSuppressed = true;
 				}
