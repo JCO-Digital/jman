@@ -170,7 +170,7 @@ const goToPlugin = (name: string) => {
 							}}</span>
 						</th>
 						<th
-							class="hide-mobile col-medium"
+							class="hide-mobile col-wide"
 							@click="handleSort('author')"
 						>
 							Author
@@ -247,7 +247,7 @@ const goToPlugin = (name: string) => {
 						<td class="hide-mobile col-version truncate">
 							{{ plugin.version }}
 						</td>
-						<td class="hide-mobile col-medium truncate">
+						<td class="hide-mobile col-wide truncate">
 							{{ plugin.author }}
 						</td>
 						<td class="col-narrow text-center">
@@ -259,7 +259,7 @@ const goToPlugin = (name: string) => {
 								class="status-badge"
 								:class="
 									plugin.vulnerabilities.every(
-										(v) => v.isSuppressed,
+										(v) => v.suppressed,
 									)
 										? 'warning'
 										: 'error'

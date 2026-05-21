@@ -91,8 +91,7 @@ const sitePlugins = computed(() => {
 		return {
 			...plugin,
 			vulnerabilities: vulns,
-			isSuppressed:
-				vulns.length > 0 && vulns.every((v) => v.isSuppressed),
+			isSuppressed: vulns.length > 0 && vulns.every((v) => v.suppressed),
 		};
 	});
 });

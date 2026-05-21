@@ -157,7 +157,7 @@ const goToSite = (id: number) => {
 							}}</span>
 						</th>
 						<th
-							class="hide-mobile col-medium"
+							class="hide-mobile col-wide"
 							@click="handleSort('server')"
 						>
 							Server
@@ -225,7 +225,7 @@ const goToSite = (id: number) => {
 						<td class="font-medium truncate col-expand">
 							{{ site.domain }}
 						</td>
-						<td class="hide-mobile col-medium truncate">
+						<td class="hide-mobile col-wide truncate">
 							{{ site.server }}
 						</td>
 						<td class="col-narrow text-center">
@@ -241,14 +241,14 @@ const goToSite = (id: number) => {
 								class="status-badge"
 								:class="
 									site.vulnerabilities.every(
-										(v) => v.isSuppressed,
+										(v) => v.suppressed,
 									)
 										? 'warning'
 										: 'error'
 								"
 								:title="
 									site.vulnerabilities.every(
-										(v) => v.isSuppressed,
+										(v) => v.suppressed,
 									)
 										? 'All vulnerabilities are suppressed via ignore rules'
 										: `${site.vulnerabilities.length} vulnerabilities detected`
