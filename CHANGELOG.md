@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.27.0 (2026-05-21)
+### 1.27.1 (2026-05-21)
+
+#### Styles
+
+- components: remove text-transform from badge-sm (d73b4c9)
+
+## v1.27.0 (2026-05-21)
 
 #### Features
 
