@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useDataStore } from "../stores/data";
+import { useIgnoreStore } from "../stores/ignore";
 import { useAssetStore } from "../stores/assetStore";
 import { useAuthStore } from "../stores/auth";
 import { useTaskStore } from "../stores/tasks";
@@ -12,6 +13,7 @@ import VulnerabilityWidget from "../components/VulnerabilityWidget.vue";
 import TaskInfoModal from "../components/TaskInfoModal.vue";
 
 const dataStore = useDataStore();
+const ignoreStore = useIgnoreStore();
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
 const taskStore = useTaskStore();
@@ -105,6 +107,8 @@ const loadRenewals = async () => {
 };
 
 onMounted(() => {
+	dataStore.initData();
+	ignoreStore.fetchIgnoreEntries();
 	loadRenewals();
 	loadReminderTasks();
 });
@@ -145,10 +149,12 @@ const formatDate = (dateString: string | null) => {
 
 			<StatCard
 				title="Vulnerabilities"
-				:value="dataStore.vulnerabilities.length"
+				:value="dataStore.activeVulnerabilities.length"
 				label="Active vulnerabilities detected"
 				:loading="dataStore.isVulnsLoading"
-				:class="{ 'error-text': dataStore.vulnerabilities.length > 0 }"
+				:class="{
+					'error-text': dataStore.activeVulnerabilities.length > 0,
+				}"
 			/>
 		</main>
 

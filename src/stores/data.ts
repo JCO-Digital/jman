@@ -96,6 +96,11 @@ export const useDataStore = defineStore("data", () => {
 		return map;
 	});
 
+	const activeVulnerabilities = computed(() => {
+		// API already filters out specifically hidden (UUID) vulnerabilities
+		return vulnerabilities.value;
+	});
+
 	// Getters
 	const enrichedPlugins = computed<EnrichedPlugin[]>(() => {
 		return pluginInfo.value.map((info) => {
@@ -117,6 +122,14 @@ export const useDataStore = defineStore("data", () => {
 				}
 			}
 
+			const vulns = (
+				vulnerabilitiesBySlug.value.get(info.slug) || []
+			).map((v) => ({
+				...v,
+				// Use API's root suppressed field for plugin-level suppression
+				isSuppressed: v.suppressed,
+			}));
+
 			return {
 				...info,
 				name,
@@ -124,8 +137,7 @@ export const useDataStore = defineStore("data", () => {
 				version: info.version || "N/A",
 				author: info.author || "Unknown",
 				count,
-				vulnerabilities:
-					vulnerabilitiesBySlug.value.get(info.slug) || [],
+				vulnerabilities: vulns,
 			};
 		});
 	});
@@ -133,6 +145,20 @@ export const useDataStore = defineStore("data", () => {
 	const enrichedSites = computed<EnrichedSite[]>(() => {
 		const monitorStore = useMonitorStore();
 		return sites.value.map((site) => {
+			const vulns = (
+				vulnerabilitiesBySiteId.value.get(site.id) || []
+			).map((v) => {
+				// Find the entry for THIS site in the vulnerability report
+				const siteSpecificVuln = v.sites.find(
+					(s) => s.site_id === site.id,
+				);
+				return {
+					...v,
+					// Use the API's site-specific suppressed field
+					isSuppressed: siteSpecificVuln?.suppressed || false,
+				};
+			});
+
 			return {
 				...site,
 				organization_id:
@@ -142,8 +168,7 @@ export const useDataStore = defineStore("data", () => {
 					serversByIdMap.value.get(site.server_id)?.name ??
 					"Unknown Server",
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
-				vulnerabilities:
-					vulnerabilitiesBySiteId.value.get(site.id) || [],
+				vulnerabilities: vulns,
 				monitorHistory:
 					monitorStore.historyByDomain.get(site.domain) || [],
 			};
@@ -374,6 +399,7 @@ export const useDataStore = defineStore("data", () => {
 		plugins,
 		pluginInfo,
 		vulnerabilities,
+		activeVulnerabilities,
 		isLoaded,
 		isLoading,
 		isVulnsLoading,

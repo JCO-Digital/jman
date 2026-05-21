@@ -79,43 +79,20 @@ const history = computed(() =>
 );
 
 const sitePlugins = computed(() => {
-	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
+	const enrichedSite = dataStore.enrichedSites.find((s) => s.id === siteId);
+	if (!enrichedSite) return [];
 
-	// Check if site or server is ignored for vulnerabilities
-	const isSiteLevelIgnored = site.value
-		? ignoreStore.isIgnored({
-				siteId: site.value.id,
-				serverId: site.value.server_id,
-				purpose: "vuln",
-			})
-		: false;
-
-	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
-		// Check if this specific plugin is ignored for vulnerabilities
-		const isPluginIgnored = ignoreStore.isIgnored({
-			pluginSlug: plugin.name,
-			purpose: "vuln",
-		});
-
-		const vulns = siteVulns
-			.filter((v) => {
-				if (v.slug !== plugin.name) return false;
-
-				// ALWAYS filter out if this specific vulnerability UUID is ignored
-				return !ignoreStore.isIgnored({
-					vulnUuid: v.vulnerability.uuid,
-					purpose: "vuln",
-				});
-			})
-			.map((v) => ({
-				...v,
-				isSuppressed: isSiteLevelIgnored || isPluginIgnored,
-			}));
+	return enrichedSite.plugins.map((plugin) => {
+		// Filter relevant vulnerabilities for this plugin on this site
+		const vulns = enrichedSite.vulnerabilities.filter(
+			(v) => v.slug === plugin.name,
+		);
 
 		return {
 			...plugin,
 			vulnerabilities: vulns,
-			isSuppressed: isSiteLevelIgnored || isPluginIgnored,
+			isSuppressed:
+				vulns.length > 0 && vulns.every((v) => v.isSuppressed),
 		};
 	});
 });
