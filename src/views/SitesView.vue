@@ -61,23 +61,7 @@ const handleSort = (key: keyof EnrichedSite) => {
 };
 
 const filteredAndSortedSites = computed(() => {
-	let result = dataStore.enrichedSites.map((site) => {
-		// Filter out ignored vulnerabilities
-		const vulns = site.vulnerabilities.filter((v) => {
-			return !ignoreStore.isIgnored({
-				siteId: site.id,
-				serverId: site.server_id,
-				pluginSlug: v.slug,
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
-			});
-		});
-
-		return {
-			...site,
-			vulnerabilities: vulns,
-		};
-	});
+	let result = dataStore.enrichedSites;
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
@@ -166,25 +150,34 @@ const goToSite = (id: number) => {
 			<table class="data-table sortable">
 				<thead>
 					<tr>
-						<th @click="handleSort('domain')">
+						<th class="col-expand" @click="handleSort('domain')">
 							Site Name
 							<span v-if="sortKey === 'domain'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th class="hide-mobile" @click="handleSort('server')">
+						<th
+							class="hide-mobile col-wide"
+							@click="handleSort('server')"
+						>
 							Server
 							<span v-if="sortKey === 'server'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('plugins')">
+						<th
+							class="col-narrow text-center"
+							@click="handleSort('plugins')"
+						>
 							Plugins
 							<span v-if="sortKey === 'plugins'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('vulnerabilities')">
+						<th
+							class="col-narrow text-center"
+							@click="handleSort('vulnerabilities')"
+						>
 							Vulns
 							<span v-if="sortKey === 'vulnerabilities'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -229,20 +222,37 @@ const goToSite = (id: number) => {
 						class="clickable-row"
 						@click="goToSite(site.id)"
 					>
-						<td>{{ site.domain }}</td>
-						<td class="hide-mobile">{{ site.server }}</td>
-						<td>
+						<td class="font-medium truncate col-expand">
+							{{ site.domain }}
+						</td>
+						<td class="hide-mobile col-wide truncate">
+							{{ site.server }}
+						</td>
+						<td class="col-narrow text-center">
 							{{
 								site.is_wordpress
 									? site.plugins.length
 									: "Not WP"
 							}}
 						</td>
-						<td>
+						<td class="col-narrow text-center">
 							<span
 								v-if="site.vulnerabilities.length > 0"
-								class="status-badge error"
-								title="Vulnerabilities detected"
+								class="status-badge"
+								:class="
+									site.vulnerabilities.every(
+										(v) => v.suppressed,
+									)
+										? 'warning'
+										: 'error'
+								"
+								:title="
+									site.vulnerabilities.every(
+										(v) => v.suppressed,
+									)
+										? 'All vulnerabilities are suppressed via ignore rules'
+										: `${site.vulnerabilities.length} vulnerabilities detected`
+								"
 							>
 								{{ site.vulnerabilities.length }}
 							</span>

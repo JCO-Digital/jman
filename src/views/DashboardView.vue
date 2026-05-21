@@ -30,10 +30,18 @@ const loadReminderTasks = async () => {
 	try {
 		await taskStore.fetchTasks();
 		const now = new Date();
+		const currentUsername = authStore.user?.username;
 		reminderTasks.value = taskStore.tasks.filter((t) => {
 			if (!t.reminder_date) return false;
 			if (t.status === "completed" || t.status === "skipped")
 				return false;
+
+			// Filter: only show unassigned or assigned to current user
+			const isUnassigned = !t.assigned_to;
+			const isAssignedToMe =
+				currentUsername && t.assigned_to === currentUsername;
+			if (!isUnassigned && !isAssignedToMe) return false;
+
 			return new Date(t.reminder_date) <= now;
 		});
 	} catch (e) {
@@ -105,6 +113,7 @@ const loadRenewals = async () => {
 };
 
 onMounted(() => {
+	dataStore.initData();
 	loadRenewals();
 	loadReminderTasks();
 });
@@ -145,10 +154,12 @@ const formatDate = (dateString: string | null) => {
 
 			<StatCard
 				title="Vulnerabilities"
-				:value="dataStore.vulnerabilities.length"
+				:value="dataStore.activeVulnerabilities.length"
 				label="Active vulnerabilities detected"
 				:loading="dataStore.isVulnsLoading"
-				:class="{ 'error-text': dataStore.vulnerabilities.length > 0 }"
+				:class="{
+					'error-text': dataStore.activeVulnerabilities.length > 0,
+				}"
 			/>
 		</main>
 

@@ -64,27 +64,7 @@ const handleSort = (
 };
 
 const uniquePlugins = computed(() => {
-	let filtered = dataStore.enrichedPlugins.map((p) => {
-		// Filter out ignored vulnerabilities
-		const vulns = p.vulnerabilities.filter((v) => {
-			return !ignoreStore.isIgnored({
-				pluginSlug: p.slug,
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
-			});
-		});
-
-		// Check if the plugin itself is ignored for vulnerabilities
-		const isPluginIgnored = ignoreStore.isIgnored({
-			pluginSlug: p.slug,
-			purpose: "vuln",
-		});
-
-		return {
-			...p,
-			vulnerabilities: isPluginIgnored ? [] : vulns,
-		};
-	});
+	let filtered = [...dataStore.enrichedPlugins];
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();
@@ -174,31 +154,43 @@ const goToPlugin = (name: string) => {
 			<table class="data-table sortable">
 				<thead>
 					<tr>
-						<th @click="handleSort('name')">
+						<th class="col-expand" @click="handleSort('name')">
 							Plugin Name
 							<span v-if="sortKey === 'name'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th class="hide-mobile" @click="handleSort('version')">
+						<th
+							class="hide-mobile col-version"
+							@click="handleSort('version')"
+						>
 							Version
 							<span v-if="sortKey === 'version'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th class="hide-mobile" @click="handleSort('author')">
+						<th
+							class="hide-mobile col-wide"
+							@click="handleSort('author')"
+						>
 							Author
 							<span v-if="sortKey === 'author'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('count')">
+						<th
+							class="col-narrow text-center"
+							@click="handleSort('count')"
+						>
 							Sites
 							<span v-if="sortKey === 'count'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th @click="handleSort('vulnerabilities')">
+						<th
+							class="col-narrow text-center"
+							@click="handleSort('vulnerabilities')"
+						>
 							Vulns
 							<span v-if="sortKey === 'vulnerabilities'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -244,7 +236,7 @@ const goToPlugin = (name: string) => {
 						class="clickable-row"
 						@click="goToPlugin(plugin.slug)"
 					>
-						<td>
+						<td class="truncate col-expand">
 							<div class="plugin-title">
 								{{ plugin.shortName }}
 							</div>
@@ -252,13 +244,26 @@ const goToPlugin = (name: string) => {
 								{{ plugin.slug }}
 							</div>
 						</td>
-						<td class="hide-mobile">{{ plugin.version }}</td>
-						<td class="hide-mobile">{{ plugin.author }}</td>
-						<td>{{ plugin.count }}</td>
-						<td>
+						<td class="hide-mobile col-version truncate">
+							{{ plugin.version }}
+						</td>
+						<td class="hide-mobile col-wide truncate">
+							{{ plugin.author }}
+						</td>
+						<td class="col-narrow text-center">
+							{{ plugin.count }}
+						</td>
+						<td class="col-narrow text-center">
 							<span
 								v-if="plugin.vulnerabilities.length > 0"
-								class="status-badge error"
+								class="status-badge"
+								:class="
+									plugin.vulnerabilities.every(
+										(v) => v.suppressed,
+									)
+										? 'warning'
+										: 'error'
+								"
 								title="Vulnerabilities detected"
 							>
 								{{ plugin.vulnerabilities.length }}

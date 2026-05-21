@@ -20,12 +20,6 @@ export const useIgnoreStore = defineStore("ignore", () => {
 			sites: new Set<string>(),
 			servers: new Map<string, Set<number>>(),
 		};
-		const vuln = {
-			sites: new Set<string>(),
-			servers: new Map<string, Set<number>>(),
-			plugins: new Set<string>(),
-			vulnerabilities: new Set<string>(),
-		};
 
 		for (const entry of ignoreEntries.value) {
 			if (entry.use_for_monitor) {
@@ -37,21 +31,9 @@ export const useIgnoreStore = defineStore("ignore", () => {
 					);
 				}
 			}
-			if (entry.use_for_vuln) {
-				if (entry.type === "site") vuln.sites.add(entry.target);
-				else if (entry.type === "server") {
-					vuln.servers.set(
-						entry.target,
-						new Set(entry.negated_site_ids || []),
-					);
-				} else if (entry.type === "plugin")
-					vuln.plugins.add(entry.target);
-				else if (entry.type === "vulnerability")
-					vuln.vulnerabilities.add(entry.target);
-			}
 		}
 
-		return { monitor, vuln };
+		return { monitor };
 	});
 
 	async function fetchIgnoreEntries(type?: string) {
@@ -167,54 +149,22 @@ export const useIgnoreStore = defineStore("ignore", () => {
 	}
 
 	/**
-	 * Returns true if the given target is ignored for the specified purpose.
+	 * Returns true if monitoring is ignored for a site.
 	 */
-	function isIgnored(params: {
-		siteId?: number;
-		serverId?: number;
-		pluginSlug?: string;
-		vulnUuid?: string;
-		purpose: "monitor" | "vuln";
-	}): boolean {
-		const lookups = ignoreLookups.value[params.purpose];
+	function isMonitoringIgnored(siteId?: number, serverId?: number): boolean {
+		const lookups = ignoreLookups.value.monitor;
 
-		// Site match
-		if (
-			params.siteId !== undefined &&
-			lookups.sites.has(params.siteId.toString())
-		) {
+		if (siteId !== undefined && lookups.sites.has(siteId.toString())) {
 			return true;
 		}
 
-		// Server match
-		if (params.serverId !== undefined) {
-			const serverIdStr = params.serverId.toString();
+		if (serverId !== undefined) {
+			const serverIdStr = serverId.toString();
 			const negatedSites = lookups.servers.get(serverIdStr);
 			if (negatedSites) {
-				if (
-					params.siteId !== undefined &&
-					negatedSites.has(params.siteId)
-				) {
+				if (siteId !== undefined && negatedSites.has(siteId)) {
 					return false;
 				}
-				return true;
-			}
-		}
-
-		if (params.purpose === "vuln") {
-			const vLookups = lookups as any;
-			// Plugin match
-			if (
-				params.pluginSlug !== undefined &&
-				vLookups.plugins.has(params.pluginSlug)
-			) {
-				return true;
-			}
-			// Vulnerability match
-			if (
-				params.vulnUuid !== undefined &&
-				vLookups.vulnerabilities.has(params.vulnUuid)
-			) {
 				return true;
 			}
 		}
@@ -230,6 +180,6 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		addIgnoreEntry,
 		updateIgnoreEntry,
 		deleteIgnoreEntry,
-		isIgnored,
+		isMonitoringIgnored,
 	};
 });

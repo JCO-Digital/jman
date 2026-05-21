@@ -79,45 +79,19 @@ const history = computed(() =>
 );
 
 const sitePlugins = computed(() => {
-	const siteVulns = dataStore.vulnerabilitiesBySiteId.get(siteId) || [];
+	const enrichedSite = dataStore.enrichedSites.find((s) => s.id === siteId);
+	if (!enrichedSite) return [];
 
-	// Check if site or server is ignored for vulnerabilities
-	const isSiteVulnIgnored = site.value
-		? ignoreStore.isIgnored({
-				siteId: site.value.id,
-				serverId: site.value.server_id,
-				purpose: "vuln",
-			})
-		: false;
-
-	return dataStore.getPluginsBySiteId(siteId).map((plugin) => {
-		if (isSiteVulnIgnored) {
-			return { ...plugin, vulnerabilities: [] };
-		}
-
-		// Check if this specific plugin is ignored for vulnerabilities
-		const isPluginIgnored = ignoreStore.isIgnored({
-			pluginSlug: plugin.name,
-			purpose: "vuln",
-		});
-
-		if (isPluginIgnored) {
-			return { ...plugin, vulnerabilities: [] };
-		}
-
-		const vulns = siteVulns.filter((v) => {
-			if (v.slug !== plugin.name) return false;
-
-			// Check if this specific vulnerability UUID is ignored
-			return !ignoreStore.isIgnored({
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
-			});
-		});
+	return enrichedSite.plugins.map((plugin) => {
+		// Filter relevant vulnerabilities for this plugin on this site
+		const vulns = enrichedSite.vulnerabilities.filter(
+			(v) => v.slug === plugin.name,
+		);
 
 		return {
 			...plugin,
 			vulnerabilities: vulns,
+			isSuppressed: vulns.length > 0 && vulns.every((v) => v.suppressed),
 		};
 	});
 });
@@ -425,8 +399,13 @@ const unlinkOrganization = async () => {
 								<td>
 									<span
 										v-if="plugin.vulnerabilities.length > 0"
-										class="status-badge error badge-sm"
-										:title="`${plugin.vulnerabilities.length} vulnerabilities detected`"
+										class="status-badge badge-sm"
+										:class="
+											plugin.isSuppressed
+												? 'warning'
+												: 'error'
+										"
+										:title="`${plugin.vulnerabilities.length} vulnerabilities detected${plugin.isSuppressed ? ' (Suppressed)' : ''}`"
 									>
 										{{ plugin.vulnerabilities.length }}
 									</span>
