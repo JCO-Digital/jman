@@ -141,12 +141,19 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 	}
 
 	for _, report := range reports {
+		if report.Suppressed {
+			continue
+		}
+
 		cvss := getCvss(report)
 
 		if opts.SiteSearch != "" {
 			// Filter sites to those matching the search term.
 			var matched []models.PluginSite
 			for _, site := range report.Sites {
+				if site.Suppressed {
+					continue
+				}
 				siteName, err := getSiteName(site.SiteID)
 				if err != nil {
 					continue
@@ -160,7 +167,18 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 			}
 			report.Sites = matched
 		} else {
-			// Apply CVSS threshold filter only when not doing a site search.
+			// Filter out suppressed sites and apply CVSS threshold filter only when not doing a site search.
+			var active []models.PluginSite
+			for _, site := range report.Sites {
+				if !site.Suppressed {
+					active = append(active, site)
+				}
+			}
+			if len(active) == 0 {
+				continue
+			}
+			report.Sites = active
+
 			if opts.CVSSThreshold > 0 && cvss < opts.CVSSThreshold {
 				continue
 			}
@@ -200,9 +218,15 @@ func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[int]map[string]*models.Vu
 	}
 
 	for _, report := range reports {
+		if report.Suppressed {
+			continue
+		}
 		cvss := getCvss(report)
 
 		for _, site := range report.Sites {
+			if site.Suppressed {
+				continue
+			}
 			currentSite, ok := sitesMap[site.SiteID]
 			if !ok {
 				currentSite = make(map[string]*models.VulnPlugin)
@@ -289,12 +313,18 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 	}
 
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
+		// Specific vulnerability ignores continue to be completely ignored.
+		if matcher != nil && matcher.IsVulnerabilityUUIDIgnored(vulnerability.Uuid) {
+			continue
+		}
+
 		report := models.VulnReport{
 			Plugin:        pluginName,
 			Slug:          pluginName,
 			PluginName:    pluginName,
 			Vulnerability: vulnerability,
 			Sites:         []models.PluginSite{},
+			Suppressed:    matcher != nil && matcher.IsPluginIgnored(pluginName),
 		}
 		if vulnResponse.Data.Name != nil {
 			report.PluginName = *vulnResponse.Data.Name
@@ -302,17 +332,12 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 
 		// Add every site whose installed plugin version falls inside the affected range.
 		for _, site := range sites {
-			var ignored bool
 			if matcher != nil {
 				serverID := 0
 				if s, ok := siteMeta[site.SiteID]; ok {
 					serverID = s.ServerID
 				}
-				ignored = matcher.IsVulnerabilityIgnored(site.SiteID, serverID, pluginName, vulnerability.Uuid)
-			}
-
-			if ignored {
-				continue
+				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, serverID)
 			}
 
 			if IsVersionAffected(site.Version, vulnerability.Operator) {

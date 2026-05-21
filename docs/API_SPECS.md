@@ -445,6 +445,63 @@ Removes the setting with the specified key.
 
 ---
 
+### Vulnerability Data
+
+`GET /vulns` (Protected: `basic`)
+
+Returns vulnerability reports for managed plugins.
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `plugin` | string | Filter by plugin slug. Returns detailed plugin metadata and all vulnerabilities. |
+
+**Success Response (200 OK - No plugin parameter)**
+
+```json
+[
+	{
+		"plugin": "akismet",
+		"slug": "akismet",
+		"plugin_name": "Akismet Anti-Spam",
+		"vulnerability": {
+			"uuid": "...",
+			"name": "...",
+			"impact": { "cvss": { "score": "7.5" } },
+			"sites": [...]
+		},
+		"sites": [
+			{ "site_id": 123, "site_name": "example.com", "version": "5.0.0", "suppressed": false }
+		],
+		"suppressed": false
+	}
+]
+```
+
+**Success Response (200 OK - With plugin parameter)**
+
+```json
+{
+	"name": "Akismet Anti-Spam",
+	"plugin": "akismet",
+	"vulnerability": [
+		{
+			"uuid": "...",
+			"sites": [{ "site_id": 123, "version": "5.0.0", "suppressed": false }]
+		}
+	],
+	"suppressed": false
+}
+```
+
+**Notes on Suppression**
+
+- Vulnerabilities ignored by their specific **UUID** are completely excluded from the response.
+- If a **Plugin** is ignored, it will be included but marked with `"suppressed": true`.
+- If a **Site** or **Server** is ignored, affected sites within a vulnerability report will be marked with `"suppressed": true`.
+
+---
+
 ## Plugin Update Operations
 
 These endpoints allow a UI to perform plugin updates one at a time, so progress can be displayed per plugin. Both require the **`execute`** level.
