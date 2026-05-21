@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -152,6 +153,7 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 	// Prepare the response data based on the original structure but filtered.
 	// We return a copy of VulnData with filtered and enriched vulnerabilities.
 	response := *vulnResponse.Data
+	response.Suppressed = matcher != nil && matcher.IsPluginIgnored(pluginName)
 	response.Vulnerability = []models.Vulnerability{}
 
 	for _, report := range reports {
@@ -246,7 +248,12 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to update plugin: %v", err))
+		msg := err.Error()
+		if msg == "" || msg == "failed to update plugin" || strings.Contains(msg, "(stderr:") {
+			WriteError(w, http.StatusInternalServerError, "Failed to update plugin")
+		} else {
+			WriteError(w, http.StatusInternalServerError, msg)
+		}
 		return
 	}
 

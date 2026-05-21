@@ -73,6 +73,7 @@ type VulnData struct {
 	Link          *string         `json:"link"`
 	Latest        *string         `json:"latest"`
 	Vulnerability []Vulnerability `json:"vulnerability"`
+	Suppressed    bool            `json:"suppressed"`
 }
 
 type VulnResponse struct {
@@ -88,6 +89,7 @@ type VulnReport struct {
 	PluginName    string        `json:"plugin_name"`
 	Vulnerability Vulnerability `json:"vulnerability"`
 	Sites         []PluginSite  `json:"sites"`
+	Suppressed    bool          `json:"suppressed"`
 }
 
 type VulnPlugin struct {
