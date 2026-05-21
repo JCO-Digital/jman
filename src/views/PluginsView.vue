@@ -64,29 +64,7 @@ const handleSort = (
 };
 
 const uniquePlugins = computed(() => {
-	let filtered = dataStore.enrichedPlugins.map((p) => {
-		// Filter out ignored vulnerabilities
-		const vulns = p.vulnerabilities
-			.filter((v) => {
-				return !ignoreStore.isIgnored({
-					vulnUuid: v.vulnerability.uuid,
-					purpose: "vuln",
-				});
-			})
-			.map((v) => {
-				// Check if the plugin itself is ignored for vulnerabilities
-				const isSuppressed = ignoreStore.isIgnored({
-					pluginSlug: p.slug,
-					purpose: "vuln",
-				});
-				return { ...v, isSuppressed };
-			});
-
-		return {
-			...p,
-			vulnerabilities: vulns,
-		};
-	});
+	let filtered = [...dataStore.enrichedPlugins];
 
 	if (searchQuery.value) {
 		const query = searchQuery.value.toLowerCase();

@@ -34,30 +34,7 @@ const assetTemplate = computed(() => {
 });
 
 const info = computed(() => {
-	const p = dataStore.enrichedPlugins.find((i) => i.slug === props.name);
-	if (!p) return undefined;
-
-	// Check if this specific plugin is ignored globally for vulnerabilities
-	const isPluginIgnored = ignoreStore.isIgnored({
-		pluginSlug: props.name,
-		purpose: "vuln",
-	});
-
-	// ALWAYS Filter out specifically ignored vulnerability UUIDs
-	const vulns = p.vulnerabilities
-		.filter((v) => {
-			return !ignoreStore.isIgnored({
-				pluginSlug: props.name,
-				vulnUuid: v.vulnerability.uuid,
-				purpose: "vuln",
-			});
-		})
-		.map((v) => ({
-			...v,
-			isSuppressed: isPluginIgnored,
-		}));
-
-	return { ...p, vulnerabilities: vulns };
+	return dataStore.enrichedPlugins.find((i) => i.slug === props.name);
 });
 
 const sitesWithPlugin = computed(() => {
@@ -72,29 +49,24 @@ const sitesWithPlugin = computed(() => {
 	return instances
 		.map((p) => {
 			const site = dataStore.getSiteById(p.site_id);
+			const enrichedSite = dataStore.enrichedSites.find(
+				(s) => s.id === p.site_id,
+			);
 
-			// Check if this site specifically ignores vulnerabilities (either site or server level)
+			// Check if this site specifically suppresses these vulnerabilities
 			let isVulnerable = vulnerableSites.has(p.site_id);
 			let isSuppressed = false;
 
-			if (isVulnerable && site) {
-				const isSiteIgnored = ignoreStore.isIgnored({
-					siteId: site.id,
-					serverId: site.server_id,
-					purpose: "vuln",
-				});
-				if (isSiteIgnored) {
+			if (isVulnerable && enrichedSite) {
+				const siteVulns = enrichedSite.vulnerabilities.filter(
+					(v) => v.slug === props.name,
+				);
+				if (
+					siteVulns.length > 0 &&
+					siteVulns.every((v) => v.isSuppressed)
+				) {
 					isSuppressed = true;
 				}
-			}
-
-			// If plugin itself is ignored, it's suppressed too
-			const isPluginIgnored = ignoreStore.isIgnored({
-				pluginSlug: props.name,
-				purpose: "vuln",
-			});
-			if (isPluginIgnored) {
-				isSuppressed = true;
 			}
 
 			return {
