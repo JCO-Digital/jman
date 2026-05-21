@@ -337,6 +337,7 @@
 	&.badge-sm {
 		font-size: 11px;
 		padding: 1px 8px;
+		text-transform: none;
 	}
 }
 
