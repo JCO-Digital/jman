@@ -150,12 +150,14 @@ export interface VulnerabilitySite {
 	site_id: number;
 	site_name: string;
 	version: string;
+	suppressed: boolean;
 }
 
 export interface Vulnerability {
 	plugin: string;
 	slug: string;
 	plugin_name: string;
+	suppressed: boolean;
 	vulnerability: {
 		uuid: string;
 		name: string;

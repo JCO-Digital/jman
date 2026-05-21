@@ -39,11 +39,7 @@ const effectiveIds = computed(() => {
 
 const isIgnored = computed(() => {
 	const ids = effectiveIds.value;
-	return ignoreStore.isIgnored({
-		siteId: ids.siteId,
-		serverId: ids.serverId,
-		purpose: "monitor",
-	});
+	return ignoreStore.isMonitoringIgnored(ids.siteId, ids.serverId);
 });
 
 const liveStatus = computed(() =>

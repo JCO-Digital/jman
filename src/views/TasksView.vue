@@ -19,7 +19,7 @@ const editingTask = ref<Task | null>(null);
 
 // Filters
 const searchQuery = ref("");
-const filterStatus = ref<TaskStatus | "">("");
+const filterStatus = ref<TaskStatus | "" | "open">("open");
 const filterPriority = ref<TaskPriority | "">("");
 const filterType = ref<TaskType | "">("");
 const filterAssignedTo = ref("");
@@ -62,7 +62,11 @@ const filteredTasks = computed(() => {
 	}
 
 	if (filterStatus.value) {
-		result = result.filter((t) => t.status === filterStatus.value);
+		if (filterStatus.value === "open") {
+			result = result.filter((t) => t.status !== "completed");
+		} else {
+			result = result.filter((t) => t.status === filterStatus.value);
+		}
 	}
 
 	if (filterPriority.value) {
@@ -178,6 +182,7 @@ function formatDate(d: string | null) {
 			/>
 
 			<select v-model="filterStatus">
+				<option value="open">All but completed</option>
 				<option value="">All Statuses</option>
 				<option value="pending">Pending</option>
 				<option value="in_progress">In Progress</option>
