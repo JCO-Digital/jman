@@ -330,6 +330,7 @@ func initSchema() error {
 				"reminder_date":    "DATETIME",
 				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"completed_at":     "DATETIME",
+				"completed_by":     "TEXT",
 				"last_notified_at": "DATETIME",
 				"created_by":       "TEXT",
 				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",

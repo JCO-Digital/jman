@@ -145,6 +145,7 @@ Returns a list of tasks matching the provided filters.
 | `status` | string | Filter by status (`pending`, `in_progress`, `completed`, `skipped`, `overdue`) |
 | `priority` | string | Filter by priority (`low`, `medium`, `high`) |
 | `assigned_to` | string | Filter by assigned username |
+| `completed_by` | string | Filter by user who completed the task |
 | `site_id` | integer | Filter by linked Site ID |
 | `organization_id` | integer | Filter by linked Organization ID |
 | `server_id` | integer | Filter by linked Server ID |
@@ -167,8 +168,10 @@ Returns a list of tasks matching the provided filters.
 		"due_date": "2024-03-20T12:00:00Z",
 		"reminder_date": "2024-03-13T12:00:00Z",
 		"created_at": "2024-03-13T12:00:00Z",
-		"updated_at": "2024-03-13T12:00:00Z",
-		"created_by": "system"
+		"completed_at": "2024-03-14T09:00:00Z",
+		"updated_at": "2024-03-14T09:00:00Z",
+		"created_by": "system",
+		"completed_by": "niklas"
 	}
 ]
 ```
