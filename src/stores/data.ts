@@ -5,7 +5,6 @@ import type {
 	Site,
 	Plugin,
 	PluginInfo,
-	Vulnerability,
 	PluginVulnerability,
 	EnrichedVulnerability,
 	EnrichedSite,
@@ -37,9 +36,17 @@ export const useDataStore = defineStore("data", () => {
 
 	// Optimization Maps
 	const vulnerabilitiesBySlug = computed(() => {
-		const map = new Map<string, Vulnerability[]>();
+		const map = new Map<string, EnrichedVulnerability[]>();
 		for (const pv of vulnerabilities.value) {
-			map.set(pv.slug, pv.vulnerabilities);
+			map.set(
+				pv.slug,
+				pv.vulnerabilities.map((v) => ({
+					...v,
+					slug: pv.slug,
+					plugin_name: pv.plugin_name,
+					plugin_suppressed: pv.suppressed,
+				})),
+			);
 		}
 		return map;
 	});
@@ -150,7 +157,14 @@ export const useDataStore = defineStore("data", () => {
 				}
 			}
 
-			const vulns = vulnerabilitiesBySlug.value.get(info.slug) || [];
+			const vulns = (
+				vulnerabilitiesBySlug.value.get(info.slug) || []
+			).map((v) => ({
+				...v,
+				// Effective suppression at the plugin level:
+				// either the plugin is suppressed OR the specific vulnerability is suppressed.
+				suppressed: v.plugin_suppressed || v.suppressed,
+			}));
 
 			return {
 				...info,
