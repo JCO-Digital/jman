@@ -57,6 +57,7 @@ type Task struct {
 	CompletedAt    *time.Time `json:"completed_at,omitempty"`
 	LastNotifiedAt *time.Time `json:"last_notified_at,omitempty"`
 
-	CreatedBy string    `json:"created_by"`
-	UpdatedAt time.Time `json:"updated_at"`
+	CreatedBy   string    `json:"created_by"`
+	CompletedBy *string   `json:"completed_by,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

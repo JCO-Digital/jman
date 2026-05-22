@@ -14,10 +14,11 @@ import (
 // ListTasksHandler handles GET /api/tasks
 func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 	filter := db.TaskFilter{
-		Status:     models.TaskStatus(r.URL.Query().Get("status")),
-		Priority:   models.TaskPriority(r.URL.Query().Get("priority")),
-		AssignedTo: r.URL.Query().Get("assigned_to"),
-		Search:     r.URL.Query().Get("search"),
+		Status:      models.TaskStatus(r.URL.Query().Get("status")),
+		Priority:    models.TaskPriority(r.URL.Query().Get("priority")),
+		AssignedTo:  r.URL.Query().Get("assigned_to"),
+		CompletedBy: r.URL.Query().Get("completed_by"),
+		Search:      r.URL.Query().Get("search"),
 	}
 
 	if sid := r.URL.Query().Get("site_id"); sid != "" {
