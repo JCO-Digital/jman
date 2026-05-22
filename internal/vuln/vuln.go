@@ -145,45 +145,66 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 			continue
 		}
 
-		cvss := getCvss(report)
-
 		if opts.SiteSearch != "" {
-			// Filter sites to those matching the search term.
-			var matched []models.PluginSite
-			for _, site := range report.Sites {
-				if site.Suppressed {
-					continue
+			// Filter vulnerabilities and their sites to those matching the search term.
+			var activeVulns []models.Vulnerability
+			for _, v := range report.Vulnerabilities {
+				var matchedSites []models.PluginSite
+				for _, site := range v.Sites {
+					if site.Suppressed {
+						continue
+					}
+					siteName, err := getSiteName(site.SiteID)
+					if err != nil {
+						continue
+					}
+					if strings.Contains(strings.ToLower(siteName), strings.ToLower(opts.SiteSearch)) {
+						matchedSites = append(matchedSites, site)
+					}
 				}
-				siteName, err := getSiteName(site.SiteID)
-				if err != nil {
-					continue
-				}
-				if strings.Contains(strings.ToLower(siteName), strings.ToLower(opts.SiteSearch)) {
-					matched = append(matched, site)
+				if len(matchedSites) > 0 {
+					v.Sites = matchedSites
+					activeVulns = append(activeVulns, v)
 				}
 			}
-			if len(matched) == 0 {
+			if len(activeVulns) == 0 {
 				continue
 			}
-			report.Sites = matched
+			report.Vulnerabilities = activeVulns
 		} else {
-			// Filter out suppressed sites and apply CVSS threshold filter only when not doing a site search.
-			var active []models.PluginSite
-			for _, site := range report.Sites {
-				if !site.Suppressed {
-					active = append(active, site)
+			// Filter out suppressed vulnerabilities and sites, and apply CVSS threshold filter.
+			var activeVulns []models.Vulnerability
+			for _, v := range report.Vulnerabilities {
+				if v.Suppressed {
+					continue
+				}
+
+				var activeSites []models.PluginSite
+				for _, site := range v.Sites {
+					if !site.Suppressed {
+						activeSites = append(activeSites, site)
+					}
+				}
+				if len(activeSites) > 0 {
+					v.Sites = activeSites
+					activeVulns = append(activeVulns, v)
 				}
 			}
-			if len(active) == 0 {
+
+			if len(activeVulns) == 0 {
 				continue
 			}
-			report.Sites = active
+			report.Vulnerabilities = activeVulns
 
-			if opts.CVSSThreshold > 0 && cvss < opts.CVSSThreshold {
+			// Recompute maxCvss from filtered vulnerabilities before applying threshold.
+			maxCvss := getCvss(report)
+			if opts.CVSSThreshold > 0 && maxCvss < opts.CVSSThreshold {
 				continue
 			}
 		}
 
+		// Recompute final maxCvss for Slack force flag after all filtering is complete.
+		finalMaxCvss := getCvss(report)
 		message, err := formatReport(report)
 		if err != nil {
 			// Skip malformed/unformattable entries without stopping the whole scan.
@@ -193,7 +214,7 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 		fmt.Println(message)
 
 		if opts.Slack {
-			force := cvss >= config.Cfg.CVSSThreshold
+			force := finalMaxCvss >= config.Cfg.CVSSThreshold
 			slack.SendMessage(message, force)
 		}
 	}
@@ -221,35 +242,43 @@ func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[int]map[string]*models.Vu
 		if report.Suppressed {
 			continue
 		}
-		cvss := getCvss(report)
 
-		for _, site := range report.Sites {
-			if site.Suppressed {
+		for _, v := range report.Vulnerabilities {
+			if v.Suppressed {
 				continue
 			}
-			currentSite, ok := sitesMap[site.SiteID]
-			if !ok {
-				currentSite = make(map[string]*models.VulnPlugin)
-				sitesMap[site.SiteID] = currentSite
-			}
+			cvss := getVulnCvss(v)
 
-			currentPlugin, ok := currentSite[report.Slug]
-			if !ok {
-				currentPlugin = &models.VulnPlugin{
-					PluginName:    report.PluginName,
-					Version:       site.Version,
-					Cvss:          &cvss,
-					Vulnerability: []models.Vulnerability{},
+			for _, site := range v.Sites {
+				if site.Suppressed {
+					continue
 				}
-				currentSite[report.Slug] = currentPlugin
-			}
+				currentSite, ok := sitesMap[site.SiteID]
+				if !ok {
+					currentSite = make(map[string]*models.VulnPlugin)
+					sitesMap[site.SiteID] = currentSite
+				}
 
-			// Keep the maximum CVSS observed for this plugin on this site.
-			if currentPlugin.Cvss == nil || cvss > *currentPlugin.Cvss {
-				currentPlugin.Cvss = &cvss
-			}
+				currentPlugin, ok := currentSite[report.Slug]
+				if !ok {
+					score := cvss
+					currentPlugin = &models.VulnPlugin{
+						PluginName:    report.PluginName,
+						Version:       site.Version,
+						Cvss:          &score,
+						Vulnerability: []models.Vulnerability{},
+					}
+					currentSite[report.Slug] = currentPlugin
+				}
 
-			currentPlugin.Vulnerability = append(currentPlugin.Vulnerability, report.Vulnerability)
+				// Keep the maximum CVSS observed for this plugin on this site.
+				if currentPlugin.Cvss == nil || cvss > *currentPlugin.Cvss {
+					score := cvss
+					currentPlugin.Cvss = &score
+				}
+
+				currentPlugin.Vulnerability = append(currentPlugin.Vulnerability, v)
+			}
 		}
 	}
 
@@ -292,24 +321,34 @@ func IsVersionAffected(ver string, op models.Operator) bool {
 
 // GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
 // Vulnerabilities whose UUID appears in the ignore list are silently skipped.
-func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher) []models.VulnReport {
-	reports := []models.VulnReport{}
-
+func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher) *models.VulnReport {
 	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
 	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 		// Missing or invalid vulnerability cache for this plugin; skip it.
-		return reports
+		return nil
 	}
 
 	// Load site metadata for server ID lookups
-	cachedSites, err := cache.GetCachedSites()
-	siteMeta := make(map[int]models.Site)
+	cliSites, err := cache.GetFastSiteList()
+	siteMeta := make(map[int]models.CliSite)
 	if err == nil {
-		for _, s := range cachedSites {
+		for _, s := range cliSites {
 			siteMeta[s.ID] = s
 		}
 	} else {
-		verb.LogPrintf(verb.Verbose, "Warning: failed to fetch site cache, server-level ignores may not be fully resolved: %v\n", err)
+		verb.LogPrintf(verb.Verbose, "Warning: failed to fetch site list, server-level ignores may not be fully resolved: %v\n", err)
+	}
+
+	pluginSuppressed := matcher != nil && matcher.IsPluginIgnored(pluginName)
+	report := &models.VulnReport{
+		Plugin:          pluginName,
+		Slug:            pluginName,
+		PluginName:      pluginName,
+		Vulnerabilities: []models.Vulnerability{},
+		Suppressed:      pluginSuppressed,
+	}
+	if vulnResponse.Data.Name != nil {
+		report.PluginName = *vulnResponse.Data.Name
 	}
 
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
@@ -318,19 +357,11 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 			continue
 		}
 
-		report := models.VulnReport{
-			Plugin:        pluginName,
-			Slug:          pluginName,
-			PluginName:    pluginName,
-			Vulnerability: vulnerability,
-			Sites:         []models.PluginSite{},
-			Suppressed:    matcher != nil && matcher.IsPluginIgnored(pluginName),
-		}
-		if vulnResponse.Data.Name != nil {
-			report.PluginName = *vulnResponse.Data.Name
-		}
+		v := vulnerability
+		v.Sites = []models.PluginSite{}
 
 		// Add every site whose installed plugin version falls inside the affected range.
+		allSitesSuppressed := true
 		for _, site := range sites {
 			if matcher != nil {
 				serverID := 0
@@ -340,18 +371,27 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, serverID)
 			}
 
-			if IsVersionAffected(site.Version, vulnerability.Operator) {
-				report.Sites = append(report.Sites, site)
+			if IsVersionAffected(site.Version, v.Operator) {
+				v.Sites = append(v.Sites, site)
+				if !site.Suppressed {
+					allSitesSuppressed = false
+				}
 			}
 		}
 
 		// Keep only vulnerabilities that affect at least one known site.
-		if len(report.Sites) > 0 {
-			reports = append(reports, report)
+		if len(v.Sites) > 0 {
+			// A vulnerability is suppressed if the plugin is suppressed OR all affected sites are suppressed.
+			v.Suppressed = pluginSuppressed || allSitesSuppressed
+			report.Vulnerabilities = append(report.Vulnerabilities, v)
 		}
 	}
 
-	return reports
+	if len(report.Vulnerabilities) == 0 {
+		return nil
+	}
+
+	return report
 }
 
 // ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
@@ -366,7 +406,10 @@ func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport,
 
 	for _, plugin := range pluginData {
 		verb.Printf(verb.Verbose, "Processing plugin: %s\n", plugin.Name)
-		reports = append(reports, GetVulnerabilityReportsForPlugin(plugin.Name, plugin.Sites, matcher)...)
+		report := GetVulnerabilityReportsForPlugin(plugin.Name, plugin.Sites, matcher)
+		if report != nil {
+			reports = append(reports, *report)
+		}
 	}
 
 	return reports, nil
@@ -378,58 +421,63 @@ func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport,
 // then falls back to base vulnerability fields where needed.
 // User-facing text is HTML-cleaned before display.
 func formatReport(report models.VulnReport) (string, error) {
-	cvss := getCvss(report)
-	infoName := ""
-	infoDesc := ""
-	if report.Vulnerability.Description != nil {
-		infoDesc = *report.Vulnerability.Description
-	}
-	infoDate := ""
-	infoLink := ""
-
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Plugin:"), verb.Bold(utils.CleanHTML(report.PluginName)))
 
-	// Pull the first useful values from source metadata.
-	// Non-CVE names are preferred for readability when available.
-	for _, source := range report.Vulnerability.Source {
-		if infoName == "" && !strings.HasPrefix(source.Name, "CVE") {
-			infoName = source.Name
+	for i, v := range report.Vulnerabilities {
+		if i > 0 {
+			fmt.Fprintln(&sb, "---")
 		}
-		if infoDesc == "" && source.Description != nil {
-			infoDesc = *source.Description
-		}
-		if infoDate == "" && source.Date != nil {
-			infoDate = *source.Date
-		}
-		if infoLink == "" && source.Link != "" {
-			infoLink = source.Link
-		}
-	}
 
-	if infoName == "" {
-		infoName = report.Vulnerability.Name
-	}
+		cvss := getVulnCvss(v)
+		infoName := ""
+		infoDesc := ""
+		if v.Description != nil {
+			infoDesc = *v.Description
+		}
+		infoDate := ""
+		infoLink := ""
 
-	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Vulnerability:"), verb.Yellow(utils.CleanHTML(infoName)))
-	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("UUID:"), verb.Cyan(report.Vulnerability.Uuid))
-	if infoDate != "" {
-		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Date:"), infoDate)
-	}
-	if cvss > 0 {
-		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("CVSS Score:"), colorCvss(cvss))
-	}
-	if infoDesc != "" {
-		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Description:"), utils.CleanHTML(infoDesc))
-	}
-	if infoLink != "" {
-		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Link:"), verb.Cyan(infoLink))
-	}
+		// Pull the first useful values from source metadata.
+		for _, source := range v.Source {
+			if infoName == "" && !strings.HasPrefix(source.Name, "CVE") {
+				infoName = source.Name
+			}
+			if infoDesc == "" && source.Description != nil {
+				infoDesc = *source.Description
+			}
+			if infoDate == "" && source.Date != nil {
+				infoDate = *source.Date
+			}
+			if infoLink == "" && source.Link != "" {
+				infoLink = source.Link
+			}
+		}
 
-	fmt.Fprintf(&sb, "\n%s\n", verb.Bold("Affected Sites:"))
-	for _, site := range report.Sites {
-		siteName, _ := getSiteName(site.SiteID)
-		fmt.Fprintf(&sb, "  %s %s\n", verb.Green("→"), fmt.Sprintf("%s %s", siteName, verb.Gray("("+site.Version+")")))
+		if infoName == "" {
+			infoName = v.Name
+		}
+
+		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Vulnerability:"), verb.Yellow(utils.CleanHTML(infoName)))
+		fmt.Fprintf(&sb, "%s %s\n", verb.Gray("UUID:"), verb.Cyan(v.Uuid))
+		if infoDate != "" {
+			fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Date:"), infoDate)
+		}
+		if cvss > 0 {
+			fmt.Fprintf(&sb, "%s %s\n", verb.Gray("CVSS Score:"), colorCvss(cvss))
+		}
+		if infoDesc != "" {
+			fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Description:"), utils.CleanHTML(infoDesc))
+		}
+		if infoLink != "" {
+			fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Link:"), verb.Cyan(infoLink))
+		}
+
+		fmt.Fprintf(&sb, "\n%s\n", verb.Bold("Affected Sites:"))
+		for _, site := range v.Sites {
+			siteName, _ := getSiteName(site.SiteID)
+			fmt.Fprintf(&sb, "  %s %s\n", verb.Green("→"), fmt.Sprintf("%s %s", siteName, verb.Gray("("+site.Version+")")))
+		}
 	}
 
 	return sb.String(), nil
@@ -495,12 +543,24 @@ func getSiteName(siteID int) (string, error) {
 	return "", fmt.Errorf("site not found")
 }
 
-// getCvss extracts and parses a CVSS numeric score from a vulnerability report.
-// Returns 0 when no score is available or parsing is not possible.
+// getCvss extracts the maximum CVSS numeric score across all vulnerabilities in a report.
 func getCvss(report models.VulnReport) float64 {
-	if report.Vulnerability.Impact != nil && report.Vulnerability.Impact.Cvss != nil {
+	var maxCvss float64
+	for _, v := range report.Vulnerabilities {
+		score := getVulnCvss(v)
+		if score > maxCvss {
+			maxCvss = score
+		}
+	}
+	return maxCvss
+}
+
+// getVulnCvss extracts and parses a CVSS numeric score from a vulnerability.
+// Returns 0 when no score is available or parsing is not possible.
+func getVulnCvss(v models.Vulnerability) float64 {
+	if v.Impact != nil && v.Impact.Cvss != nil {
 		var score float64
-		fmt.Sscanf(report.Vulnerability.Impact.Cvss.Score, "%f", &score)
+		fmt.Sscanf(v.Impact.Cvss.Score, "%f", &score)
 		return score
 	}
 	return 0
