@@ -384,6 +384,16 @@ export type TaskStatus =
 	| "overdue";
 export type TaskPriority = "low" | "medium" | "high";
 
+export type DashboardWidgetType =
+	| "stats"
+	| "tasks"
+	| "vulnerabilities"
+	| "renewals";
+
+export interface DashboardSettings {
+	layout: DashboardWidgetType[];
+}
+
 export interface Task {
 	id: number;
 	type: TaskType;

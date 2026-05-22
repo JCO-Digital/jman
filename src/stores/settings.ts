@@ -1,6 +1,7 @@
 import { ref, watch, nextTick } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
+import type { DashboardWidgetType } from "../types";
 
 const LS_SETTINGS = "jman_settings";
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -10,6 +11,7 @@ interface AppSettings {
 	dataRefreshInterval: number;
 	vulnCvssThreshold: number;
 	vulnTotalThreshold: number;
+	dashboardLayout: DashboardWidgetType[];
 }
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -20,6 +22,12 @@ export const useSettingsStore = defineStore("settings", () => {
 	const dataRefreshInterval = ref(300); // Default 300 seconds
 	const vulnCvssThreshold = ref(7); // Default CVSS 7
 	const vulnTotalThreshold = ref(8); // Default 8 vulnerabilities
+	const dashboardLayout = ref<DashboardWidgetType[]>([
+		"stats",
+		"tasks",
+		"vulnerabilities",
+		"renewals",
+	]);
 
 	let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
@@ -72,6 +80,9 @@ export const useSettingsStore = defineStore("settings", () => {
 		if (data.vulnTotalThreshold !== undefined) {
 			vulnTotalThreshold.value = data.vulnTotalThreshold;
 		}
+		if (data.dashboardLayout && Array.isArray(data.dashboardLayout)) {
+			dashboardLayout.value = data.dashboardLayout;
+		}
 	}
 
 	async function saveSettings() {
@@ -80,6 +91,7 @@ export const useSettingsStore = defineStore("settings", () => {
 			dataRefreshInterval: dataRefreshInterval.value,
 			vulnCvssThreshold: vulnCvssThreshold.value,
 			vulnTotalThreshold: vulnTotalThreshold.value,
+			dashboardLayout: dashboardLayout.value,
 		};
 
 		// Always save to LS
@@ -117,10 +129,12 @@ export const useSettingsStore = defineStore("settings", () => {
 			() => dataRefreshInterval.value,
 			() => vulnCvssThreshold.value,
 			() => vulnTotalThreshold.value,
+			() => dashboardLayout.value,
 		],
 		() => {
 			saveSettings();
 		},
+		{ deep: true },
 	);
 
 	return {
@@ -128,6 +142,7 @@ export const useSettingsStore = defineStore("settings", () => {
 		dataRefreshInterval,
 		vulnCvssThreshold,
 		vulnTotalThreshold,
+		dashboardLayout,
 		initialize,
 	};
 });

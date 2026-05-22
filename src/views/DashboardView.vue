@@ -1,297 +1,235 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { RouterLink } from "vue-router";
+import { ref, computed, onMounted } from "vue";
 import { useDataStore } from "../stores/data";
-import { useAssetStore } from "../stores/assetStore";
-import { useAuthStore } from "../stores/auth";
+import { useOrganizationStore } from "../stores/organization";
 import { useTaskStore } from "../stores/tasks";
-import type { OrganizationAsset, Task } from "../types";
+import { useSettingsStore } from "../stores/settings";
+import { useAuthStore } from "../stores/auth";
+import type { DashboardWidgetType } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
-import StatCard from "../components/StatCard.vue";
+import StatSummaryWidget from "../components/StatSummaryWidget.vue";
+import TaskReminderWidget from "../components/TaskReminderWidget.vue";
 import VulnerabilityWidget from "../components/VulnerabilityWidget.vue";
-import TaskInfoModal from "../components/TaskInfoModal.vue";
+import UpcomingRenewalsWidget from "../components/UpcomingRenewalsWidget.vue";
+import AppIcon from "../components/AppIcon.vue";
 
 const dataStore = useDataStore();
-const assetStore = useAssetStore();
-const authStore = useAuthStore();
+const organizationStore = useOrganizationStore();
 const taskStore = useTaskStore();
+const settingsStore = useSettingsStore();
+const authStore = useAuthStore();
 
-const upcomingRenewals = ref<OrganizationAsset[]>([]);
-const isRenewalsLoading = ref(false);
+const isEditMode = ref(false);
 
-const selectedTask = ref<Task | null>(null);
-const showTaskModal = ref(false);
+const toggleEditMode = () => {
+	isEditMode.value = !isEditMode.value;
+};
 
-const reminderTasks = ref<Task[]>([]);
-const isTasksLoading = ref(false);
+const layout = computed(() => settingsStore.dashboardLayout);
 
-const loadReminderTasks = async () => {
-	isTasksLoading.value = true;
-	try {
-		await taskStore.fetchTasks();
-		const now = new Date();
-		const currentUsername = authStore.user?.username;
-		reminderTasks.value = taskStore.tasks.filter((t) => {
-			if (!t.reminder_date) return false;
-			if (t.status === "completed" || t.status === "skipped")
-				return false;
+const availableWidgets = [
+	{ id: "stats", name: "Stat Summary" },
+	{ id: "tasks", name: "Task Reminders" },
+	{ id: "vulnerabilities", name: "Vulnerabilities" },
+	{ id: "renewals", name: "Upcoming Renewals" },
+] as const;
 
-			// Filter: only show unassigned or assigned to current user
-			const isUnassigned = !t.assigned_to;
-			const isAssignedToMe =
-				currentUsername && t.assigned_to === currentUsername;
-			if (!isUnassigned && !isAssignedToMe) return false;
+const missingWidgets = computed(() => {
+	return availableWidgets.filter((w) => !layout.value.includes(w.id));
+});
 
-			return new Date(t.reminder_date) <= now;
-		});
-	} catch (e) {
-		console.error("Failed to load reminder tasks", e);
-	} finally {
-		isTasksLoading.value = false;
+const removeWidget = (id: DashboardWidgetType) => {
+	settingsStore.dashboardLayout = settingsStore.dashboardLayout.filter(
+		(w) => w !== id,
+	);
+};
+
+const addWidget = (id: DashboardWidgetType) => {
+	if (!settingsStore.dashboardLayout.includes(id)) {
+		settingsStore.dashboardLayout = [...settingsStore.dashboardLayout, id];
 	}
 };
 
-function openTask(task: Task) {
-	selectedTask.value = task;
-	showTaskModal.value = true;
-}
+// Simple native Drag & Drop reordering
+const draggedIndex = ref<number | null>(null);
 
-async function completeTask(task: Task) {
-	try {
-		await taskStore.completeTask(task.id);
-		reminderTasks.value = reminderTasks.value.filter(
-			(t) => t.id !== task.id,
-		);
-	} catch (e) {
-		console.error("Failed to complete task", e);
+const onDragStart = (index: number) => {
+	if (!isEditMode.value) return;
+	draggedIndex.value = index;
+};
+
+const onDragOver = (e: DragEvent) => {
+	if (!isEditMode.value) return;
+	e.preventDefault();
+	if (e.dataTransfer) {
+		e.dataTransfer.dropEffect = "move";
 	}
-}
+};
 
-function handleTaskUpdated(updated: Task) {
-	selectedTask.value = updated;
-	if (updated.status === "completed" || updated.status === "skipped") {
-		reminderTasks.value = reminderTasks.value.filter(
-			(t) => t.id !== updated.id,
-		);
-	}
-}
+const onDrop = (index: number) => {
+	if (!isEditMode.value || draggedIndex.value === null) return;
 
-function handleTaskDeleted() {
-	showTaskModal.value = false;
-	if (selectedTask.value) {
-		reminderTasks.value = reminderTasks.value.filter(
-			(t) => t.id !== selectedTask.value?.id,
-		);
-	}
-}
+	const newLayout = [...settingsStore.dashboardLayout];
+	const [movedItem] = newLayout.splice(draggedIndex.value, 1);
+	newLayout.splice(index, 0, movedItem);
 
-const loadRenewals = async () => {
-	isRenewalsLoading.value = true;
-	try {
-		const thirtyDaysFromNow = new Date();
-		thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-
-		upcomingRenewals.value = await assetStore.fetchAllOrganizationAssets({
-			status: "active",
-			before: thirtyDaysFromNow.toISOString(),
-		});
-
-		// Sort by next_billing
-		upcomingRenewals.value.sort((a, b) => {
-			if (!a.next_billing) return 1;
-			if (!b.next_billing) return -1;
-			return (
-				new Date(a.next_billing).getTime() -
-				new Date(b.next_billing).getTime()
-			);
-		});
-	} catch (e) {
-		console.error("Failed to load renewals", e);
-	} finally {
-		isRenewalsLoading.value = false;
-	}
+	settingsStore.dashboardLayout = newLayout;
+	draggedIndex.value = null;
 };
 
 onMounted(() => {
 	dataStore.initData();
-	loadRenewals();
-	loadReminderTasks();
+	organizationStore.fetchOrganizations();
+	taskStore.fetchTasks();
 });
-
-const formatCurrency = (cents: number) => {
-	return new Intl.NumberFormat("de-DE", {
-		style: "currency",
-		currency: "EUR",
-	}).format(cents / 100);
-};
-
-const formatDate = (dateString: string | null) => {
-	if (!dateString) return "-";
-	return new Date(dateString).toLocaleDateString("de-DE");
-};
 </script>
 
 <template>
 	<div class="view-container">
-		<ViewHeader title="Dashboard" />
+		<ViewHeader title="Dashboard">
+			<template #actions>
+				<div v-if="authStore.canEdit" class="flex-row">
+					<button
+						class="icon-btn"
+						:class="{ active: isEditMode }"
+						:title="isEditMode ? 'Done Editing' : 'Edit Layout'"
+						@click="toggleEditMode"
+					>
+						<AppIcon
+							:name="isEditMode ? 'check' : 'edit'"
+							size="20"
+						/>
+					</button>
+				</div>
+			</template>
+		</ViewHeader>
 
 		<div v-if="dataStore.error" class="error-banner">
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
 		</div>
 
-		<main class="dashboard-grid mt-4">
-			<StatCard
-				title="Sites"
-				:value="dataStore.sites.length"
-				label="Total sites in cache"
-			/>
-
-			<StatCard
-				title="Plugins"
-				:value="dataStore.pluginInfo.length"
-				label="Unique plugins in cache"
-			/>
-
-			<StatCard
-				title="Vulnerabilities"
-				:value="dataStore.activeVulnerabilities.length"
-				label="Active vulnerabilities detected"
-				:loading="dataStore.isVulnsLoading"
-				:class="{
-					'error-text': dataStore.activeVulnerabilities.length > 0,
-				}"
-			/>
-		</main>
-
-		<section
-			v-if="reminderTasks.length > 0 || isTasksLoading"
-			class="card mt-4"
+		<div
+			v-if="isEditMode && missingWidgets.length > 0"
+			class="card p-4"
+			style="margin-top: var(--space-6)"
 		>
-			<div class="card-header">
-				<h2>Tasks Needing Attention</h2>
-				<RouterLink to="/tasks" class="view-all-link"
-					>View all</RouterLink
+			<h3 class="mb-3 font-medium">Add Widgets</h3>
+			<div class="flex-row gap-2">
+				<button
+					v-for="widget in missingWidgets"
+					:key="widget.id"
+					class="btn btn-outline btn-sm"
+					@click="addWidget(widget.id as DashboardWidgetType)"
 				>
+					<AppIcon name="plus-circle" size="14" class="mr-1" />
+					{{ widget.name }}
+				</button>
 			</div>
-			<div v-if="isTasksLoading" class="loading-state">
-				<p>Loading tasks…</p>
-			</div>
-			<div v-else class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Task</th>
-							<th>Priority</th>
-							<th class="hide-mobile">Due Date</th>
-							<th></th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="task in reminderTasks"
-							:key="task.id"
-							class="clickable-row"
-							@click="openTask(task)"
-						>
-							<td class="task-title-cell">{{ task.title }}</td>
-							<td>
-								<span
-									:class="[
-										'status-badge',
-										task.priority === 'high'
-											? 'error'
-											: task.priority === 'medium'
-												? 'warning'
-												: 'default',
-									]"
-								>
-									{{ task.priority }}
-								</span>
-							</td>
-							<td
-								class="hide-mobile"
-								:class="{
-									overdue:
-										task.due_date &&
-										new Date(task.due_date) < new Date(),
-								}"
-							>
-								{{
-									task.due_date
-										? formatDate(task.due_date)
-										: "—"
-								}}
-							</td>
-							<td class="text-right" @click.stop>
-								<button
-									v-if="authStore.canEdit"
-									class="btn btn-primary btn-sm"
-									@click="completeTask(task)"
-								>
-									Complete
-								</button>
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		</section>
-
-		<div class="mt-4">
-			<VulnerabilityWidget />
 		</div>
 
-		<section
-			v-if="upcomingRenewals.length > 0 || isRenewalsLoading"
-			class="card mt-4"
-		>
-			<div class="card-header">
-				<h2>Upcoming Renewals (30 Days)</h2>
-			</div>
-			<div v-if="isRenewalsLoading" class="loading-state">
-				<p>Loading renewals...</p>
-			</div>
-			<div v-else class="table-container">
-				<table class="data-table">
-					<thead>
-						<tr>
-							<th>Organization</th>
-							<th>Asset</th>
-							<th>Price</th>
-							<th>Due Date</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr v-for="oa in upcomingRenewals" :key="oa.id">
-							<td>{{ oa.organization_name }}</td>
-							<td>
-								<strong>{{
-									oa.asset_name || oa.identifier
-								}}</strong>
-							</td>
-							<td>{{ formatCurrency(oa.price) }}</td>
-							<td
-								:class="{
-									overdue:
-										new Date(oa.next_billing || '') <
-										new Date(),
-								}"
-							>
-								{{ formatDate(oa.next_billing) }}
-							</td>
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		</section>
+		<main class="dashboard-widgets">
+			<div
+				v-for="(widgetId, index) in layout"
+				:key="widgetId"
+				class="widget-container"
+				:class="{ 'is-editing': isEditMode }"
+				:draggable="isEditMode"
+				@dragstart="onDragStart(index)"
+				@dragover="onDragOver"
+				@drop="onDrop(index)"
+			>
+				<div v-if="isEditMode" class="widget-overlay">
+					<div class="drag-handle">
+						<AppIcon name="drag-handle" size="20" />
+					</div>
+					<button
+						class="remove-btn"
+						title="Remove widget"
+						@click="removeWidget(widgetId)"
+					>
+						<AppIcon name="trash" size="18" />
+					</button>
+				</div>
 
-		<TaskInfoModal
-			v-if="showTaskModal && selectedTask"
-			:task="selectedTask"
-			@close="showTaskModal = false"
-			@edit="showTaskModal = false"
-			@updated="handleTaskUpdated"
-			@deleted="handleTaskDeleted"
-		/>
+				<StatSummaryWidget v-if="widgetId === 'stats'" />
+				<TaskReminderWidget v-else-if="widgetId === 'tasks'" />
+				<VulnerabilityWidget
+					v-else-if="widgetId === 'vulnerabilities'"
+				/>
+				<UpcomingRenewalsWidget v-else-if="widgetId === 'renewals'" />
+			</div>
+		</main>
 	</div>
 </template>
+
+<style scoped>
+.dashboard-widgets {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin-top: var(--space-6);
+}
+
+.widget-container {
+	position: relative;
+	transition: all 0.2s ease;
+}
+
+.widget-container.is-editing {
+	cursor: move;
+	border: 2px dashed var(--border-color);
+	border-radius: var(--radius-md);
+	padding: var(--space-2);
+	background: var(--bg-hover);
+}
+
+.widget-overlay {
+	position: absolute;
+	top: var(--space-4);
+	right: var(--space-4);
+	display: flex;
+	gap: var(--space-2);
+	z-index: 10;
+}
+
+.drag-handle {
+	background: var(--bg-card);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-sm);
+	padding: var(--space-1);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: grab;
+	opacity: 0.7;
+}
+
+.remove-btn {
+	background: var(--bg-card);
+	border: 1px solid var(--border-color);
+	border-radius: var(--radius-sm);
+	padding: var(--space-1);
+	color: var(--error-text);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.remove-btn:hover {
+	background: var(--error-bg);
+}
+
+.mb-3 {
+	margin-bottom: var(--space-3);
+}
+
+.mr-1 {
+	margin-right: var(--space-1);
+}
+
+.p-4 {
+	padding: var(--space-4);
+}
+</style>
