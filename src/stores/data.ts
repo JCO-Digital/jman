@@ -6,6 +6,8 @@ import type {
 	Plugin,
 	PluginInfo,
 	Vulnerability,
+	PluginVulnerability,
+	EnrichedVulnerability,
 	EnrichedSite,
 	EnrichedPlugin,
 } from "../types";
@@ -26,7 +28,7 @@ export const useDataStore = defineStore("data", () => {
 	const siteOrganizationLinks = ref<Record<number, number>>({});
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
-	const vulnerabilities = ref<Vulnerability[]>([]);
+	const vulnerabilities = ref<PluginVulnerability[]>([]);
 
 	const isLoaded = ref(false);
 	const isLoading = ref(false);
@@ -36,19 +38,25 @@ export const useDataStore = defineStore("data", () => {
 	// Optimization Maps
 	const vulnerabilitiesBySlug = computed(() => {
 		const map = new Map<string, Vulnerability[]>();
-		for (const v of vulnerabilities.value) {
-			if (!map.has(v.slug)) map.set(v.slug, []);
-			map.get(v.slug)!.push(v);
+		for (const pv of vulnerabilities.value) {
+			map.set(pv.slug, pv.vulnerabilities);
 		}
 		return map;
 	});
 
 	const vulnerabilitiesBySiteId = computed(() => {
-		const map = new Map<number, Vulnerability[]>();
-		for (const v of vulnerabilities.value) {
-			for (const s of v.sites) {
-				if (!map.has(s.site_id)) map.set(s.site_id, []);
-				map.get(s.site_id)!.push(v);
+		const map = new Map<number, EnrichedVulnerability[]>();
+		for (const pv of vulnerabilities.value) {
+			for (const v of pv.vulnerabilities) {
+				for (const s of v.sites) {
+					if (!map.has(s.site_id)) map.set(s.site_id, []);
+					map.get(s.site_id)!.push({
+						...v,
+						slug: pv.slug,
+						plugin_name: pv.plugin_name,
+						plugin_suppressed: pv.suppressed,
+					});
+				}
 			}
 		}
 		return map;
@@ -99,16 +107,23 @@ export const useDataStore = defineStore("data", () => {
 	const activeVulnerabilities = computed(() => {
 		// Filter out vulnerabilities that are suppressed at the plugin level
 		// and only count sites where the vulnerability is not suppressed at the site/server level.
-		const active = [];
-		for (const v of vulnerabilities.value) {
-			if (v.suppressed) continue;
+		const active: EnrichedVulnerability[] = [];
+		for (const pv of vulnerabilities.value) {
+			if (pv.suppressed) continue;
 
-			const activeSites = v.sites.filter((s) => !s.suppressed);
-			if (activeSites.length > 0) {
-				active.push({
-					...v,
-					sites: activeSites,
-				});
+			for (const v of pv.vulnerabilities) {
+				if (v.suppressed) continue;
+
+				const activeSites = v.sites.filter((s) => !s.suppressed);
+				if (activeSites.length > 0) {
+					active.push({
+						...v,
+						slug: pv.slug,
+						plugin_name: pv.plugin_name,
+						plugin_suppressed: pv.suppressed,
+						sites: activeSites,
+					});
+				}
 			}
 		}
 		return active;
@@ -135,13 +150,7 @@ export const useDataStore = defineStore("data", () => {
 				}
 			}
 
-			const vulns = (
-				vulnerabilitiesBySlug.value.get(info.slug) || []
-			).map((v) => ({
-				...v,
-				// Use API's root suppressed field for plugin-level suppression
-				isSuppressed: v.suppressed,
-			}));
+			const vulns = vulnerabilitiesBySlug.value.get(info.slug) || [];
 
 			return {
 				...info,
@@ -167,8 +176,15 @@ export const useDataStore = defineStore("data", () => {
 				);
 				return {
 					...v,
-					// Use the API's site-specific suppressed field
-					isSuppressed: siteSpecificVuln?.suppressed || false,
+					// A vulnerability is effectively suppressed for a site if:
+					// 1. The plugin is ignored globally (v.plugin_suppressed)
+					// 2. The vulnerability itself is ignored (v.suppressed)
+					// 3. The site/server is ignored (siteSpecificVuln.suppressed)
+					suppressed:
+						v.plugin_suppressed ||
+						v.suppressed ||
+						siteSpecificVuln?.suppressed ||
+						false,
 				};
 			});
 

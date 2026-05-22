@@ -154,25 +154,33 @@ export interface VulnerabilitySite {
 }
 
 export interface Vulnerability {
+	uuid: string;
+	name: string;
+	description: string | null;
+	operator: {
+		max_version: string | null;
+		max_operator: string | null;
+		unfixed: string;
+		closed: string;
+	};
+	source: VulnerabilitySource[];
+	impact: VulnerabilityImpact;
+	sites: VulnerabilitySite[];
+	suppressed: boolean;
+}
+
+export interface PluginVulnerability {
 	plugin: string;
 	slug: string;
 	plugin_name: string;
 	suppressed: boolean;
-	vulnerability: {
-		uuid: string;
-		name: string;
-		description: string | null;
-		operator: {
-			max_version: string | null;
-			max_operator: string | null;
-			unfixed: string;
-			closed: string;
-		};
-		source: VulnerabilitySource[];
-		impact: VulnerabilityImpact;
-		sites: VulnerabilitySite[];
-	};
-	sites: VulnerabilitySite[];
+	vulnerabilities: Vulnerability[];
+}
+
+export interface EnrichedVulnerability extends Vulnerability {
+	slug: string;
+	plugin_name: string;
+	plugin_suppressed: boolean;
 }
 
 export interface MonitorHistory {
@@ -223,7 +231,7 @@ export type UpdateIgnorePayload = Partial<CreateIgnorePayload>;
 export interface EnrichedSite extends Site {
 	server: string;
 	plugins: Plugin[];
-	vulnerabilities: Vulnerability[];
+	vulnerabilities: EnrichedVulnerability[];
 	monitorHistory?: MonitorHistory[];
 	monitorStatus?: MonitorStatus;
 }
