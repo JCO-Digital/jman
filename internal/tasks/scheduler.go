@@ -65,11 +65,17 @@ func syncVulnerabilities() error {
 		return err
 	}
 
-	// Group reports by site
-	siteVulns := make(map[int][]models.VulnReport)
+	// Group vulnerabilities by site
+	type siteVulnLink struct {
+		Report models.VulnReport
+		Vuln   models.Vulnerability
+	}
+	siteVulns := make(map[int][]siteVulnLink)
 	for _, report := range reports {
-		for _, site := range report.Sites {
-			siteVulns[site.SiteID] = append(siteVulns[site.SiteID], report)
+		for _, v := range report.Vulnerabilities {
+			for _, site := range v.Sites {
+				siteVulns[site.SiteID] = append(siteVulns[site.SiteID], siteVulnLink{report, v})
+			}
 		}
 	}
 
@@ -80,27 +86,27 @@ func syncVulnerabilities() error {
 		siteNameMap[s.ID] = s.Name
 	}
 
-	for siteID, reports := range siteVulns {
+	for siteID, links := range siteVulns {
 		var maxCvss float64
 		var totalVulns int
 		var uuids []string
 		pluginMap := make(map[string]*models.VulnPlugin)
 
-		for _, report := range reports {
+		for _, link := range links {
 			totalVulns++
-			uuids = append(uuids, report.Vulnerability.Uuid)
+			uuids = append(uuids, link.Vuln.Uuid)
 
 			// Find CVSS
 			var cvss float64
-			if report.Vulnerability.Impact != nil && report.Vulnerability.Impact.Cvss != nil {
-				fmt.Sscanf(report.Vulnerability.Impact.Cvss.Score, "%f", &cvss)
+			if link.Vuln.Impact != nil && link.Vuln.Impact.Cvss != nil {
+				fmt.Sscanf(link.Vuln.Impact.Cvss.Score, "%f", &cvss)
 			}
 			if cvss > maxCvss {
 				maxCvss = cvss
 			}
 
 			siteVersion := ""
-			for _, site := range report.Sites {
+			for _, site := range link.Vuln.Sites {
 				if site.SiteID == siteID {
 					siteVersion = site.Version
 					break
@@ -108,15 +114,15 @@ func syncVulnerabilities() error {
 			}
 
 			// Group for description
-			if _, ok := pluginMap[report.Slug]; !ok {
-				pluginMap[report.Slug] = &models.VulnPlugin{
-					PluginName: report.PluginName,
+			if _, ok := pluginMap[link.Report.Slug]; !ok {
+				pluginMap[link.Report.Slug] = &models.VulnPlugin{
+					PluginName: link.Report.PluginName,
 					Version:    siteVersion,
 					Cvss:       &cvss,
 				}
 			} else {
-				if cvss > *pluginMap[report.Slug].Cvss {
-					*pluginMap[report.Slug].Cvss = cvss
+				if cvss > *pluginMap[link.Report.Slug].Cvss {
+					*pluginMap[link.Report.Slug].Cvss = cvss
 				}
 			}
 		}
