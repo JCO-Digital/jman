@@ -1,6 +1,17 @@
 # Changelog
 
-### 1.27.1 (2026-05-21)
+### 1.27.2 (2026-05-22)
+
+#### Refactor
+
+- data: update vulnerability enrichment logic in store (315ab31)
+- data: normalize vulnerability data structures (cbe2580)
+
+#### Maintenance
+
+- store: update vulnerabilities cache key (a75d409)
+
+### v1.27.1 (2026-05-21)
 
 #### Styles
 
