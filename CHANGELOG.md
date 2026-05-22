@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.15.0 (2026-05-21)
+## 5.16.0 (2026-05-22)
+
+#### Features
+
+- cache: add suppressed field to plugin site data structure (cf1b153)
+- api: track user who completed tasks (b890156)
+
+#### Refactor
+
+- task: move completion logic to database repository (d65c9cb)
+
+## v5.15.0 (2026-05-21)
 
 #### Features
 
