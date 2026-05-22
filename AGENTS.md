@@ -1,6 +1,14 @@
-# Project Styling Guidelines
+# Project Guidelines
 
-To maintain a unified visual style and clean architecture, all agents and developers must adhere to the following styling guidelines for the `jman-ui` project.
+To maintain a unified visual style and clean architecture, all agents and developers must adhere to the following guidelines for the `jman-ui` project.
+
+## 0. Package Management
+
+**ALWAYS** use `pnpm` for managing dependencies and running scripts. Do not use `npm` or `yarn`.
+
+- Install dependencies: `pnpm install`
+- Add a package: `pnpm add <package>`
+- Run scripts: `pnpm <script>` (e.g., `pnpm dev`, `pnpm build`)
 
 ## 1. Modular CSS Architecture
 
@@ -70,5 +78,45 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 For information regarding backend API endpoints, payloads, and authentication, refer to the official API specification:
 
 - [API Specification (API_SPECS.md)](https://github.com/JCO-Digital/jman/blob/main/docs/API_SPECS.md)
+
+## 9. Code Design & Architecture
+
+The project is built with **Vue 3**, **TypeScript**, and **Vite**.
+
+### Vue Components
+
+- Use the **Composition API** with `<script setup lang="ts">`.
+- Keep components small and focused.
+- Props should be clearly defined using `defineProps<{ ... }>()`.
+- Emits should be clearly defined using `defineEmits<{ ... }>()`.
+
+### State Management (Pinia)
+
+- Use **Pinia** for global state management.
+- Use the **Setup Store** syntax (passing a function as the second argument to `defineStore`).
+- Organize stores by domain (e.g., `auth.ts`, `tasks.ts`, `data.ts`) in `src/stores/`.
+- Access stores in components using `const store = useXStore()`.
+
+### Directory Structure
+
+- `src/components/`: Reusable UI components.
+- `src/views/`: Main page components that correspond to routes.
+- `src/stores/`: Pinia stores for state management.
+- `src/utils/`: Helper functions and shared logic.
+- `src/styles/`: Modular CSS files.
+- `src/assets/`: Static assets like icons (SVG) and images.
+- `src/router/`: Vue Router configuration.
+
+### Type Safety
+
+- Always use TypeScript for all new code.
+- Define shared interfaces and types in `src/types.ts`.
+- Avoid using `any`; define proper types for API responses and component state.
+
+### API Interaction
+
+- Use the native `fetch` API for network requests.
+- Centralize API logic within Pinia actions to keep components clean.
+- Always include error handling and loading states for asynchronous operations.
 
 When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.
