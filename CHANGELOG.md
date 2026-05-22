@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.16.0 (2026-05-22)
+## 5.17.0 (2026-05-22)
+
+#### Features
+
+- vuln: refactor vulnerability reporting to support multiple vulnerabilities per plugin (be828a0)
+
+#### Bug Fixes
+
+- vuln: ignore suppressed vulnerabilities and fix CVSS pointer assignment (f78b64a)
+- vuln: recompute CVSS score after filtering vulnerabilities (6b3768e)
+
+## v5.16.0 (2026-05-22)
 
 #### Features
 
