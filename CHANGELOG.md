@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.27.2 (2026-05-22)
+## 1.28.0 (2026-05-22)
+
+#### Features
+
+- dashboard: implement modular and reorderable widget system (4bea0bd)
+
+### v1.27.2 (2026-05-22)
 
 #### Refactor
 
