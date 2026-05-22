@@ -261,10 +261,11 @@ func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[int]map[string]*models.Vu
 
 				currentPlugin, ok := currentSite[report.Slug]
 				if !ok {
+					score := cvss
 					currentPlugin = &models.VulnPlugin{
 						PluginName:    report.PluginName,
 						Version:       site.Version,
-						Cvss:          &cvss,
+						Cvss:          &score,
 						Vulnerability: []models.Vulnerability{},
 					}
 					currentSite[report.Slug] = currentPlugin
@@ -272,7 +273,8 @@ func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[int]map[string]*models.Vu
 
 				// Keep the maximum CVSS observed for this plugin on this site.
 				if currentPlugin.Cvss == nil || cvss > *currentPlugin.Cvss {
-					currentPlugin.Cvss = &cvss
+					score := cvss
+					currentPlugin.Cvss = &score
 				}
 
 				currentPlugin.Vulnerability = append(currentPlugin.Vulnerability, v)

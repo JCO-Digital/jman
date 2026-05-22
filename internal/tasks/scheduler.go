@@ -72,8 +72,17 @@ func syncVulnerabilities() error {
 	}
 	siteVulns := make(map[int][]siteVulnLink)
 	for _, report := range reports {
+		if report.Suppressed {
+			continue
+		}
 		for _, v := range report.Vulnerabilities {
+			if v.Suppressed {
+				continue
+			}
 			for _, site := range v.Sites {
+				if site.Suppressed {
+					continue
+				}
 				siteVulns[site.SiteID] = append(siteVulns[site.SiteID], siteVulnLink{report, v})
 			}
 		}
@@ -115,14 +124,16 @@ func syncVulnerabilities() error {
 
 			// Group for description
 			if _, ok := pluginMap[link.Report.Slug]; !ok {
+				score := cvss
 				pluginMap[link.Report.Slug] = &models.VulnPlugin{
 					PluginName: link.Report.PluginName,
 					Version:    siteVersion,
-					Cvss:       &cvss,
+					Cvss:       &score,
 				}
 			} else {
 				if cvss > *pluginMap[link.Report.Slug].Cvss {
-					*pluginMap[link.Report.Slug].Cvss = cvss
+					score := cvss
+					pluginMap[link.Report.Slug].Cvss = &score
 				}
 			}
 		}
