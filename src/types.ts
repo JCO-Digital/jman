@@ -239,7 +239,7 @@ export interface EnrichedSite extends Site {
 export interface EnrichedPlugin extends PluginInfo {
 	shortName: string;
 	count: number;
-	vulnerabilities: Vulnerability[];
+	vulnerabilities: EnrichedVulnerability[];
 }
 
 export interface Organization {
