@@ -158,7 +158,7 @@ Returns a list of tasks matching the provided filters.
 	{
 		"id": 1,
 		"type": "one-time",
-		"status": "pending",
+		"status": "completed",
 		"priority": "high",
 		"title": "Security Vulnerabilities - example.com",
 		"description": "...",

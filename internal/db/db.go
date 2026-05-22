@@ -380,6 +380,10 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_completed_by ON tasks(completed_by);")
 	return err
 }
 
