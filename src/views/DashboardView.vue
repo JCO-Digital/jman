@@ -70,10 +70,11 @@ const onDrop = (index: number) => {
 	if (!isEditMode.value || draggedIndex.value === null) return;
 
 	const newLayout = [...settingsStore.dashboardLayout];
-	const [movedItem] = newLayout.splice(draggedIndex.value, 1);
-	newLayout.splice(index, 0, movedItem);
-
-	settingsStore.dashboardLayout = newLayout;
+	const movedItem = newLayout.splice(draggedIndex.value, 1)[0];
+	if (movedItem) {
+		newLayout.splice(index, 0, movedItem);
+		settingsStore.dashboardLayout = newLayout;
+	}
 	draggedIndex.value = null;
 };
 
