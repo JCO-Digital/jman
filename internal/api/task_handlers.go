@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -153,14 +152,6 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		if updates.Status == "" {
 			WriteError(w, http.StatusBadRequest, "Status cannot be empty")
 			return
-		}
-		if updates.Status == models.TaskStatusCompleted && existing.Status != models.TaskStatusCompleted {
-			now := time.Now()
-			existing.CompletedAt = &now
-			existing.CompletedBy = &claims.Username
-		} else if updates.Status != models.TaskStatusCompleted && existing.Status == models.TaskStatusCompleted {
-			existing.CompletedAt = nil
-			existing.CompletedBy = nil
 		}
 		existing.Status = updates.Status
 	}

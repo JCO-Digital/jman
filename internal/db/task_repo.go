@@ -19,6 +19,20 @@ func SaveTask(task *models.Task, username string) error {
 	}
 
 	now := time.Now()
+
+	// Normalize completion fields based on status
+	if task.Status != models.TaskStatusCompleted {
+		task.CompletedAt = nil
+		task.CompletedBy = nil
+	} else {
+		if task.CompletedAt == nil {
+			task.CompletedAt = &now
+		}
+		if task.CompletedBy == nil {
+			task.CompletedBy = &username
+		}
+	}
+
 	if task.ID == 0 {
 		query := `
 		INSERT INTO tasks (
@@ -200,10 +214,7 @@ func CompleteTask(id int, username string) error {
 		return nil
 	}
 
-	now := time.Now()
 	task.Status = models.TaskStatusCompleted
-	task.CompletedAt = &now
-	task.CompletedBy = &username
 
 	if err := SaveTask(task, username); err != nil {
 		return err
