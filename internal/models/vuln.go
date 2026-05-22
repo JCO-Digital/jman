@@ -65,6 +65,7 @@ type Vulnerability struct {
 	Source      []Source     `json:"source"`
 	Impact      *Impact      `json:"impact,omitempty"`
 	Sites       []PluginSite `json:"sites,omitempty"`
+	Suppressed  bool         `json:"suppressed"`
 }
 
 type VulnData struct {
@@ -84,12 +85,11 @@ type VulnResponse struct {
 }
 
 type VulnReport struct {
-	Plugin        string        `json:"plugin"`
-	Slug          string        `json:"slug"`
-	PluginName    string        `json:"plugin_name"`
-	Vulnerability Vulnerability `json:"vulnerability"`
-	Sites         []PluginSite  `json:"sites"`
-	Suppressed    bool          `json:"suppressed"`
+	Plugin          string          `json:"plugin"`
+	Slug            string          `json:"slug"`
+	PluginName      string          `json:"plugin_name"`
+	Vulnerabilities []Vulnerability `json:"vulnerabilities"`
+	Suppressed      bool            `json:"suppressed"`
 }
 
 type VulnPlugin struct {

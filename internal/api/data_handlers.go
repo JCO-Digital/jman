@@ -111,11 +111,6 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Enrich each vulnerability with its affected sites for UI convenience.
-		for i := range reports {
-			reports[i].Vulnerability.Sites = reports[i].Sites
-		}
-
 		WriteJSON(w, http.StatusOK, reports)
 		return
 	}
@@ -148,21 +143,18 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	reports := vuln.GetVulnerabilityReportsForPlugin(pluginName, targetSites, matcher)
-
-	// Prepare the response data based on the original structure but filtered.
-	// We return a copy of VulnData with filtered and enriched vulnerabilities.
-	response := *vulnResponse.Data
-	response.Suppressed = matcher != nil && matcher.IsPluginIgnored(pluginName)
-	response.Vulnerability = []models.Vulnerability{}
-
-	for _, report := range reports {
-		v := report.Vulnerability
-		v.Sites = report.Sites
-		response.Vulnerability = append(response.Vulnerability, v)
+	report := vuln.GetVulnerabilityReportsForPlugin(pluginName, targetSites, matcher)
+	if report == nil {
+		// Return the basic cached data but with zero vulnerabilities if none passed filtering.
+		response := *vulnResponse.Data
+		response.Suppressed = matcher != nil && matcher.IsPluginIgnored(pluginName)
+		response.Vulnerability = []models.Vulnerability{}
+		WriteJSON(w, http.StatusOK, response)
+		return
 	}
 
-	WriteJSON(w, http.StatusOK, response)
+	// Return a GroupedVulnReport style response for consistency.
+	WriteJSON(w, http.StatusOK, report)
 }
 
 // SitePluginUpdatesHandler returns the list of plugins with available updates for a site.

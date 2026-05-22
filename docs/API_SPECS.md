@@ -467,41 +467,47 @@ Returns vulnerability reports for managed plugins.
 		"plugin": "akismet",
 		"slug": "akismet",
 		"plugin_name": "Akismet Anti-Spam",
-		"vulnerability": {
-			"uuid": "...",
-			"name": "...",
-			"impact": { "cvss": { "score": "7.5" } },
-			"sites": [...]
-		},
-		"sites": [
-			{ "site_id": 123, "site_name": "example.com", "version": "5.0.0", "suppressed": false }
-		],
-		"suppressed": false
+		"suppressed": false,
+		"vulnerabilities": [
+			{
+				"uuid": "...",
+				"name": "...",
+				"impact": { "cvss": { "score": "7.5" } },
+				"suppressed": false,
+				"sites": [
+					{
+						"site_id": 123,
+						"site_name": "example.com",
+						"version": "5.0.0",
+						"suppressed": false
+					}
+				]
+			}
+		]
 	}
 ]
 ```
 
 **Success Response (200 OK - With plugin parameter)**
 
+Returns a single plugin report. Note that if active vulnerabilities are found, the structure matches a single item from the list above. If no active vulnerabilities are found after filtering, it returns the base plugin metadata.
+
 ```json
 {
-	"name": "Akismet Anti-Spam",
 	"plugin": "akismet",
-	"vulnerability": [
-		{
-			"uuid": "...",
-			"sites": [{ "site_id": 123, "version": "5.0.0", "suppressed": false }]
-		}
-	],
-	"suppressed": false
+	"slug": "akismet",
+	"plugin_name": "Akismet Anti-Spam",
+	"suppressed": false,
+	"vulnerabilities": [...]
 }
 ```
 
 **Notes on Suppression**
 
 - Vulnerabilities ignored by their specific **UUID** are completely excluded from the response.
-- If a **Plugin** is ignored, it will be included but marked with `"suppressed": true`.
-- If a **Site** or **Server** is ignored, affected sites within a vulnerability report will be marked with `"suppressed": true`.
+- If a **Plugin** is ignored, the root `"suppressed"` flag will be `true`.
+- If a **Site** or **Server** is ignored, affected sites will be marked with `"suppressed": true`.
+- A vulnerability is marked `"suppressed": true` if either the plugin is ignored or **all** affected sites are suppressed.
 
 ---
 
