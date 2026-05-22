@@ -197,9 +197,10 @@ func groupPlugins(plugins []models.WPPlugin) ([]models.WPPluginData, error) {
 		}
 
 		data.Sites = append(data.Sites, models.PluginSite{
-			SiteID:   plugin.SiteID,
-			SiteName: siteNames[plugin.SiteID],
-			Version:  plugin.Version,
+			SiteID:     plugin.SiteID,
+			SiteName:   siteNames[plugin.SiteID],
+			Version:    plugin.Version,
+			Suppressed: false, // Default value; will be populated by vuln scanning logic if needed.
 		})
 	}
 
