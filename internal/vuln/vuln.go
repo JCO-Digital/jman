@@ -145,8 +145,6 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 			continue
 		}
 
-		maxCvss := getCvss(report)
-
 		if opts.SiteSearch != "" {
 			// Filter vulnerabilities and their sites to those matching the search term.
 			var activeVulns []models.Vulnerability
@@ -198,11 +196,15 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 			}
 			report.Vulnerabilities = activeVulns
 
+			// Recompute maxCvss from filtered vulnerabilities before applying threshold.
+			maxCvss := getCvss(report)
 			if opts.CVSSThreshold > 0 && maxCvss < opts.CVSSThreshold {
 				continue
 			}
 		}
 
+		// Recompute final maxCvss for Slack force flag after all filtering is complete.
+		finalMaxCvss := getCvss(report)
 		message, err := formatReport(report)
 		if err != nil {
 			// Skip malformed/unformattable entries without stopping the whole scan.
@@ -212,7 +214,7 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 		fmt.Println(message)
 
 		if opts.Slack {
-			force := maxCvss >= config.Cfg.CVSSThreshold
+			force := finalMaxCvss >= config.Cfg.CVSSThreshold
 			slack.SendMessage(message, force)
 		}
 	}
