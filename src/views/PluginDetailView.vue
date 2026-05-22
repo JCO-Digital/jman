@@ -55,7 +55,7 @@ const sitesWithPlugin = computed(() => {
 
 			// Check if this site specifically suppresses these vulnerabilities
 			let isVulnerable = vulnerableSites.has(p.site_id);
-			let isSuppressed = false;
+			let suppressed = false;
 
 			if (isVulnerable && enrichedSite) {
 				const siteVulns = enrichedSite.vulnerabilities.filter(
@@ -65,7 +65,7 @@ const sitesWithPlugin = computed(() => {
 					siteVulns.length > 0 &&
 					siteVulns.every((v) => v.suppressed)
 				) {
-					isSuppressed = true;
+					suppressed = true;
 				}
 			}
 
@@ -74,7 +74,7 @@ const sitesWithPlugin = computed(() => {
 				site_domain: site ? site.domain : "Unknown Site",
 				site_id: p.site_id,
 				isVulnerable,
-				isSuppressed,
+				suppressed,
 			};
 		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
@@ -198,13 +198,13 @@ const manageAssetTemplate = () => {
 										v-if="item.isVulnerable"
 										class="status-badge"
 										:class="
-											item.isSuppressed
+											item.suppressed
 												? 'warning'
 												: 'error'
 										"
 									>
 										{{
-											item.isSuppressed
+											item.suppressed
 												? "Suppressed"
 												: "Yes"
 										}}

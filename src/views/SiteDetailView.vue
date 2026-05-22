@@ -91,7 +91,7 @@ const sitePlugins = computed(() => {
 		return {
 			...plugin,
 			vulnerabilities: vulns,
-			isSuppressed: vulns.length > 0 && vulns.every((v) => v.suppressed),
+			suppressed: vulns.length > 0 && vulns.every((v) => v.suppressed),
 		};
 	});
 });
@@ -401,11 +401,11 @@ const unlinkOrganization = async () => {
 										v-if="plugin.vulnerabilities.length > 0"
 										class="status-badge badge-sm"
 										:class="
-											plugin.isSuppressed
+											plugin.suppressed
 												? 'warning'
 												: 'error'
 										"
-										:title="`${plugin.vulnerabilities.length} vulnerabilities detected${plugin.isSuppressed ? ' (Suppressed)' : ''}`"
+										:title="`${plugin.vulnerabilities.length} vulnerabilities detected${plugin.suppressed ? ' (Suppressed)' : ''}`"
 									>
 										{{ plugin.vulnerabilities.length }}
 									</span>
