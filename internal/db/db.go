@@ -330,6 +330,7 @@ func initSchema() error {
 				"reminder_date":    "DATETIME",
 				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"completed_at":     "DATETIME",
+				"completed_by":     "TEXT",
 				"last_notified_at": "DATETIME",
 				"created_by":       "TEXT",
 				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
@@ -379,6 +380,10 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_completed_by ON tasks(completed_by);")
 	return err
 }
 

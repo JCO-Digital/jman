@@ -19,20 +19,36 @@ func SaveTask(task *models.Task, username string) error {
 	}
 
 	now := time.Now()
+
+	// Normalize completion fields based on status
+	if task.Status != models.TaskStatusCompleted {
+		task.CompletedAt = nil
+		task.CompletedBy = nil
+	} else {
+		if task.CompletedAt == nil {
+			task.CompletedAt = &now
+		}
+		if task.CompletedBy == nil {
+			task.CompletedBy = &username
+		}
+	}
+
 	if task.ID == 0 {
 		query := `
 		INSERT INTO tasks (
 			type, status, priority, title, description,
 			site_id, server_id, organization_id, plugin_slug,
 			assigned_to, metadata, interval, due_date, reminder_date,
-			created_at, created_by, updated_at, last_notified_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at, created_by, updated_at, last_notified_at,
+			completed_at, completed_by
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		result, err := database.Exec(query,
 			task.Type, task.Status, task.Priority, task.Title, task.Description,
 			task.SiteID, task.ServerID, task.OrganizationID, task.PluginSlug,
 			task.AssignedTo, task.Metadata, task.Interval, task.DueDate, task.ReminderDate,
 			now, username, now, task.LastNotifiedAt,
+			task.CompletedAt, task.CompletedBy,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to insert task: %w", err)
@@ -48,14 +64,14 @@ func SaveTask(task *models.Task, username string) error {
 			type = ?, status = ?, priority = ?, title = ?, description = ?,
 			site_id = ?, server_id = ?, organization_id = ?, plugin_slug = ?,
 			assigned_to = ?, metadata = ?, interval = ?, due_date = ?, reminder_date = ?,
-			completed_at = ?, updated_at = ?, last_notified_at = ?
+			completed_at = ?, completed_by = ?, updated_at = ?, last_notified_at = ?
 		WHERE id = ?
 		`
 		_, err := database.Exec(query,
 			task.Type, task.Status, task.Priority, task.Title, task.Description,
 			task.SiteID, task.ServerID, task.OrganizationID, task.PluginSlug,
 			task.AssignedTo, task.Metadata, task.Interval, task.DueDate, task.ReminderDate,
-			task.CompletedAt, now, task.LastNotifiedAt, task.ID,
+			task.CompletedAt, task.CompletedBy, now, task.LastNotifiedAt, task.ID,
 		)
 		if err != nil {
 			return fmt.Errorf("failed to update task: %w", err)
@@ -77,7 +93,7 @@ func GetTask(id int) (*models.Task, error) {
 		id, type, status, priority, title, description,
 		site_id, server_id, organization_id, plugin_slug,
 		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, created_by, updated_at, last_notified_at
+		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
 	FROM tasks WHERE id = ?`
 
 	var t models.Task
@@ -85,7 +101,7 @@ func GetTask(id int) (*models.Task, error) {
 		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
 		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-		&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
+		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -101,6 +117,7 @@ type TaskFilter struct {
 	Status         models.TaskStatus
 	Priority       models.TaskPriority
 	AssignedTo     string
+	CompletedBy    string
 	SiteID         int
 	OrganizationID int
 	ServerID       int
@@ -119,7 +136,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 		id, type, status, priority, title, description,
 		site_id, server_id, organization_id, plugin_slug,
 		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, created_by, updated_at, last_notified_at
+		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
 	FROM tasks WHERE 1=1`
 
 	var args []interface{}
@@ -135,6 +152,10 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 	if filter.AssignedTo != "" {
 		query += " AND assigned_to = ?"
 		args = append(args, filter.AssignedTo)
+	}
+	if filter.CompletedBy != "" {
+		query += " AND completed_by = ?"
+		args = append(args, filter.CompletedBy)
 	}
 	if filter.SiteID != 0 {
 		query += " AND site_id = ?"
@@ -169,7 +190,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 			&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
 			&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 			&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-			&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
+			&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -193,9 +214,7 @@ func CompleteTask(id int, username string) error {
 		return nil
 	}
 
-	now := time.Now()
 	task.Status = models.TaskStatusCompleted
-	task.CompletedAt = &now
 
 	if err := SaveTask(task, username); err != nil {
 		return err
@@ -314,7 +333,7 @@ func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
 		id, type, status, priority, title, description,
 		site_id, server_id, organization_id, plugin_slug,
 		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, created_by, updated_at, last_notified_at
+		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
 	FROM tasks
 	WHERE site_id = ? AND status != 'completed' AND status != 'skipped' AND title LIKE 'Security Vulnerabilities%'
 	LIMIT 1`
@@ -324,7 +343,7 @@ func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
 		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
 		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-		&t.CreatedAt, &t.CompletedAt, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
+		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
