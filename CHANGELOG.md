@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.28.0 (2026-05-22)
+### 1.28.1 (2026-05-22)
+
+#### Bug Fixes
+
+- dashboard: prevent null item insertion during drag and drop reordering (4c0f9fc)
+
+## v1.28.0 (2026-05-22)
 
 #### Features
 
