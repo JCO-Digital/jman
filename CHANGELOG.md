@@ -1,6 +1,26 @@
 # Changelog
 
-### 1.28.1 (2026-05-22)
+## 1.29.0 (2026-05-25)
+
+#### Features
+
+- ui: implement asynchronous confirmation modal (d4be1e7)
+
+#### Bug Fixes
+
+- auth: log server response body on login failure (9a0b944)
+
+#### Refactor
+
+- icons: convert SVG assets to Vue components (1cc60fb)
+- api: centralize BASE_URL definition (482306f)
+- api: use centralized error handler in stores (385da54)
+
+#### Documentation
+
+- AGENTS: update icon implementation details and document intentional design decisions (9281562)
+
+### v1.28.1 (2026-05-22)
 
 #### Bug Fixes
 
