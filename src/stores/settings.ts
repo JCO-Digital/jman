@@ -29,9 +29,8 @@ export const useSettingsStore = defineStore("settings", () => {
 		"renewals",
 	]);
 
-	let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
-
 	const isInitializing = ref(false);
+	let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
 	// Initialize from API (with localStorage fallback)
 	async function initialize() {
@@ -68,11 +67,17 @@ export const useSettingsStore = defineStore("settings", () => {
 	}
 
 	function applySettings(data: Partial<AppSettings>) {
-		if (data.monitorRefreshInterval) {
-			monitorRefreshInterval.value = data.monitorRefreshInterval;
+		if (data.monitorRefreshInterval != null) {
+			monitorRefreshInterval.value = Math.max(
+				10,
+				Math.min(3600, data.monitorRefreshInterval),
+			);
 		}
-		if (data.dataRefreshInterval) {
-			dataRefreshInterval.value = data.dataRefreshInterval;
+		if (data.dataRefreshInterval != null) {
+			dataRefreshInterval.value = Math.max(
+				10,
+				Math.min(3600, data.dataRefreshInterval),
+			);
 		}
 		if (data.vulnCvssThreshold !== undefined) {
 			vulnCvssThreshold.value = data.vulnCvssThreshold;
@@ -101,7 +106,10 @@ export const useSettingsStore = defineStore("settings", () => {
 			clearTimeout(debounceTimeout);
 		}
 
-		// Save to API if authenticated and not in the middle of initializing
+		// Save to API if authenticated and not in the middle of initializing.
+		// The isInitializing guard prevents the watchers that fire when
+		// applySettings() writes reactive state from immediately writing
+		// those values back to the API before the full fetch has settled.
 		if (authStore.isAuthenticated && !isInitializing.value) {
 			debounceTimeout = setTimeout(async () => {
 				try {

@@ -64,6 +64,10 @@ function validateSlackId(id: string) {
 	return /^[UW][A-Z0-9]{8}$/.test(id);
 }
 
+function handleSlackIdInput() {
+	slackId.value = slackId.value.toUpperCase();
+}
+
 async function saveSlackId() {
 	if (slackId.value && !validateSlackId(slackId.value)) {
 		slackError.value =
@@ -290,7 +294,7 @@ function cancelDisable() {
 					type="text"
 					placeholder="e.g. U0G9QF9C6"
 					maxlength="9"
-					@input="slackId = slackId.toUpperCase()"
+					@input="handleSlackIdInput"
 				/>
 				<p class="help-text">
 					Format: U or W followed by 8 characters.

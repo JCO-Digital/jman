@@ -6,6 +6,7 @@ import { useAuthStore } from "../stores/auth";
 import { useUserStore } from "../stores/user";
 import AppIcon from "./AppIcon.vue";
 import type { Task, TaskStatus } from "../types";
+import { useConfirm } from "../composables/useConfirm";
 
 const props = defineProps<{
 	task: Task;
@@ -21,6 +22,7 @@ const emit = defineEmits<{
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
 const userStore = useUserStore();
+const { confirm } = useConfirm();
 
 const isActioning = ref(false);
 const actionError = ref<string | null>(null);
@@ -54,7 +56,7 @@ async function changeStatus(status: TaskStatus) {
 const isDeleting = ref(false);
 
 async function handleDelete() {
-	if (!confirm(`Delete task "${props.task.title}"?`)) return;
+	if (!await confirm(`Delete task "${props.task.title}"?`, { danger: true })) return;
 	isDeleting.value = true;
 	try {
 		await taskStore.deleteTask(props.task.id);

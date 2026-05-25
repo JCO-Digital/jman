@@ -205,6 +205,13 @@ export const useAuthStore = defineStore("auth", () => {
 		}
 	}
 
+	function setDisplayName(name: string) {
+		if (user.value) {
+			user.value.displayName = name;
+			localStorage.setItem(LS_USER, JSON.stringify(user.value));
+		}
+	}
+
 	function initialize() {
 		const storedToken = localStorage.getItem(LS_TOKEN);
 		const storedUser = localStorage.getItem(LS_USER);
@@ -251,5 +258,6 @@ export const useAuthStore = defineStore("auth", () => {
 		refreshToken,
 		scheduleRefresh,
 		initialize,
+		setDisplayName,
 	};
 });

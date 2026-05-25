@@ -13,6 +13,7 @@ import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import PluginUpdateModal from "../components/PluginUpdateModal.vue";
+import { useConfirm } from "../composables/useConfirm";
 
 const props = defineProps<{
 	id: string;
@@ -25,8 +26,10 @@ const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
 const ignoreStore = useIgnoreStore();
 const toast = useToastStore();
+const { confirm } = useConfirm();
 
 const siteId = parseInt(props.id, 10);
+if (isNaN(siteId)) router.replace({ name: "sites" });
 const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
 const site = computed(() => dataStore.getSiteById(siteId));
@@ -223,7 +226,7 @@ const linkOrganization = async (organizationId: number) => {
 };
 
 const unlinkOrganization = async () => {
-	if (!confirm("Are you sure you want to unlink this organization?")) return;
+	if (!await confirm("Are you sure you want to unlink this organization?")) return;
 	try {
 		await organizationStore.unlinkSite(siteId);
 		dataStore.setSiteOrganizationLink(siteId, undefined);

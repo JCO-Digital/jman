@@ -9,13 +9,8 @@ import type {
 	UserProfile,
 } from "../types";
 import { BASE_URL } from "../utils/api";
-const CACHE_KEY_USERS = "jman_users";
 
-// Deprecated: use AdminUser from ../types instead. Kept for backward compatibility.
-export interface User {
-	username: string;
-	displayName: string;
-}
+const CACHE_KEY_USERS = "jman_users";
 
 export const useUserStore = defineStore("user", () => {
 	const authStore = useAuthStore();
@@ -195,14 +190,7 @@ export const useUserStore = defineStore("user", () => {
 		if (!res.ok) {
 			await handleErrorResponse(res);
 		}
-		// Update auth store user and persist to localStorage
-		if (authStore.user) {
-			authStore.user.displayName = displayName;
-			localStorage.setItem(
-				"jman_auth_user",
-				JSON.stringify(authStore.user),
-			);
-		}
+		authStore.setDisplayName(displayName);
 	}
 
 	async function changePassword(

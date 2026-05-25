@@ -7,10 +7,12 @@ import LoadingSpinner from "../LoadingSpinner.vue";
 import AppIcon from "../AppIcon.vue";
 import UserFormModal from "./UserFormModal.vue";
 import type { AdminUser } from "../../types";
+import { useConfirm } from "../../composables/useConfirm";
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
 const toast = useToastStore();
+const { confirm } = useConfirm();
 
 const showModal = ref(false);
 const editingUser = ref<{
@@ -50,7 +52,7 @@ function handleSaved() {
 async function handleDelete(user: AdminUser) {
 	if (user.username === authStore.user?.username) return;
 
-	if (!confirm(`Are you sure you want to delete user "${user.username}"?`))
+	if (!await confirm(`Are you sure you want to delete user "${user.username}"?`, { danger: true }))
 		return;
 
 	try {

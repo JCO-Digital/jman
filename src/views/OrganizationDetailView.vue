@@ -21,6 +21,7 @@ import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
 import AppIcon from "../components/AppIcon.vue";
+import { useConfirm } from "../composables/useConfirm";
 
 const props = defineProps<{
 	id: string;
@@ -33,8 +34,10 @@ const userStore = useUserStore();
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
 const toast = useToastStore();
+const { confirm } = useConfirm();
 
 const organizationId = parseInt(props.id, 10);
+if (isNaN(organizationId)) router.replace({ name: "organizations" });
 const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
 const linkedSites = ref<Site[]>([]);
@@ -170,7 +173,7 @@ const handleContactSubmit = async () => {
 };
 
 const handleDeleteContact = async (id: number) => {
-	if (!confirm("Are you sure you want to delete this contact?")) return;
+	if (!await confirm("Are you sure you want to delete this contact?", { danger: true })) return;
 	try {
 		await organizationStore.deleteContact(id);
 		contacts.value =
@@ -186,8 +189,9 @@ const goBack = () => {
 
 const handleDeleteOrganization = async () => {
 	if (
-		!confirm(
+		!await confirm(
 			`Are you sure you want to delete ${organization.value?.name}? This will also delete all associated contacts.`,
+			{ danger: true },
 		)
 	)
 		return;
@@ -226,7 +230,7 @@ const handleLinkSite = async (siteId: number) => {
 };
 
 const handleUnlinkSite = async (siteId: number) => {
-	if (!confirm("Are you sure you want to unlink this site?")) return;
+	if (!await confirm("Are you sure you want to unlink this site?")) return;
 	try {
 		await organizationStore.unlinkSite(siteId);
 		dataStore.setSiteOrganizationLink(siteId, undefined);
@@ -473,7 +477,7 @@ const handleRecordPayment = async () => {
 };
 
 const handleUnlinkAsset = async (id: number) => {
-	if (!confirm("Are you sure you want to unlink this asset?")) return;
+	if (!await confirm("Are you sure you want to unlink this asset?")) return;
 	try {
 		await assetStore.unlinkAsset(id);
 		orgAssets.value =
