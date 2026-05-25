@@ -67,11 +67,12 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 
 ## 7. Icons
 
-**DO NOT** use inline SVGs in components or views. Use the `<AppIcon>` component which pulls from `src/assets/icons/`.
+**DO NOT** use inline SVGs in components or views. Use the `<AppIcon>` component.
 
-- Icons are rendered using CSS masks to ensure they respect the `currentColor` of their parent (e.g., buttons or links).
+- Icons live in `src/components/icons/` as template-only Vue SFCs (e.g., `IconSettings.vue`).
+- `AppIcon` resolves the icon name to the corresponding component via a static import map in `src/components/AppIcon.vue`.
 - Usage: `<AppIcon name="settings" size="18" />`.
-- Add new icons as `.svg` files to `src/assets/icons/`.
+- To add a new icon: create `src/components/icons/IconMyIcon.vue` with the SVG markup and register it in the `iconMap` in `AppIcon.vue`.
 
 ## 8. API Documentation
 
@@ -120,3 +121,11 @@ The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 - Always include error handling and loading states for asynchronous operations.
 
 When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.
+
+## 10. Intentional Design Decisions
+
+This section documents choices that look like mistakes but are deliberate. Do not "fix" them without understanding the rationale.
+
+### Password entropy pool size (`src/utils/passwordStrength.ts`)
+
+The special-character pool is hardcoded to **16**, not the full ~32 printable ASCII symbols. This is intentional: it approximates the subset of symbols users realistically type on typical Latin keyboard layouts, rather than the theoretical maximum. Using 32 would over-estimate entropy for real-world passwords. The slight under-estimation is safe — it makes the strength requirement marginally stricter than the entropy formula strictly demands. The inline comments in `passwordStrength.ts` explain this in detail.
