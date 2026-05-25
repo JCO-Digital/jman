@@ -6,9 +6,7 @@ import type {
 	UpdateIgnorePayload,
 } from "../types";
 import { useAuthStore } from "./auth";
-import { handleErrorResponse } from "../utils/api";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+import { handleErrorResponse, BASE_URL } from "../utils/api";
 
 export const useIgnoreStore = defineStore("ignore", () => {
 	const authStore = useAuthStore();

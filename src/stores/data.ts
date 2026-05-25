@@ -12,13 +12,13 @@ import type {
 } from "../types";
 import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
+import { BASE_URL } from "../utils/api";
 
 const CACHE_KEY_SERVERS = "jman_servers";
 const CACHE_KEY_SITES = "jman_sites";
 const CACHE_KEY_PLUGINS = "jman_plugins";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
 const CACHE_KEY_VULNS = "jman_vulns_v2";
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 export const useDataStore = defineStore("data", () => {
 	// State

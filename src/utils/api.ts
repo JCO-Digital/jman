@@ -1,5 +1,7 @@
 import { useAuthStore } from "../stores/auth";
 
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
+
 export async function handleErrorResponse(res: Response): Promise<never> {
 	const authStore = useAuthStore();
 	if (res.status === 401) {
