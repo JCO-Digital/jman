@@ -6,6 +6,7 @@ import type {
 	UpdateIgnorePayload,
 } from "../types";
 import { useAuthStore } from "./auth";
+import { handleErrorResponse } from "../utils/api";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -80,10 +81,7 @@ export const useIgnoreStore = defineStore("ignore", () => {
 				body: JSON.stringify(payload),
 			});
 
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data.error || "Failed to add ignore entry");
-			}
+			if (!res.ok) await handleErrorResponse(res);
 
 			const data = await res.json();
 			await fetchIgnoreEntries();
@@ -109,10 +107,7 @@ export const useIgnoreStore = defineStore("ignore", () => {
 				body: JSON.stringify(payload),
 			});
 
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data.error || "Failed to update ignore entry");
-			}
+			if (!res.ok) await handleErrorResponse(res);
 
 			const data = await res.json();
 			await fetchIgnoreEntries();
@@ -134,10 +129,7 @@ export const useIgnoreStore = defineStore("ignore", () => {
 				headers: authStore.authHeader,
 			});
 
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data.error || "Failed to delete ignore entry");
-			}
+			if (!res.ok) await handleErrorResponse(res);
 
 			await fetchIgnoreEntries();
 		} catch (e: any) {

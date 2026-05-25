@@ -7,6 +7,7 @@ import type {
 	EnrichedOrganizationAsset,
 } from "../types";
 import { useAuthStore } from "./auth";
+import { handleErrorResponse } from "../utils/api";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -32,7 +33,7 @@ export const useAssetStore = defineStore("asset", () => {
 				signal,
 			});
 
-			if (!res.ok) throw new Error("Failed to fetch assets");
+			if (!res.ok) await handleErrorResponse(res);
 
 			const data = await res.json();
 			assets.value = data;
@@ -50,7 +51,7 @@ export const useAssetStore = defineStore("asset", () => {
 			const res = await fetch(`${BASE_URL}/assets/${id}`, {
 				headers: authStore.authHeader,
 			});
-			if (!res.ok) throw new Error("Failed to fetch asset template");
+			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
 			console.error(e);
@@ -67,7 +68,7 @@ export const useAssetStore = defineStore("asset", () => {
 			},
 			body: JSON.stringify(asset),
 		});
-		if (!res.ok) throw new Error("Failed to create asset template");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -80,7 +81,7 @@ export const useAssetStore = defineStore("asset", () => {
 			},
 			body: JSON.stringify(asset),
 		});
-		if (!res.ok) throw new Error("Failed to update asset template");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -89,7 +90,7 @@ export const useAssetStore = defineStore("asset", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to delete asset template");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	// Organization Asset Management
@@ -102,7 +103,7 @@ export const useAssetStore = defineStore("asset", () => {
 				headers: authStore.authHeader,
 			},
 		);
-		if (!res.ok) throw new Error("Failed to fetch organization assets");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -122,7 +123,7 @@ export const useAssetStore = defineStore("asset", () => {
 		const res = await fetch(url.toString(), {
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to fetch all organization assets");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -141,7 +142,7 @@ export const useAssetStore = defineStore("asset", () => {
 				body: JSON.stringify(data),
 			},
 		);
-		if (!res.ok) throw new Error("Failed to link asset");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -152,7 +153,7 @@ export const useAssetStore = defineStore("asset", () => {
 			const res = await fetch(`${BASE_URL}/organization-assets/${id}`, {
 				headers: authStore.authHeader,
 			});
-			if (!res.ok) throw new Error("Failed to fetch organization asset");
+			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
 			console.error(e);
@@ -172,7 +173,7 @@ export const useAssetStore = defineStore("asset", () => {
 			},
 			body: JSON.stringify(data),
 		});
-		if (!res.ok) throw new Error("Failed to update organization asset");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -181,7 +182,7 @@ export const useAssetStore = defineStore("asset", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to unlink asset");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	// Payment Tracking
@@ -194,7 +195,7 @@ export const useAssetStore = defineStore("asset", () => {
 				headers: authStore.authHeader,
 			},
 		);
-		if (!res.ok) throw new Error("Failed to fetch asset payments");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -218,7 +219,7 @@ export const useAssetStore = defineStore("asset", () => {
 				body: JSON.stringify(data),
 			},
 		);
-		if (!res.ok) throw new Error("Failed to record payment");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -227,7 +228,7 @@ export const useAssetStore = defineStore("asset", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to delete payment record");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	return {
