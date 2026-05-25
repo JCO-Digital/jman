@@ -8,6 +8,7 @@ import type {
 	TaskFilters,
 } from "../types";
 import { useAuthStore } from "./auth";
+import { handleErrorResponse } from "../utils/api";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -33,7 +34,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			const res = await fetch(url.toString(), {
 				headers: authStore.authHeader,
 			});
-			if (!res.ok) throw new Error("Failed to fetch tasks");
+			if (!res.ok) await handleErrorResponse(res);
 			tasks.value = await res.json();
 		} catch (e: any) {
 			error.value = e.message;
@@ -48,7 +49,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			const res = await fetch(`${BASE_URL}/tasks/${id}`, {
 				headers: authStore.authHeader,
 			});
-			if (!res.ok) throw new Error("Failed to fetch task");
+			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
 			console.error(e);
@@ -65,7 +66,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			},
 			body: JSON.stringify(payload),
 		});
-		if (!res.ok) throw new Error("Failed to create task");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -81,7 +82,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			},
 			body: JSON.stringify(payload),
 		});
-		if (!res.ok) throw new Error("Failed to update task");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -94,7 +95,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			method: "POST",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to complete task");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	async function deleteTask(id: number): Promise<void> {
@@ -102,7 +103,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to delete task");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	return {

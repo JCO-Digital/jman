@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import type { Organization, Contact, ContactType, Site } from "../types";
 import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
+import { handleErrorResponse } from "../utils/api";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -31,7 +32,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 				signal,
 			});
 
-			if (!res.ok) throw new Error("Failed to fetch organizations");
+			if (!res.ok) await handleErrorResponse(res);
 
 			const data = await res.json();
 			organizations.value = data;
@@ -49,7 +50,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			const res = await fetch(`${BASE_URL}/organizations/${id}`, {
 				headers: authStore.authHeader,
 			});
-			if (!res.ok) throw new Error("Failed to fetch organization");
+			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
 			console.error(e);
@@ -66,7 +67,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			},
 			body: JSON.stringify(organization),
 		});
-		if (!res.ok) throw new Error("Failed to create organization");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -82,7 +83,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			},
 			body: JSON.stringify(organization),
 		});
-		if (!res.ok) throw new Error("Failed to update organization");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -91,7 +92,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to delete organization");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	async function fetchOrganizationContacts(
@@ -103,7 +104,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 				headers: authStore.authHeader,
 			},
 		);
-		if (!res.ok) throw new Error("Failed to fetch contacts");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -114,7 +115,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 				headers: authStore.authHeader,
 			},
 		);
-		if (!res.ok) throw new Error("Failed to fetch organization sites");
+		if (!res.ok) await handleErrorResponse(res);
 		const sites = await res.json();
 
 		if (Array.isArray(sites)) {
@@ -141,7 +142,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			},
 			body: JSON.stringify(contact),
 		});
-		if (!res.ok) throw new Error("Failed to create contact");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -154,7 +155,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			},
 			body: JSON.stringify(contact),
 		});
-		if (!res.ok) throw new Error("Failed to update contact");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -163,7 +164,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to delete contact");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	async function getOrganizationForSite(
@@ -173,7 +174,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			headers: authStore.authHeader,
 		});
 		if (res.status === 404) return null;
-		if (!res.ok) throw new Error("Failed to fetch organization for site");
+		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
@@ -189,7 +190,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			},
 			body: JSON.stringify({ organization_id: organizationId }),
 		});
-		if (!res.ok) throw new Error("Failed to link site");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	async function unlinkSite(siteId: number) {
@@ -197,7 +198,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 			method: "DELETE",
 			headers: authStore.authHeader,
 		});
-		if (!res.ok) throw new Error("Failed to unlink site");
+		if (!res.ok) await handleErrorResponse(res);
 	}
 
 	return {
