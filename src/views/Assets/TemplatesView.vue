@@ -8,11 +8,13 @@ import type { Asset, AssetType, BillingFrequency } from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import { useConfirm } from "../../composables/useConfirm";
 
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
 const toast = useToastStore();
 const route = useRoute();
+const { confirm } = useConfirm();
 
 const searchQuery = ref((route.query.search as string) || "");
 const showModal = ref(false);
@@ -112,7 +114,7 @@ const handleSubmit = async () => {
 };
 
 const handleDelete = async (id: number) => {
-	if (!confirm("Are you sure you want to delete this asset template?"))
+	if (!await confirm("Are you sure you want to delete this asset template?", { danger: true }))
 		return;
 	try {
 		await assetStore.deleteAsset(id);

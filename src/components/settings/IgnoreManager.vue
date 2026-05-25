@@ -7,12 +7,14 @@ import { useToastStore } from "../../stores/toast";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import SearchableSelect from "../SearchableSelect.vue";
-import type { IgnoreType, CreateIgnorePayload } from "../../types";
+import type { IgnoreType, IgnoreEntry, CreateIgnorePayload, Site } from "../../types";
+import { useConfirm } from "../../composables/useConfirm";
 
 const ignoreStore = useIgnoreStore();
 const dataStore = useDataStore();
 const authStore = useAuthStore();
 const toast = useToastStore();
+const { confirm } = useConfirm();
 
 const isSubmitting = ref(false);
 const showAddForm = ref(false);
@@ -96,7 +98,7 @@ const selectedNegatedSites = computed(() => {
 	if (!newEntry.value.negated_site_ids) return [];
 	return newEntry.value.negated_site_ids
 		.map((id) => dataStore.getSiteById(id))
-		.filter((s): s is any => !!s)
+		.filter((s): s is Site => s !== undefined)
 		.sort((a, b) => a.domain.localeCompare(b.domain));
 });
 
@@ -177,7 +179,7 @@ const handleAddEntry = async () => {
 	}
 };
 
-const handleEditEntry = (entry: any) => {
+const handleEditEntry = (entry: IgnoreEntry) => {
 	editingEntryId.value = entry.id;
 	newEntry.value = {
 		type: entry.type,
@@ -194,7 +196,7 @@ const handleEditEntry = (entry: any) => {
 };
 
 const handleRemoveEntry = async (id: number) => {
-	if (!confirm("Are you sure you want to remove this ignore rule?")) return;
+	if (!await confirm("Are you sure you want to remove this ignore rule?", { danger: true })) return;
 
 	try {
 		await ignoreStore.deleteIgnoreEntry(id);

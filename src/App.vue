@@ -8,6 +8,7 @@ import { useMonitorStore } from "./stores/monitor";
 import { useUserStore } from "./stores/user";
 import AppNav from "./components/AppNav.vue";
 import ToastContainer from "./components/ToastContainer.vue";
+import ConfirmModal from "./components/ConfirmModal.vue";
 import packageInfo from "../package.json";
 
 const dataStore = useDataStore();
@@ -48,7 +49,9 @@ const stopIntervals = () => {
 	}
 };
 
-// Load data whenever the user becomes authenticated and handle intervals
+// Load data whenever the user becomes authenticated and handle intervals.
+// The else branch also fires on auto-logout (401 responses), so all cleanup
+// lives here rather than being duplicated in handleLogout.
 watch(
 	() => authStore.isAuthenticated,
 	(authenticated) => {
@@ -58,6 +61,8 @@ watch(
 			startIntervals();
 		} else {
 			stopIntervals();
+			dataStore.clearCache();
+			userStore.clearCache();
 		}
 	},
 	{ immediate: true },
@@ -83,10 +88,7 @@ onUnmounted(() => {
 const version = packageInfo.version;
 
 const handleLogout = () => {
-	stopIntervals();
-	dataStore.clearCache();
-	userStore.clearCache();
-	authStore.logout();
+	authStore.logout(); // watcher handles interval/cache cleanup
 };
 </script>
 
@@ -101,6 +103,7 @@ const handleLogout = () => {
 		</footer>
 	</div>
 	<ToastContainer />
+	<ConfirmModal />
 </template>
 
 <style scoped>

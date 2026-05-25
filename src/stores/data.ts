@@ -33,6 +33,7 @@ export const useDataStore = defineStore("data", () => {
 	const isLoading = ref(false);
 	const isVulnsLoading = ref(false);
 	const error = ref<string | null>(null);
+	const vulnsError = ref<string | null>(null);
 
 	// Optimization Maps
 	const vulnerabilitiesBySlug = computed(() => {
@@ -297,6 +298,7 @@ export const useDataStore = defineStore("data", () => {
 
 			// Fetch vulnerabilities separately to not block primary data
 			isVulnsLoading.value = true;
+			vulnsError.value = null;
 			fetch(`${BASE_URL}/vulns`, { headers })
 				.then(async (res) => {
 					if (res.ok) {
@@ -307,15 +309,17 @@ export const useDataStore = defineStore("data", () => {
 							JSON.stringify(data),
 						);
 					} else if (res.status !== 401) {
+						vulnsError.value = "Failed to load vulnerability data";
 						console.error(
 							"Failed to fetch vulnerabilities:",
 							res.statusText,
 						);
 					}
 				})
-				.catch((err) =>
-					console.error("Failed to fetch vulnerabilities:", err),
-				)
+				.catch((err) => {
+					vulnsError.value = "Failed to load vulnerability data";
+					console.error("Failed to fetch vulnerabilities:", err);
+				})
 				.finally(() => {
 					isVulnsLoading.value = false;
 				});
@@ -447,6 +451,7 @@ export const useDataStore = defineStore("data", () => {
 		isLoading,
 		isVulnsLoading,
 		error,
+		vulnsError,
 		// Getters
 		enrichedPlugins,
 		enrichedSites,

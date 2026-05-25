@@ -98,7 +98,8 @@ router.beforeEach((to) => {
 		return true;
 	}
 
-	// Protected route: check authentication
+	// Protected route: only authentication is checked here; role-based access
+	// control is enforced inside each view via canEdit/canExecute/canAdmin.
 	if (!authStore.isAuthenticated) {
 		return { name: "login" };
 	}
