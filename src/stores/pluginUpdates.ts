@@ -2,8 +2,7 @@ import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
 import type { Plugin, PluginUpdateResult } from "../types";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+import { BASE_URL } from "../utils/api";
 
 export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	const authStore = useAuthStore();

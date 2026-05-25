@@ -1,8 +1,7 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import router from "../router";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+import { BASE_URL } from "../utils/api";
 
 const LS_TOKEN = "jman_auth_token";
 const LS_USER = "jman_auth_user";

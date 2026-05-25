@@ -8,8 +8,7 @@ import type {
 	TwoFactorSetupResponse,
 	UserProfile,
 } from "../types";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+import { BASE_URL } from "../utils/api";
 const CACHE_KEY_USERS = "jman_users";
 
 // Deprecated: use AdminUser from ../types instead. Kept for backward compatibility.

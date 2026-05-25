@@ -2,9 +2,9 @@ import { ref, watch, nextTick } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import type { DashboardWidgetType } from "../types";
+import { BASE_URL } from "../utils/api";
 
 const LS_SETTINGS = "jman_settings";
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 interface AppSettings {
 	monitorRefreshInterval: number;

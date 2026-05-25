@@ -3,9 +3,7 @@ import { defineStore } from "pinia";
 import type { Organization, Contact, ContactType, Site } from "../types";
 import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
-import { handleErrorResponse } from "../utils/api";
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+import { handleErrorResponse, BASE_URL } from "../utils/api";
 
 export const useOrganizationStore = defineStore("organization", () => {
 	const authStore = useAuthStore();

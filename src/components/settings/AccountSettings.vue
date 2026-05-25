@@ -4,11 +4,10 @@ import { useAuthStore } from "../../stores/auth";
 import { useUserStore } from "../../stores/user";
 import { validatePasswordStrength } from "../../utils/passwordStrength";
 import QRCode from "qrcode";
+import { BASE_URL } from "../../utils/api";
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 // Fetch user profile on mount to get 2FA status
 onMounted(() => {
