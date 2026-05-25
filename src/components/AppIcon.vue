@@ -1,27 +1,49 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, type Component } from "vue";
+import IconCheck from "./icons/IconCheck.vue";
+import IconChevronRight from "./icons/IconChevronRight.vue";
+import IconCreditCard from "./icons/IconCreditCard.vue";
+import IconDragHandle from "./icons/IconDragHandle.vue";
+import IconEdit from "./icons/IconEdit.vue";
+import IconExternalLink from "./icons/IconExternalLink.vue";
+import IconOrganization from "./icons/IconOrganization.vue";
+import IconPlugin from "./icons/IconPlugin.vue";
+import IconPlusCircle from "./icons/IconPlusCircle.vue";
+import IconRefresh from "./icons/IconRefresh.vue";
+import IconSettings from "./icons/IconSettings.vue";
+import IconSite from "./icons/IconSite.vue";
+import IconTag from "./icons/IconTag.vue";
+import IconTask from "./icons/IconTask.vue";
+import IconTrash from "./icons/IconTrash.vue";
+import IconVulnerability from "./icons/IconVulnerability.vue";
+import IconX from "./icons/IconX.vue";
 
 const props = defineProps<{
 	name: string;
 	size?: string | number;
 }>();
 
-// Import all SVG icons from the assets folder as raw strings using Vite's ?raw query
-const icons = import.meta.glob<string>("../assets/icons/*.svg", {
-	eager: true,
-	query: "?raw",
-	import: "default",
-});
+const iconMap: Record<string, Component> = {
+	"check": IconCheck,
+	"chevron-right": IconChevronRight,
+	"credit-card": IconCreditCard,
+	"drag-handle": IconDragHandle,
+	"edit": IconEdit,
+	"external-link": IconExternalLink,
+	"organization": IconOrganization,
+	"plugin": IconPlugin,
+	"plus-circle": IconPlusCircle,
+	"refresh": IconRefresh,
+	"settings": IconSettings,
+	"site": IconSite,
+	"tag": IconTag,
+	"task": IconTask,
+	"trash": IconTrash,
+	"vulnerability": IconVulnerability,
+	"x": IconX,
+};
 
-const svgContent = computed(() => {
-	const path = `../assets/icons/${props.name}.svg`;
-	const content = icons[path];
-	if (!content) {
-		console.warn(`Icon "${props.name}" not found at ${path}`);
-		return "";
-	}
-	return content;
-});
+const icon = computed(() => iconMap[props.name]);
 
 const sizeStyle = computed(() => {
 	const s = props.size || "1em";
@@ -36,11 +58,12 @@ const sizeStyle = computed(() => {
 <template>
 	<span
 		class="app-icon"
-		v-html="svgContent"
 		:style="sizeStyle"
 		role="img"
 		:aria-label="name + ' icon'"
-	></span>
+	>
+		<component :is="icon" v-if="icon" />
+	</span>
 </template>
 
 <style scoped>
@@ -52,7 +75,6 @@ const sizeStyle = computed(() => {
 	line-height: 1;
 }
 
-/* Ensure the injected SVG fills the component dimensions */
 .app-icon :deep(svg) {
 	width: 100%;
 	height: 100%;
