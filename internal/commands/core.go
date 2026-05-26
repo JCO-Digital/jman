@@ -9,6 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	coreMajor bool
+)
+
 var coreCmd = &cobra.Command{
 	Use:           "core [check|update|version] <target>",
 	Short:         "Manage WordPress core.",
@@ -29,6 +33,7 @@ var coreCmd = &cobra.Command{
 }
 
 func init() {
+	coreCmd.Flags().BoolVar(&coreMajor, "major", false, "Allow major version updates for WordPress core")
 	rootCmd.AddCommand(coreCmd)
 }
 
@@ -90,7 +95,7 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		updated := 0
 		for _, site := range sites {
 			verb.Printf(verb.Verbose, "Updating WordPress core on %s...\n", site.Name)
-			result, err := wpcli.UpdateCore(site)
+			result, err := wpcli.UpdateCore(site, coreMajor)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Error updating core on %s: %v\n", site.Name, err)
 				continue

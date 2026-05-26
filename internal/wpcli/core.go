@@ -45,15 +45,24 @@ type CoreUpdateResult struct {
 	Language string
 }
 
-// UpdateCore updates WordPress core to the latest minor version. It returns the new version and language if an update was performed.
-func UpdateCore(site models.CliSite) (CoreUpdateResult, error) {
+// UpdateCore updates WordPress core. If major is true, it updates to the latest version (major/minor), otherwise it only updates to the latest minor version. It returns the new version and language if an update was performed.
+func UpdateCore(site models.CliSite, major bool) (CoreUpdateResult, error) {
 	result := CoreUpdateResult{
 		Success:  false,
 		Version:  "unknown",
 		Language: "",
 	}
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "core", "update", "--minor")
+	args := []string{"core", "update"}
+	if major {
+		// wp-cli core update defaults to major/latest if no flag is provided, but we can be explicit if we want.
+		// Actually wp-cli documentation says: "If no version is specified, it updates to the latest version."
+		// --minor only updates to the latest minor version.
+	} else {
+		args = append(args, "--minor")
+	}
+
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, args...)
 	if err != nil {
 		return result, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
 	}
