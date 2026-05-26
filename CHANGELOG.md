@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.17.0 (2026-05-22)
+## 5.18.0 (2026-05-26)
+
+#### Features
+
+- commands: add major version update support for wordpress core (9bb786b)
+
+## v5.17.0 (2026-05-22)
 
 #### Features
 
