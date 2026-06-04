@@ -19,6 +19,7 @@ const toast = useToastStore();
 const showEditModal = ref(false);
 const editingAsset = ref<OrganizationAsset | null>(null);
 const organizationSites = ref<Site[]>([]);
+const selectedOrgId = ref<number | null>(null);
 
 const assets = ref<OrganizationAsset[]>([]);
 const isLoading = ref(true);
@@ -36,10 +37,12 @@ const loadAssets = async () => {
 	}
 };
 
-onMounted(() => {
+onMounted(async () => {
 	loadAssets();
-	organizationStore.fetchOrganizations();
+	await organizationStore.fetchOrganizations();
 });
+
+const organizations = computed(() => organizationStore.organizations);
 
 const filteredAssets = computed(() => {
 	return assets.value.filter((a) => {
@@ -66,9 +69,17 @@ const goToOrganization = (id: number) => {
 	router.push({ name: "organization-detail", params: { id: id.toString() } });
 };
 
+const openAddModal = () => {
+	editingAsset.value = null;
+	selectedOrgId.value = null;
+	organizationSites.value = [];
+	showEditModal.value = true;
+};
+
 const openEditModal = async (asset: OrganizationAsset, event: Event) => {
 	event.stopPropagation();
 	editingAsset.value = asset;
+	selectedOrgId.value = asset.organization_id;
 
 	// Load sites for this organization to allow linking asset to a site
 	try {
@@ -84,8 +95,29 @@ const openEditModal = async (asset: OrganizationAsset, event: Event) => {
 	showEditModal.value = true;
 };
 
+const handleOrgChange = async () => {
+	if (selectedOrgId.value) {
+		try {
+			organizationSites.value =
+				await organizationStore.fetchOrganizationSites(
+					selectedOrgId.value,
+				);
+		} catch (e) {
+			console.error("Failed to load organization sites", e);
+			organizationSites.value = [];
+		}
+	} else {
+		organizationSites.value = [];
+	}
+};
+
 const handleAssetSaved = () => {
-	toast.addToast("Asset updated successfully", "success");
+	toast.addToast(
+		editingAsset.value
+			? "Asset updated successfully"
+			: "Asset added successfully",
+		"success",
+	);
 	loadAssets();
 };
 
@@ -110,10 +142,16 @@ const formatDate = (dateString: string | null) => {
 	<div class="view-container">
 		<ViewHeader title="Assets & Subscriptions">
 			<template #actions>
-				<button class="btn btn-outline" @click="goToTemplates">
-					<AppIcon name="tag" size="18" />
-					Manage Templates
-				</button>
+				<div class="flex-row gap-2 items-center">
+					<button class="btn btn-primary" @click="openAddModal">
+						<AppIcon name="plus-circle" size="18" />
+						<span>Add Asset</span>
+					</button>
+					<button class="btn btn-secondary" @click="goToTemplates">
+						<AppIcon name="tag" size="18" />
+						<span>Manage Templates</span>
+					</button>
+				</div>
 			</template>
 		</ViewHeader>
 
@@ -196,7 +234,7 @@ const formatDate = (dateString: string | null) => {
 							</td>
 							<td class="text-right" @click.stop>
 								<button
-									class="btn btn-text"
+									class="icon-btn icon-btn-sm"
 									title="Edit Asset"
 									@click="openEditModal(asset, $event)"
 								>
@@ -214,7 +252,10 @@ const formatDate = (dateString: string | null) => {
 			v-model="showEditModal"
 			:asset="editingAsset"
 			:sites="organizationSites"
+			:organizations="organizations"
+			v-model:organization-id="selectedOrgId"
 			@saved="handleAssetSaved"
+			@update:organization-id="handleOrgChange"
 		/>
 	</div>
 </template>
