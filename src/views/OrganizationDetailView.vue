@@ -10,16 +10,17 @@ import { useToastStore } from "../stores/toast";
 import type {
 	Organization,
 	Contact,
-	ContactType,
 	Site,
 	EnrichedOrganizationAsset,
-	BillingFrequency,
 } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
 import AppIcon from "../components/AppIcon.vue";
 import AssetEditModal from "../components/AssetEditModal.vue";
+import ContactModal from "../components/ContactModal.vue";
+import LinkSiteModal from "../components/LinkSiteModal.vue";
+import PaymentModal from "../components/PaymentModal.vue";
 import { useConfirm } from "../composables/useConfirm";
 
 const props = defineProps<{
@@ -115,60 +116,20 @@ const handleSaveOrganization = async (values: Record<string, any>) => {
 // Contact Management
 const showContactModal = ref(false);
 const editingContact = ref<Contact | null>(null);
-const contactForm = ref({
-	name: "",
-	email: "",
-	phone: "",
-	type: "Main" as ContactType,
-});
-
-const contactTypeOptions = [
-	{ label: "Main", value: "Main" },
-	{ label: "Technical", value: "Technical" },
-	{ label: "Billing", value: "Billing" },
-];
 
 const openAddContact = () => {
 	editingContact.value = null;
-	contactForm.value = {
-		name: "",
-		email: "",
-		phone: "",
-		type: "Main",
-	};
 	showContactModal.value = true;
 };
 
 const openEditContact = (contact: Contact) => {
 	editingContact.value = contact;
-	contactForm.value = {
-		name: contact.name,
-		email: contact.email || "",
-		phone: contact.phone || "",
-		type: contact.type,
-	};
 	showContactModal.value = true;
 };
 
-const handleContactSubmit = async () => {
-	try {
-		if (editingContact.value) {
-			await organizationStore.updateContact(
-				editingContact.value.id,
-				contactForm.value,
-			);
-		} else {
-			await organizationStore.createContact({
-				...contactForm.value,
-				organization_id: organizationId,
-			});
-		}
-		showContactModal.value = false;
-		contacts.value =
-			await organizationStore.fetchOrganizationContacts(organizationId);
-	} catch (e: any) {
-		toast.addToast("Failed to save contact: " + e.message, "error");
-	}
+const handleContactSaved = async () => {
+	contacts.value =
+		await organizationStore.fetchOrganizationContacts(organizationId);
 };
 
 const handleDeleteContact = async (id: number) => {
@@ -208,29 +169,10 @@ const handleDeleteOrganization = async () => {
 };
 
 const showLinkSiteModal = ref(false);
-const siteSearchQuery = ref("");
 
-const availableSites = computed(() => {
-	const query = siteSearchQuery.value.toLowerCase();
-	return dataStore.enrichedSites.filter((site) => {
-		const isNotLinked = !linkedSites.value.some((s) => s.id === site.id);
-		const matchesQuery = site.domain.toLowerCase().includes(query);
-		return isNotLinked && matchesQuery;
-	});
-});
-
-const handleLinkSite = async (siteId: number) => {
-	try {
-		await organizationStore.linkSiteToOrganization(siteId, organizationId);
-		dataStore.setSiteOrganizationLink(siteId, organizationId);
-		await dataStore.refreshData();
-		linkedSites.value =
-			await organizationStore.fetchOrganizationSites(organizationId);
-		showLinkSiteModal.value = false;
-		siteSearchQuery.value = "";
-	} catch (e: any) {
-		toast.addToast("Failed to link site: " + e.message, "error");
-	}
+const handleSiteLinked = async () => {
+	linkedSites.value =
+		await organizationStore.fetchOrganizationSites(organizationId);
 };
 
 const handleUnlinkSite = async (siteId: number) => {
@@ -255,12 +197,6 @@ const showLinkAssetModal = ref(false);
 const showPaymentModal = ref(false);
 const editingOrgAsset = ref<EnrichedOrganizationAsset | null>(null);
 const selectedAssetForPayment = ref<EnrichedOrganizationAsset | null>(null);
-
-const paymentForm = ref({
-	amount: 0,
-	info: "",
-	next_billing: "",
-});
 
 const openAddAsset = () => {
 	editingOrgAsset.value = null;
@@ -333,54 +269,13 @@ const convertToAsset = async () => {
 	showLinkAssetModal.value = true;
 };
 
-const calculateNextBillingDate = (
-	dateStr: string | null,
-	freq: BillingFrequency,
-): string => {
-	const date = dateStr ? new Date(dateStr) : new Date();
-	if (isNaN(date.getTime()))
-		return new Date().toISOString().split("T")[0] || "";
-
-	if (freq === "Monthly") date.setMonth(date.getMonth() + 1);
-	else if (freq === "Quarterly") date.setMonth(date.getMonth() + 3);
-	else if (freq === "Yearly") date.setFullYear(date.getFullYear() + 1);
-	else return "";
-
-	return date.toISOString().split("T")[0] || "";
-};
-
 const openPaymentModal = (asset: EnrichedOrganizationAsset) => {
 	selectedAssetForPayment.value = asset;
-	const suggestedNextDate = calculateNextBillingDate(
-		asset.next_billing,
-		asset.billing_freq,
-	);
-	paymentForm.value = {
-		amount: asset.price,
-		info: `Renewal ${new Date().toLocaleDateString()}`,
-		next_billing: suggestedNextDate,
-	};
 	showPaymentModal.value = true;
 };
 
-const handleRecordPayment = async () => {
-	if (!selectedAssetForPayment.value) return;
-	try {
-		const payload = { ...paymentForm.value };
-		if (payload.next_billing) {
-			payload.next_billing = new Date(payload.next_billing).toISOString();
-		}
-
-		await assetStore.recordPayment(
-			selectedAssetForPayment.value.id,
-			payload,
-		);
-		showPaymentModal.value = false;
-		orgAssets.value =
-			await assetStore.fetchOrganizationAssets(organizationId);
-	} catch (e: any) {
-		toast.addToast("Failed to record payment: " + e.message, "error");
-	}
+const handlePaymentSaved = async () => {
+	orgAssets.value = await assetStore.fetchOrganizationAssets(organizationId);
 };
 
 const handleUnlinkAsset = async (id: number) => {
@@ -877,205 +772,32 @@ const sitesAudit = computed(() => {
 		</main>
 
 		<!-- Contact Modal -->
-		<div
-			v-if="showContactModal"
-			class="modal-overlay"
-			@click.self="showContactModal = false"
-		>
-			<div class="modal-content card">
-				<h2>
-					{{ editingContact ? "Edit Contact" : "Add New Contact" }}
-				</h2>
-				<form class="form-layout" @submit.prevent="handleContactSubmit">
-					<div class="form-group">
-						<label for="c-name">Full Name*</label>
-						<input
-							id="c-name"
-							v-model="contactForm.name"
-							type="text"
-							required
-							placeholder="Contact person name"
-						/>
-					</div>
-					<div class="form-group">
-						<label for="c-type">Type</label>
-						<select id="c-type" v-model="contactForm.type">
-							<option
-								v-for="opt in contactTypeOptions"
-								:key="opt.value"
-								:value="opt.value"
-							>
-								{{ opt.label }}
-							</option>
-						</select>
-					</div>
-					<div class="form-group">
-						<label for="c-email">Email Address</label>
-						<input
-							id="c-email"
-							v-model="contactForm.email"
-							type="email"
-							placeholder="email@example.com"
-						/>
-					</div>
-					<div class="form-group">
-						<label for="c-phone">Phone Number</label>
-						<input
-							id="c-phone"
-							v-model="contactForm.phone"
-							type="tel"
-							placeholder="+358 ..."
-						/>
-					</div>
-					<div class="form-actions">
-						<button
-							type="button"
-							class="back-btn"
-							@click="showContactModal = false"
-						>
-							Cancel
-						</button>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							:disabled="!contactForm.name"
-						>
-							{{
-								editingContact
-									? "Update Contact"
-									: "Add Contact"
-							}}
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
+		<ContactModal
+			v-model="showContactModal"
+			:contact="editingContact"
+			:organization-id="organizationId"
+			@saved="handleContactSaved"
+		/>
 
-		<!-- Link Site Modal -->
-		<div
-			v-if="showLinkSiteModal"
-			class="modal-overlay"
-			@click.self="showLinkSiteModal = false"
-		>
-			<div class="modal-content card">
-				<h2>Link Site to Organization</h2>
-				<div class="form-layout">
-					<div class="form-group">
-						<label for="s-search">Search Site Domain</label>
-						<input
-							id="s-search"
-							v-model="siteSearchQuery"
-							type="text"
-							placeholder="e.g. example.com"
-						/>
-					</div>
+		<LinkSiteModal
+			v-model="showLinkSiteModal"
+			:organization-id="organizationId"
+			:linked-sites="linkedSites"
+			@linked="handleSiteLinked"
+		/>
 
-					<div
-						v-if="availableSites.length > 0"
-						class="search-results-list"
-					>
-						<div
-							v-for="site in availableSites"
-							:key="site.id"
-							class="search-result-item"
-							@click="handleLinkSite(site.id)"
-						>
-							<div class="res-name">{{ site.domain }}</div>
-						</div>
-					</div>
-					<div
-						v-else-if="siteSearchQuery.length > 0"
-						class="empty-state"
-					>
-						No available sites found.
-					</div>
+		<AssetEditModal
+			v-model="showLinkAssetModal"
+			:asset="editingOrgAsset"
+			:sites="linkedSites"
+			:organization-id="organizationId"
+			@saved="loadData"
+		/>
 
-					<div class="form-actions">
-						<button
-							class="back-btn"
-							@click="showLinkSiteModal = false"
-						>
-							Cancel
-						</button>
-					</div>
-				</div>
-			</div>
-		</div>
-	</div>
-
-	<AssetEditModal
-		v-model="showLinkAssetModal"
-		:asset="editingOrgAsset"
-		:sites="linkedSites"
-		@saved="loadData"
-	/>
-
-	<!-- Record Payment Modal -->
-	<div
-		v-if="showPaymentModal"
-		class="modal-overlay"
-		@click.self="showPaymentModal = false"
-	>
-		<div class="modal-content card">
-			<h2>Record Payment</h2>
-			<p v-if="selectedAssetForPayment">
-				Recording payment for:
-				<strong>{{
-					selectedAssetForPayment.asset?.name ||
-					selectedAssetForPayment.identifier
-				}}</strong>
-			</p>
-			<div class="form-layout">
-				<div class="form-group">
-					<label for="p-amount">Amount (€)</label>
-					<input
-						id="p-amount"
-						type="number"
-						step="0.01"
-						:value="(paymentForm.amount / 100).toFixed(2)"
-						@input="
-							(e) =>
-								(paymentForm.amount = Math.round(
-									parseFloat(
-										(e.target as HTMLInputElement).value ||
-											'0',
-									) * 100,
-								))
-						"
-					/>
-				</div>
-				<div class="form-group">
-					<label for="p-info">Reference / Info</label>
-					<input
-						id="p-info"
-						v-model="paymentForm.info"
-						type="text"
-						placeholder="Invoice # or Note"
-					/>
-				</div>
-				<div
-					v-if="selectedAssetForPayment?.billing_freq !== 'One-time'"
-					class="form-group"
-				>
-					<label for="p-next-billing">Next Billing Date</label>
-					<input
-						id="p-next-billing"
-						v-model="paymentForm.next_billing"
-						type="date"
-					/>
-				</div>
-				<div class="form-actions">
-					<button class="back-btn" @click="showPaymentModal = false">
-						Cancel
-					</button>
-					<button
-						class="btn btn-primary"
-						@click="handleRecordPayment"
-					>
-						Confirm & Advance Billing
-					</button>
-				</div>
-			</div>
-		</div>
+		<PaymentModal
+			v-model="showPaymentModal"
+			:asset="selectedAssetForPayment"
+			@saved="handlePaymentSaved"
+		/>
 	</div>
 </template>
