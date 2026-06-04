@@ -257,6 +257,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		response.Status = "failed"
 		response.OldVersion = currentVersion
 		response.NewVersion = currentVersion
+		response.Error = err.Error()
 		WriteJSON(w, http.StatusInternalServerError, response)
 		return
 	}
@@ -278,6 +279,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			response.OldVersion = currentVersion
 		}
 		response.NewVersion = response.OldVersion
+		response.Error = "Plugin update failed"
 		WriteJSON(w, http.StatusInternalServerError, response)
 		return
 	}
