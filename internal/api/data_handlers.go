@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -238,23 +237,50 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
-	if err != nil {
-		msg := err.Error()
-		if msg == "" || msg == "failed to update plugin" || strings.Contains(msg, "(stderr:") {
-			WriteError(w, http.StatusInternalServerError, "Failed to update plugin")
-		} else {
-			WriteError(w, http.StatusInternalServerError, msg)
+	// Try to get current version from cache for fallback
+	currentVersion := ""
+	if plugins, err := db.GetSitePlugins(site.ID); err == nil {
+		for _, p := range plugins {
+			if p.Name == body.Plugin {
+				currentVersion = p.Version
+				break
+			}
 		}
+	}
+
+	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
+
+	var response wpcli.UpdateResult
+	response.Name = body.Plugin
+
+	if err != nil {
+		response.Status = "failed"
+		response.OldVersion = currentVersion
+		response.NewVersion = currentVersion
+		WriteJSON(w, http.StatusInternalServerError, response)
 		return
 	}
 
 	if len(results) == 0 {
-		WriteJSON(w, http.StatusOK, []wpcli.UpdateResult{})
+		response.Status = "Up to date"
+		response.OldVersion = currentVersion
+		response.NewVersion = currentVersion
+		WriteJSON(w, http.StatusOK, response)
 		return
 	}
 
-	result := results[0]
+	response = results[0]
+
+	// Normalize status to "failed" if it's not "Updated" and ensure versions are same on failure.
+	if response.Status != "Updated" {
+		response.Status = "failed"
+		if response.OldVersion == "" {
+			response.OldVersion = currentVersion
+		}
+		response.NewVersion = response.OldVersion
+		WriteJSON(w, http.StatusInternalServerError, response)
+		return
+	}
 
 	// Refresh the full plugin list for this site so all versions and
 	// update_available flags reflect the post-update state.
@@ -264,7 +290,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	WriteJSON(w, http.StatusOK, result)
+	WriteJSON(w, http.StatusOK, response)
 }
 
 func getSiteByID(id int) (*models.CliSite, error) {
