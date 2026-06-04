@@ -1,6 +1,16 @@
 # Changelog
 
-### 1.30.1 (2026-06-04)
+## 1.31.0 (2026-06-04)
+
+#### Features
+
+- plugin: add support for updating vulnerable plugins (ef6a8ae)
+
+#### Refactor
+
+- organization: extract modal components from detail view (8e3c54a)
+
+### v1.30.1 (2026-06-04)
 
 #### Refactor
 
