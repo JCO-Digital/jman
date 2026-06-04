@@ -93,7 +93,8 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if task.AssignedTo != nil && *task.AssignedTo != "" {
-		go tasks.NotifyTaskAssigned(&task)
+		taskCopy := task
+		go tasks.NotifyTaskAssigned(&taskCopy)
 	}
 
 	WriteJSON(w, http.StatusCreated, task)
@@ -183,8 +184,9 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 
 		// If a new user is assigned, send a notification
 		if isChanged && newAssignee != nil && *newAssignee != "" {
-			// We use a goroutine to avoid blocking the API response
-			go tasks.NotifyTaskAssigned(existing)
+			// Pass a copy to the goroutine to avoid data races
+			taskCopy := *existing
+			go tasks.NotifyTaskAssigned(&taskCopy)
 		}
 	}
 	if has("due_date") {
