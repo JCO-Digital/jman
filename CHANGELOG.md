@@ -1,6 +1,22 @@
 # Changelog
 
-## 5.18.0 (2026-05-26)
+## 5.19.0 (2026-06-04)
+
+#### Features
+
+- api: trigger slack notification upon task assignment (20c3671)
+
+#### Bug Fixes
+
+- api: prevent data races when notifying task assignees (690067a)
+- tasks: improve reminder time parsing and validation (c1842b7)
+- api: implement configurable Slack reminder times and reset notification status on reassignment (87352eb)
+
+#### Performance Improvements
+
+- tasks: implement caching for user reminder times to avoid N+1 queries (2d85854)
+
+## v5.18.0 (2026-05-26)
 
 #### Features
 
