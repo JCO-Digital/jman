@@ -174,11 +174,13 @@ const formatDate = (dateString: string | null) => {
 							</td>
 							<td class="text-right" @click.stop>
 								<button
-									class="icon-btn"
+									class="btn btn-text btn-sm"
+									style="color: var(--primary)"
 									title="Edit Asset"
 									@click="openEditModal(asset, $event)"
 								>
 									<AppIcon name="edit" size="18" />
+									<span class="show-mobile">Edit</span>
 								</button>
 							</td>
 						</tr>
