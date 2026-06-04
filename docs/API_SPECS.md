@@ -570,7 +570,21 @@ Updates one plugin on the site. The plugin cache is refreshed in the background 
 }
 ```
 
-Returns an empty array if the plugin had no update available. The `status` field reflects the WP-CLI result (e.g. `"Updated"`).
+If the plugin is already up to date, `status` will be `"Up to date"` and versions will be identical.
+
+**Response (500 Internal Server Error)**
+
+```json
+{
+	"name": "akismet",
+	"old_version": "5.0.0",
+	"new_version": "5.0.0",
+	"status": "failed",
+	"error": "Error message"
+}
+```
+
+If the update fails, `status` will be `"failed"`, versions will reflect the state before the attempt, and the `error` field will contain a description of the failure.
 
 ---
 
