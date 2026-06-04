@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, watch, computed } from "vue";
 import type {
 	Asset,
 	BillingFrequency,
 	OrganizationAssetStatus,
 	EnrichedOrganizationAsset,
 	Site,
+	Organization,
 } from "../types";
 import { useAssetStore } from "../stores/assetStore";
 import AppIcon from "./AppIcon.vue";
@@ -14,10 +15,13 @@ const props = defineProps<{
 	modelValue: boolean;
 	asset: EnrichedOrganizationAsset | null;
 	sites: Site[];
+	organizations?: Organization[];
+	organizationId?: number | null;
 }>();
 
 const emit = defineEmits<{
 	(e: "update:modelValue", value: boolean): void;
+	(e: "update:organizationId", value: number | null): void;
 	(e: "saved"): void;
 }>();
 
@@ -37,6 +41,10 @@ const assetForm = ref({
 });
 
 const isEditing = ref(false);
+
+const isOrgSelected = computed(() => {
+	return !!(props.asset?.organization_id || props.organizationId);
+});
 
 watch(
 	() => props.modelValue,
@@ -111,15 +119,9 @@ const handleSave = async () => {
 		if (isEditing.value && props.asset) {
 			await assetStore.updateOrganizationAsset(props.asset.id, payload);
 		} else {
-			// This component is mostly for editing in the reuse case,
-			// but we can support adding if we have the organization_id from the asset (if it exists)
-			// or if we passed it in. In this extraction, we focus on the edit functionality.
-			// The original LinkAsset handles both.
-			if (props.asset?.organization_id) {
-				await assetStore.linkAsset(
-					props.asset.organization_id,
-					payload,
-				);
+			const orgId = props.asset?.organization_id || props.organizationId;
+			if (orgId) {
+				await assetStore.linkAsset(orgId, payload);
 			} else {
 				throw new Error("Organization ID missing");
 			}
@@ -144,6 +146,55 @@ const close = () => {
 		<div class="modal-content card">
 			<h2>{{ isEditing ? "Edit Asset" : "Link Asset" }}</h2>
 			<div class="form-layout">
+				<div
+					v-if="!isEditing && organizations && !organizationId"
+					class="form-group"
+				>
+					<label for="a-org">Select Organization</label>
+					<select
+						id="a-org"
+						:value="organizationId"
+						@change="
+							(e) =>
+								emit(
+									'update:organizationId',
+									parseInt(
+										(e.target as HTMLSelectElement).value,
+									),
+								)
+						"
+					>
+						<option :value="null">Select an organization...</option>
+						<option
+							v-for="org in organizations"
+							:key="org.id"
+							:value="org.id"
+						>
+							{{ org.name }}
+						</option>
+					</select>
+				</div>
+
+				<div
+					v-if="!isEditing && organizations && organizationId"
+					class="form-group"
+				>
+					<label>Organization</label>
+					<div class="readonly-value">
+						{{
+							organizations.find((o) => o.id === organizationId)
+								?.name
+						}}
+					</div>
+				</div>
+
+				<div v-if="isEditing" class="form-group">
+					<label>Organization</label>
+					<span class="readonly-value">{{
+						asset?.organization_name
+					}}</span>
+				</div>
+
 				<div class="form-group" v-if="!isEditing">
 					<label for="a-search">Search Asset Template</label>
 					<input
@@ -151,6 +202,7 @@ const close = () => {
 						v-model="assetSearchQuery"
 						type="text"
 						placeholder="Start typing to search templates..."
+						:disabled="!isOrgSelected"
 						@input="searchAssets"
 					/>
 					<div
@@ -186,6 +238,7 @@ const close = () => {
 							type="number"
 							step="0.01"
 							placeholder="e.g. 50.00"
+							:disabled="!isOrgSelected"
 							@input="
 								(e) =>
 									(assetForm.price_euro =
@@ -198,7 +251,11 @@ const close = () => {
 					</div>
 					<div class="form-group">
 						<label for="a-freq">Billing Frequency</label>
-						<select id="a-freq" v-model="assetForm.billing_freq">
+						<select
+							id="a-freq"
+							v-model="assetForm.billing_freq"
+							:disabled="!isOrgSelected"
+						>
 							<option value="Monthly">Monthly</option>
 							<option value="Quarterly">Quarterly</option>
 							<option value="Yearly">Yearly</option>
@@ -209,7 +266,11 @@ const close = () => {
 
 				<div class="form-group">
 					<label for="a-site">Link to Site (Optional)</label>
-					<select id="a-site" v-model="assetForm.site_id">
+					<select
+						id="a-site"
+						v-model="assetForm.site_id"
+						:disabled="!isOrgSelected"
+					>
 						<option :value="null">
 							No site (Organization-wide)
 						</option>
@@ -234,6 +295,7 @@ const close = () => {
 						id="a-identifier"
 						v-model="assetForm.identifier"
 						type="text"
+						:disabled="!isOrgSelected"
 					/>
 				</div>
 
@@ -244,11 +306,16 @@ const close = () => {
 							id="a-next-billing"
 							v-model="assetForm.next_billing"
 							type="date"
+							:disabled="!isOrgSelected"
 						/>
 					</div>
 					<div class="form-group">
 						<label for="a-status">Status</label>
-						<select id="a-status" v-model="assetForm.status">
+						<select
+							id="a-status"
+							v-model="assetForm.status"
+							:disabled="!isOrgSelected"
+						>
 							<option value="active">Active</option>
 							<option value="paused">Paused</option>
 							<option value="cancelled">Cancelled</option>
@@ -262,6 +329,7 @@ const close = () => {
 						id="a-description"
 						v-model="assetForm.description"
 						rows="2"
+						:disabled="!isOrgSelected"
 					></textarea>
 				</div>
 
@@ -271,7 +339,10 @@ const close = () => {
 					</button>
 					<button
 						class="btn btn-primary"
-						:disabled="!assetForm.asset_id"
+						:disabled="
+							!assetForm.asset_id ||
+							(!isEditing && organizations && !organizationId)
+						"
 						@click="handleSave"
 					>
 						{{ isEditing ? "Update Asset" : "Link Asset" }}
