@@ -1,6 +1,25 @@
 # Changelog
 
-## 1.29.0 (2026-05-25)
+## 1.30.0 (2026-06-04)
+
+#### Features
+
+- view: update header actions in TemplatesView (74d20ea)
+- asset: add organization selection and linking to asset management (070e7a4)
+- components: implement reusable AssetEditModal component (0dccdcc)
+- assets: add edit modal to asset list (de52cc0)
+- task: display completion details in task info modal (f5412bf)
+- settings: add slack reminder time configuration (a9749d0)
+
+#### Refactor
+
+- style: move component-specific styles to global CSS (47b63f7)
+
+#### Styles
+
+- ui: standardize AppIcon rendering and asset action button (4bd87c3)
+
+## v1.29.0 (2026-05-25)
 
 #### Features
 
