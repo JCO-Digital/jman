@@ -24,23 +24,23 @@ const props = defineProps<{
 }>();
 
 const iconMap: Record<string, Component> = {
-	"check": IconCheck,
+	check: IconCheck,
 	"chevron-right": IconChevronRight,
 	"credit-card": IconCreditCard,
 	"drag-handle": IconDragHandle,
-	"edit": IconEdit,
+	edit: IconEdit,
 	"external-link": IconExternalLink,
-	"organization": IconOrganization,
-	"plugin": IconPlugin,
+	organization: IconOrganization,
+	plugin: IconPlugin,
 	"plus-circle": IconPlusCircle,
-	"refresh": IconRefresh,
-	"settings": IconSettings,
-	"site": IconSite,
-	"tag": IconTag,
-	"task": IconTask,
-	"trash": IconTrash,
-	"vulnerability": IconVulnerability,
-	"x": IconX,
+	refresh: IconRefresh,
+	settings: IconSettings,
+	site: IconSite,
+	tag: IconTag,
+	task: IconTask,
+	trash: IconTrash,
+	vulnerability: IconVulnerability,
+	x: IconX,
 };
 
 const icon = computed(() => iconMap[props.name]);
@@ -49,8 +49,12 @@ const sizeStyle = computed(() => {
 	const s = props.size || "1em";
 	const value = typeof s === "number" ? `${s}px` : s;
 	return {
+		display: "inline-flex",
 		width: value,
 		height: value,
+		minWidth: value,
+		minHeight: value,
+		flexShrink: 0,
 	};
 });
 </script>
