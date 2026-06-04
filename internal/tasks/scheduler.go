@@ -244,12 +244,31 @@ func processReminders() error {
 	return nil
 }
 
+// sendSlackReminder sends a reminder notification for a task.
 func sendSlackReminder(task *models.Task) {
 	message := fmt.Sprintf("🔔 *Task Reminder: %s*\nPriority: %s", task.Title, task.Priority)
 	if task.DueDate != nil {
 		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
 	}
 
+	if sendToAssignee(task, message) {
+		now := time.Now()
+		task.LastNotifiedAt = &now
+		_ = db.SaveTask(task, "system")
+	}
+}
+
+// NotifyTaskAssigned sends a notification to a user when a task is assigned to them.
+func NotifyTaskAssigned(task *models.Task) {
+	message := fmt.Sprintf("📋 *New Task Assigned: %s*\nPriority: %s", task.Title, task.Priority)
+	if task.DueDate != nil {
+		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
+	}
+
+	sendToAssignee(task, message)
+}
+
+func sendToAssignee(task *models.Task, message string) bool {
 	var sent bool
 	if task.AssignedTo != nil && *task.AssignedTo != "" {
 		setting, err := db.GetSetting(*task.AssignedTo, "slack_id")
@@ -266,12 +285,7 @@ func sendSlackReminder(task *models.Task) {
 			sent = true
 		}
 	}
-
-	if sent {
-		now := time.Now()
-		task.LastNotifiedAt = &now
-		_ = db.SaveTask(task, "system")
-	}
+	return sent
 }
 
 // cleanupOrphanedTasks marks tasks as skipped if they are linked to non-existent entities.

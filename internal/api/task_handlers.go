@@ -9,6 +9,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/tasks"
 )
 
 // ListTasksHandler handles GET /api/tasks
@@ -91,6 +92,10 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if task.AssignedTo != nil && *task.AssignedTo != "" {
+		go tasks.NotifyTaskAssigned(&task)
+	}
+
 	WriteJSON(w, http.StatusCreated, task)
 }
 
@@ -164,12 +169,23 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if has("assigned_to") {
 		// Reset LastNotifiedAt if the assignee changes, so the new user gets a reminder
-		if (existing.AssignedTo == nil && updates.AssignedTo != nil) ||
-			(existing.AssignedTo != nil && updates.AssignedTo == nil) ||
-			(existing.AssignedTo != nil && updates.AssignedTo != nil && *existing.AssignedTo != *updates.AssignedTo) {
+		oldAssignee := existing.AssignedTo
+		newAssignee := updates.AssignedTo
+
+		isChanged := (oldAssignee == nil && newAssignee != nil) ||
+			(oldAssignee != nil && newAssignee == nil) ||
+			(oldAssignee != nil && newAssignee != nil && *oldAssignee != *newAssignee)
+
+		if isChanged {
 			existing.LastNotifiedAt = nil
 		}
 		existing.AssignedTo = updates.AssignedTo
+
+		// If a new user is assigned, send a notification
+		if isChanged && newAssignee != nil && *newAssignee != "" {
+			// We use a goroutine to avoid blocking the API response
+			go tasks.NotifyTaskAssigned(existing)
+		}
 	}
 	if has("due_date") {
 		existing.DueDate = updates.DueDate
