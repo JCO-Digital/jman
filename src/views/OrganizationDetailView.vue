@@ -21,6 +21,7 @@ import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
 import AppIcon from "../components/AppIcon.vue";
+import AssetEditModal from "../components/AssetEditModal.vue";
 import { useConfirm } from "../composables/useConfirm";
 
 const props = defineProps<{
@@ -1101,154 +1102,12 @@ const sitesAudit = computed(() => {
 		</div>
 	</div>
 
-	<!-- Link Asset Modal -->
-	<div
-		v-if="showLinkAssetModal"
-		class="modal-overlay"
-		@click.self="showLinkAssetModal = false"
-	>
-		<div class="modal-content card">
-			<h2>{{ editingOrgAsset ? "Edit Asset" : "Link New Asset" }}</h2>
-			<div class="form-layout">
-				<div class="form-group" v-if="!editingOrgAsset">
-					<label for="a-search">Search Template</label>
-					<input
-						id="a-search"
-						v-model="assetSearchQuery"
-						type="text"
-						placeholder="Start typing asset name..."
-						autocomplete="off"
-						@input="searchAssets"
-					/>
-					<div
-						v-if="availableAssetTemplates.length > 0"
-						class="search-results-list"
-					>
-						<div
-							v-for="template in availableAssetTemplates"
-							:key="template.id"
-							class="search-result-item"
-							@click="selectAssetTemplate(template)"
-						>
-							<div class="res-name">{{ template.name }}</div>
-							<div class="sub-text">
-								{{ template.type }} -
-								{{
-									formatCurrency(template.default_price || 0)
-								}}
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<div v-if="editingOrgAsset" class="form-group">
-					<label>Organization</label>
-					<span class="readonly-value">{{
-						editingOrgAsset.organization_name
-					}}</span>
-				</div>
-
-				<div v-if="assetForm.asset_id" class="form-row">
-					<div class="form-group">
-						<label for="a-price">Price (€)</label>
-						<input
-							id="a-price"
-							type="number"
-							step="0.01"
-							:value="(assetForm.price / 100).toFixed(2)"
-							@input="
-								(e) =>
-									(assetForm.price = Math.round(
-										parseFloat(
-											(e.target as HTMLInputElement)
-												.value || '0',
-										) * 100,
-									))
-							"
-						/>
-					</div>
-					<div class="form-group">
-						<label for="a-freq">Frequency</label>
-						<select id="a-freq" v-model="assetForm.billing_freq">
-							<option value="Monthly">Monthly</option>
-							<option value="Quarterly">Quarterly</option>
-							<option value="Yearly">Yearly</option>
-							<option value="One-time">One-time</option>
-						</select>
-					</div>
-				</div>
-
-				<div class="form-group">
-					<label for="a-site">Link to Site (Optional)</label>
-					<select id="a-site" v-model="assetForm.site_id">
-						<option :value="null">None</option>
-						<option
-							v-for="site in linkedSites"
-							:key="site.id"
-							:value="site.id"
-						>
-							{{ site.domain }}
-						</option>
-					</select>
-				</div>
-
-				<div class="form-group">
-					<label for="a-identifier"
-						>Identifier / License / Domain</label
-					>
-					<input
-						id="a-identifier"
-						v-model="assetForm.identifier"
-						type="text"
-					/>
-				</div>
-
-				<div class="form-row">
-					<div class="form-group">
-						<label for="a-next-billing">Next Billing Date</label>
-						<input
-							id="a-next-billing"
-							v-model="assetForm.next_billing"
-							type="date"
-						/>
-					</div>
-					<div class="form-group">
-						<label for="a-status">Status</label>
-						<select id="a-status" v-model="assetForm.status">
-							<option value="active">Active</option>
-							<option value="paused">Paused</option>
-							<option value="cancelled">Cancelled</option>
-						</select>
-					</div>
-				</div>
-
-				<div class="form-group">
-					<label for="a-description">Description / Notes</label>
-					<textarea
-						id="a-description"
-						v-model="assetForm.description"
-						rows="2"
-					></textarea>
-				</div>
-
-				<div class="form-actions">
-					<button
-						class="back-btn"
-						@click="showLinkAssetModal = false"
-					>
-						Cancel
-					</button>
-					<button
-						class="btn btn-primary"
-						:disabled="!assetForm.asset_id"
-						@click="handleLinkAsset"
-					>
-						{{ editingOrgAsset ? "Update Asset" : "Link Asset" }}
-					</button>
-				</div>
-			</div>
-		</div>
-	</div>
+	<AssetEditModal
+		v-model="showLinkAssetModal"
+		:asset="editingOrgAsset"
+		:sites="linkedSites"
+		@saved="loadData"
+	/>
 
 	<!-- Record Payment Modal -->
 	<div

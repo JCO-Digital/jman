@@ -8,12 +8,17 @@ import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
+import AssetEditModal from "../../components/AssetEditModal.vue";
+import { useToastStore } from "../../stores/toast";
+
 const router = useRouter();
 const assetStore = useAssetStore();
 const organizationStore = useOrganizationStore();
+const toast = useToastStore();
 
 const showEditModal = ref(false);
 const editingAsset = ref<OrganizationAsset | null>(null);
+const organizationSites = ref<Site[]>([]);
 
 const assets = ref<OrganizationAsset[]>([]);
 const isLoading = ref(true);
@@ -61,10 +66,27 @@ const goToOrganization = (id: number) => {
 	router.push({ name: "organization-detail", params: { id: id.toString() } });
 };
 
-const openEditModal = (asset: OrganizationAsset, event: Event) => {
+const openEditModal = async (asset: OrganizationAsset, event: Event) => {
 	event.stopPropagation();
 	editingAsset.value = asset;
+
+	// Load sites for this organization to allow linking asset to a site
+	try {
+		organizationSites.value =
+			await organizationStore.fetchOrganizationSites(
+				asset.organization_id,
+			);
+	} catch (e) {
+		console.error("Failed to load organization sites", e);
+		organizationSites.value = [];
+	}
+
 	showEditModal.value = true;
+};
+
+const handleAssetSaved = () => {
+	toast.addToast("Asset updated successfully", "success");
+	loadAssets();
 };
 
 const goToTemplates = () => {
@@ -189,24 +211,12 @@ const formatDate = (dateString: string | null) => {
 			</div>
 		</main>
 
-		<!-- Asset Edit Modal Placeholder -->
-		<div
-			v-if="showEditModal"
-			class="modal-overlay"
-			@click.self="showEditModal = false"
-		>
-			<div class="modal-content card">
-				<h2>Edit Asset</h2>
-				<p>
-					Editing <strong>{{ editingAsset?.asset_name }}</strong> for
-					{{ editingAsset?.organization_name }}
-				</p>
-				<!-- Add form fields here if needed, or link to org detail -->
-				<button class="btn btn-outline" @click="showEditModal = false">
-					Close
-				</button>
-			</div>
-		</div>
+		<AssetEditModal
+			v-model="showEditModal"
+			:asset="editingAsset"
+			:sites="organizationSites"
+			@saved="handleAssetSaved"
+		/>
 	</div>
 </template>
 
