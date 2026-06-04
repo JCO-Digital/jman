@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.30.0 (2026-06-04)
+### 1.30.1 (2026-06-04)
+
+#### Refactor
+
+- assets: decouple asset management logic from organization details (1bb781c)
+
+## v1.30.0 (2026-06-04)
 
 #### Features
 
