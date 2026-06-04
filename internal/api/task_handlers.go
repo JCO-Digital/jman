@@ -163,6 +163,12 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		existing.Priority = updates.Priority
 	}
 	if has("assigned_to") {
+		// Reset LastNotifiedAt if the assignee changes, so the new user gets a reminder
+		if (existing.AssignedTo == nil && updates.AssignedTo != nil) ||
+			(existing.AssignedTo != nil && updates.AssignedTo == nil) ||
+			(existing.AssignedTo != nil && updates.AssignedTo != nil && *existing.AssignedTo != *updates.AssignedTo) {
+			existing.LastNotifiedAt = nil
+		}
 		existing.AssignedTo = updates.AssignedTo
 	}
 	if has("due_date") {
