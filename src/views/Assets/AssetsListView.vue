@@ -110,7 +110,7 @@ const formatDate = (dateString: string | null) => {
 	<div class="view-container">
 		<ViewHeader title="Assets & Subscriptions">
 			<template #actions>
-				<button class="btn btn-secondary" @click="goToTemplates">
+				<button class="btn btn-outline" @click="goToTemplates">
 					<AppIcon name="tag" size="18" />
 					Manage Templates
 				</button>
@@ -196,8 +196,7 @@ const formatDate = (dateString: string | null) => {
 							</td>
 							<td class="text-right" @click.stop>
 								<button
-									class="btn btn-text btn-sm"
-									style="color: var(--primary)"
+									class="btn btn-text"
 									title="Edit Asset"
 									@click="openEditModal(asset, $event)"
 								>
@@ -220,96 +219,4 @@ const formatDate = (dateString: string | null) => {
 	</div>
 </template>
 
-<style scoped>
-.controls-row {
-	display: flex;
-	gap: 1rem;
-	margin-bottom: 1.5rem;
-}
-
-.search-input {
-	flex: 1;
-	padding: 0.625rem;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 0.875rem;
-}
-
-.status-select {
-	width: 180px;
-	padding: 0.625rem;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 0.875rem;
-}
-
-.loading-container {
-	padding: 3rem;
-	display: flex;
-	justify-content: center;
-}
-
-.font-medium {
-	font-weight: 500;
-}
-
-.sub-text {
-	font-size: 0.8rem;
-	color: var(--text-muted);
-	margin-top: 0.2rem;
-	max-width: 250px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-}
-
-.overdue {
-	color: var(--error-text);
-	font-weight: 600;
-}
-
-.status-badge.active {
-	background-color: var(--badge-active-bg);
-	color: var(--badge-active-text);
-}
-
-.status-badge.paused {
-	background-color: var(--badge-drop-in-bg);
-	color: var(--badge-drop-in-text);
-}
-
-.status-badge.cancelled {
-	background-color: var(--badge-inactive-bg);
-	color: var(--badge-inactive-text);
-}
-
-code {
-	background: var(--bg-body);
-	padding: 0.2rem 0.4rem;
-	border-radius: 4px;
-	font-size: 0.9em;
-	color: var(--primary);
-}
-
-.btn-secondary {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	background-color: transparent;
-	border: 1px solid var(--border-input);
-	color: var(--text-main);
-}
-
-.btn-secondary:hover {
-	background-color: var(--bg-hover);
-}
-
-@media (max-width: 768px) {
-	.controls-row {
-		flex-direction: column;
-	}
-	.status-select {
-		width: 100%;
-	}
-}
-</style>
+<style scoped></style>
