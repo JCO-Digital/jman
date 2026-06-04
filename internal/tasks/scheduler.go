@@ -216,6 +216,28 @@ func processReminders() error {
 	for _, task := range tasks {
 		if (task.Priority == models.TaskPriorityHigh || task.Priority == models.TaskPriorityMedium) &&
 			task.ReminderDate != nil && task.ReminderDate.Before(now) && task.LastNotifiedAt == nil {
+
+			// Get user's preferred reminder time
+			reminderTimeStr := "10:00"
+			if task.AssignedTo != nil && *task.AssignedTo != "" {
+				setting, err := db.GetSetting(*task.AssignedTo, "slack_reminder_time")
+				if err == nil && setting != nil {
+					if val, ok := setting.Value.(string); ok && val != "" {
+						reminderTimeStr = val
+					}
+				}
+			}
+
+			// Parse reminderTimeStr (expecting HH:mm)
+			var hour, minute int
+			if _, err := fmt.Sscanf(reminderTimeStr, "%d:%d", &hour, &minute); err == nil {
+				todayReminderTime := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
+				if now.Before(todayReminderTime) {
+					// It's before the set time today, skip sending for now
+					continue
+				}
+			}
+
 			sendSlackReminder(&task)
 		}
 	}
