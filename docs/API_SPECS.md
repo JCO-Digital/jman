@@ -579,11 +579,12 @@ If the plugin is already up to date, `status` will be `"Up to date"` and version
 	"name": "akismet",
 	"old_version": "5.0.0",
 	"new_version": "5.0.0",
-	"status": "failed"
+	"status": "failed",
+	"error": "Error message"
 }
 ```
 
-If the update fails, `status` will be `"failed"` and versions will reflect the state before the attempt.
+If the update fails, `status` will be `"failed"`, versions will reflect the state before the attempt, and the `error` field will contain a description of the failure.
 
 ---
 

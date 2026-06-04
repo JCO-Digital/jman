@@ -87,6 +87,7 @@ type UpdateResult struct {
 	OldVersion string `json:"old_version"`
 	NewVersion string `json:"new_version"`
 	Status     string `json:"status"`
+	Error      string `json:"error,omitempty"`
 }
 
 // UpdatePlugin updates one or more plugins.
