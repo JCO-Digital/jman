@@ -264,6 +264,17 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(results) == 0 {
 		response.Status = "Up to date"
+		// If we think it's up to date but versions don't match, or if we didn't have
+		// a version, we should try to get the real current version.
+		actual, err := wpcli.GetPlugins(*site, true)
+		if err == nil {
+			for _, p := range actual {
+				if p.Name == body.Plugin {
+					currentVersion = p.Version
+					break
+				}
+			}
+		}
 		response.OldVersion = currentVersion
 		response.NewVersion = currentVersion
 		WriteJSON(w, http.StatusOK, response)
