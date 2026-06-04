@@ -1,6 +1,16 @@
 # Changelog
 
-## 5.19.0 (2026-06-04)
+## 5.20.0 (2026-06-04)
+
+#### Features
+
+- api: include error details in plugin update responses (cad8a37)
+
+#### Bug Fixes
+
+- api: improve error handling and response consistency for plugin updates (d54dff8)
+
+## v5.19.0 (2026-06-04)
 
 #### Features
 
