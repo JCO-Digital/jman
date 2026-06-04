@@ -12,6 +12,9 @@ const router = useRouter();
 const assetStore = useAssetStore();
 const organizationStore = useOrganizationStore();
 
+const showEditModal = ref(false);
+const editingAsset = ref<OrganizationAsset | null>(null);
+
 const assets = ref<OrganizationAsset[]>([]);
 const isLoading = ref(true);
 const searchQuery = ref("");
@@ -56,6 +59,12 @@ const filteredAssets = computed(() => {
 
 const goToOrganization = (id: number) => {
 	router.push({ name: "organization-detail", params: { id: id.toString() } });
+};
+
+const openEditModal = (asset: OrganizationAsset, event: Event) => {
+	event.stopPropagation();
+	editingAsset.value = asset;
+	showEditModal.value = true;
 };
 
 const goToTemplates = () => {
@@ -117,11 +126,12 @@ const formatDate = (dateString: string | null) => {
 							<th>Frequency</th>
 							<th>Next Billing</th>
 							<th>Status</th>
+							<th style="width: 40px"></th>
 						</tr>
 					</thead>
 					<tbody>
 						<tr v-if="filteredAssets.length === 0">
-							<td colspan="7" class="empty-state">
+							<td colspan="8" class="empty-state">
 								No assets found matching your filters.
 							</td>
 						</tr>
@@ -162,11 +172,39 @@ const formatDate = (dateString: string | null) => {
 									{{ asset.status }}
 								</span>
 							</td>
+							<td class="text-right" @click.stop>
+								<button
+									class="icon-btn"
+									title="Edit Asset"
+									@click="openEditModal(asset, $event)"
+								>
+									<AppIcon name="edit" size="18" />
+								</button>
+							</td>
 						</tr>
 					</tbody>
 				</table>
 			</div>
 		</main>
+
+		<!-- Asset Edit Modal Placeholder -->
+		<div
+			v-if="showEditModal"
+			class="modal-overlay"
+			@click.self="showEditModal = false"
+		>
+			<div class="modal-content card">
+				<h2>Edit Asset</h2>
+				<p>
+					Editing <strong>{{ editingAsset?.asset_name }}</strong> for
+					{{ editingAsset?.organization_name }}
+				</p>
+				<!-- Add form fields here if needed, or link to org detail -->
+				<button class="btn btn-outline" @click="showEditModal = false">
+					Close
+				</button>
+			</div>
+		</div>
 	</div>
 </template>
 
