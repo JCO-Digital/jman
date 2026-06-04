@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
+import { useDataStore } from "../stores/data";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
 import AppIcon from "./AppIcon.vue";
 import type { Plugin, PluginUpdateResult } from "../types";
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 	(e: "close"): void;
 }>();
 
+const dataStore = useDataStore();
 const pluginUpdatesStore = usePluginUpdatesStore();
 
 const isLoading = ref(false);
@@ -24,14 +26,60 @@ const pluginStatus = ref<Record<string, UpdateStatus>>({});
 const pluginError = ref<Record<string, string>>({});
 const pluginResult = ref<Record<string, PluginUpdateResult | null>>({});
 const isUpdatingAll = ref(false);
+
 const isAnyUpdating = computed(() =>
 	Object.values(pluginStatus.value).some((s) => s === "updating"),
 );
-const hasUpdatesRemaining = computed(() =>
-	updates.value.some((p) => {
-		const s = pluginStatus.value[p.name];
-		return s !== "success" && s !== "updating";
-	}),
+
+const isPending = (p: Plugin) => {
+	const s = pluginStatus.value[p.name];
+	return s !== "success" && s !== "updating";
+};
+
+const hasUpdatesRemaining = computed(() => updates.value.some(isPending));
+
+const vulnerablePluginNames = computed(() => {
+	const vulns = dataStore.vulnerabilitiesBySiteId.get(props.siteId) || [];
+	return new Set(
+		vulns
+			.filter((v) => {
+				const siteSpecificVuln = v.sites.find(
+					(s) => s.site_id === props.siteId,
+				);
+				return !(
+					v.plugin_suppressed ||
+					v.suppressed ||
+					siteSpecificVuln?.suppressed
+				);
+			})
+			.map((v) => v.plugin_name),
+	);
+});
+
+const vulnerablePluginSlugs = computed(() => {
+	const vulns = dataStore.vulnerabilitiesBySiteId.get(props.siteId) || [];
+	return new Set(
+		vulns
+			.filter((v) => {
+				const siteSpecificVuln = v.sites.find(
+					(s) => s.site_id === props.siteId,
+				);
+				return !(
+					v.plugin_suppressed ||
+					v.suppressed ||
+					siteSpecificVuln?.suppressed
+				);
+			})
+			.map((v) => v.slug),
+	);
+});
+
+const isVulnerable = (plugin: Plugin) =>
+	vulnerablePluginNames.value.has(plugin.name) ||
+	vulnerablePluginSlugs.value.has(plugin.slug || plugin.name);
+
+const hasVulnerableUpdatesRemaining = computed(() =>
+	updates.value.some((p) => isVulnerable(p) && isPending(p)),
 );
 
 async function fetchUpdates() {
@@ -72,16 +120,22 @@ async function updatePlugin(pluginName: string): Promise<boolean> {
 	}
 }
 
-async function updateAll() {
+async function runUpdates(entries: Plugin[]) {
 	isUpdatingAll.value = true;
-	const pending = updates.value.filter((p) => {
-		const s = pluginStatus.value[p.name];
-		return s !== "success" && s !== "updating";
-	});
-	for (const plugin of pending) {
+	for (const plugin of entries) {
 		await updatePlugin(plugin.name);
 	}
 	isUpdatingAll.value = false;
+}
+
+async function updateAll() {
+	await runUpdates(updates.value.filter(isPending));
+}
+
+async function updateVulnerable() {
+	await runUpdates(
+		updates.value.filter((p) => isVulnerable(p) && isPending(p)),
+	);
 }
 
 watch(
@@ -123,6 +177,7 @@ watch(
 								<tr>
 									<th>Plugin</th>
 									<th>Version</th>
+									<th class="hide-mobile">Vuln</th>
 									<th class="text-right">Action</th>
 								</tr>
 							</thead>
@@ -146,6 +201,15 @@ watch(
 												plugin.update
 											}}</span>
 										</div>
+									</td>
+									<td class="hide-mobile">
+										<span
+											v-if="isVulnerable(plugin)"
+											class="status-badge error badge-sm"
+										>
+											Yes
+										</span>
+										<span v-else class="text-muted">—</span>
 									</td>
 									<td class="text-right">
 										<span
@@ -188,7 +252,9 @@ watch(
 										<button
 											v-else
 											class="btn btn-primary btn-sm"
-											:disabled="isUpdatingAll"
+											:disabled="
+												isUpdatingAll || isAnyUpdating
+											"
 											@click="updatePlugin(plugin.name)"
 										>
 											Update
@@ -202,6 +268,14 @@ watch(
 					<footer class="form-actions mt-4">
 						<button class="btn btn-outline" @click="emit('close')">
 							Close
+						</button>
+						<button
+							v-if="hasVulnerableUpdatesRemaining"
+							class="btn btn-danger"
+							:disabled="isUpdatingAll || isAnyUpdating"
+							@click="updateVulnerable"
+						>
+							Update Vulnerable
 						</button>
 						<button
 							v-if="updates.length > 0"
@@ -223,10 +297,4 @@ watch(
 	</Teleport>
 </template>
 
-<style scoped>
-.version-display {
-	display: flex;
-	align-items: center;
-	white-space: nowrap;
-}
-</style>
+<style scoped></style>

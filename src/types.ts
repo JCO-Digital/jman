@@ -106,6 +106,7 @@ export interface Site {
 export interface Plugin {
 	site_id: number;
 	name: string;
+	slug?: string;
 	status: string;
 	version: string;
 	update: string;
@@ -361,6 +362,7 @@ export interface PluginUpdateResult {
 	old_version: string;
 	new_version: string;
 	status: string;
+	error?: string;
 }
 
 export interface TwoFactorSetupResponse {
