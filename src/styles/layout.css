@@ -150,6 +150,10 @@
 	max-width: 320px;
 }
 
+.max-w-640 {
+	max-width: 640px;
+}
+
 .truncate {
 	overflow: hidden;
 	text-overflow: ellipsis;

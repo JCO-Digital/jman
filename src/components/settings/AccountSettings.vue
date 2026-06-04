@@ -12,7 +12,7 @@ const userStore = useUserStore();
 // Fetch user profile on mount to get 2FA status
 onMounted(() => {
 	userStore.fetchProfile();
-	fetchSlackId();
+	fetchSlackSettings();
 });
 
 // ─── Section 1: Profile ──────────────────────────────────────────────────────
@@ -39,24 +39,37 @@ async function saveProfile() {
 // ─── Section: Slack Integration ──────────────────────────────────────────────
 
 const slackId = ref("");
+const slackReminderTime = ref("10:00");
 const slackSaving = ref(false);
 const slackSuccess = ref("");
 const slackError = ref("");
 
-async function fetchSlackId() {
+async function fetchSlackSettings() {
 	if (!authStore.isAuthenticated) return;
 	try {
-		const res = await fetch(`${BASE_URL}/settings/slack_id`, {
-			headers: authStore.authHeader,
-		});
-		if (res.ok) {
-			const data = await res.json();
+		const [idRes, timeRes] = await Promise.all([
+			fetch(`${BASE_URL}/settings/slack_id`, {
+				headers: authStore.authHeader,
+			}),
+			fetch(`${BASE_URL}/settings/slack_reminder_time`, {
+				headers: authStore.authHeader,
+			}),
+		]);
+
+		if (idRes.ok) {
+			const data = await idRes.json();
 			// The API returns either a raw string or { value: "..." }
 			slackId.value =
 				typeof data === "object" && data !== null ? data.value : data;
 		}
+
+		if (timeRes.ok) {
+			const data = await timeRes.json();
+			slackReminderTime.value =
+				typeof data === "object" && data !== null ? data.value : data;
+		}
 	} catch (e) {
-		console.error("Failed to fetch Slack ID", e);
+		console.error("Failed to fetch Slack settings", e);
 	}
 }
 
@@ -68,7 +81,7 @@ function handleSlackIdInput() {
 	slackId.value = slackId.value.toUpperCase();
 }
 
-async function saveSlackId() {
+async function saveSlackSettings() {
 	if (slackId.value && !validateSlackId(slackId.value)) {
 		slackError.value =
 			"Invalid Slack Member ID format. It should start with U or W followed by 8 alphanumeric characters.";
@@ -79,18 +92,31 @@ async function saveSlackId() {
 	slackSuccess.value = "";
 	slackError.value = "";
 	try {
-		const res = await fetch(`${BASE_URL}/settings/slack_id`, {
-			method: "POST",
-			headers: {
-				...authStore.authHeader,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify(slackId.value),
-		});
-		if (!res.ok) throw new Error("Failed to save Slack ID");
-		slackSuccess.value = "Slack ID updated successfully.";
+		const [idRes, timeRes] = await Promise.all([
+			fetch(`${BASE_URL}/settings/slack_id`, {
+				method: "POST",
+				headers: {
+					...authStore.authHeader,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(slackId.value),
+			}),
+			fetch(`${BASE_URL}/settings/slack_reminder_time`, {
+				method: "POST",
+				headers: {
+					...authStore.authHeader,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(slackReminderTime.value),
+			}),
+		]);
+
+		if (!idRes.ok || !timeRes.ok)
+			throw new Error("Failed to save Slack settings");
+
+		slackSuccess.value = "Slack settings updated successfully.";
 	} catch (e: any) {
-		slackError.value = e.message || "Failed to update Slack ID.";
+		slackError.value = e.message || "Failed to update Slack settings.";
 	} finally {
 		slackSaving.value = false;
 	}
@@ -281,24 +307,36 @@ function cancelDisable() {
 		<section class="card">
 			<h2>Slack Integration</h2>
 			<p class="sub-text mb-4">
-				Connect your Slack account by providing your Member ID. This
-				allows you to receive notifications and assignments directly in
-				Slack.
+				Connect your Slack account by providing your Member ID and
+				preferred reminder time. This allows you to receive
+				notifications and assignments directly in Slack.
 			</p>
 
-			<div class="form-group max-w-320">
-				<label for="slack-id">Slack Member ID</label>
-				<input
-					id="slack-id"
-					v-model="slackId"
-					type="text"
-					placeholder="e.g. U0G9QF9C6"
-					maxlength="9"
-					@input="handleSlackIdInput"
-				/>
-				<p class="help-text">
-					Format: U or W followed by 8 characters.
-				</p>
+			<div class="grid-2-cols gap-4 max-w-640">
+				<div class="form-group">
+					<label for="slack-id">Slack Member ID</label>
+					<input
+						id="slack-id"
+						v-model="slackId"
+						type="text"
+						placeholder="e.g. U0G9QF9C6"
+						maxlength="9"
+						@input="handleSlackIdInput"
+					/>
+					<p class="help-text">
+						Format: U or W followed by 8 characters.
+					</p>
+				</div>
+
+				<div class="form-group">
+					<label for="slack-reminder-time">Reminder Time</label>
+					<input
+						id="slack-reminder-time"
+						v-model="slackReminderTime"
+						type="time"
+					/>
+					<p class="help-text">Time of day to receive reminders.</p>
+				</div>
 			</div>
 
 			<div v-if="slackSuccess" class="feedback success">
@@ -311,9 +349,9 @@ function cancelDisable() {
 			<button
 				class="btn btn-primary"
 				:disabled="slackSaving"
-				@click="saveSlackId"
+				@click="saveSlackSettings"
 			>
-				{{ slackSaving ? "Saving..." : "Save Slack ID" }}
+				{{ slackSaving ? "Saving..." : "Save Slack Settings" }}
 			</button>
 
 			<div class="section-divider mt-6"></div>
