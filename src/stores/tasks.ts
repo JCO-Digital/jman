@@ -88,12 +88,13 @@ export const useTaskStore = defineStore("tasks", () => {
 		return updateTask(id, { status });
 	}
 
-	async function completeTask(id: number): Promise<void> {
+	async function completeTask(id: number): Promise<Task> {
 		const res = await fetch(`${BASE_URL}/tasks/${id}/complete`, {
 			method: "POST",
 			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
+		return await res.json();
 	}
 
 	async function deleteTask(id: number): Promise<void> {

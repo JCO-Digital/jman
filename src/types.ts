@@ -413,6 +413,8 @@ export interface Task {
 	created_at: string;
 	updated_at: string;
 	created_by: string;
+	completed_at: string | null;
+	completed_by: string | null;
 }
 
 export interface CreateTaskPayload {
