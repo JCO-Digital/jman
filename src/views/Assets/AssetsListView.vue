@@ -3,7 +3,11 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAssetStore } from "../../stores/assetStore";
 import { useOrganizationStore } from "../../stores/organization";
-import type { OrganizationAsset, OrganizationAssetStatus } from "../../types";
+import type {
+	OrganizationAsset,
+	OrganizationAssetStatus,
+	Site,
+} from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";

@@ -9,7 +9,6 @@ import type {
 	Organization,
 } from "../types";
 import { useAssetStore } from "../stores/assetStore";
-import AppIcon from "./AppIcon.vue";
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -96,7 +95,7 @@ const searchAssets = async () => {
 const selectAssetTemplate = (template: Asset) => {
 	assetForm.value.asset_id = template.id;
 	assetForm.value.identifier = template.identifier || "";
-	assetForm.value.price_euro = template.default_price / 100;
+	assetForm.value.price_euro = (template.default_price || 0) / 100;
 	assetForm.value.billing_freq = template.default_freq || "Yearly";
 	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
 	assetSearchQuery.value = template.name;
@@ -217,7 +216,8 @@ const close = () => {
 						>
 							<div class="res-name">{{ t.name }}</div>
 							<div class="sub-text">
-								{{ t.type }} • {{ t.default_price / 100 }}€ /
+								{{ t.type }} •
+								{{ (t.default_price || 0) / 100 }}€ /
 								{{ t.default_freq }}
 							</div>
 						</div>
@@ -279,7 +279,7 @@ const close = () => {
 							:key="site.id"
 							:value="site.id"
 						>
-							{{ site.domain || site.name }}
+							{{ site.domain }}
 						</option>
 					</select>
 				</div>
