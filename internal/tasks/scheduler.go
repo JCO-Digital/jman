@@ -229,13 +229,16 @@ func processReminders() error {
 			}
 
 			// Parse reminderTimeStr (expecting HH:mm)
-			var hour, minute int
-			if _, err := fmt.Sscanf(reminderTimeStr, "%d:%d", &hour, &minute); err == nil {
-				todayReminderTime := time.Date(now.Year(), now.Month(), now.Day(), hour, minute, 0, 0, now.Location())
-				if now.Before(todayReminderTime) {
-					// It's before the set time today, skip sending for now
-					continue
-				}
+			reminderTime, err := time.ParseInLocation("15:04", reminderTimeStr, now.Location())
+			if err != nil {
+				// Fallback to default if user setting is invalid
+				reminderTime, _ = time.ParseInLocation("15:04", "10:00", now.Location())
+			}
+
+			todayReminderTime := time.Date(now.Year(), now.Month(), now.Day(), reminderTime.Hour(), reminderTime.Minute(), 0, 0, now.Location())
+			if now.Before(todayReminderTime) {
+				// It's before the set time today, skip sending for now
+				continue
 			}
 
 			sendSlackReminder(&task)
