@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.20.0 (2026-06-04)
+### 5.20.1 (2026-06-04)
+
+#### Bug Fixes
+
+- api: verify plugin version against remote state when update check reports up to date (5f664bb)
+
+## v5.20.0 (2026-06-04)
 
 #### Features
 
