@@ -213,21 +213,78 @@ func processReminders() error {
 	}
 
 	now := time.Now()
+	// Cache for user reminder times to avoid N+1 queries
+	userReminderTimes := make(map[string]time.Time)
+
 	for _, task := range tasks {
 		if (task.Priority == models.TaskPriorityHigh || task.Priority == models.TaskPriorityMedium) &&
 			task.ReminderDate != nil && task.ReminderDate.Before(now) && task.LastNotifiedAt == nil {
+
+			// Get user's preferred reminder time
+			assignee := "default"
+			if task.AssignedTo != nil && *task.AssignedTo != "" {
+				assignee = *task.AssignedTo
+			}
+
+			reminderTime, ok := userReminderTimes[assignee]
+			if !ok {
+				reminderTimeStr := "10:00"
+				if assignee != "default" {
+					setting, err := db.GetSetting(assignee, "slack_reminder_time")
+					if err == nil && setting != nil {
+						if val, ok := setting.Value.(string); ok && val != "" {
+							reminderTimeStr = val
+						}
+					}
+				}
+
+				// Parse reminderTimeStr (expecting HH:mm)
+				parsed, err := time.ParseInLocation("15:04", reminderTimeStr, now.Location())
+				if err != nil {
+					// Fallback to default if user setting is invalid
+					parsed, _ = time.ParseInLocation("15:04", "10:00", now.Location())
+				}
+				reminderTime = parsed
+				userReminderTimes[assignee] = reminderTime
+			}
+
+			todayReminderTime := time.Date(now.Year(), now.Month(), now.Day(), reminderTime.Hour(), reminderTime.Minute(), 0, 0, now.Location())
+			if now.Before(todayReminderTime) {
+				// It's before the set time today, skip sending for now
+				continue
+			}
+
 			sendSlackReminder(&task)
 		}
 	}
 	return nil
 }
 
+// sendSlackReminder sends a reminder notification for a task.
 func sendSlackReminder(task *models.Task) {
 	message := fmt.Sprintf("🔔 *Task Reminder: %s*\nPriority: %s", task.Title, task.Priority)
 	if task.DueDate != nil {
 		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
 	}
 
+	if sendToAssignee(task, message) {
+		now := time.Now()
+		task.LastNotifiedAt = &now
+		_ = db.SaveTask(task, "system")
+	}
+}
+
+// NotifyTaskAssigned sends a notification to a user when a task is assigned to them.
+func NotifyTaskAssigned(task *models.Task) {
+	message := fmt.Sprintf("📋 *New Task Assigned: %s*\nPriority: %s", task.Title, task.Priority)
+	if task.DueDate != nil {
+		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
+	}
+
+	sendToAssignee(task, message)
+}
+
+func sendToAssignee(task *models.Task, message string) bool {
 	var sent bool
 	if task.AssignedTo != nil && *task.AssignedTo != "" {
 		setting, err := db.GetSetting(*task.AssignedTo, "slack_id")
@@ -244,12 +301,7 @@ func sendSlackReminder(task *models.Task) {
 			sent = true
 		}
 	}
-
-	if sent {
-		now := time.Now()
-		task.LastNotifiedAt = &now
-		_ = db.SaveTask(task, "system")
-	}
+	return sent
 }
 
 // cleanupOrphanedTasks marks tasks as skipped if they are linked to non-existent entities.
