@@ -421,6 +421,12 @@ export const useDataStore = defineStore("data", () => {
 		if (plugin) {
 			plugin.version = newVersion;
 			plugin.update = "";
+
+			// Persist to session storage so it survives reloads
+			sessionStorage.setItem(
+				CACHE_KEY_PLUGINS,
+				JSON.stringify(plugins.value),
+			);
 		}
 	}
 
