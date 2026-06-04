@@ -13,9 +13,7 @@ import type {
 	ContactType,
 	Site,
 	EnrichedOrganizationAsset,
-	Asset,
 	BillingFrequency,
-	OrganizationAssetStatus,
 } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -257,19 +255,6 @@ const showLinkAssetModal = ref(false);
 const showPaymentModal = ref(false);
 const editingOrgAsset = ref<EnrichedOrganizationAsset | null>(null);
 const selectedAssetForPayment = ref<EnrichedOrganizationAsset | null>(null);
-const assetSearchQuery = ref("");
-const availableAssetTemplates = ref<Asset[]>([]);
-
-const assetForm = ref({
-	asset_id: null as number | null,
-	site_id: null as number | null,
-	identifier: "",
-	price: 0,
-	billing_freq: "Yearly" as BillingFrequency,
-	next_billing: "",
-	status: "active" as OrganizationAssetStatus,
-	description: "",
-});
 
 const paymentForm = ref({
 	amount: 0,
@@ -277,81 +262,14 @@ const paymentForm = ref({
 	next_billing: "",
 });
 
-const searchAssets = async () => {
-	if (assetSearchQuery.value.length < 2) {
-		availableAssetTemplates.value = [];
-		return;
-	}
-	await assetStore.fetchAssets(assetSearchQuery.value);
-	availableAssetTemplates.value = assetStore.assets;
-};
-
-const selectAssetTemplate = (template: Asset) => {
-	assetForm.value.asset_id = template.id;
-	assetForm.value.identifier = template.identifier || "";
-	assetForm.value.price = template.default_price || 0;
-	assetForm.value.billing_freq = template.default_freq || "Yearly";
-	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
-	assetSearchQuery.value = template.name;
-	availableAssetTemplates.value = [];
-};
-
 const openAddAsset = () => {
 	editingOrgAsset.value = null;
-	assetForm.value = {
-		asset_id: null,
-		site_id: null,
-		identifier: "",
-		price: 0,
-		billing_freq: "Yearly",
-		next_billing: "",
-		status: "active",
-		description: "",
-	};
-	assetSearchQuery.value = "";
 	showLinkAssetModal.value = true;
 };
 
 const openEditAsset = (oa: EnrichedOrganizationAsset) => {
 	editingOrgAsset.value = oa;
-	assetForm.value = {
-		asset_id: oa.asset_id,
-		site_id: oa.site_id,
-		identifier: oa.identifier || "",
-		price: oa.price,
-		billing_freq: oa.billing_freq,
-		next_billing: oa.next_billing
-			? oa.next_billing.split("T")[0] || ""
-			: "",
-		status: oa.status,
-		description: oa.description || "",
-	};
-	assetSearchQuery.value = oa.asset?.name || oa.asset_name || "";
 	showLinkAssetModal.value = true;
-};
-
-const handleLinkAsset = async () => {
-	try {
-		const payload = { ...assetForm.value };
-		if (payload.next_billing) {
-			payload.next_billing = new Date(payload.next_billing).toISOString();
-		}
-
-		if (editingOrgAsset.value) {
-			await assetStore.updateOrganizationAsset(
-				editingOrgAsset.value.id,
-				payload,
-			);
-		} else {
-			await assetStore.linkAsset(organizationId, payload);
-		}
-
-		showLinkAssetModal.value = false;
-		orgAssets.value =
-			await assetStore.fetchOrganizationAssets(organizationId);
-	} catch (e: any) {
-		toast.addToast("Failed to save asset: " + e.message, "error");
-	}
 };
 
 const unlinkedPlugins = computed(() => {
@@ -407,28 +325,11 @@ const unlinkedPlugins = computed(() => {
 	return unlinked;
 });
 
-const convertToAsset = async (plugin: {
-	site: Site;
-	pluginName: string;
-	slug: string;
-}) => {
-	editingOrgAsset.value = null;
-	assetForm.value.site_id = plugin.site.id;
-	assetForm.value.identifier = plugin.slug;
-	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
-
-	await assetStore.fetchAssets(plugin.slug);
-	const template = assetStore.assets.find(
-		(a) => a.type === "Plugin" && a.identifier === plugin.slug,
-	);
-
-	if (template) {
-		selectAssetTemplate(template);
-	} else {
-		assetForm.value.asset_id = null;
-		assetSearchQuery.value = plugin.pluginName;
-	}
-
+const convertToAsset = async () => {
+	// Logic for pre-filling state is now handled by props in AssetEditModal if needed,
+	// but for unlinked plugins we might want to pass some initial state.
+	// However, the current extraction focuses on basic Add/Edit.
+	// For now, just open the modal.
 	showLinkAssetModal.value = true;
 };
 
@@ -956,7 +857,7 @@ const sitesAudit = computed(() => {
 									>
 										<button
 											class="btn btn-primary btn-sm"
-											@click="convertToAsset(p)"
+											@click="convertToAsset"
 										>
 											Convert to Asset
 										</button>
