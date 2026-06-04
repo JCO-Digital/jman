@@ -31,8 +31,8 @@ async function complete() {
 	isActioning.value = true;
 	actionError.value = null;
 	try {
-		await taskStore.completeTask(props.task.id);
-		emit("updated", { ...props.task, status: "completed" });
+		const updated = await taskStore.completeTask(props.task.id);
+		emit("updated", updated);
 	} catch (e: any) {
 		actionError.value = e.message;
 	} finally {
@@ -56,7 +56,10 @@ async function changeStatus(status: TaskStatus) {
 const isDeleting = ref(false);
 
 async function handleDelete() {
-	if (!await confirm(`Delete task "${props.task.title}"?`, { danger: true })) return;
+	if (
+		!(await confirm(`Delete task "${props.task.title}"?`, { danger: true }))
+	)
+		return;
 	isDeleting.value = true;
 	try {
 		await taskStore.deleteTask(props.task.id);
@@ -68,9 +71,13 @@ async function handleDelete() {
 	}
 }
 
-function formatDate(d: string | null) {
+function formatDate(d: string | null, includeTime = false) {
 	if (!d) return "—";
-	return new Date(d).toLocaleDateString("de-DE", { dateStyle: "medium" });
+	const options: Intl.DateTimeFormatOptions = { dateStyle: "medium" };
+	if (includeTime) {
+		options.timeStyle = "short";
+	}
+	return new Date(d).toLocaleString("de-DE", options);
 }
 
 const priorityClass: Record<string, string> = {
@@ -164,6 +171,11 @@ const canComplete = (s: string) =>
 							<span class="label">Interval</span>
 							<span class="value">{{ task.interval }}</span>
 						</div>
+					</div>
+
+					<div class="section-divider"></div>
+
+					<div class="grid-2-cols gap-4">
 						<div class="info-item">
 							<span class="label">Created by</span>
 							<span class="value">{{ task.created_by }}</span>
@@ -172,6 +184,24 @@ const canComplete = (s: string) =>
 							<span class="label">Created at</span>
 							<span class="value">{{
 								formatDate(task.created_at)
+							}}</span>
+						</div>
+					</div>
+
+					<div
+						v-if="task.status === 'completed'"
+						class="grid-2-cols gap-4 mt-4"
+					>
+						<div class="info-item">
+							<span class="label">Completed by</span>
+							<span class="value">{{
+								userStore.resolveDisplayName(task.completed_by)
+							}}</span>
+						</div>
+						<div class="info-item">
+							<span class="label">Completed at</span>
+							<span class="value">{{
+								formatDate(task.completed_at, true)
 							}}</span>
 						</div>
 					</div>
