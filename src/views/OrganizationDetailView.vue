@@ -173,7 +173,12 @@ const handleContactSubmit = async () => {
 };
 
 const handleDeleteContact = async (id: number) => {
-	if (!await confirm("Are you sure you want to delete this contact?", { danger: true })) return;
+	if (
+		!(await confirm("Are you sure you want to delete this contact?", {
+			danger: true,
+		}))
+	)
+		return;
 	try {
 		await organizationStore.deleteContact(id);
 		contacts.value =
@@ -189,10 +194,10 @@ const goBack = () => {
 
 const handleDeleteOrganization = async () => {
 	if (
-		!await confirm(
+		!(await confirm(
 			`Are you sure you want to delete ${organization.value?.name}? This will also delete all associated contacts.`,
 			{ danger: true },
-		)
+		))
 	)
 		return;
 	try {
@@ -230,7 +235,7 @@ const handleLinkSite = async (siteId: number) => {
 };
 
 const handleUnlinkSite = async (siteId: number) => {
-	if (!await confirm("Are you sure you want to unlink this site?")) return;
+	if (!(await confirm("Are you sure you want to unlink this site?"))) return;
 	try {
 		await organizationStore.unlinkSite(siteId);
 		dataStore.setSiteOrganizationLink(siteId, undefined);
@@ -477,7 +482,7 @@ const handleRecordPayment = async () => {
 };
 
 const handleUnlinkAsset = async (id: number) => {
-	if (!await confirm("Are you sure you want to unlink this asset?")) return;
+	if (!(await confirm("Are you sure you want to unlink this asset?"))) return;
 	try {
 		await assetStore.unlinkAsset(id);
 		orgAssets.value =
@@ -1105,7 +1110,7 @@ const sitesAudit = computed(() => {
 		<div class="modal-content card">
 			<h2>{{ editingOrgAsset ? "Edit Asset" : "Link New Asset" }}</h2>
 			<div class="form-layout">
-				<div class="form-group">
+				<div class="form-group" v-if="!editingOrgAsset">
 					<label for="a-search">Search Template</label>
 					<input
 						id="a-search"
@@ -1134,6 +1139,13 @@ const sitesAudit = computed(() => {
 							</div>
 						</div>
 					</div>
+				</div>
+
+				<div v-if="editingOrgAsset" class="form-group">
+					<label>Organization</label>
+					<span class="readonly-value">{{
+						editingOrgAsset.organization_name
+					}}</span>
 				</div>
 
 				<div v-if="assetForm.asset_id" class="form-row">

@@ -58,6 +58,13 @@ const handleRefresh = () => {
 					Plugins
 				</RouterLink>
 				<RouterLink
+					to="/tasks"
+					class="nav-item"
+					:class="{ active: route.name === 'tasks' }"
+				>
+					Tasks
+				</RouterLink>
+				<RouterLink
 					to="/organizations"
 					class="nav-item"
 					:class="{
@@ -67,13 +74,6 @@ const handleRefresh = () => {
 					}"
 				>
 					Organizations
-				</RouterLink>
-				<RouterLink
-					to="/tasks"
-					class="nav-item"
-					:class="{ active: route.name === 'tasks' }"
-				>
-					Tasks
 				</RouterLink>
 				<RouterLink
 					to="/inventory"

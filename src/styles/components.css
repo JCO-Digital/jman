@@ -147,7 +147,7 @@
 	background: none;
 	border: none;
 	color: var(--text-muted);
-	padding: 6px;
+	padding: 8px;
 	border-radius: 4px;
 	cursor: pointer;
 	display: inline-flex;
@@ -313,6 +313,7 @@
 	&.success {
 		background-color: var(--badge-active-bg);
 		color: var(--badge-active-text);
+		border: 1px solid currentColor;
 	}
 
 	&.inactive,
@@ -320,18 +321,21 @@
 	&.error {
 		background-color: var(--badge-inactive-bg);
 		color: var(--badge-inactive-text);
+		border: 1px solid currentColor;
 	}
 
 	&.warning,
 	&.drop-in {
 		background-color: var(--badge-drop-in-bg);
 		color: var(--badge-drop-in-text);
+		border: 1px solid currentColor;
 	}
 
 	&.must-use,
 	&.info {
 		background-color: var(--badge-must-use-bg);
 		color: var(--badge-must-use-text);
+		border: 1px solid currentColor;
 	}
 
 	&.badge-sm {
