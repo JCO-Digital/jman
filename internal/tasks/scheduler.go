@@ -213,26 +213,39 @@ func processReminders() error {
 	}
 
 	now := time.Now()
+	// Cache for user reminder times to avoid N+1 queries
+	userReminderTimes := make(map[string]time.Time)
+
 	for _, task := range tasks {
 		if (task.Priority == models.TaskPriorityHigh || task.Priority == models.TaskPriorityMedium) &&
 			task.ReminderDate != nil && task.ReminderDate.Before(now) && task.LastNotifiedAt == nil {
 
 			// Get user's preferred reminder time
-			reminderTimeStr := "10:00"
+			assignee := "default"
 			if task.AssignedTo != nil && *task.AssignedTo != "" {
-				setting, err := db.GetSetting(*task.AssignedTo, "slack_reminder_time")
-				if err == nil && setting != nil {
-					if val, ok := setting.Value.(string); ok && val != "" {
-						reminderTimeStr = val
-					}
-				}
+				assignee = *task.AssignedTo
 			}
 
-			// Parse reminderTimeStr (expecting HH:mm)
-			reminderTime, err := time.ParseInLocation("15:04", reminderTimeStr, now.Location())
-			if err != nil {
-				// Fallback to default if user setting is invalid
-				reminderTime, _ = time.ParseInLocation("15:04", "10:00", now.Location())
+			reminderTime, ok := userReminderTimes[assignee]
+			if !ok {
+				reminderTimeStr := "10:00"
+				if assignee != "default" {
+					setting, err := db.GetSetting(assignee, "slack_reminder_time")
+					if err == nil && setting != nil {
+						if val, ok := setting.Value.(string); ok && val != "" {
+							reminderTimeStr = val
+						}
+					}
+				}
+
+				// Parse reminderTimeStr (expecting HH:mm)
+				parsed, err := time.ParseInLocation("15:04", reminderTimeStr, now.Location())
+				if err != nil {
+					// Fallback to default if user setting is invalid
+					parsed, _ = time.ParseInLocation("15:04", "10:00", now.Location())
+				}
+				reminderTime = parsed
+				userReminderTimes[assignee] = reminderTime
 			}
 
 			todayReminderTime := time.Date(now.Year(), now.Month(), now.Day(), reminderTime.Hour(), reminderTime.Minute(), 0, 0, now.Location())
