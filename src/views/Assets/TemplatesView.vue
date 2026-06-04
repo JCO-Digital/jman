@@ -139,21 +139,25 @@ const formatCurrency = (cents: number) => {
 
 <template>
 	<div class="view-container">
-		<ViewHeader
-			title="Asset Templates"
-			:back-button="{
-				text: 'Back to Assets',
-				onClick: () => $router.push({ name: 'assets' }),
-			}"
-		>
+		<ViewHeader title="Asset Templates">
 			<template #actions>
-				<button
-					v-if="authStore.canEdit"
-					class="btn btn-primary"
-					@click="openAddModal"
-				>
-					Create Template
-				</button>
+				<div class="flex-row gap-2 items-center">
+					<button
+						v-if="authStore.canEdit"
+						class="btn btn-primary"
+						@click="openAddModal"
+					>
+						<AppIcon name="plus-circle" size="18" />
+						Create Template
+					</button>
+					<button
+						class="btn btn-secondary"
+						@click="$router.push({ name: 'assets' })"
+					>
+						<AppIcon name="tag" size="18" />
+						<span>Manage Assets</span>
+					</button>
+				</div>
 			</template>
 		</ViewHeader>
 
