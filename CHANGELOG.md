@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.20.1 (2026-06-04)
+### 5.20.2 (2026-08-03)
+
+#### Maintenance
+
+- api: add air configuration for live-reloading (bf37394)
+
+### v5.20.1 (2026-06-04)
 
 #### Bug Fixes
 
