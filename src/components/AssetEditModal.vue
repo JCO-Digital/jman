@@ -13,6 +13,7 @@ import { useAssetStore } from "../stores/assetStore";
 const props = defineProps<{
 	modelValue: boolean;
 	asset: EnrichedOrganizationAsset | null;
+	prefill?: { template: Asset; siteId: number | null } | null;
 	sites: Site[];
 	organizations?: Organization[];
 	organizationId?: number | null;
@@ -65,6 +66,21 @@ watch(
 				};
 				assetSearchQuery.value =
 					props.asset.asset?.name || props.asset.asset_name || "";
+			} else if (props.prefill) {
+				isEditing.value = false;
+				const { template, siteId } = props.prefill;
+				assetForm.value = {
+					asset_id: template.id,
+					site_id: siteId,
+					identifier: template.identifier || "",
+					price_euro: (template.default_price || 0) / 100,
+					billing_freq: template.default_freq || "Yearly",
+					next_billing: new Date().toISOString().split("T")[0] || "",
+					status: "active",
+					description: "",
+				};
+				assetSearchQuery.value = template.name;
+				availableAssetTemplates.value = [];
 			} else {
 				isEditing.value = false;
 				assetForm.value = {
@@ -88,8 +104,9 @@ const searchAssets = async () => {
 		availableAssetTemplates.value = [];
 		return;
 	}
-	await assetStore.fetchAssets(assetSearchQuery.value);
-	availableAssetTemplates.value = assetStore.assets;
+	availableAssetTemplates.value = await assetStore.searchAssetTemplates(
+		assetSearchQuery.value,
+	);
 };
 
 const selectAssetTemplate = (template: Asset) => {

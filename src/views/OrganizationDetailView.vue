@@ -12,6 +12,7 @@ import type {
 	Contact,
 	Site,
 	EnrichedOrganizationAsset,
+	Asset,
 } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -55,6 +56,7 @@ const loadData = async () => {
 				organizationStore.fetchOrganizationContacts(organizationId),
 				organizationStore.fetchOrganizationSites(organizationId),
 				assetStore.fetchOrganizationAssets(organizationId),
+				assetStore.fetchAssets(),
 			]);
 
 		if (organizationData) {
@@ -197,14 +199,19 @@ const showLinkAssetModal = ref(false);
 const showPaymentModal = ref(false);
 const editingOrgAsset = ref<EnrichedOrganizationAsset | null>(null);
 const selectedAssetForPayment = ref<EnrichedOrganizationAsset | null>(null);
+const assetPrefill = ref<{ template: Asset; siteId: number | null } | null>(
+	null,
+);
 
 const openAddAsset = () => {
 	editingOrgAsset.value = null;
+	assetPrefill.value = null;
 	showLinkAssetModal.value = true;
 };
 
 const openEditAsset = (oa: EnrichedOrganizationAsset) => {
 	editingOrgAsset.value = oa;
+	assetPrefill.value = null;
 	showLinkAssetModal.value = true;
 };
 
@@ -218,6 +225,7 @@ const unlinkedPlugins = computed(() => {
 		site: Site;
 		pluginName: string;
 		slug: string;
+		template: Asset;
 	}> = [];
 
 	// Get all asset templates that are of type 'Plugin'
@@ -253,6 +261,7 @@ const unlinkedPlugins = computed(() => {
 					site,
 					pluginName: enriched ? enriched.shortName : plugin.name,
 					slug: plugin.name,
+					template: matchingTemplate,
 				});
 			}
 		});
@@ -261,11 +270,9 @@ const unlinkedPlugins = computed(() => {
 	return unlinked;
 });
 
-const convertToAsset = async () => {
-	// Logic for pre-filling state is now handled by props in AssetEditModal if needed,
-	// but for unlinked plugins we might want to pass some initial state.
-	// However, the current extraction focuses on basic Add/Edit.
-	// For now, just open the modal.
+const convertToAsset = (p: { site: Site; template: Asset }) => {
+	editingOrgAsset.value = null;
+	assetPrefill.value = { template: p.template, siteId: p.site.id };
 	showLinkAssetModal.value = true;
 };
 
@@ -752,7 +759,7 @@ const sitesAudit = computed(() => {
 									>
 										<button
 											class="btn btn-primary btn-sm"
-											@click="convertToAsset"
+											@click="convertToAsset(p)"
 										>
 											Convert to Asset
 										</button>
@@ -789,6 +796,7 @@ const sitesAudit = computed(() => {
 		<AssetEditModal
 			v-model="showLinkAssetModal"
 			:asset="editingOrgAsset"
+			:prefill="assetPrefill"
 			:sites="linkedSites"
 			:organization-id="organizationId"
 			@saved="loadData"
