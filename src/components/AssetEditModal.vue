@@ -33,14 +33,18 @@ const assetForm = ref({
 	asset_id: null as number | null,
 	site_id: null as number | null,
 	identifier: "",
-	price_euro: 0,
 	billing_freq: "Yearly" as BillingFrequency,
 	next_billing: "",
 	status: "active" as OrganizationAssetStatus,
 	description: "",
 });
+const priceInput = ref("0.00");
 
 const isEditing = ref(false);
+
+const normalizePriceInput = () => {
+	priceInput.value = (parseFloat(priceInput.value) || 0).toFixed(2);
+};
 
 const isOrgSelected = computed(() => {
 	return !!(props.asset?.organization_id || props.organizationId);
@@ -56,7 +60,6 @@ watch(
 					asset_id: props.asset.asset_id,
 					site_id: props.asset.site_id,
 					identifier: props.asset.identifier || "",
-					price_euro: props.asset.price / 100,
 					billing_freq: props.asset.billing_freq,
 					next_billing: props.asset.next_billing
 						? props.asset.next_billing.split("T")[0] || ""
@@ -64,6 +67,7 @@ watch(
 					status: props.asset.status,
 					description: props.asset.description || "",
 				};
+				priceInput.value = (props.asset.price / 100).toFixed(2);
 				assetSearchQuery.value =
 					props.asset.asset?.name || props.asset.asset_name || "";
 			} else if (props.prefill) {
@@ -73,12 +77,14 @@ watch(
 					asset_id: template.id,
 					site_id: siteId,
 					identifier: template.identifier || "",
-					price_euro: (template.default_price || 0) / 100,
 					billing_freq: template.default_freq || "Yearly",
 					next_billing: new Date().toISOString().split("T")[0] || "",
 					status: "active",
 					description: "",
 				};
+				priceInput.value = (
+					(template.default_price || 0) / 100
+				).toFixed(2);
 				assetSearchQuery.value = template.name;
 				availableAssetTemplates.value = [];
 			} else {
@@ -87,12 +93,12 @@ watch(
 					asset_id: null,
 					site_id: null,
 					identifier: "",
-					price_euro: 0,
 					billing_freq: "Yearly",
 					next_billing: "",
 					status: "active",
 					description: "",
 				};
+				priceInput.value = "0.00";
 				assetSearchQuery.value = "";
 			}
 		}
@@ -112,7 +118,7 @@ const searchAssets = async () => {
 const selectAssetTemplate = (template: Asset) => {
 	assetForm.value.asset_id = template.id;
 	assetForm.value.identifier = template.identifier || "";
-	assetForm.value.price_euro = (template.default_price || 0) / 100;
+	priceInput.value = ((template.default_price || 0) / 100).toFixed(2);
 	assetForm.value.billing_freq = template.default_freq || "Yearly";
 	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
 	assetSearchQuery.value = template.name;
@@ -123,10 +129,8 @@ const handleSave = async () => {
 	try {
 		const payload = {
 			...assetForm.value,
-			price: Math.round(assetForm.value.price_euro * 100),
+			price: Math.round((parseFloat(priceInput.value) || 0) * 100),
 		};
-		// @ts-ignore
-		delete payload.price_euro;
 
 		if (payload.next_billing) {
 			payload.next_billing = new Date(payload.next_billing).toISOString();
@@ -251,19 +255,12 @@ const close = () => {
 						<label for="a-price">Custom Price (€)</label>
 						<input
 							id="a-price"
-							:value="assetForm.price_euro.toFixed(2)"
+							v-model="priceInput"
 							type="number"
 							step="0.01"
 							placeholder="e.g. 50.00"
 							:disabled="!isOrgSelected"
-							@input="
-								(e) =>
-									(assetForm.price_euro =
-										parseFloat(
-											(e.target as HTMLInputElement)
-												.value,
-										) || 0)
-							"
+							@blur="normalizePriceInput"
 						/>
 					</div>
 					<div class="form-group">

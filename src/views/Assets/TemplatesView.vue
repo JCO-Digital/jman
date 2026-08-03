@@ -25,10 +25,14 @@ const assetForm = ref({
 	name: "",
 	identifier: "",
 	description: "",
-	default_price: 0,
 	default_freq: "Yearly" as BillingFrequency,
 	active: true,
 });
+const priceInput = ref("0.00");
+
+const normalizePriceInput = () => {
+	priceInput.value = (parseFloat(priceInput.value) || 0).toFixed(2);
+};
 
 const assetTypeOptions: AssetType[] = [
 	"Plugin",
@@ -75,10 +79,10 @@ const openAddModal = () => {
 		name: "",
 		identifier: "",
 		description: "",
-		default_price: 0,
 		default_freq: "Yearly",
 		active: true,
 	};
+	priceInput.value = "0.00";
 	showModal.value = true;
 };
 
@@ -89,22 +93,23 @@ const openEditModal = (asset: Asset) => {
 		name: asset.name,
 		identifier: asset.identifier || "",
 		description: asset.description || "",
-		default_price: asset.default_price || 0,
 		default_freq: asset.default_freq || "Yearly",
 		active: asset.active,
 	};
+	priceInput.value = ((asset.default_price || 0) / 100).toFixed(2);
 	showModal.value = true;
 };
 
 const handleSubmit = async () => {
 	try {
+		const payload = {
+			...assetForm.value,
+			default_price: Math.round((parseFloat(priceInput.value) || 0) * 100),
+		};
 		if (editingAsset.value) {
-			await assetStore.updateAsset(
-				editingAsset.value.id,
-				assetForm.value,
-			);
+			await assetStore.updateAsset(editingAsset.value.id, payload);
 		} else {
-			await assetStore.createAsset(assetForm.value);
+			await assetStore.createAsset(payload);
 		}
 		showModal.value = false;
 		await loadAssets();
@@ -291,20 +296,10 @@ const formatCurrency = (cents: number) => {
 							<label for="price">Default Price (€)</label>
 							<input
 								id="price"
+								v-model="priceInput"
 								type="number"
 								step="0.01"
-								:value="
-									(assetForm.default_price / 100).toFixed(2)
-								"
-								@input="
-									(e) =>
-										(assetForm.default_price = Math.round(
-											parseFloat(
-												(e.target as HTMLInputElement)
-													.value || '0',
-											) * 100,
-										))
-								"
+								@blur="normalizePriceInput"
 							/>
 						</div>
 						<div class="form-group">
