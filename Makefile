@@ -1,4 +1,4 @@
-.PHONY: build build-pkg dev prepare install clean test format completions
+.PHONY: build build-pkg dev dev-api prepare install clean test format completions
 
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
@@ -25,6 +25,9 @@ dev: clean prepare
 	go build -o bin/jman ./cmd/jman
 	go build -o bin/jman-api ./cmd/jman-api
 	go build -o bin/jman-monitor ./cmd/jman-monitor
+
+dev-api:
+	air
 
 prepare:
 	go mod download
