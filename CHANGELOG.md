@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.31.0 (2026-06-04)
+### 1.31.1 (2026-08-03)
+
+#### Bug Fixes
+
+- organization: fix plugin audit visibility and prefill convert-to-asset modal (fe96449)
+
+#### Refactor
+
+- ui: manage asset price as string input (4422ac3)
+
+## v1.31.0 (2026-06-04)
 
 #### Features
 
