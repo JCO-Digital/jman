@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.20.2 (2026-08-03)
+### 5.20.3 (2026-08-03)
+
+#### Continuous Integration
+
+- github: allow AUR publication steps to fail (544a14a)
+
+### v5.20.2 (2026-08-03)
 
 #### Maintenance
 
