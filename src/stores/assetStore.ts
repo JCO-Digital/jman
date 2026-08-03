@@ -17,16 +17,11 @@ export const useAssetStore = defineStore("asset", () => {
 	const error = ref<string | null>(null);
 
 	// Template Management
-	async function fetchAssets(search?: string, signal?: AbortSignal) {
+	async function fetchAssets(signal?: AbortSignal) {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const url = new URL(`${BASE_URL}/assets`, window.location.origin);
-			if (search) {
-				url.searchParams.append("search", search);
-			}
-
-			const res = await fetch(url.toString(), {
+			const res = await fetch(`${BASE_URL}/assets`, {
 				headers: authStore.authHeader,
 				signal,
 			});
@@ -42,6 +37,24 @@ export const useAssetStore = defineStore("asset", () => {
 		} finally {
 			isLoading.value = false;
 		}
+	}
+
+	// Search the template catalog without clobbering the cached `assets` list,
+	// since callers (e.g. the asset-link modal) use this for transient lookups.
+	async function searchAssetTemplates(
+		search: string,
+		signal?: AbortSignal,
+	): Promise<Asset[]> {
+		const url = new URL(`${BASE_URL}/assets`, window.location.origin);
+		url.searchParams.append("search", search);
+
+		const res = await fetch(url.toString(), {
+			headers: authStore.authHeader,
+			signal,
+		});
+
+		if (!res.ok) await handleErrorResponse(res);
+		return await res.json();
 	}
 
 	async function getAsset(id: number): Promise<Asset | null> {
@@ -234,6 +247,7 @@ export const useAssetStore = defineStore("asset", () => {
 		isLoading,
 		error,
 		fetchAssets,
+		searchAssetTemplates,
 		getAsset,
 		createAsset,
 		updateAsset,
