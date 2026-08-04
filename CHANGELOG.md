@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.20.3 (2026-08-03)
+### 5.20.4 (2026-08-04)
+
+#### Bug Fixes
+
+- api: return completed task object in CompleteTask handler (b8c57fa)
+
+### v5.20.3 (2026-08-03)
 
 #### Continuous Integration
 
