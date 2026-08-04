@@ -202,7 +202,31 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 
 // CompleteTask marks a task as completed and handles the generation of recurring tasks.
 // It returns the completed task as saved.
+//
+// The completion itself is a single conditional UPDATE (rather than a
+// read-then-write) so that concurrent requests to complete the same task
+// can't both observe "not yet completed" and both spawn a recurring
+// follow-up task.
 func CompleteTask(id int, username string) (*models.Task, error) {
+	database := GetDB()
+	if database == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	now := time.Now()
+	result, err := database.Exec(
+		`UPDATE tasks SET status = ?, completed_at = ?, completed_by = ?, updated_at = ?
+		 WHERE id = ? AND status != ?`,
+		models.TaskStatusCompleted, now, username, now, id, models.TaskStatusCompleted,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to complete task: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine rows affected: %w", err)
+	}
+
 	task, err := GetTask(id)
 	if err != nil {
 		return nil, err
@@ -211,14 +235,11 @@ func CompleteTask(id int, username string) (*models.Task, error) {
 		return nil, ErrTaskNotFound
 	}
 
-	if task.Status == models.TaskStatusCompleted {
+	if rowsAffected == 0 {
+		// Already completed by a concurrent request (or already completed
+		// previously) — return the current state without spawning a
+		// duplicate recurring task.
 		return task, nil
-	}
-
-	task.Status = models.TaskStatusCompleted
-
-	if err := SaveTask(task, username); err != nil {
-		return nil, err
 	}
 
 	// Handle repetition logic
