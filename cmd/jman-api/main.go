@@ -69,8 +69,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 }
 
 func main() {
+	os.Exit(run())
+}
+
+// run executes the root command and returns the process exit code. Unlike
+// calling os.Exit directly from main, this lets deferred cleanup (closing
+// the database) run before the process exits on an error path.
+func run() int {
 	defer db.Close()
 	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }

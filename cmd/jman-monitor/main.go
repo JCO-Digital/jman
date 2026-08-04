@@ -21,6 +21,13 @@ var (
 )
 
 func main() {
+	os.Exit(run())
+}
+
+// run parses flags and executes jman-monitor, returning the process exit
+// code. Unlike calling os.Exit directly, this lets deferred cleanup (closing
+// the database, stopping the signal handler) run before the process exits.
+func run() int {
 	// Parse flags
 	flag.BoolVar(&flagVerbose, "verbose", false, "Enable verbose output")
 	flag.BoolVar(&flagVerbose, "v", false, "Enable verbose output (shorthand)")
@@ -42,13 +49,13 @@ func main() {
 	// Initialize config
 	if err := config.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing config: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	// Initialize database
 	if err := db.Init(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer db.Close()
 
@@ -60,14 +67,16 @@ func main() {
 		verb.LogPrintf(verb.Normal, "jman-monitor service starting...\n")
 		if err := monitor.RunService(ctx); err != nil && err != context.Canceled {
 			verb.Printf(verb.Normal, "Service error: %v\n", err)
-			os.Exit(1)
+			return 1
 		}
 		verb.LogPrintf(verb.Normal, "jman-monitor service stopped.\n")
-	} else {
-		// Run once (legacy/manual mode)
-		if err := monitor.RunOnce(); err != nil {
-			verb.Printf(verb.Normal, "%v\n", err)
-			os.Exit(1)
-		}
+		return 0
 	}
+
+	// Run once (legacy/manual mode)
+	if err := monitor.RunOnce(); err != nil {
+		verb.Printf(verb.Normal, "%v\n", err)
+		return 1
+	}
+	return 0
 }
