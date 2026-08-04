@@ -306,14 +306,14 @@ func TestDeleteUserHandler(t *testing.T) {
 
 	t.Run("Delete Last Admin Forbidden", func(t *testing.T) {
 		// Remove admin2 first so admin is the last admin
-		cfg.Lock()
+		cfg.LockWrite()
 		for i, u := range cfg.Users {
 			if u.Username == "admin2" {
 				cfg.Users = append(cfg.Users[:i], cfg.Users[i+1:]...)
 				break
 			}
 		}
-		cfg.Unlock()
+		cfg.UnlockWrite()
 
 		// Only "admin" is left as LevelAdmin
 		req := httptest.NewRequest("DELETE", "/api/users/admin", nil)
