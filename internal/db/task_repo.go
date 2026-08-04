@@ -201,31 +201,34 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 }
 
 // CompleteTask marks a task as completed and handles the generation of recurring tasks.
-func CompleteTask(id int, username string) error {
+// It returns the completed task as saved.
+func CompleteTask(id int, username string) (*models.Task, error) {
 	task, err := GetTask(id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if task == nil {
-		return ErrTaskNotFound
+		return nil, ErrTaskNotFound
 	}
 
 	if task.Status == models.TaskStatusCompleted {
-		return nil
+		return task, nil
 	}
 
 	task.Status = models.TaskStatusCompleted
 
 	if err := SaveTask(task, username); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Handle repetition logic
 	if task.Type == models.TaskTypeRepeating || task.Type == models.TaskTypeDynamic {
-		return createNextRecurringTask(task, username)
+		if err := createNextRecurringTask(task, username); err != nil {
+			return nil, err
+		}
 	}
 
-	return nil
+	return task, nil
 }
 
 // createNextRecurringTask calculates the next due date and creates a new task instance.
