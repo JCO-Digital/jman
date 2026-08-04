@@ -1,6 +1,22 @@
 # Changelog
 
-### 5.20.4 (2026-08-04)
+### 5.20.5 (2026-08-04)
+
+#### Bug Fixes
+
+- config: rename UsersConfig lock methods to avoid implementing sync.Locker (4184062)
+- commands: don't treat non-interactive EOF as update confirmation (e5c2709)
+- cache: guard cache/data file paths against traversal (d332fef)
+- config: enforce file permissions on config.toml (b371513)
+- db: make CompleteTask's completion check atomic (4e62b3e)
+- cmd: run deferred cleanup before process exit (211095e)
+- api: only trust X-Forwarded-For/X-Real-IP from configured trusted proxies (9fc63bd)
+- wpcli: shell-quote arguments passed to RunSSH (952f9e7)
+- update: enforce signature verification and harden downloads (79fa498)
+- config: initialize lock when constructing UsersConfig outside LoadUsersConfig (044f459)
+- wpcli: force refresh of WordPress update transient before plugin updates (7f06b83)
+
+### v5.20.4 (2026-08-04)
 
 #### Bug Fixes
 
