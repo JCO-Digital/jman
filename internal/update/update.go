@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,33 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/hashicorp/go-version"
 )
+
+// maxDownloadSize caps how much data we'll read from a release asset, to
+// bound memory/disk use if an upstream host is compromised or misbehaves.
+const maxDownloadSize = 200 * 1024 * 1024 // 200 MiB
+
+// maxSignatureSize caps how much data we'll read for a detached signature.
+const maxSignatureSize = 4 * 1024 // 4 KiB
+
+// allowedDownloadHosts restricts release asset downloads to GitHub's own
+// hosts, so a compromised release API response can't redirect us elsewhere.
+var allowedDownloadHosts = []string{"github.com", "objects.githubusercontent.com"}
+
+func validateDownloadURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	if u.Scheme != "https" {
+		return fmt.Errorf("URL must use https, got %q", u.Scheme)
+	}
+	for _, host := range allowedDownloadHosts {
+		if u.Host == host || strings.HasSuffix(u.Host, "."+host) {
+			return nil
+		}
+	}
+	return fmt.Errorf("URL host %q is not an allowed download host", u.Host)
+}
 
 // progressReader wraps an io.Reader and prints download progress to stdout.
 type progressReader struct {
@@ -146,6 +174,16 @@ func CheckForUpdate(currentVersion string, component string) (string, string, st
 // If component is "jman", it replaces the currently running executable.
 // Otherwise, it looks for the component in the same directory as the jman binary.
 func DownloadAndReplace(downloadURL, sigURL, component string) error {
+	if err := validateDownloadURL(downloadURL); err != nil {
+		return fmt.Errorf("refusing to download update: %w", err)
+	}
+	if sigURL == "" {
+		return fmt.Errorf("refusing to install update: no signature asset found for %s", component)
+	}
+	if err := validateDownloadURL(sigURL); err != nil {
+		return fmt.Errorf("refusing to download update signature: %w", err)
+	}
+
 	// Resolve the path of the currently running jman executable (follow symlinks).
 	jmanPath, err := os.Executable()
 	if err != nil {
@@ -196,10 +234,16 @@ func DownloadAndReplace(downloadURL, sigURL, component string) error {
 	}
 
 	progress := newProgressReader(resp.Body, resp.ContentLength)
+	limited := io.LimitReader(progress, maxDownloadSize+1)
 
-	if _, err := io.Copy(tmpFile, progress); err != nil {
+	written, err := io.Copy(tmpFile, limited)
+	if err != nil {
 		tmpFile.Close()
 		return fmt.Errorf("failed to write update to temporary file: %w", err)
+	}
+	if written > maxDownloadSize {
+		tmpFile.Close()
+		return fmt.Errorf("update download exceeded maximum allowed size of %d bytes", maxDownloadSize)
 	}
 	progress.finish()
 
@@ -208,25 +252,23 @@ func DownloadAndReplace(downloadURL, sigURL, component string) error {
 		return fmt.Errorf("failed to sync temporary file: %w", err)
 	}
 
-	// Verify signature if available
-	if sigURL != "" {
-		if _, err := tmpFile.Seek(0, 0); err != nil {
-			tmpFile.Close()
-			return fmt.Errorf("failed to seek temporary file: %w", err)
-		}
-		content, err := io.ReadAll(tmpFile)
-		if err != nil {
-			tmpFile.Close()
-			return fmt.Errorf("failed to read temporary file for verification: %w", err)
-		}
-		if err := verifySignature(content, sigURL); err != nil {
-			tmpFile.Close()
-			return fmt.Errorf("signature verification failed: %w", err)
-		}
-		verb.Printf(verb.Verbose, "  Signature verified successfully\n")
-	} else {
-		verb.Printf(verb.Normal, "  Warning: skipping signature verification (no signature URL)\n")
+	// Verify signature. A missing or invalid signature is a hard failure —
+	// every release binary is signed in CI, so its absence indicates a
+	// compromised or malformed release and must not be installed.
+	if _, err := tmpFile.Seek(0, 0); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to seek temporary file: %w", err)
 	}
+	content, err := io.ReadAll(io.LimitReader(tmpFile, maxDownloadSize+1))
+	if err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to read temporary file for verification: %w", err)
+	}
+	if err := verifySignature(content, sigURL); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("signature verification failed: %w", err)
+	}
+	verb.Printf(verb.Verbose, "  Signature verified successfully\n")
 
 	if err := tmpFile.Close(); err != nil {
 		return fmt.Errorf("failed to close temporary file: %w", err)
@@ -257,9 +299,12 @@ func verifySignature(content []byte, sigURL string) error {
 		return fmt.Errorf("failed to download signature: received status code %d", resp.StatusCode)
 	}
 
-	sigBytes, err := io.ReadAll(resp.Body)
+	sigBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxSignatureSize+1))
 	if err != nil {
 		return fmt.Errorf("failed to read signature: %w", err)
+	}
+	if len(sigBytes) > maxSignatureSize {
+		return fmt.Errorf("signature response exceeded maximum allowed size of %d bytes", maxSignatureSize)
 	}
 
 	signature, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(sigBytes)))
