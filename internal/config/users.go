@@ -40,29 +40,35 @@ type UsersConfig struct {
 	mu                 *sync.RWMutex `toml:"-" mapstructure:"-"` // Protects fields from concurrent access
 }
 
-// Lock locks the config for writing.
-func (c *UsersConfig) Lock() {
+// LockWrite locks the config for writing.
+//
+// These methods are deliberately NOT named Lock/Unlock: a type with that
+// exact method pair satisfies sync.Locker, which makes `go vet`'s copylocks
+// check flag every copy of a UsersConfig value (e.g. passing it as a
+// function argument or returning it) as a lock-copy hazard — even though
+// mu is a pointer here, so copies safely share the same underlying mutex.
+func (c *UsersConfig) LockWrite() {
 	if c.mu != nil {
 		c.mu.Lock()
 	}
 }
 
-// Unlock unlocks the config.
-func (c *UsersConfig) Unlock() {
+// UnlockWrite unlocks the config after a LockWrite.
+func (c *UsersConfig) UnlockWrite() {
 	if c.mu != nil {
 		c.mu.Unlock()
 	}
 }
 
-// RLock locks the config for reading.
-func (c *UsersConfig) RLock() {
+// LockRead locks the config for reading.
+func (c *UsersConfig) LockRead() {
 	if c.mu != nil {
 		c.mu.RLock()
 	}
 }
 
-// RUnlock unlocks the config.
-func (c *UsersConfig) RUnlock() {
+// UnlockRead unlocks the config after a LockRead.
+func (c *UsersConfig) UnlockRead() {
 	if c.mu != nil {
 		c.mu.RUnlock()
 	}
@@ -182,8 +188,8 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 // If the JWT secret was loaded from the JMAN_JWTSECRET environment variable,
 // it is not written to the file.
 func SaveUsersConfig(configDir string, cfg UsersConfig) error {
-	cfg.RLock()
-	defer cfg.RUnlock()
+	cfg.LockRead()
+	defer cfg.UnlockRead()
 
 	// Deep-copy the Users slice so encryption doesn't mutate the caller's data
 	// (slices share the underlying array even when the struct is passed by value).
