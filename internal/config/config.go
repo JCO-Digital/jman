@@ -135,6 +135,21 @@ func loadConfig() error {
 		} else {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
+	} else {
+		// Enforce strict file permissions on config.toml. This file can hold
+		// the SpinupWP API token and Slack bot token; refuse to start if it's
+		// readable by group or others, mirroring the check on users.toml.
+		configPath := viper.ConfigFileUsed()
+		info, statErr := os.Stat(configPath)
+		if statErr == nil {
+			if perm := info.Mode().Perm(); perm&0o077 != 0 {
+				return fmt.Errorf(
+					"%s has permissions %04o, which are too open. "+
+						"This file may contain secrets and must not be accessible by group or others. "+
+						"Fix with: chmod 600 %s",
+					configPath, perm, configPath)
+			}
+		}
 	}
 
 	// Unmarshal into the Cfg struct
