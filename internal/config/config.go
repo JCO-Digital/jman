@@ -36,6 +36,7 @@ type AppConfig struct {
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
 	BehindProxy         bool              `toml:"behindProxy" mapstructure:"behindProxy"`
+	TrustedProxies      []string          `toml:"trustedProxies" mapstructure:"trustedProxies"`
 	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
 	IgnoreSites         []string          `toml:"ignoreSites" mapstructure:"ignoreSites"`
 	PluginAliases       map[string]string `toml:"pluginAliases" mapstructure:"pluginAliases"`
@@ -80,6 +81,10 @@ func loadConfig() error {
 	viper.SetDefault("monitorCacheBypass", false)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
+	// Default to trusting proxy headers only from loopback, the common case
+	// of a reverse proxy (e.g. nginx) running on the same host as jman-api.
+	// Deployments with a proxy elsewhere on the network must set this explicitly.
+	viper.SetDefault("trustedProxies", []string{"127.0.0.1/32", "::1/128"})
 	viper.SetDefault("allowedOrigins", []string{})
 	viper.SetDefault("ignoreSites", []string{})
 	viper.SetDefault("pluginAliases", map[string]string{})
@@ -108,6 +113,7 @@ func loadConfig() error {
 		"cvssThreshold":       "CVSSTHRESHOLD",
 		"vulnThreshold":       "VULNTHRESHOLD",
 		"allowedOrigins":      "ALLOWEDORIGINS",
+		"trustedProxies":      "TRUSTEDPROXIES",
 		"ignoreSites":         "IGNORESITES",
 	}
 
