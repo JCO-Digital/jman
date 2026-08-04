@@ -141,18 +141,35 @@ func SetDisallowFileMods(ssh, path string, value bool) error {
 	return err
 }
 
-// RunSSH executes an arbitrary command via SSH on the target server.
+// shellQuoteArg quotes s for safe inclusion in a POSIX shell command line.
+// This is needed because the ssh client joins all trailing arguments with a
+// single space and hands the result to the remote user's shell for parsing
+// — passing args as separate exec.Command elements (as we do for local
+// commands) does not protect against shell metacharacters on the remote end.
+func shellQuoteArg(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// RunSSH executes an arbitrary command via SSH on the target server. Each
+// argument is shell-quoted and joined into a single remote command string so
+// that ssh (which otherwise concatenates trailing args with spaces before
+// the remote shell parses them) can't be tricked into splitting on
+// attacker-influenced shell metacharacters.
 func RunSSH(ssh string, args ...string) (RunResult, error) {
 	if ssh == "" {
 		return RunResult{}, fmt.Errorf("ssh connection string is required")
 	}
 
-	cmdArgs := append([]string{ssh}, args...)
+	quotedArgs := make([]string, len(args))
+	for i, arg := range args {
+		quotedArgs[i] = shellQuoteArg(arg)
+	}
+	remoteCommand := strings.Join(quotedArgs, " ")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "ssh", cmdArgs...)
+	cmd := exec.CommandContext(ctx, "ssh", ssh, remoteCommand)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
