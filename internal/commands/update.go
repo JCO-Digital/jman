@@ -7,7 +7,9 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -16,6 +18,20 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
+
+// confirmPrompt reads a single [Y/n]-style confirmation from stdin. An empty
+// response (the user just pressing Enter) defaults to "yes", but a true EOF
+// — no input available at all, e.g. stdin closed or redirected from
+// /dev/null in a cron job or script — is treated as "no" rather than
+// silently defaulting to yes, since nothing was actually confirmed.
+func confirmPrompt() (bool, error) {
+	var response string
+	n, err := fmt.Scanln(&response)
+	if n == 0 && errors.Is(err, io.EOF) {
+		return false, fmt.Errorf("no input available to confirm the update; aborting (run this command interactively to confirm)")
+	}
+	return response == "y" || response == "Y" || response == "", nil
+}
 
 var updateCmd = &cobra.Command{
 	Use:   "update [api|monitor]",
@@ -65,9 +81,11 @@ var updateCmd = &cobra.Command{
 			verb.Printf(verb.Normal, "\nA new version of jman is available: %s\n", verb.Green(latestVersion))
 			verb.Printf(verb.Quiet, "\n%s? [Y/n]: ", verb.Bold("Would you like to download and install it"))
 
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" && response != "" {
+			confirmed, err := confirmPrompt()
+			if err != nil {
+				return err
+			}
+			if !confirmed {
 				return nil
 			}
 		} else {
@@ -81,9 +99,11 @@ var updateCmd = &cobra.Command{
 			fmt.Printf("This will download %s to %s and overwrite any existing version.\n", verb.Blue(component), verb.Gray(binDir))
 			fmt.Printf("%s? [Y/n]: ", verb.Bold("Proceed"))
 
-			var response string
-			fmt.Scanln(&response)
-			if response != "y" && response != "Y" && response != "" {
+			confirmed, err := confirmPrompt()
+			if err != nil {
+				return err
+			}
+			if !confirmed {
 				return nil
 			}
 		}
