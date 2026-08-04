@@ -217,7 +217,8 @@ func CompleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := db.CompleteTask(id, claims.Username); err != nil {
+	task, err := db.CompleteTask(id, claims.Username)
+	if err != nil {
 		if errors.Is(err, db.ErrTaskNotFound) {
 			WriteError(w, http.StatusNotFound, "Task not found")
 			return
@@ -226,7 +227,7 @@ func CompleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	WriteJSON(w, http.StatusOK, map[string]string{"status": "completed"})
+	WriteJSON(w, http.StatusOK, task)
 }
 
 // DeleteTaskHandler handles DELETE /api/tasks/{id}
