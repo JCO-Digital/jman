@@ -90,11 +90,29 @@ type UpdateResult struct {
 	Error      string `json:"error,omitempty"`
 }
 
+// refreshUpdateCache forces WordPress to drop its cached update_plugins
+// transient. `wp plugin update` tries to refresh it itself, but WordPress
+// core throttles that refresh (it no-ops if the installed version hasn't
+// changed since the last check), so a plugin whose update was only just
+// reported by `wp plugin list` can be silently skipped as "up to date".
+// Debounced per site since the transient is site-wide: refreshing once
+// covers every plugin in a batch, not just the one being updated.
+func refreshUpdateCache(site models.CliSite) {
+	if !shouldRefreshUpdateCache(site.ID) {
+		return
+	}
+	if _, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "eval", "delete_site_transient('update_plugins');"); err != nil {
+		verb.Printf(verb.Verbose, "Failed to refresh plugin update cache: %v\n", err)
+	}
+}
+
 // UpdatePlugin updates one or more plugins.
 func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error) {
 	if len(plugins) == 0 {
 		return nil, nil
 	}
+
+	refreshUpdateCache(site)
 
 	args := []string{"plugin", "update"}
 	args = append(args, plugins...)
