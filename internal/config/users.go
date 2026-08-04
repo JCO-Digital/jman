@@ -68,6 +68,18 @@ func (c *UsersConfig) RUnlock() {
 	}
 }
 
+// NewUsersConfig creates an empty UsersConfig with the given JWT secret and
+// token lifetime, ready for use (e.g. when creating a fresh users.toml).
+// Unlike a bare UsersConfig{} literal, this ensures the config's internal
+// lock is initialized so concurrent access is actually protected.
+func NewUsersConfig(jwtSecret string, tokenLifetimeHours int) UsersConfig {
+	return UsersConfig{
+		JWTSecret:          jwtSecret,
+		TokenLifetimeHours: tokenLifetimeHours,
+		mu:                 &sync.RWMutex{},
+	}
+}
+
 // LoadUsersConfig reads and validates the users.toml configuration from the given directory.
 func LoadUsersConfig(configDir string) (UsersConfig, error) {
 	v := viper.New()
