@@ -135,6 +135,32 @@ func TestIsValidSlug(t *testing.T) {
 	}
 }
 
+func TestIsValidVersion(t *testing.T) {
+	tests := []struct {
+		version  string
+		expected bool
+	}{
+		{"6.6.1", true},
+		{"6.6", true},
+		{"6", true},
+		{"6.6.1.1", true},
+		{"", false},
+		{"6.6.1.1.1", false},
+		{"6.6.1-beta", false},
+		{"../../etc/passwd", false},
+		{"6.6.1/", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.version, func(t *testing.T) {
+			result := IsValidVersion(tt.version)
+			if result != tt.expected {
+				t.Errorf("IsValidVersion(%q) = %v, want %v", tt.version, result, tt.expected)
+			}
+		})
+	}
+}
+
 func TestStripANSI(t *testing.T) {
 	tests := []struct {
 		name     string

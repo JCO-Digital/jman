@@ -63,3 +63,11 @@ func TestWriteJSONCacheAllowsNormalNestedFilename(t *testing.T) {
 		t.Fatalf("expected normal nested filename to succeed, got: %v", err)
 	}
 }
+
+func TestWriteJSONCacheAllowsCoreVersionNestedFilename(t *testing.T) {
+	setupCacheTest(t)
+
+	if err := WriteJSONCache("vulnerabilities/core/6.6.1", map[string]string{"ok": "true"}); err != nil {
+		t.Fatalf("expected core version nested filename to succeed, got: %v", err)
+	}
+}

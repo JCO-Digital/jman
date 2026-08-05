@@ -84,6 +84,42 @@ type VulnResponse struct {
 	Updated any       `json:"updated"`
 }
 
+// CoreVulnData is the payload for a WordPress core vulnerability lookup,
+// scoped to a single installed core version.
+type CoreVulnData struct {
+	Core          string          `json:"core"`
+	Link          *string         `json:"link"`
+	Vulnerability []Vulnerability `json:"vulnerability"`
+}
+
+// CoreVulnResponse mirrors VulnResponse for the wpvulnerability.net core endpoint.
+type CoreVulnResponse struct {
+	Error   int           `json:"error"`
+	Message *string       `json:"message"`
+	Data    *CoreVulnData `json:"data,omitempty"`
+	Updated any           `json:"updated"`
+}
+
+// CoreVulnReport is the aggregated report for a single installed WordPress core
+// version, listing the vulnerabilities affecting it and the sites running it.
+type CoreVulnReport struct {
+	Version         string          `json:"version"`
+	Vulnerabilities []Vulnerability `json:"vulnerabilities"`
+	Suppressed      bool            `json:"suppressed"`
+}
+
+// SiteCore represents the WordPress core version installed on a specific site.
+type SiteCore struct {
+	SiteID  int    `json:"site_id"`
+	Version string `json:"version"`
+}
+
+// CoreVersionData groups sites by installed WordPress core version.
+type CoreVersionData struct {
+	Version string       `json:"version"`
+	Sites   []PluginSite `json:"sites"`
+}
+
 type VulnReport struct {
 	Plugin          string          `json:"plugin"`
 	Slug            string          `json:"slug"`

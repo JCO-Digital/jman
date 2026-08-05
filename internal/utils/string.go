@@ -10,11 +10,17 @@ import (
 var htmlTagRegexp = regexp.MustCompile(`<[^>]*>`)
 var unifyHyphens = regexp.MustCompile(`[-–—]+`)
 var slugRegex = regexp.MustCompile(`^[a-z0-9-]+$`)
+var versionRegex = regexp.MustCompile(`^[0-9]+(\.[0-9]+){0,3}$`)
 var ansiRegexp = regexp.MustCompile(`\x1B\[[0-?]*[ -/]*[@-~]`)
 
 // IsValidSlug checks if a plugin slug is valid according to WordPress standards.
 func IsValidSlug(slug string) bool {
 	return slugRegex.MatchString(slug)
+}
+
+// IsValidVersion checks if a string looks like a plain dotted version number (e.g. "6.6.1").
+func IsValidVersion(version string) bool {
+	return versionRegex.MatchString(version)
 }
 
 // CleanHTML removes HTML tags, decodes HTML entities, and trims surrounding whitespace.

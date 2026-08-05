@@ -72,11 +72,31 @@ var vulnSitesCmd = &cobra.Command{
 	},
 }
 
+var vulnCoreCmd = &cobra.Command{
+	Use:   "core",
+	Short: "List WordPress core vulnerabilities",
+	Long:  `Lists WordPress core vulnerabilities, grouped by installed core version, and the sites they affect.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		opts := vuln.ScanOptions{
+			Slack:         vulnSlack,
+			CVSSThreshold: vulnCVSS,
+		}
+
+		err := vuln.ScanCoreVulnerabilities(opts)
+		if err != nil {
+			return fmt.Errorf("error scanning core vulnerabilities: %w", err)
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	vulnCmd.PersistentFlags().BoolVarP(&vulnSlack, "slack", "s", false, "Send reports to Slack")
 	vulnCmd.PersistentFlags().Float64VarP(&vulnCVSS, "cvss", "c", 0, "Filter by CVSS threshold")
 
 	vulnCmd.AddCommand(vulnListCmd)
 	vulnCmd.AddCommand(vulnSitesCmd)
+	vulnCmd.AddCommand(vulnCoreCmd)
 	rootCmd.AddCommand(vulnCmd)
 }
