@@ -18,6 +18,16 @@ const (
 	FetchTTL = 30 * time.Minute
 )
 
+// parseCacheTimestamp parses a DATETIME value read back from SQLite. The modernc.org/sqlite
+// driver returns DATETIME columns as RFC3339 strings (e.g. "2026-08-05T11:52:49Z"), not the
+// "YYYY-MM-DD HH:MM:SS" layout `sqlite3` CLI displays for the same underlying TEXT value.
+func parseCacheTimestamp(value string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t, nil
+	}
+	return time.ParseInLocation("2006-01-02 15:04:05", value, time.UTC)
+}
+
 func getCacheFilePath(filename string) string {
 	return filepath.Join(config.RunData.CacheDir, filename+".json")
 }
