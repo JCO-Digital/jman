@@ -49,7 +49,7 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 				if t == -1 {
 					continue
 				}
-				lu, err := time.ParseInLocation("2006-01-02 15:04:05", lastUpdate, time.UTC)
+				lu, err := parseCacheTimestamp(lastUpdate)
 				if err == nil && time.Now().UTC().Sub(lu) < t {
 					continue
 				}
