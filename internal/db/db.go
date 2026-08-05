@@ -152,6 +152,14 @@ func initSchema() error {
 			PrimaryKey: []string{"site_id", "slug"},
 		},
 		{
+			Name: "site_core",
+			Columns: map[string]string{
+				"site_id":    "INTEGER PRIMARY KEY",
+				"version":    "TEXT NOT NULL",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "slack_messages",
 			Columns: map[string]string{
 				"hash":      "TEXT PRIMARY KEY",

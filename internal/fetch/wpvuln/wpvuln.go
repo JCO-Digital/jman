@@ -14,6 +14,7 @@ import (
 )
 
 const WPVulnerabilityAPIURL = "https://www.wpvulnerability.net/plugin/"
+const WPVulnerabilityCoreAPIURL = "https://www.wpvulnerability.net/core/"
 
 // GetVulnerabilities fetches vulnerability data for a specific WordPress plugin.
 func GetVulnerabilities(pluginName string) (*models.VulnResponse, error) {
@@ -84,6 +85,85 @@ func GetVulnerabilities(pluginName string) (*models.VulnResponse, error) {
 			Message: &msg,
 			Data: &models.VulnData{
 				Plugin:        pluginName,
+				Vulnerability: []models.Vulnerability{},
+			},
+		}, nil
+	}
+
+	return &vulnResponse, nil
+}
+
+// GetCoreVulnerabilities fetches vulnerability data for a specific installed WordPress core version.
+// Unlike GetVulnerabilities, the API scopes the result to the given version, so no client-side
+// version-range filtering is needed on the returned vulnerabilities.
+func GetCoreVulnerabilities(coreVersion string) (*models.CoreVulnResponse, error) {
+	if !utils.IsValidVersion(coreVersion) {
+		msg := "Invalid WordPress core version"
+		return &models.CoreVulnResponse{
+			Error:   0,
+			Message: &msg,
+			Data: &models.CoreVulnData{
+				Core:          coreVersion,
+				Vulnerability: []models.Vulnerability{},
+			},
+		}, nil
+	}
+
+	endpoint := fmt.Sprintf("%s%s/", WPVulnerabilityCoreAPIURL, coreVersion)
+
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	client := utils.NewHTTPClient(15 * time.Second)
+	utils.SetStandardHeaders(req)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch core vulnerabilities for %s: %w", coreVersion, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		msg := fmt.Sprintf("API returned status %d", resp.StatusCode)
+		return &models.CoreVulnResponse{
+			Error:   1,
+			Message: &msg,
+			Data: &models.CoreVulnData{
+				Core:          coreVersion,
+				Vulnerability: []models.Vulnerability{},
+			},
+		}, nil
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response for %s: %w", coreVersion, err)
+	}
+
+	contentType := resp.Header.Get("Content-Type")
+	isJSON := strings.Contains(contentType, "application/json") || bytes.HasPrefix(bytes.TrimSpace(body), []byte("{"))
+
+	if !isJSON {
+		msg := fmt.Sprintf("API returned non-JSON response (Content-Type: %s)", contentType)
+		return &models.CoreVulnResponse{
+			Error:   1,
+			Message: &msg,
+			Data: &models.CoreVulnData{
+				Core:          coreVersion,
+				Vulnerability: []models.Vulnerability{},
+			},
+		}, nil
+	}
+
+	var vulnResponse models.CoreVulnResponse
+	if err := json.Unmarshal(body, &vulnResponse); err != nil {
+		msg := fmt.Sprintf("failed to decode response for %s: %v", coreVersion, err)
+		return &models.CoreVulnResponse{
+			Error:   1,
+			Message: &msg,
+			Data: &models.CoreVulnData{
+				Core:          coreVersion,
 				Vulnerability: []models.Vulnerability{},
 			},
 		}, nil

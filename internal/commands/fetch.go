@@ -120,6 +120,45 @@ var (
 				}
 			}
 
+			if fetchVulns {
+				verb.PrintErrorln(verb.Normal, "Fetching WordPress core vulnerabilities.")
+
+				coreVersions, err := cache.GetCachedCoreVersions(ttl)
+				if err != nil {
+					return fmt.Errorf("error fetching core versions: %w", err)
+				}
+				verb.Printf(verb.Verbose, "Successfully fetched and cached core versions for %d sites.\n", len(coreVersions))
+
+				coreVersionList := make(map[string]bool)
+				for _, v := range coreVersions {
+					coreVersionList[v.Version] = true
+				}
+
+				verb.Printf(verb.Normal, "Fetching vulnerabilities for %d WordPress core versions.\n", len(coreVersionList))
+				for version := range coreVersionList {
+					response, err := cache.GetCachedCoreVulnerabilities(version, ttl)
+					if err != nil {
+						verb.PrintErrorf(verb.Normal, "Warning: failed to fetch vulnerabilities for WordPress core %s: %v\n", version, err)
+						continue
+					}
+
+					if response == nil {
+						continue
+					}
+
+					if response.Error != 0 {
+						msg := "unknown error"
+						if response.Message != nil {
+							msg = *response.Message
+						}
+						verb.PrintErrorf(verb.Verbose, "Warning: API returned error for WordPress core %s: %s\n", version, msg)
+						continue
+					}
+
+					verb.Printf(verb.Verbose, "Successfully fetched and cached %d vulnerabilities for WordPress core %s.\n", len(response.Data.Vulnerability), version)
+				}
+			}
+
 			verb.PrintErrorln(verb.Normal, "Cache update complete.")
 			return nil
 		},
