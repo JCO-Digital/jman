@@ -5,6 +5,7 @@ import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
 import type { Task } from "../types";
 import TaskInfoModal from "./TaskInfoModal.vue";
+import TaskFormModal from "./TaskFormModal.vue";
 
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
@@ -13,6 +14,8 @@ const reminderTasks = ref<Task[]>([]);
 const isTasksLoading = ref(false);
 const selectedTask = ref<Task | null>(null);
 const showTaskModal = ref(false);
+const showFormModal = ref(false);
+const editingTask = ref<Task | null>(null);
 
 const loadReminderTasks = async () => {
 	isTasksLoading.value = true;
@@ -43,6 +46,21 @@ const loadReminderTasks = async () => {
 function openTask(task: Task) {
 	selectedTask.value = task;
 	showTaskModal.value = true;
+}
+
+function openEdit(task: Task) {
+	editingTask.value = task;
+	showTaskModal.value = false;
+	showFormModal.value = true;
+}
+
+function handleSaved(task: Task) {
+	showFormModal.value = false;
+	loadReminderTasks();
+	if (editingTask.value) {
+		selectedTask.value = task;
+		showTaskModal.value = true;
+	}
 }
 
 async function completeTask(task: Task) {
@@ -156,9 +174,16 @@ onMounted(loadReminderTasks);
 			v-if="showTaskModal && selectedTask"
 			:task="selectedTask"
 			@close="showTaskModal = false"
-			@edit="showTaskModal = false"
+			@edit="openEdit"
 			@updated="handleTaskUpdated"
 			@deleted="handleTaskDeleted"
+		/>
+
+		<TaskFormModal
+			v-if="showFormModal"
+			:task="editingTask"
+			@close="showFormModal = false"
+			@saved="handleSaved"
 		/>
 	</section>
 </template>
