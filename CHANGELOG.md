@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.31.1 (2026-08-03)
+### 1.31.2 (2026-08-05)
+
+#### Bug Fixes
+
+- dashboard: wire up edit action in task reminder widget (99fdfdb)
+
+### v1.31.1 (2026-08-03)
 
 #### Bug Fixes
 
