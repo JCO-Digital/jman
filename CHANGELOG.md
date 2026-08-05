@@ -1,6 +1,17 @@
 # Changelog
 
-### 5.20.5 (2026-08-04)
+## 5.21.0 (2026-08-05)
+
+#### Features
+
+- vuln: add WordPress core vulnerability scanning (4d01c38)
+
+#### Bug Fixes
+
+- cache: parse SQLite DATETIME as RFC3339 in plugin freshness check (7786443)
+- cache: parse SQLite DATETIME as RFC3339 in core version freshness check (8defd77)
+
+### v5.20.5 (2026-08-04)
 
 #### Bug Fixes
 
