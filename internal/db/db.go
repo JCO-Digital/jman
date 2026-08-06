@@ -160,6 +160,15 @@ func initSchema() error {
 			},
 		},
 		{
+			Name: "site_environment",
+			Columns: map[string]string{
+				"site_id":     "INTEGER PRIMARY KEY",
+				"environment": "TEXT NOT NULL",
+				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":  "TEXT",
+			},
+		},
+		{
 			Name: "slack_messages",
 			Columns: map[string]string{
 				"hash":      "TEXT PRIMARY KEY",
