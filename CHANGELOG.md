@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.32.0 (2026-08-06)
+## 1.33.0 (2026-08-06)
+
+#### Features
+
+- site: add archived environment support (5ae55cf)
+
+## v1.32.0 (2026-08-06)
 
 #### Features
 
