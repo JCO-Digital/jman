@@ -286,6 +286,7 @@ const unlinkOrganization = async () => {
 					<option value="production">Production</option>
 					<option value="staging">Staging</option>
 					<option value="development">Development</option>
+					<option value="archived">Archived</option>
 				</select>
 			</div>
 

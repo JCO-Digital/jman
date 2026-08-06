@@ -63,7 +63,11 @@ export interface Backups {
 	storage_provider: StorageProvider;
 }
 
-export type SiteEnvironment = "production" | "staging" | "development";
+export type SiteEnvironment =
+	| "production"
+	| "staging"
+	| "development"
+	| "archived";
 
 export interface Site {
 	id: number;
