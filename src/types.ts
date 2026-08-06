@@ -63,6 +63,8 @@ export interface Backups {
 	storage_provider: StorageProvider;
 }
 
+export type SiteEnvironment = "production" | "staging" | "development";
+
 export interface Site {
 	id: number;
 	server_id: number;
@@ -101,6 +103,7 @@ export interface Site {
 	updated_at: string;
 	updated_by: string;
 	status: string;
+	environment?: SiteEnvironment;
 }
 
 export interface Plugin {

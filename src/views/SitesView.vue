@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useIgnoreStore } from "../stores/ignore";
-import type { EnrichedSite } from "../types";
+import type { EnrichedSite, SiteEnvironment } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -18,10 +18,16 @@ const dataStore = useDataStore();
 const ignoreStore = useIgnoreStore();
 
 const searchQuery = ref("");
+const filterEnvironment = ref<SiteEnvironment | "unclassified" | "">("");
 const sortKey = ref<keyof EnrichedSite>("domain");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(props.page || 1);
 const rowsPerPage = ref(props.rowsPerPage || 50);
+
+const batchMode = ref(false);
+const selectedSiteIds = ref<Set<number>>(new Set());
+const batchEnvironment = ref<SiteEnvironment | "">("");
+const isApplyingBatch = ref(false);
 
 watch(
 	() => props.page,
@@ -70,6 +76,14 @@ const filteredAndSortedSites = computed(() => {
 		});
 	}
 
+	if (filterEnvironment.value) {
+		result = result.filter((site) =>
+			filterEnvironment.value === "unclassified"
+				? !site.environment
+				: site.environment === filterEnvironment.value,
+		);
+	}
+
 	result = [...result].sort((a, b) => {
 		let valA: any = a[sortKey.value];
 		let valB: any = b[sortKey.value];
@@ -107,6 +121,55 @@ const paginatedSites = computed(() => {
 	return filteredAndSortedSites.value.slice(start, end);
 });
 
+const allOnPageSelected = computed(
+	() =>
+		paginatedSites.value.length > 0 &&
+		paginatedSites.value.every((site) =>
+			selectedSiteIds.value.has(site.id),
+		),
+);
+
+const toggleSelectAllOnPage = () => {
+	if (allOnPageSelected.value) {
+		for (const site of paginatedSites.value) {
+			selectedSiteIds.value.delete(site.id);
+		}
+	} else {
+		for (const site of paginatedSites.value) {
+			selectedSiteIds.value.add(site.id);
+		}
+	}
+};
+
+const toggleSiteSelected = (id: number) => {
+	if (selectedSiteIds.value.has(id)) {
+		selectedSiteIds.value.delete(id);
+	} else {
+		selectedSiteIds.value.add(id);
+	}
+};
+
+const toggleBatchMode = () => {
+	batchMode.value = !batchMode.value;
+	selectedSiteIds.value.clear();
+	batchEnvironment.value = "";
+};
+
+const applyBatchEnvironment = async () => {
+	if (selectedSiteIds.value.size === 0) return;
+	isApplyingBatch.value = true;
+	try {
+		await Promise.all(
+			Array.from(selectedSiteIds.value).map((id) =>
+				dataStore.setSiteEnvironment(id, batchEnvironment.value),
+			),
+		);
+		selectedSiteIds.value.clear();
+	} finally {
+		isApplyingBatch.value = false;
+	}
+};
+
 const prevPage = () => {
 	if (currentPage.value > 1) {
 		updateRoute(currentPage.value - 1, rowsPerPage.value);
@@ -124,6 +187,10 @@ const handleRowsPerPageUpdate = (newRpp: number) => {
 };
 
 const goToSite = (id: number) => {
+	if (batchMode.value) {
+		toggleSiteSelected(id);
+		return;
+	}
 	router.push({ name: "site-detail", params: { id: id.toString() } });
 };
 </script>
@@ -144,12 +211,54 @@ const goToSite = (id: number) => {
 				class="search-input"
 				@input="updateRoute(1, rowsPerPage)"
 			/>
+
+			<select v-model="filterEnvironment">
+				<option value="">All Environments</option>
+				<option value="production">Production</option>
+				<option value="staging">Staging</option>
+				<option value="development">Development</option>
+				<option value="unclassified">Unclassified</option>
+			</select>
+
+			<button
+				class="btn btn-outline"
+				:class="{ 'btn-primary': batchMode }"
+				@click="toggleBatchMode"
+			>
+				{{ batchMode ? "Cancel Batch Edit" : "Batch Edit" }}
+			</button>
+		</div>
+
+		<div v-if="batchMode" class="card-muted batch-action-bar">
+			<span class="font-medium"
+				>{{ selectedSiteIds.size }} site(s) selected</span
+			>
+			<select v-model="batchEnvironment">
+				<option value="">Unclassified</option>
+				<option value="production">Production</option>
+				<option value="staging">Staging</option>
+				<option value="development">Development</option>
+			</select>
+			<button
+				class="btn btn-primary btn-sm"
+				:disabled="selectedSiteIds.size === 0 || isApplyingBatch"
+				@click="applyBatchEnvironment"
+			>
+				{{ isApplyingBatch ? "Applying…" : "Apply" }}
+			</button>
 		</div>
 
 		<main class="table-container">
 			<table class="data-table sortable">
 				<thead>
 					<tr>
+						<th v-if="batchMode" class="col-narrow text-center">
+							<input
+								type="checkbox"
+								:checked="allOnPageSelected"
+								@click="toggleSelectAllOnPage"
+							/>
+						</th>
 						<th class="col-expand" @click="handleSort('domain')">
 							Site Name
 							<span v-if="sortKey === 'domain'">{{
@@ -162,6 +271,15 @@ const goToSite = (id: number) => {
 						>
 							Server
 							<span v-if="sortKey === 'server'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
+						<th
+							class="col-narrow text-center"
+							@click="handleSort('environment')"
+						>
+							Environment
+							<span v-if="sortKey === 'environment'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
@@ -191,15 +309,15 @@ const goToSite = (id: number) => {
 							dataStore.isLoading && dataStore.sites.length === 0
 						"
 					>
-						<td colspan="4" class="hide-mobile">
+						<td colspan="5" class="hide-mobile">
 							<LoadingSpinner message="Loading data..." />
 						</td>
-						<td colspan="3" class="show-mobile">
+						<td colspan="4" class="show-mobile">
 							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="4" class="empty-state hide-mobile">
+						<td colspan="5" class="empty-state hide-mobile">
 							<span v-if="searchQuery"
 								>No sites found matching "{{
 									searchQuery
@@ -207,7 +325,7 @@ const goToSite = (id: number) => {
 							>
 							<span v-else>No sites available.</span>
 						</td>
-						<td colspan="3" class="empty-state show-mobile">
+						<td colspan="4" class="empty-state show-mobile">
 							<span v-if="searchQuery"
 								>No sites found matching "{{
 									searchQuery
@@ -222,11 +340,28 @@ const goToSite = (id: number) => {
 						class="clickable-row"
 						@click="goToSite(site.id)"
 					>
+						<td v-if="batchMode" class="col-narrow text-center">
+							<input
+								type="checkbox"
+								:checked="selectedSiteIds.has(site.id)"
+								@click.stop="toggleSiteSelected(site.id)"
+							/>
+						</td>
 						<td class="font-medium truncate col-expand">
 							{{ site.domain }}
 						</td>
 						<td class="hide-mobile col-wide truncate">
 							{{ site.server }}
+						</td>
+						<td class="col-narrow text-center">
+							<span
+								v-if="site.environment"
+								class="status-badge badge-sm"
+								:class="site.environment"
+							>
+								{{ site.environment }}
+							</span>
+							<span v-else class="text-muted">—</span>
 						</td>
 						<td class="col-narrow text-center">
 							{{
@@ -273,3 +408,12 @@ const goToSite = (id: number) => {
 		</main>
 	</div>
 </template>
+
+<style scoped>
+.batch-action-bar {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	margin-bottom: 24px;
+}
+</style>

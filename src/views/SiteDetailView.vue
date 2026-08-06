@@ -7,7 +7,7 @@ import { useOrganizationStore } from "../stores/organization";
 import { useAuthStore } from "../stores/auth";
 import { useIgnoreStore } from "../stores/ignore";
 import { useToastStore } from "../stores/toast";
-import type { Organization, Contact } from "../types";
+import type { Organization, Contact, SiteEnvironment } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
@@ -76,6 +76,30 @@ watch(
 const server = computed(() =>
 	site.value ? dataStore.getServerById(site.value.server_id) : null,
 );
+
+const environmentDraft = ref<SiteEnvironment | "">("");
+watch(
+	() => site.value?.environment,
+	(environment) => {
+		environmentDraft.value = environment ?? "";
+	},
+	{ immediate: true },
+);
+
+const onEnvironmentChange = async () => {
+	if (!site.value) return;
+	const previous = site.value.environment ?? "";
+	try {
+		await dataStore.setSiteEnvironment(
+			site.value.id,
+			environmentDraft.value,
+		);
+		toast.addToast("Environment updated.", "success");
+	} catch (e: any) {
+		environmentDraft.value = previous;
+		toast.addToast("Failed to update environment: " + e.message, "error");
+	}
+};
 
 const history = computed(() =>
 	site.value ? monitorStore.historyByDomain.get(site.value.domain) || [] : [],
@@ -226,7 +250,8 @@ const linkOrganization = async (organizationId: number) => {
 };
 
 const unlinkOrganization = async () => {
-	if (!await confirm("Are you sure you want to unlink this organization?")) return;
+	if (!(await confirm("Are you sure you want to unlink this organization?")))
+		return;
 	try {
 		await organizationStore.unlinkSite(siteId);
 		dataStore.setSiteOrganizationLink(siteId, undefined);
@@ -247,6 +272,23 @@ const unlinkOrganization = async () => {
 		/>
 
 		<main v-if="site" class="content mt-4">
+			<div class="flex-row gap-3 mb-4">
+				<label for="site-environment" class="font-medium"
+					>Environment</label
+				>
+				<select
+					id="site-environment"
+					v-model="environmentDraft"
+					:disabled="!authStore.canEdit"
+					@change="onEnvironmentChange"
+				>
+					<option value="">Unclassified</option>
+					<option value="production">Production</option>
+					<option value="staging">Staging</option>
+					<option value="development">Development</option>
+				</select>
+			</div>
+
 			<div class="grid-2-cols">
 				<InfoCard title="Site Information" :items="siteInfoItems" />
 				<InfoCard
