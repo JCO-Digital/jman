@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import type {
 	Server,
 	Site,
+	SiteEnvironment,
 	Plugin,
 	PluginInfo,
 	PluginVulnerability,
@@ -12,7 +13,7 @@ import type {
 } from "../types";
 import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, handleErrorResponse } from "../utils/api";
 
 const CACHE_KEY_SERVERS = "jman_servers";
 const CACHE_KEY_SITES = "jman_sites";
@@ -430,6 +431,32 @@ export const useDataStore = defineStore("data", () => {
 		}
 	}
 
+	async function setSiteEnvironment(
+		siteId: number,
+		environment: SiteEnvironment | "",
+	) {
+		const authStore = useAuthStore();
+
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/environment`, {
+			method: "PATCH",
+			headers: {
+				"Content-Type": "application/json",
+				...authStore.authHeader,
+			},
+			body: JSON.stringify({ environment }),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.environment = environment || undefined;
+			sessionStorage.setItem(
+				CACHE_KEY_SITES,
+				JSON.stringify(sites.value),
+			);
+		}
+	}
+
 	function setSiteOrganizationLink(
 		siteId: number,
 		organizationId: number | undefined,
@@ -473,6 +500,7 @@ export const useDataStore = defineStore("data", () => {
 		getPluginsBySiteId,
 		getVulnerabilitiesBySlug,
 		setSiteOrganizationLink,
+		setSiteEnvironment,
 		applyPluginUpdate,
 		// Actions
 		initData,
