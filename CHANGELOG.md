@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.21.0 (2026-08-05)
+## 5.22.0 (2026-08-06)
+
+#### Features
+
+- api: implement site environment classification (1d6dfcc)
+
+## v5.21.0 (2026-08-05)
 
 #### Features
 
