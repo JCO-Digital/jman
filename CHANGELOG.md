@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.31.2 (2026-08-05)
+## 1.32.0 (2026-08-06)
+
+#### Features
+
+- site: add environment classification and batch editing (d756428)
+
+### v1.31.2 (2026-08-05)
 
 #### Bug Fixes
 
