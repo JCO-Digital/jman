@@ -9,6 +9,7 @@ const (
 	SiteEnvironmentProduction  SiteEnvironmentType = "production"
 	SiteEnvironmentStaging     SiteEnvironmentType = "staging"
 	SiteEnvironmentDevelopment SiteEnvironmentType = "development"
+	SiteEnvironmentArchived    SiteEnvironmentType = "archived"
 )
 
 // InferEnvironmentFromDomain guesses a site's environment from its primary domain.
