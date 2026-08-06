@@ -92,6 +92,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/sites/{id}/organization", basic(GetSiteOrganizationHandler))
 	mux.Handle("POST /api/sites/{id}/link", edit(LinkSiteHandler))
 	mux.Handle("DELETE /api/sites/{id}/link", edit(UnlinkSiteHandler))
+	mux.Handle("PATCH /api/sites/{id}/environment", edit(SetSiteEnvironmentHandler))
 
 	// --- Plugin update routes ---
 	mux.Handle("GET /api/sites/{id}/plugin-updates", execute(SitePluginUpdatesHandler))

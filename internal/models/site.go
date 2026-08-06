@@ -50,26 +50,27 @@ type BasicAuth struct {
 }
 
 type Site struct {
-	ID                int                `json:"id"`
-	ServerID          int                `json:"server_id"`
-	Domain            string             `json:"domain"`
-	AdditionalDomains []AdditionalDomain `json:"additional_domains"`
-	SiteUser          string             `json:"site_user"`
-	UserAuth          string             `json:"user_auth"`
-	PHPVersion        string             `json:"php_version"`
-	PublicFolder      string             `json:"public_folder"`
-	IsWordpress       bool               `json:"is_wordpress"`
-	PageCache         Enabled            `json:"page_cache"`
-	HTTPS             HTTPS              `json:"https"`
-	Nginx             Nginx              `json:"nginx"`
-	Database          SiteDatabase       `json:"database"`
-	Backups           Backups            `json:"backups"`
-	WPCoreUpdate      bool               `json:"wp_core_update"`
-	WPThemeUpdates    int                `json:"wp_theme_updates"`
-	WPPluginUpdates   int                `json:"wp_plugin_updates"`
-	BasicAuth         BasicAuth          `json:"basic_auth"`
-	CreatedAt         string             `json:"created_at"`
-	Status            string             `json:"status"`
+	ID                int                 `json:"id"`
+	ServerID          int                 `json:"server_id"`
+	Domain            string              `json:"domain"`
+	AdditionalDomains []AdditionalDomain  `json:"additional_domains"`
+	SiteUser          string              `json:"site_user"`
+	UserAuth          string              `json:"user_auth"`
+	PHPVersion        string              `json:"php_version"`
+	PublicFolder      string              `json:"public_folder"`
+	IsWordpress       bool                `json:"is_wordpress"`
+	PageCache         Enabled             `json:"page_cache"`
+	HTTPS             HTTPS               `json:"https"`
+	Nginx             Nginx               `json:"nginx"`
+	Database          SiteDatabase        `json:"database"`
+	Backups           Backups             `json:"backups"`
+	WPCoreUpdate      bool                `json:"wp_core_update"`
+	WPThemeUpdates    int                 `json:"wp_theme_updates"`
+	WPPluginUpdates   int                 `json:"wp_plugin_updates"`
+	BasicAuth         BasicAuth           `json:"basic_auth"`
+	CreatedAt         string              `json:"created_at"`
+	Status            string              `json:"status"`
+	Environment       SiteEnvironmentType `json:"environment,omitempty"`
 }
 
 type CliSite struct {

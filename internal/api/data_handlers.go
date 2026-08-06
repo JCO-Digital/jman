@@ -85,6 +85,15 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	environments, err := db.GetAllSiteEnvironments()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+	for i, site := range sites {
+		sites[i].Environment = models.SiteEnvironmentType(environments[site.ID])
+	}
+
 	// Sort by ID for deterministic output.
 	sort.Slice(sites, func(i, j int) bool {
 		return sites[i].ID < sites[j].ID

@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
@@ -52,6 +53,13 @@ var (
 					return fmt.Errorf("error fetching sites: %w", err)
 				}
 				verb.Printf(verb.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
+
+				classified, err := db.AutoClassifySiteEnvironments(sites)
+				if err != nil {
+					verb.PrintErrorf(verb.Normal, "Warning: failed to auto-classify site environments: %v\n", err)
+				} else if classified > 0 {
+					verb.Printf(verb.Verbose, "Auto-classified environment for %d sites.\n", classified)
+				}
 			}
 
 			fetchPlugins := slices.Contains([]string{"plugins", "all"}, operation)
