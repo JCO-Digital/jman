@@ -15,6 +15,7 @@ var validSiteEnvironments = map[string]bool{
 	string(models.SiteEnvironmentProduction):  true,
 	string(models.SiteEnvironmentStaging):     true,
 	string(models.SiteEnvironmentDevelopment): true,
+	string(models.SiteEnvironmentArchived):    true,
 }
 
 // SetSiteEnvironmentHandler sets or clears the environment classification for a site.
