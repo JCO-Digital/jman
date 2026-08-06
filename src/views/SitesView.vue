@@ -212,11 +212,15 @@ const goToSite = (id: number) => {
 				@input="updateRoute(1, rowsPerPage)"
 			/>
 
-			<select v-model="filterEnvironment">
+			<select
+				v-model="filterEnvironment"
+				@change="updateRoute(1, rowsPerPage)"
+			>
 				<option value="">All Environments</option>
 				<option value="production">Production</option>
 				<option value="staging">Staging</option>
 				<option value="development">Development</option>
+				<option value="archived">Archived</option>
 				<option value="unclassified">Unclassified</option>
 			</select>
 
@@ -238,6 +242,7 @@ const goToSite = (id: number) => {
 				<option value="production">Production</option>
 				<option value="staging">Staging</option>
 				<option value="development">Development</option>
+				<option value="archived">Archived</option>
 			</select>
 			<button
 				class="btn btn-primary btn-sm"
