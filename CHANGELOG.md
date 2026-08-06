@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.22.0 (2026-08-06)
+## 5.23.0 (2026-08-06)
+
+#### Features
+
+- api: add archived site environment type (b2e1c13)
+
+## v5.22.0 (2026-08-06)
 
 #### Features
 
