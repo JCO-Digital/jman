@@ -179,7 +179,7 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 	query := `
 	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
 	       oa.next_billing, oa.status, oa.description, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
-	       o.name as organization_name, a.name as asset_name
+	       o.name as organization_name, a.name as asset_name, a.type as asset_type
 	FROM organization_assets oa
 	LEFT JOIN organizations o ON oa.organization_id = o.id
 	LEFT JOIN assets a ON oa.asset_id = a.id
@@ -217,7 +217,7 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 		err := rows.Scan(
 			&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
 			&oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
-			&oa.OrganizationName, &oa.AssetName,
+			&oa.OrganizationName, &oa.AssetName, &oa.AssetType,
 		)
 		if err != nil {
 			return nil, err
@@ -239,7 +239,7 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 	query := `
 	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
 	       oa.next_billing, oa.status, oa.description, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
-	       o.name as organization_name, a.name as asset_name
+	       o.name as organization_name, a.name as asset_name, a.type as asset_type
 	FROM organization_assets oa
 	LEFT JOIN organizations o ON oa.organization_id = o.id
 	LEFT JOIN assets a ON oa.asset_id = a.id
@@ -258,7 +258,7 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 		err := rows.Scan(
 			&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
 			&oa.NextBilling, &oa.Status, &oa.Description, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
-			&oa.OrganizationName, &oa.AssetName,
+			&oa.OrganizationName, &oa.AssetName, &oa.AssetType,
 		)
 		if err != nil {
 			return nil, err
