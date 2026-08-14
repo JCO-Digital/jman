@@ -14,6 +14,7 @@ import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 import { useConfirm } from "../composables/useConfirm";
+import NotesWidget from "../components/NotesWidget.vue";
 
 const props = defineProps<{
 	id: string;
@@ -298,6 +299,8 @@ const unlinkOrganization = async () => {
 					:items="serverInfoItems"
 				/>
 			</div>
+
+			<NotesWidget parent-type="Site" :parent-id="siteId" />
 
 			<section class="card mt-4">
 				<div class="card-header">

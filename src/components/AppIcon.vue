@@ -6,6 +6,7 @@ import IconCreditCard from "./icons/IconCreditCard.vue";
 import IconDragHandle from "./icons/IconDragHandle.vue";
 import IconEdit from "./icons/IconEdit.vue";
 import IconExternalLink from "./icons/IconExternalLink.vue";
+import IconNote from "./icons/IconNote.vue";
 import IconOrganization from "./icons/IconOrganization.vue";
 import IconPlugin from "./icons/IconPlugin.vue";
 import IconPlusCircle from "./icons/IconPlusCircle.vue";
@@ -30,6 +31,7 @@ const iconMap: Record<string, Component> = {
 	"drag-handle": IconDragHandle,
 	edit: IconEdit,
 	"external-link": IconExternalLink,
+	note: IconNote,
 	organization: IconOrganization,
 	plugin: IconPlugin,
 	"plus-circle": IconPlusCircle,
