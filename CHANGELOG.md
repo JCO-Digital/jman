@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.34.0 (2026-08-14)
+## 1.35.0 (2026-08-14)
+
+#### Features
+
+- notes: support string parent IDs and link plugin notes by slug (6a2aded)
+
+## v1.34.0 (2026-08-14)
 
 #### Features
 
