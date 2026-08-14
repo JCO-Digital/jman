@@ -53,6 +53,7 @@ type NoteParentType string
 const (
 	NoteParentTypeOrganization NoteParentType = "Organization"
 	NoteParentTypeSite         NoteParentType = "Site"
+	NoteParentTypePlugin       NoteParentType = "Plugin"
 )
 
 // Note represents a free-text record linked to an organization or site.

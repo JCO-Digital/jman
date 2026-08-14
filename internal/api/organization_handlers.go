@@ -392,7 +392,7 @@ func ListNotesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if parentType != models.NoteParentTypeOrganization && parentType != models.NoteParentTypeSite {
+	if parentType != models.NoteParentTypeOrganization && parentType != models.NoteParentTypeSite && parentType != models.NoteParentTypePlugin {
 		WriteError(w, http.StatusBadRequest, "Invalid parent type")
 		return
 	}
@@ -417,7 +417,7 @@ func CreateNoteHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Content, ParentID and ParentType are required")
 		return
 	}
-	if note.ParentType != models.NoteParentTypeOrganization && note.ParentType != models.NoteParentTypeSite {
+	if note.ParentType != models.NoteParentTypeOrganization && note.ParentType != models.NoteParentTypeSite && note.ParentType != models.NoteParentTypePlugin {
 		WriteError(w, http.StatusBadRequest, "Invalid parent type")
 		return
 	}
