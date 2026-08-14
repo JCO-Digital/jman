@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.35.0 (2026-08-14)
+## 1.36.0 (2026-08-14)
+
+#### Features
+
+- assets: standardize list view with sorting, pagination, and metadata (b5e9e86)
+
+## v1.35.0 (2026-08-14)
 
 #### Features
 
