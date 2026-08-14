@@ -383,7 +383,14 @@ const goToSite = (id: number) => {
 						<td class="font-medium truncate col-expand">
 							{{ site.domain }}
 						</td>
-						<td class="hide-mobile col-medium truncate">
+						<td
+							class="hide-mobile col-medium truncate"
+							:title="
+								site.organization_id
+									? getOrganizationName(site.organization_id)
+									: ''
+							"
+						>
 							<span v-if="site.organization_id">
 								{{ getOrganizationName(site.organization_id) }}
 							</span>
