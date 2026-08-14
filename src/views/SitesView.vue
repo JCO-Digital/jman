@@ -3,7 +3,8 @@ import { ref, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useIgnoreStore } from "../stores/ignore";
-import type { EnrichedSite, SiteEnvironment } from "../types";
+import { useOrganizationStore } from "../stores/organization";
+import type { EnrichedSite, SiteEnvironment, Organization } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
@@ -16,6 +17,7 @@ const props = defineProps<{
 const router = useRouter();
 const dataStore = useDataStore();
 const ignoreStore = useIgnoreStore();
+const organizationStore = useOrganizationStore();
 
 const searchQuery = ref("");
 const filterEnvironment = ref<SiteEnvironment | "unclassified" | "">("");
@@ -45,7 +47,21 @@ watch(
 
 onMounted(() => {
 	ignoreStore.fetchIgnoreEntries();
+	organizationStore.fetchOrganizations();
 });
+
+const organizationsById = computed(() => {
+	const map = new Map<number, Organization>();
+	for (const org of organizationStore.organizations) {
+		map.set(org.id, org);
+	}
+	return map;
+});
+
+const getOrganizationName = (orgId?: number) => {
+	if (!orgId) return "";
+	return organizationsById.value.get(orgId)?.name || "";
+};
 
 const updateRoute = (page: number, rpp: number) => {
 	router.push({
@@ -88,7 +104,10 @@ const filteredAndSortedSites = computed(() => {
 		let valA: any = a[sortKey.value];
 		let valB: any = b[sortKey.value];
 
-		if (sortKey.value === "server") {
+		if (sortKey.value === "organization_id") {
+			valA = getOrganizationName(a.organization_id).toLowerCase();
+			valB = getOrganizationName(b.organization_id).toLowerCase();
+		} else if (sortKey.value === "server") {
 			valA = a.server.toLowerCase();
 			valB = b.server.toLowerCase();
 		} else if (sortKey.value === "plugins") {
@@ -271,6 +290,15 @@ const goToSite = (id: number) => {
 							}}</span>
 						</th>
 						<th
+							class="hide-mobile col-medium"
+							@click="handleSort('organization_id')"
+						>
+							Organization
+							<span v-if="sortKey === 'organization_id'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
+						<th
 							class="hide-mobile col-wide"
 							@click="handleSort('server')"
 						>
@@ -314,7 +342,7 @@ const goToSite = (id: number) => {
 							dataStore.isLoading && dataStore.sites.length === 0
 						"
 					>
-						<td colspan="5" class="hide-mobile">
+						<td colspan="6" class="hide-mobile">
 							<LoadingSpinner message="Loading data..." />
 						</td>
 						<td colspan="4" class="show-mobile">
@@ -322,7 +350,7 @@ const goToSite = (id: number) => {
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="5" class="empty-state hide-mobile">
+						<td colspan="6" class="empty-state hide-mobile">
 							<span v-if="searchQuery"
 								>No sites found matching "{{
 									searchQuery
@@ -354,6 +382,12 @@ const goToSite = (id: number) => {
 						</td>
 						<td class="font-medium truncate col-expand">
 							{{ site.domain }}
+						</td>
+						<td class="hide-mobile col-medium truncate">
+							<span v-if="site.organization_id">
+								{{ getOrganizationName(site.organization_id) }}
+							</span>
+							<span v-else class="text-muted">—</span>
 						</td>
 						<td class="hide-mobile col-wide truncate">
 							{{ site.server }}
