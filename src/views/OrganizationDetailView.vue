@@ -23,6 +23,7 @@ import ContactModal from "../components/ContactModal.vue";
 import LinkSiteModal from "../components/LinkSiteModal.vue";
 import PaymentModal from "../components/PaymentModal.vue";
 import { useConfirm } from "../composables/useConfirm";
+import NotesWidget from "../components/NotesWidget.vue";
 
 const props = defineProps<{
 	id: string;
@@ -390,6 +391,13 @@ const sitesAudit = computed(() => {
 						on {{ formatAuditDate(organization.updated_at) }}.
 					</template>
 				</div>
+			</div>
+
+			<div class="card-group">
+				<NotesWidget
+					parent-type="Organization"
+					:parent-id="organizationId"
+				/>
 			</div>
 
 			<div class="card-group">
