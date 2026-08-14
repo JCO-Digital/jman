@@ -345,7 +345,7 @@ export interface EnrichedOrganizationAsset extends OrganizationAsset {
 
 export type UserLevel = "basic" | "edit" | "execute" | "admin";
 
-export type NoteParentType = "Organization" | "Site";
+export type NoteParentType = "Organization" | "Site" | "Plugin";
 
 export interface Note {
 	id: number;

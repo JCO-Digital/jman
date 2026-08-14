@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted, nextTick } from "vue";
 import type { NoteParentType, Note } from "../types";
 import { useNotesStore } from "../stores/notes";
 import { useAuthStore } from "../stores/auth";
@@ -28,6 +28,15 @@ const isSaving = ref(false);
 
 const isFormExpanded = ref(false);
 const isListExpanded = ref(false);
+
+const newNoteTextarea = ref<HTMLTextAreaElement | null>(null);
+
+const expandForm = () => {
+	isFormExpanded.value = true;
+	nextTick(() => {
+		newNoteTextarea.value?.focus();
+	});
+};
 
 const visibleNotes = computed(() => {
 	if (isListExpanded.value) {
@@ -139,7 +148,7 @@ const formatNoteDate = (dateString: string) => {
 			<button
 				v-if="authStore.canEdit && !isFormExpanded"
 				class="btn btn-outline btn-sm"
-				@click="isFormExpanded = true"
+				@click="expandForm"
 			>
 				<AppIcon name="plus-circle" size="14" />
 				<span class="ml-1">Add Note</span>
@@ -152,6 +161,7 @@ const formatNoteDate = (dateString: string) => {
 			class="add-note-form mb-4"
 		>
 			<textarea
+				ref="newNoteTextarea"
 				v-model="newNoteContent"
 				placeholder="Add a new note..."
 				rows="3"
