@@ -236,18 +236,18 @@ const formatNoteDate = (dateString: string) => {
 .note-textarea {
 	width: 100%;
 	padding: 0.75rem;
-	border: 1px solid var(--border-color, #ccc);
+	border: 1px solid var(--border-color);
 	border-radius: 6px;
 	resize: vertical;
-	background-color: var(--bg-card, #fff);
-	color: var(--text-main, #333);
+	background-color: var(--bg-card);
+	color: var(--text-main);
 	font-family: inherit;
 	font-size: 0.95rem;
 	line-height: 1.5;
 }
 .note-textarea:focus {
 	outline: none;
-	border-color: var(--primary, #007bff);
+	border-color: var(--primary);
 }
 .notes-list {
 	display: flex;
@@ -256,12 +256,12 @@ const formatNoteDate = (dateString: string) => {
 }
 .note-item {
 	padding: 1rem;
-	background-color: var(--bg-card-hover, #f8f9fa);
-	border: 1px solid var(--border-color, #eee);
+	background-color: var(--bg-body);
+	border: 1px solid var(--border-color);
 	border-radius: 6px;
 }
 .note-content {
-	color: var(--text-main, #333);
+	color: var(--text-main);
 	font-size: 0.95rem;
 	line-height: 1.5;
 }
@@ -269,6 +269,6 @@ const formatNoteDate = (dateString: string) => {
 	white-space: pre-wrap;
 }
 .note-meta {
-	border-top: 1px solid var(--border-color, #eee);
+	border-top: 1px solid var(--border-color);
 }
 </style>
