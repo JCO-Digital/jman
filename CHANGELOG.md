@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.24.0 (2026-08-14)
+## 5.25.0 (2026-08-14)
+
+#### Features
+
+- notes: migrate parent_id to string to support slug-based plugin notes (738f259)
+
+## v5.24.0 (2026-08-14)
 
 #### Features
 
