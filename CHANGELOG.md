@@ -1,6 +1,25 @@
 # Changelog
 
-## 1.33.0 (2026-08-06)
+## 1.34.0 (2026-08-14)
+
+#### Features
+
+- notes: focus note input on add and integrate notes in plugin detail view (0389fe9)
+- notes: position Add Note button in card header (1fd0cc2)
+- notes: collapse add-note form and truncate note list to recent 3 items (2aaed64)
+- notes: implement reusable notes widget on organization and site views (120f501)
+- assets: add asset type filter and optimize column density (5a8405c)
+- sites: add organization name tooltip to sites table (019cd0a)
+
+#### Bug Fixes
+
+- notes: resolve color readability issues in dark mode (7c1d177)
+
+#### Styles
+
+- refactor: format codebase with Prettier (233c094)
+
+## v1.33.0 (2026-08-06)
 
 #### Features
 
