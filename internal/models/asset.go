@@ -59,6 +59,7 @@ type OrganizationAsset struct {
 	Description      string           `json:"description"`
 	OrganizationName string           `json:"organization_name,omitempty"`
 	AssetName        string           `json:"asset_name,omitempty"`
+	AssetType        string           `json:"asset_type,omitempty"`
 	AuditFields
 }
 
