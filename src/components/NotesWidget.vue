@@ -136,43 +136,43 @@ const formatNoteDate = (dateString: string) => {
 				<AppIcon name="note" size="18" />
 				<h2>Notes</h2>
 			</div>
+			<button
+				v-if="authStore.canEdit && !isFormExpanded"
+				class="btn btn-outline btn-sm"
+				@click="isFormExpanded = true"
+			>
+				<AppIcon name="plus-circle" size="14" />
+				<span class="ml-1">Add Note</span>
+			</button>
 		</div>
 
 		<!-- Add note form -->
-		<div v-if="authStore.canEdit" class="add-note-form mb-4">
-			<div v-if="!isFormExpanded" class="flex-row justify-start">
+		<div
+			v-if="authStore.canEdit && isFormExpanded"
+			class="add-note-form mb-4"
+		>
+			<textarea
+				v-model="newNoteContent"
+				placeholder="Add a new note..."
+				rows="3"
+				class="note-textarea"
+				:disabled="isAdding"
+			></textarea>
+			<div class="flex-row justify-end gap-2 mt-2">
 				<button
 					class="btn btn-outline btn-sm"
-					@click="isFormExpanded = true"
-				>
-					<AppIcon name="plus-circle" size="14" />
-					<span class="ml-1">Add Note</span>
-				</button>
-			</div>
-			<div v-else>
-				<textarea
-					v-model="newNoteContent"
-					placeholder="Add a new note..."
-					rows="3"
-					class="note-textarea"
 					:disabled="isAdding"
-				></textarea>
-				<div class="flex-row justify-end gap-2 mt-2">
-					<button
-						class="btn btn-outline btn-sm"
-						:disabled="isAdding"
-						@click="isFormExpanded = false"
-					>
-						Cancel
-					</button>
-					<button
-						class="btn btn-primary btn-sm"
-						:disabled="!newNoteContent.trim() || isAdding"
-						@click="handleAddNote"
-					>
-						{{ isAdding ? "Adding..." : "Add Note" }}
-					</button>
-				</div>
+					@click="isFormExpanded = false"
+				>
+					Cancel
+				</button>
+				<button
+					class="btn btn-primary btn-sm"
+					:disabled="!newNoteContent.trim() || isAdding"
+					@click="handleAddNote"
+				>
+					{{ isAdding ? "Adding..." : "Add Note" }}
+				</button>
 			</div>
 		</div>
 
