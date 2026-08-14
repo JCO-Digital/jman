@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import type { NoteParentType, Note } from "../types";
 import { useNotesStore } from "../stores/notes";
 import { useAuthStore } from "../stores/auth";
@@ -26,6 +26,20 @@ const editingNoteId = ref<number | null>(null);
 const editingContent = ref("");
 const isSaving = ref(false);
 
+const isFormExpanded = ref(false);
+const isListExpanded = ref(false);
+
+const visibleNotes = computed(() => {
+	if (isListExpanded.value) {
+		return notesStore.notes;
+	}
+	return notesStore.notes.slice(0, 3);
+});
+
+const remainingNotesCount = computed(() => {
+	return Math.max(0, notesStore.notes.length - 3);
+});
+
 const loadNotes = () => {
 	notesStore.fetchNotes(props.parentType, props.parentId);
 };
@@ -38,6 +52,8 @@ watch(
 	() => [props.parentType, props.parentId],
 	() => {
 		loadNotes();
+		isFormExpanded.value = false;
+		isListExpanded.value = false;
 	},
 );
 
@@ -51,6 +67,7 @@ const handleAddNote = async () => {
 			newNoteContent.value,
 		);
 		newNoteContent.value = "";
+		isFormExpanded.value = false;
 		toastStore.addToast("Note added successfully.", "success");
 	} catch (e: any) {
 		toastStore.addToast("Failed to add note: " + e.message, "error");
@@ -123,21 +140,39 @@ const formatNoteDate = (dateString: string) => {
 
 		<!-- Add note form -->
 		<div v-if="authStore.canEdit" class="add-note-form mb-4">
-			<textarea
-				v-model="newNoteContent"
-				placeholder="Add a new note..."
-				rows="3"
-				class="note-textarea"
-				:disabled="isAdding"
-			></textarea>
-			<div class="flex-row justify-end mt-2">
+			<div v-if="!isFormExpanded" class="flex-row justify-start">
 				<button
-					class="btn btn-primary btn-sm"
-					:disabled="!newNoteContent.trim() || isAdding"
-					@click="handleAddNote"
+					class="btn btn-outline btn-sm"
+					@click="isFormExpanded = true"
 				>
-					{{ isAdding ? "Adding..." : "Add Note" }}
+					<AppIcon name="plus-circle" size="14" />
+					<span class="ml-1">Add Note</span>
 				</button>
+			</div>
+			<div v-else>
+				<textarea
+					v-model="newNoteContent"
+					placeholder="Add a new note..."
+					rows="3"
+					class="note-textarea"
+					:disabled="isAdding"
+				></textarea>
+				<div class="flex-row justify-end gap-2 mt-2">
+					<button
+						class="btn btn-outline btn-sm"
+						:disabled="isAdding"
+						@click="isFormExpanded = false"
+					>
+						Cancel
+					</button>
+					<button
+						class="btn btn-primary btn-sm"
+						:disabled="!newNoteContent.trim() || isAdding"
+						@click="handleAddNote"
+					>
+						{{ isAdding ? "Adding..." : "Add Note" }}
+					</button>
+				</div>
 			</div>
 		</div>
 
@@ -149,11 +184,7 @@ const formatNoteDate = (dateString: string) => {
 			No notes available.
 		</div>
 		<div v-else class="notes-list">
-			<div
-				v-for="note in notesStore.notes"
-				:key="note.id"
-				class="note-item"
-			>
+			<div v-for="note in visibleNotes" :key="note.id" class="note-item">
 				<!-- Edit mode -->
 				<div v-if="editingNoteId === note.id" class="edit-note-form">
 					<textarea
@@ -221,6 +252,18 @@ const formatNoteDate = (dateString: string) => {
 						</div>
 					</div>
 				</div>
+			</div>
+
+			<div
+				v-if="remainingNotesCount > 0 && !isListExpanded"
+				class="flex-row justify-center mt-3"
+			>
+				<button
+					class="btn btn-outline btn-sm"
+					@click="isListExpanded = true"
+				>
+					Show {{ remainingNotesCount }} more...
+				</button>
 			</div>
 		</div>
 	</section>
