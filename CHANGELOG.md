@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.23.0 (2026-08-06)
+## 5.24.0 (2026-08-14)
+
+#### Features
+
+- notes: add support for Plugin parent type in Go API (37f4ee3)
+- assets: include asset type in organization assets query (bc40771)
+
+## v5.23.0 (2026-08-06)
 
 #### Features
 
