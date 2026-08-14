@@ -308,7 +308,7 @@ func initSchema() error {
 			Columns: map[string]string{
 				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
 				"parent_type": "TEXT",
-				"parent_id":   "INTEGER",
+				"parent_id":   "TEXT",
 				"content":     "TEXT",
 				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"created_by":  "TEXT",

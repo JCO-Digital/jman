@@ -325,7 +325,7 @@ func SaveNote(note *models.Note, username string) error {
 	return nil
 }
 
-func GetNotes(parentType models.NoteParentType, parentID int) ([]models.Note, error) {
+func GetNotes(parentType models.NoteParentType, parentID string) ([]models.Note, error) {
 	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
