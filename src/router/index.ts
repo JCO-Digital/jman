@@ -60,9 +60,17 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/inventory",
+			path: "/inventory/:page(\\d+)?/:rowsPerPage(\\d+)?",
 			name: "assets",
 			component: () => import("../views/Assets/AssetsListView.vue"),
+			props: (route) => ({
+				page: route.params.page
+					? parseInt(route.params.page as string, 10)
+					: undefined,
+				rowsPerPage: route.params.rowsPerPage
+					? parseInt(route.params.rowsPerPage as string, 10)
+					: undefined,
+			}),
 		},
 		{
 			path: "/inventory/templates",
