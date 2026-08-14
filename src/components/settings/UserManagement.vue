@@ -52,7 +52,12 @@ function handleSaved() {
 async function handleDelete(user: AdminUser) {
 	if (user.username === authStore.user?.username) return;
 
-	if (!await confirm(`Are you sure you want to delete user "${user.username}"?`, { danger: true }))
+	if (
+		!(await confirm(
+			`Are you sure you want to delete user "${user.username}"?`,
+			{ danger: true },
+		))
+	)
 		return;
 
 	try {

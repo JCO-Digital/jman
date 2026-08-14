@@ -7,7 +7,12 @@ import { useToastStore } from "../../stores/toast";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import SearchableSelect from "../SearchableSelect.vue";
-import type { IgnoreType, IgnoreEntry, CreateIgnorePayload, Site } from "../../types";
+import type {
+	IgnoreType,
+	IgnoreEntry,
+	CreateIgnorePayload,
+	Site,
+} from "../../types";
 import { useConfirm } from "../../composables/useConfirm";
 
 const ignoreStore = useIgnoreStore();
@@ -196,7 +201,12 @@ const handleEditEntry = (entry: IgnoreEntry) => {
 };
 
 const handleRemoveEntry = async (id: number) => {
-	if (!await confirm("Are you sure you want to remove this ignore rule?", { danger: true })) return;
+	if (
+		!(await confirm("Are you sure you want to remove this ignore rule?", {
+			danger: true,
+		}))
+	)
+		return;
 
 	try {
 		await ignoreStore.deleteIgnoreEntry(id);

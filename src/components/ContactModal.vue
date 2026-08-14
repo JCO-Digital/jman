@@ -125,7 +125,11 @@ const close = () => {
 					/>
 				</div>
 				<div class="form-actions">
-					<button type="button" class="btn btn-outline" @click="close">
+					<button
+						type="button"
+						class="btn btn-outline"
+						@click="close"
+					>
 						Cancel
 					</button>
 					<button type="submit" class="btn btn-primary">

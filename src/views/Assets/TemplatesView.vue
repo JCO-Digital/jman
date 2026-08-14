@@ -104,7 +104,9 @@ const handleSubmit = async () => {
 	try {
 		const payload = {
 			...assetForm.value,
-			default_price: Math.round((parseFloat(priceInput.value) || 0) * 100),
+			default_price: Math.round(
+				(parseFloat(priceInput.value) || 0) * 100,
+			),
 		};
 		if (editingAsset.value) {
 			await assetStore.updateAsset(editingAsset.value.id, payload);
