@@ -60,7 +60,7 @@ const (
 type Note struct {
 	ID         int            `json:"id"`
 	ParentType NoteParentType `json:"parent_type"`
-	ParentID   int            `json:"parent_id"`
+	ParentID   string         `json:"parent_id"`
 	Content    string         `json:"content"`
 	AuditFields
 }

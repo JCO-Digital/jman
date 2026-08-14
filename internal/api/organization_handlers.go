@@ -385,9 +385,8 @@ func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 // ListNotesHandler returns notes for a specific organization or site.
 func ListNotesHandler(w http.ResponseWriter, r *http.Request) {
 	parentType := models.NoteParentType(r.URL.Query().Get("type"))
-	parentIDStr := r.URL.Query().Get("id")
-	parentID, err := strconv.Atoi(parentIDStr)
-	if err != nil {
+	parentID := r.URL.Query().Get("id")
+	if parentID == "" {
 		WriteError(w, http.StatusBadRequest, "Invalid parent ID")
 		return
 	}
@@ -413,7 +412,7 @@ func CreateNoteHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if note.Content == "" || note.ParentID == 0 || note.ParentType == "" {
+	if note.Content == "" || note.ParentID == "" || note.ParentType == "" {
 		WriteError(w, http.StatusBadRequest, "Content, ParentID and ParentType are required")
 		return
 	}
