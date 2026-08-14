@@ -11,7 +11,7 @@ import AppIcon from "./AppIcon.vue";
 
 const props = defineProps<{
 	parentType: NoteParentType;
-	parentId: number;
+	parentId: string | number;
 }>();
 
 const notesStore = useNotesStore();

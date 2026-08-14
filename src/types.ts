@@ -350,7 +350,7 @@ export type NoteParentType = "Organization" | "Site" | "Plugin";
 export interface Note {
 	id: number;
 	parent_type: NoteParentType;
-	parent_id: number;
+	parent_id: string | number;
 	content: string;
 	created_at: string;
 	created_by: string;

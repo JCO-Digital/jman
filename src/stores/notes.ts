@@ -10,12 +10,15 @@ export const useNotesStore = defineStore("notes", () => {
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
 
-	async function fetchNotes(parentType: NoteParentType, parentId: number) {
+	async function fetchNotes(
+		parentType: NoteParentType,
+		parentId: string | number,
+	) {
 		isLoading.value = true;
 		error.value = null;
 		try {
 			const res = await fetch(
-				`${BASE_URL}/notes?type=${parentType}&id=${parentId}`,
+				`${BASE_URL}/notes?type=${parentType}&id=${encodeURIComponent(parentId.toString())}`,
 				{
 					headers: authStore.authHeader,
 				},
@@ -32,7 +35,7 @@ export const useNotesStore = defineStore("notes", () => {
 
 	async function createNote(
 		parentType: NoteParentType,
-		parentId: number,
+		parentId: string | number,
 		content: string,
 	) {
 		const res = await fetch(`${BASE_URL}/notes`, {
@@ -43,7 +46,7 @@ export const useNotesStore = defineStore("notes", () => {
 			},
 			body: JSON.stringify({
 				parent_type: parentType,
-				parent_id: parentId,
+				parent_id: parentId.toString(),
 				content,
 			}),
 		});

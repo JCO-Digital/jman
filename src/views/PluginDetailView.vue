@@ -147,27 +147,7 @@ const manageAssetTemplate = () => {
 				:installation-count="sitesWithPlugin.length"
 			/>
 
-			<NotesWidget
-				v-if="assetTemplate"
-				parent-type="Plugin"
-				:parent-id="assetTemplate.id"
-			/>
-			<section
-				v-else-if="authStore.canEdit"
-				class="card mt-4 p-4 text-center"
-			>
-				<p class="text-muted">
-					Notes can be added once this plugin is registered as an
-					Asset Template.
-				</p>
-				<button
-					class="btn btn-outline btn-sm mt-3 mx-auto"
-					@click="manageAssetTemplate"
-				>
-					<AppIcon name="plus-circle" size="14" />
-					<span class="ml-1">Create Asset Template</span>
-				</button>
-			</section>
+			<NotesWidget parent-type="Plugin" :parent-id="name" />
 
 			<PluginVulnerabilityList
 				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
