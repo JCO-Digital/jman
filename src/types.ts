@@ -312,6 +312,7 @@ export interface OrganizationAsset {
 	site_id: number | null;
 	asset_id: number | null;
 	asset_name?: string;
+	asset_type?: string;
 	identifier: string | null;
 	price: number;
 	billing_freq: BillingFrequency;

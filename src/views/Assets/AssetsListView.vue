@@ -29,6 +29,7 @@ const assets = ref<OrganizationAsset[]>([]);
 const isLoading = ref(true);
 const searchQuery = ref("");
 const statusFilter = ref<OrganizationAssetStatus | "all">("all");
+const typeFilter = ref<string>("all");
 
 const loadAssets = async () => {
 	isLoading.value = true;
@@ -65,7 +66,11 @@ const filteredAssets = computed(() => {
 		const matchesStatus =
 			statusFilter.value === "all" || a.status === statusFilter.value;
 
-		return matchesSearch && matchesStatus;
+		const matchesType =
+			typeFilter.value === "all" ||
+			(a.asset_type || "General") === typeFilter.value;
+
+		return matchesSearch && matchesStatus && matchesType;
 	});
 });
 
@@ -166,6 +171,14 @@ const formatDate = (dateString: string | null) => {
 				placeholder="Search by customer, asset or identifier..."
 				class="search-input"
 			/>
+			<select v-model="typeFilter" class="type-select">
+				<option value="all">All Types</option>
+				<option value="Plugin">Plugin</option>
+				<option value="Domain">Domain</option>
+				<option value="Hosting Package">Hosting Package</option>
+				<option value="Service Package">Service Package</option>
+				<option value="General">General</option>
+			</select>
 			<select v-model="statusFilter" class="status-select">
 				<option value="all">All Statuses</option>
 				<option value="active">Active</option>
@@ -184,10 +197,9 @@ const formatDate = (dateString: string | null) => {
 					<thead>
 						<tr>
 							<th>Customer</th>
+							<th>Type</th>
 							<th>Asset</th>
-							<th>Identifier</th>
 							<th>Price</th>
-							<th>Frequency</th>
 							<th>Next Billing</th>
 							<th>Status</th>
 							<th style="width: 40px"></th>
@@ -195,7 +207,7 @@ const formatDate = (dateString: string | null) => {
 					</thead>
 					<tbody>
 						<tr v-if="filteredAssets.length === 0">
-							<td colspan="8" class="empty-state">
+							<td colspan="7" class="empty-state">
 								No assets found matching your filters.
 							</td>
 						</tr>
@@ -209,6 +221,15 @@ const formatDate = (dateString: string | null) => {
 								{{ asset.organization_name }}
 							</td>
 							<td>
+								{{ asset.asset_type || "General" }}
+							</td>
+							<td
+								:title="
+									asset.identifier
+										? `Identifier: ${asset.identifier}`
+										: ''
+								"
+							>
 								<strong>{{
 									asset.asset_name || "Custom"
 								}}</strong>
@@ -217,10 +238,11 @@ const formatDate = (dateString: string | null) => {
 								</div>
 							</td>
 							<td>
-								<code>{{ asset.identifier || "-" }}</code>
+								{{ formatCurrency(asset.price) }}
+								<span class="text-muted text-sm ml-1">
+									{{ asset.billing_freq }}
+								</span>
 							</td>
-							<td>{{ formatCurrency(asset.price) }}</td>
-							<td>{{ asset.billing_freq }}</td>
 							<td
 								:class="{
 									overdue:
