@@ -36,11 +36,11 @@ type SiteWpFlags struct {
 // AgentManifestSite is a single site entry returned to jman-agent by the
 // manifest endpoint, describing what it should collect data for locally.
 // jman-api deliberately does not compute an absolute filesystem path here —
-// site layouts vary by provisioning convention (e.g. /sites/<domain>/files
-// vs <home_folder>/files), and jman-api has no filesystem access to the
-// managed server to verify one. jman-agent runs locally as root instead, so
-// it resolves SiteUser's actual home directory via the OS's own user
-// database and joins it with PublicFolder — correct regardless of layout.
+// it has no filesystem access to the managed server to verify one exists.
+// jman-agent runs locally as root instead, and resolves the actual path
+// itself (see agent.ResolveSitePath): primarily via SpinupWP's standard
+// /sites/<domain>/<public_folder> layout, falling back to a local OS user
+// lookup on SiteUser for servers provisioned with a dedicated user per site.
 type AgentManifestSite struct {
 	SiteID       int    `json:"site_id"`
 	Domain       string `json:"domain"`
