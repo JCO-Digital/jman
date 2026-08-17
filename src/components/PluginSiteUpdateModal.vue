@@ -187,9 +187,14 @@ watch(
 												:class="[
 													'status-badge',
 													'badge-sm',
-													siteResult[entry.site_id]
+													siteResult[entry.site_id] &&
+													!siteResult[
+														entry.site_id
+													]?.status
+														.toLowerCase()
+														.includes('up to date')
 														? 'active'
-														: 'default',
+														: 'warning',
 												]"
 											>
 												{{

@@ -220,9 +220,14 @@ watch(
 											:class="[
 												'status-badge',
 												'badge-sm',
-												pluginResult[plugin.name]
+												pluginResult[plugin.name] &&
+												!pluginResult[
+													plugin.name
+												]?.status
+													.toLowerCase()
+													.includes('up to date')
 													? 'active'
-													: 'default',
+													: 'warning',
 											]"
 										>
 											{{
