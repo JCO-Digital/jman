@@ -155,12 +155,24 @@ const siteInfoItems = computed(() => {
 
 const serverInfoItems = computed(() => {
 	if (!server.value) return [];
-	return [
+	const items = [
 		{ label: "Server Name", value: server.value.name, copyable: true },
 		{ label: "IP Address", value: server.value.ip_address, copyable: true },
 		{ label: "Ubuntu", value: server.value.ubuntu_version },
 		{ label: "Provider", value: server.value.provider_name },
 	];
+
+	if (server.value.disk_space && server.value.disk_space.total > 0) {
+		const used = server.value.disk_space.used;
+		const total = server.value.disk_space.total;
+		const percent = Math.round((used / total) * 100);
+		items.push({
+			label: "Disk Space",
+			value: `${formatBytes(used)} / ${formatBytes(total)} (${percent}% used)`,
+		});
+	}
+
+	return items;
 });
 
 const goBack = () => {
@@ -263,6 +275,15 @@ const unlinkOrganization = async () => {
 		toast.addToast("Failed to unlink organization: " + e.message, "error");
 	}
 };
+
+function formatBytes(bytes: number, decimals = 1) {
+	if (bytes === 0) return "0 B";
+	const k = 1024;
+	const dm = decimals < 0 ? 0 : decimals;
+	const sizes = ["B", "KB", "MB", "GB", "TB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+}
 </script>
 
 <template>
