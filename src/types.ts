@@ -69,6 +69,17 @@ export type SiteEnvironment =
 	| "development"
 	| "archived";
 
+export interface SiteDiskUsage {
+	bytes_used: number;
+	measured_at: string;
+}
+
+export interface SiteWpFlags {
+	is_multisite: boolean;
+	disallow_file_mods: boolean;
+	updated_at: string;
+}
+
 export interface Site {
 	id: number;
 	server_id: number;
@@ -108,6 +119,8 @@ export interface Site {
 	updated_by: string;
 	status: string;
 	environment?: SiteEnvironment;
+	disk_usage?: SiteDiskUsage;
+	wp_flags?: SiteWpFlags;
 }
 
 export interface Plugin {
@@ -466,4 +479,27 @@ export interface TaskFilters {
 	organization_id?: number;
 	server_id?: number;
 	search?: string;
+}
+
+export interface AgentToken {
+	id: number;
+	server_id: number;
+	server_name: string;
+	token_prefix: string;
+	description: string | null;
+	revoked: boolean;
+	last_seen_at: string | null;
+	created_at: string;
+	created_by: string;
+}
+
+export interface CreateAgentTokenPayload {
+	server_id: number;
+	server_name: string;
+	description?: string;
+}
+
+// Returned only once, at creation time, in addition to the normal AgentToken fields.
+export interface CreatedAgentToken extends AgentToken {
+	token: string;
 }
