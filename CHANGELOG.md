@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.26.0 (2026-08-17)
+## 5.27.0 (2026-08-17)
+
+#### Features
+
+- agent: improve site path resolution and manifest filtering (f48a94d)
+- agent: track agent versions and improve path resolution (1db6f18)
+
+## v5.26.0 (2026-08-17)
 
 #### Features
 
