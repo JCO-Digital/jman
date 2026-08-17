@@ -3,6 +3,8 @@ import { ref, computed, onMounted } from "vue";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
 import { useUserStore } from "../stores/user";
+import { useDataStore } from "../stores/data";
+import AppIcon from "../components/AppIcon.vue";
 import type { Task, TaskStatus, TaskPriority, TaskType } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import TaskInfoModal from "../components/TaskInfoModal.vue";
@@ -11,6 +13,7 @@ import TaskFormModal from "../components/TaskFormModal.vue";
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
 const userStore = useUserStore();
+const dataStore = useDataStore();
 
 const selectedTask = ref<Task | null>(null);
 const showInfoModal = ref(false);
@@ -157,6 +160,59 @@ function formatDate(d: string | null) {
 	if (!d) return "—";
 	return new Date(d).toLocaleDateString("de-DE");
 }
+
+function getVulnerabilityStatus(task: Task) {
+	const fallback = {
+		isVuln: false,
+		remaining: 0,
+		total: 0,
+		totalActiveOnSite: 0,
+		type: "none",
+	};
+
+	if (task.site_id === null) return fallback;
+	const isVuln =
+		task.title.toLowerCase().startsWith("security vulnerabilities") ||
+		(task.metadata && task.metadata.includes("vuln_uuids"));
+	if (!isVuln) return fallback;
+
+	const site = dataStore.enrichedSites.find((s) => s.id === task.site_id);
+	if (!site) return fallback;
+
+	// Parse metadata to get original UUIDs if any
+	let originalUuids: string[] = [];
+	if (task.metadata) {
+		try {
+			const meta = JSON.parse(task.metadata);
+			originalUuids = meta.vuln_uuids || [];
+		} catch {
+			// Ignore JSON parsing errors
+		}
+	}
+
+	const activeVulns = site.vulnerabilities.filter((v) => !v.suppressed);
+
+	if (originalUuids.length > 0) {
+		const remainingCount = activeVulns.filter((v) =>
+			originalUuids.includes(v.uuid),
+		).length;
+		return {
+			isVuln: true,
+			remaining: remainingCount,
+			total: originalUuids.length,
+			totalActiveOnSite: activeVulns.length,
+			type: "specific",
+		};
+	} else {
+		return {
+			isVuln: true,
+			remaining: activeVulns.length,
+			total: activeVulns.length,
+			totalActiveOnSite: activeVulns.length,
+			type: "general",
+		};
+	}
+}
 </script>
 
 <template>
@@ -257,7 +313,44 @@ function formatDate(d: string | null) {
 						@click="openTask(task)"
 					>
 						<td class="max-w-320 truncate font-medium">
-							{{ task.title }}
+							<div class="flex-row items-center gap-2">
+								<span class="truncate">{{ task.title }}</span>
+								<span
+									v-if="getVulnerabilityStatus(task).isVuln"
+									:class="[
+										'status-badge',
+										'badge-sm',
+										getVulnerabilityStatus(task)
+											.remaining === 0
+											? 'success'
+											: 'warning',
+									]"
+									style="font-size: 10px; padding: 1px 6px"
+									:title="
+										getVulnerabilityStatus(task)
+											.remaining === 0
+											? 'All vulnerabilities resolved!'
+											: `${getVulnerabilityStatus(task).remaining} remaining vulnerabilities`
+									"
+								>
+									<AppIcon
+										:name="
+											getVulnerabilityStatus(task)
+												.remaining === 0
+												? 'check'
+												: 'vulnerability'
+										"
+										size="12"
+										style="margin-right: 4px"
+									/>
+									{{
+										getVulnerabilityStatus(task)
+											.remaining === 0
+											? "Resolved"
+											: `${getVulnerabilityStatus(task).remaining} left`
+									}}
+								</span>
+							</div>
 						</td>
 						<td>
 							<span
