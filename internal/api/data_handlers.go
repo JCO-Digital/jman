@@ -90,8 +90,27 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
 		return
 	}
+
+	diskUsage, err := db.GetLatestSiteDiskUsage()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+
+	wpFlags, err := db.GetAllSiteWpFlags()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+
 	for i, site := range sites {
 		sites[i].Environment = models.SiteEnvironmentType(environments[site.ID])
+		if usage, ok := diskUsage[site.ID]; ok {
+			sites[i].DiskUsage = &usage
+		}
+		if flags, ok := wpFlags[site.ID]; ok {
+			sites[i].WpFlags = &flags
+		}
 	}
 
 	// Sort by ID for deterministic output.

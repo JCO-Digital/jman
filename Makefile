@@ -3,7 +3,7 @@
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
 
-build: clean prepare bin/jman bin/jman-api bin/jman-monitor completions
+build: clean prepare bin/jman bin/jman-api bin/jman-monitor bin/jman-agent completions
 
 # Build without the built-in update command (for use with external package managers)
 build-pkg: clean prepare
@@ -21,10 +21,14 @@ bin/jman-api:
 bin/jman-monitor:
 	go build -ldflags="$(LDFLAGS)" -o bin/jman-monitor ./cmd/jman-monitor
 
+bin/jman-agent:
+	go build -ldflags="$(LDFLAGS)" -o bin/jman-agent ./cmd/jman-agent
+
 dev: clean prepare
 	go build -o bin/jman ./cmd/jman
 	go build -o bin/jman-api ./cmd/jman-api
 	go build -o bin/jman-monitor ./cmd/jman-monitor
+	go build -o bin/jman-agent ./cmd/jman-agent
 
 dev-api:
 	air

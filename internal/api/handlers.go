@@ -36,6 +36,15 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/sites", basic(SitesHandler))
 	mux.Handle("GET /api/vulns", basic(VulnsHandler))
 
+	// --- Agent routes (X-Agent-Token auth, not JWT) ---
+	mux.Handle("GET /api/agent/manifest", AgentAuthMiddleware(AgentManifestHandler))
+	mux.Handle("POST /api/agent/report", AgentAuthMiddleware(AgentReportHandler))
+
+	// --- Agent token management (JWT, admin level) ---
+	mux.Handle("GET /api/agent-tokens", admin(ListAgentTokensHandler))
+	mux.Handle("POST /api/agent-tokens", admin(CreateAgentTokenHandler))
+	mux.Handle("DELETE /api/agent-tokens/{id}", admin(RevokeAgentTokenHandler))
+
 	// --- User Management ---
 	mux.Handle("GET /api/users", basic(ListUsersHandler(&usersCfg)))
 	mux.Handle("POST /api/users", admin(CreateUserHandler(&usersCfg)))

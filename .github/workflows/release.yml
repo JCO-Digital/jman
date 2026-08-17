@@ -45,7 +45,7 @@ jobs:
         if: steps.foonver.outputs.is_bumped == 'true'
         env:
           MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
-        run: go run cmd/sign-binaries/main.go bin/jman bin/jman-api bin/jman-monitor
+        run: go run cmd/sign-binaries/main.go bin/jman bin/jman-api bin/jman-monitor bin/jman-agent
 
       - name: Create GitHub Release
         if: steps.foonver.outputs.is_bumped == 'true'

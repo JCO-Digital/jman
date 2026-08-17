@@ -71,6 +71,8 @@ type Site struct {
 	CreatedAt         string              `json:"created_at"`
 	Status            string              `json:"status"`
 	Environment       SiteEnvironmentType `json:"environment,omitempty"`
+	DiskUsage         *SiteDiskUsage      `json:"disk_usage,omitempty"`
+	WpFlags           *SiteWpFlags        `json:"wp_flags,omitempty"`
 }
 
 type CliSite struct {

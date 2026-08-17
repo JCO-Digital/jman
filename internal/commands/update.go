@@ -108,8 +108,22 @@ var updateCmd = &cobra.Command{
 			}
 		}
 
+		// Resolve the path of the currently running jman executable (follow symlinks).
+		jmanPath, err := os.Executable()
+		if err != nil {
+			return fmt.Errorf("failed to determine executable path: %w", err)
+		}
+		jmanPath, err = filepath.EvalSymlinks(jmanPath)
+		if err != nil {
+			return fmt.Errorf("failed to resolve executable symlinks: %w", err)
+		}
+		targetPath := jmanPath
+		if component != "jman" {
+			targetPath = filepath.Join(filepath.Dir(jmanPath), component)
+		}
+
 		fmt.Printf("\n%s...\n", verb.Cyan("Downloading"))
-		if err := update.DownloadAndReplace(releaseURL, sigURL, component); err != nil {
+		if err := update.DownloadAndReplace(releaseURL, sigURL, targetPath, component); err != nil {
 			return fmt.Errorf("update failed: %w", err)
 		}
 
