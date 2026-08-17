@@ -38,9 +38,19 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		Sites:    make([]models.AgentManifestSite, 0, len(sites)),
 	}
 	for _, site := range sites {
-		// SiteUser/PublicFolder are handed off as-is; the agent (running
-		// locally on the server) resolves the actual absolute path itself —
-		// see the AgentManifestSite doc comment for why.
+		// SpinupWP sites go through deploying -> deployed (or failed), and
+		// public_folder isn't populated until a site reaches "deployed"
+		// (e.g. a staging site mid-clone). There's nothing for the agent to
+		// do with such a site yet, so leave it out of the manifest
+		// entirely. site_user is passed through only as an optional
+		// fallback hint (see AgentManifestSite doc comment) — it's not
+		// required, since most servers use SpinupWP's shared /sites/<domain>
+		// layout rather than a dedicated Unix user per site.
+		if site.Status != "deployed" {
+			verb.LogPrintf(verb.Verbose, "Excluding %s from agent manifest: status=%q", site.Domain, site.Status)
+			continue
+		}
+
 		publicFolder := site.PublicFolder
 		if publicFolder == "" {
 			publicFolder = "files"
