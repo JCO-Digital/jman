@@ -146,15 +146,15 @@ Set `selfUpdateEnabled = false` in `config.toml` to manage updates manually inst
 
 If **Last Seen** is recent but **Version** never appears (or stops updating), the agent is authenticating fine but its reports aren't landing — check `journalctl -u jman-agent` on that server for collection or network errors. Per-site collection failures (e.g. a `du`/`wp-config.php` read failing for a specific site) are logged at normal verbosity by default, no `--debug` flag needed.
 
-A site missing from the manifest (no data reported, no error either) usually means it isn't fully `deployed` on SpinupWP yet — e.g. a staging site mid-clone — since `public_folder` isn't populated until deployment finishes. `jman-api` excludes such sites from the manifest; they'll appear automatically once deployment finishes and jman's local cache next refreshes (`jman fetch sites`).
+A site missing from the manifest (no data reported, no error either) usually means it isn't fully `deployed` on SpinupWP yet — e.g. a staging site mid-clone. `jman-api` excludes such sites from the manifest; they'll appear automatically once deployment finishes and jman's local cache next refreshes (`jman fetch sites`).
 
-If a site *is* in the manifest but its data never shows up, check for a "no valid site path found" error in the log — the agent looks for the site first at SpinupWP's standard `/sites/<domain>/<public_folder>` layout, falling back to the home directory of `site_user` (if it resolves to a real local Unix account) for servers provisioned with a dedicated user per site. If neither exists, the site is skipped and logged.
+If a site *is* in the manifest but its data never shows up, check for a "no valid site path found" error in the log — the agent looks for the site first at SpinupWP's standard `/sites/<domain>/files` layout, falling back to the home directory of `site_user` (if it resolves to a real local Unix account) for servers provisioned with a dedicated user per site. If neither exists, the site is skipped and logged. Note this deliberately ignores SpinupWP's own `public_folder` field, which describes the web-server-exposed docroot (sometimes nested for security) rather than where the WordPress install itself lives.
 
 ## API Endpoints
 
 `jman-api` exposes these endpoints for `jman-agent` (authenticated via the `X-Agent-Token` header, not JWT):
 
-- `GET /api/agent/manifest`: Returns the list of sites this server's token is scoped to, along with each site's domain, public folder name, and (optionally) Unix user — the agent resolves the actual filesystem path itself, since site layouts vary by hosting provisioning convention.
+- `GET /api/agent/manifest`: Returns the list of sites this server's token is scoped to, along with each site's domain and (optionally) Unix user — the agent resolves the actual filesystem path itself, since site layouts vary by hosting provisioning convention.
 - `POST /api/agent/report`: Accepts a batch of collected data for those sites. Reports for sites outside the calling server's own token are rejected.
 
 And for admins managing tokens (JWT, admin level):

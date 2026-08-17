@@ -39,13 +39,15 @@ type SiteWpFlags struct {
 // it has no filesystem access to the managed server to verify one exists.
 // jman-agent runs locally as root instead, and resolves the actual path
 // itself (see agent.ResolveSitePath): primarily via SpinupWP's standard
-// /sites/<domain>/<public_folder> layout, falling back to a local OS user
-// lookup on SiteUser for servers provisioned with a dedicated user per site.
+// /sites/<domain>/files layout, falling back to a local OS user lookup on
+// SiteUser for servers provisioned with a dedicated user per site.
+// (SpinupWP's own "public_folder" field describes the web-server-exposed
+// docroot, which can differ from the WordPress install location, so it's
+// deliberately not used here.)
 type AgentManifestSite struct {
-	SiteID       int    `json:"site_id"`
-	Domain       string `json:"domain"`
-	SiteUser     string `json:"site_user"`
-	PublicFolder string `json:"public_folder"`
+	SiteID   int    `json:"site_id"`
+	Domain   string `json:"domain"`
+	SiteUser string `json:"site_user"`
 }
 
 // AgentManifest is the response body for GET /api/agent/manifest.

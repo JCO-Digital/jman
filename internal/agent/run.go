@@ -72,7 +72,7 @@ func collectAndReport(ctx context.Context, client *Client, version string) error
 	for _, site := range manifest.Sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
 
-		sitePath, err := ResolveSitePath(site.Domain, site.SiteUser, site.PublicFolder)
+		sitePath, err := ResolveSitePath(site.Domain, site.SiteUser)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Skipping %s: %v", site.Domain, err)
 			report.Sites = append(report.Sites, siteReport)
