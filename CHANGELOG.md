@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.38.0 (2026-08-17)
+## 1.39.0 (2026-08-17)
+
+#### Features
+
+- settings: display agent version in token list (0676d8c)
+
+## v1.38.0 (2026-08-17)
 
 #### Features
 
