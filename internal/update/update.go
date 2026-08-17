@@ -170,35 +170,21 @@ func CheckForUpdate(currentVersion string, component string) (string, string, st
 }
 
 // DownloadAndReplace downloads the binary from downloadURL, writes it to a
-// temporary file, and then replaces the target component binary with it.
-// If component is "jman", it replaces the currently running executable.
-// Otherwise, it looks for the component in the same directory as the jman binary.
-func DownloadAndReplace(downloadURL, sigURL, component string) error {
+// temporary file in the same directory as targetPath, verifies it against
+// the detached signature at sigURL, and atomically replaces targetPath with
+// it. label is used only for error messages and the temp-file name prefix.
+func DownloadAndReplace(downloadURL, sigURL, targetPath, label string) error {
 	if err := validateDownloadURL(downloadURL); err != nil {
 		return fmt.Errorf("refusing to download update: %w", err)
 	}
 	if sigURL == "" {
-		return fmt.Errorf("refusing to install update: no signature asset found for %s", component)
+		return fmt.Errorf("refusing to install update: no signature asset found for %s", label)
 	}
 	if err := validateDownloadURL(sigURL); err != nil {
 		return fmt.Errorf("refusing to download update signature: %w", err)
 	}
 
-	// Resolve the path of the currently running jman executable (follow symlinks).
-	jmanPath, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("failed to determine executable path: %w", err)
-	}
-	jmanPath, err = filepath.EvalSymlinks(jmanPath)
-	if err != nil {
-		return fmt.Errorf("failed to resolve executable symlinks: %w", err)
-	}
-
-	dir := filepath.Dir(jmanPath)
-	targetPath := jmanPath
-	if component != "jman" {
-		targetPath = filepath.Join(dir, component)
-	}
+	dir := filepath.Dir(targetPath)
 
 	// Default mode to 0755 if the target doesn't exist yet.
 	mode := os.FileMode(0755)
@@ -208,7 +194,7 @@ func DownloadAndReplace(downloadURL, sigURL, component string) error {
 
 	// Download the new binary to a temporary file in the same directory as the
 	// target binary. Using the same directory avoids cross-device rename issues.
-	tmpFile, err := os.CreateTemp(dir, fmt.Sprintf("%s-update-*", component))
+	tmpFile, err := os.CreateTemp(dir, fmt.Sprintf("%s-update-*", label))
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
@@ -281,7 +267,7 @@ func DownloadAndReplace(downloadURL, sigURL, component string) error {
 
 	// Replace the old binary. os.Rename is atomic on the same filesystem.
 	if err := os.Rename(tmpPath, targetPath); err != nil {
-		return fmt.Errorf("failed to replace binary %s (do you have write permission?): %w", component, err)
+		return fmt.Errorf("failed to replace binary %s (do you have write permission?): %w", label, err)
 	}
 
 	return nil

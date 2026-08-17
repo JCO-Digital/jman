@@ -1,0 +1,22 @@
+[Unit]
+Description=jman Server Agent
+After=network.target
+
+[Service]
+Type=simple
+# Ensure the path matches your installation location
+ExecStart=/usr/local/bin/jman-agent --service
+Restart=always
+RestartSec=15
+StandardOutput=journal
+StandardError=journal
+
+# Config file (containing the server's API token) must be readable only by
+# whichever user runs this service, e.g. chmod 600 /etc/jman-agent/config.toml
+# jman-agent self-updates its own binary at /usr/local/bin/jman-agent, so
+# this service's user needs write access there (root is the simplest choice
+# since the agent also needs to read every site's files to measure disk
+# usage and wp-config.php).
+
+[Install]
+WantedBy=multi-user.target

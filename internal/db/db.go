@@ -328,6 +328,40 @@ func initSchema() error {
 			PrimaryKey: []string{"user_id", "key"},
 		},
 		{
+			Name: "agent_tokens",
+			Columns: map[string]string{
+				"id":           "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"server_id":    "INTEGER NOT NULL",
+				"server_name":  "TEXT",
+				"token_hash":   "TEXT NOT NULL",
+				"token_prefix": "TEXT NOT NULL",
+				"description":  "TEXT",
+				"revoked":      "BOOLEAN DEFAULT 0",
+				"last_seen_at": "DATETIME",
+				"created_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":   "TEXT",
+			},
+		},
+		{
+			Name: "site_disk_usage",
+			Columns: map[string]string{
+				"site_id":     "INTEGER NOT NULL",
+				"bytes_used":  "INTEGER NOT NULL",
+				"measured_at": "DATETIME NOT NULL",
+				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"site_id", "measured_at"},
+		},
+		{
+			Name: "site_wp_flags",
+			Columns: map[string]string{
+				"site_id":            "INTEGER PRIMARY KEY",
+				"is_multisite":       "BOOLEAN DEFAULT 0",
+				"disallow_file_mods": "BOOLEAN DEFAULT 0",
+				"updated_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "tasks",
 			Columns: map[string]string{
 				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -401,6 +435,14 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_completed_by ON tasks(completed_by);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_agent_tokens_server_id ON agent_tokens(server_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_disk_usage_site_id ON site_disk_usage(site_id);")
 	return err
 }
 
