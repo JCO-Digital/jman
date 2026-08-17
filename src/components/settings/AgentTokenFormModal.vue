@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
 import { useAgentTokensStore } from "../../stores/agentTokens";
+import { useDataStore } from "../../stores/data";
 import AppIcon from "../AppIcon.vue";
 import type { CreatedAgentToken } from "../../types";
 
@@ -14,9 +15,12 @@ const emit = defineEmits<{
 }>();
 
 const agentTokensStore = useAgentTokensStore();
+const dataStore = useDataStore();
 
-const serverId = ref("");
-const serverName = ref("");
+// Server IDs here are SpinupWP server IDs (the same ones used everywhere
+// else in jman, e.g. site.server_id) — selecting from the known server list
+// avoids the admin having to look one up manually.
+const selectedServerId = ref<number | "">("");
 const description = ref("");
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
@@ -25,10 +29,10 @@ watch(
 	() => props.visible,
 	(newVal) => {
 		if (newVal) {
-			serverId.value = "";
-			serverName.value = "";
+			selectedServerId.value = "";
 			description.value = "";
 			errorMessage.value = null;
+			if (!dataStore.isLoaded) dataStore.initData();
 		}
 	},
 );
@@ -40,15 +44,17 @@ function handleOverlayClick(event: MouseEvent) {
 }
 
 async function handleSubmit() {
-	const parsedServerId = parseInt(serverId.value, 10);
-	if (isNaN(parsedServerId) || !serverName.value.trim()) return;
+	const server = dataStore.servers.find(
+		(s) => s.id === selectedServerId.value,
+	);
+	if (!server) return;
 
 	isSubmitting.value = true;
 	errorMessage.value = null;
 	try {
 		const created = await agentTokensStore.createToken(
-			parsedServerId,
-			serverName.value.trim(),
+			server.id,
+			server.name,
 			description.value.trim() || undefined,
 		);
 		emit("created", created);
@@ -81,29 +87,23 @@ async function handleSubmit() {
 					<form @submit.prevent="handleSubmit">
 						<div class="content">
 							<div class="form-group">
-								<label for="agent-token-server-id"
-									>Server ID</label
-								>
-								<input
-									id="agent-token-server-id"
-									v-model="serverId"
-									type="number"
-									placeholder="Enter server ID"
+								<label for="agent-token-server">Server</label>
+								<select
+									id="agent-token-server"
+									v-model="selectedServerId"
 									required
-								/>
-							</div>
-
-							<div class="form-group">
-								<label for="agent-token-server-name"
-									>Server Name</label
 								>
-								<input
-									id="agent-token-server-name"
-									v-model="serverName"
-									type="text"
-									placeholder="Enter server name"
-									required
-								/>
+									<option value="" disabled>
+										Select a server
+									</option>
+									<option
+										v-for="server in dataStore.servers"
+										:key="server.id"
+										:value="server.id"
+									>
+										{{ server.name }}
+									</option>
+								</select>
 							</div>
 
 							<div class="form-group">
@@ -130,9 +130,7 @@ async function handleSubmit() {
 									type="submit"
 									class="btn btn-primary"
 									:disabled="
-										isSubmitting ||
-										!serverId ||
-										!serverName.trim()
+										isSubmitting || !selectedServerId
 									"
 								>
 									{{
