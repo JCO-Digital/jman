@@ -1,6 +1,16 @@
 # Changelog
 
-### 5.25.1 (2026-08-17)
+## 5.26.0 (2026-08-17)
+
+#### Features
+
+- agent: introduce jman-agent for local server monitoring (6748bc5)
+
+#### Documentation
+
+- readme: add documentation for jman-agent (e6f2488)
+
+### v5.25.1 (2026-08-17)
 
 #### Bug Fixes
 
