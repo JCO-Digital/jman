@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { RouterLink } from "vue-router";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
 import { useUserStore } from "../stores/user";
+import { useDataStore } from "../stores/data";
 import AppIcon from "./AppIcon.vue";
 import type { Task, TaskStatus } from "../types";
 import { useConfirm } from "../composables/useConfirm";
@@ -22,7 +23,74 @@ const emit = defineEmits<{
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
 const userStore = useUserStore();
+const dataStore = useDataStore();
 const { confirm } = useConfirm();
+
+// Get the enriched site corresponding to this task's site_id
+const site = computed(() => {
+	if (!props.task.site_id) return null;
+	return (
+		dataStore.enrichedSites.find((s) => s.id === props.task.site_id) || null
+	);
+});
+
+// Parse task metadata to get original vulnerability UUIDs
+const metadata = computed(() => {
+	if (!props.task.metadata) return null;
+	try {
+		return JSON.parse(props.task.metadata);
+	} catch {
+		return null;
+	}
+});
+
+const originalVulnUuids = computed<string[]>(() => {
+	return metadata.value?.vuln_uuids || [];
+});
+
+// A task is a vulnerability-derived task if it has a site_id AND has vuln_uuids in metadata,
+// OR if the title starts with "Security Vulnerabilities".
+const isVulnerabilityTask = computed(() => {
+	return (
+		props.task.site_id !== null &&
+		(originalVulnUuids.value.length > 0 ||
+			props.task.title
+				.toLowerCase()
+				.startsWith("security vulnerabilities"))
+	);
+});
+
+// Total active (unsuppressed) vulnerabilities currently on the site
+const activeVulnerabilitiesCount = computed(() => {
+	if (!site.value) return 0;
+	return site.value.vulnerabilities.filter((v) => !v.suppressed).length;
+});
+
+// Count how many of the originally reported vulnerabilities remain active (unsuppressed) on the site
+const remainingOriginalVulnsCount = computed(() => {
+	if (!site.value) return 0;
+	const activeVulns = site.value.vulnerabilities.filter((v) => !v.suppressed);
+	if (originalVulnUuids.value.length === 0) {
+		// Fallback if we don't have metadata but it's a vulnerability task:
+		// count all current active vulnerabilities for the site as the remaining
+		return activeVulns.length;
+	}
+	return activeVulns.filter((v) => originalVulnUuids.value.includes(v.uuid))
+		.length;
+});
+
+// Flag to indicate if all vulnerabilities (or at least all original ones) are resolved
+const isVulnerabilityReadyToClose = computed(() => {
+	if (!isVulnerabilityTask.value) return false;
+
+	if (originalVulnUuids.value.length > 0) {
+		// If we have the specific UUIDs, the task is ready to close when those are all resolved
+		return remainingOriginalVulnsCount.value === 0;
+	} else {
+		// Fallback: ready to close when the site has 0 active vulnerabilities
+		return activeVulnerabilitiesCount.value === 0;
+	}
+});
 
 const isActioning = ref(false);
 const actionError = ref<string | null>(null);
@@ -225,7 +293,11 @@ const canComplete = (s: string) =>
 									class="font-sm font-medium"
 									@click="emit('close')"
 								>
-									Site #{{ task.site_id }}
+									{{
+										site
+											? site.domain
+											: `Site #${task.site_id}`
+									}}
 								</RouterLink>
 							</div>
 							<div v-if="task.server_id" class="info-item">
@@ -253,6 +325,62 @@ const canComplete = (s: string) =>
 								>
 									{{ task.plugin_slug }}
 								</RouterLink>
+							</div>
+						</div>
+					</div>
+
+					<!-- Vulnerability Status Indicator -->
+					<div v-if="isVulnerabilityTask" class="section-divider">
+						<h3 class="sub-text font-medium mb-4">
+							Vulnerability Status Check
+						</h3>
+
+						<div
+							v-if="isVulnerabilityReadyToClose"
+							class="status-banner success"
+						>
+							<div class="banner-icon">
+								<AppIcon name="check" size="20" />
+							</div>
+							<div class="banner-text">
+								<strong>Ready to Close</strong>
+								<p v-if="originalVulnUuids.length > 0">
+									All {{ originalVulnUuids.length }} linked
+									vulnerabilities for this site have been
+									resolved! You can now complete this task.
+								</p>
+								<p v-else>
+									No active vulnerabilities remain on this
+									site.
+								</p>
+							</div>
+						</div>
+
+						<div v-else class="status-banner warning">
+							<div class="banner-icon">
+								<AppIcon name="vulnerability" size="20" />
+							</div>
+							<div class="banner-text">
+								<strong>Action Required</strong>
+								<p v-if="originalVulnUuids.length > 0">
+									{{ remainingOriginalVulnsCount }} of
+									{{ originalVulnUuids.length }} originally
+									reported vulnerabilities are still active.
+								</p>
+								<p v-else>
+									{{ activeVulnerabilitiesCount }} active
+									vulnerabilities currently remain on this
+									site.
+								</p>
+								<div class="site-vulnerability-link">
+									<RouterLink
+										:to="`/site/${task.site_id}`"
+										class="btn btn-outline btn-sm font-xs"
+										@click="emit('close')"
+									>
+										View active vulnerabilities on site
+									</RouterLink>
+								</div>
 							</div>
 						</div>
 					</div>
@@ -328,5 +456,56 @@ const canComplete = (s: string) =>
 </template>
 
 <style scoped>
-/* Scoped styles removed in favor of global utility classes and component styles */
+.status-banner {
+	display: flex;
+	gap: 12px;
+	padding: 12px 16px;
+	border-radius: 6px;
+	margin-top: 8px;
+	font-size: 14px;
+	line-height: 1.4;
+	border-left: 4px solid;
+}
+
+.status-banner.success {
+	background-color: var(--badge-active-bg);
+	border-color: var(--badge-active-text);
+	color: var(--text-main);
+
+	& .banner-icon {
+		color: var(--badge-active-text);
+	}
+}
+
+.status-banner.warning {
+	background-color: var(--warning-bg);
+	border-color: var(--warning-border);
+	color: var(--text-main);
+
+	& .banner-icon {
+		color: var(--warning-text);
+	}
+}
+
+.banner-icon {
+	display: flex;
+	align-items: flex-start;
+	padding-top: 2px;
+}
+
+.banner-text strong {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 2px;
+}
+
+.banner-text p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: 13px;
+}
+
+.site-vulnerability-link {
+	margin-top: 10px;
+}
 </style>
