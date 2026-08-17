@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.27.0 (2026-08-17)
+### 5.27.1 (2026-08-17)
+
+#### Refactor
+
+- agent: use fixed files directory for site path resolution (eb01ae6)
+
+## v5.27.0 (2026-08-17)
 
 #### Features
 
