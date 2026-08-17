@@ -1,6 +1,14 @@
 # Changelog
 
-### 1.37.1 (2026-08-17)
+## 1.38.0 (2026-08-17)
+
+#### Features
+
+- settings: switch server ID input to selection list (555b80d)
+- settings: add agent token management and site metrics (941a209)
+- views: display disk space usage for servers (5075f2f)
+
+### v1.37.1 (2026-08-17)
 
 #### Bug Fixes
 
