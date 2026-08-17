@@ -15,6 +15,7 @@ import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
+import { formatBytes } from "../utils/format";
 
 const props = defineProps<{
 	id: string;
@@ -141,6 +142,17 @@ const siteInfoItems = computed(() => {
 		{ label: "WordPress", value: site.value.is_wordpress ? "Yes" : "No" },
 	];
 
+	if (site.value.wp_flags) {
+		items.push({
+			label: "Multisite",
+			value: site.value.wp_flags.is_multisite ? "Yes" : "No",
+		});
+		items.push({
+			label: "File Mods Allowed",
+			value: !site.value.wp_flags.disallow_file_mods ? "Yes" : "No",
+		});
+	}
+
 	if (site.value.database?.table_prefix) {
 		items.push({
 			label: "Table Prefix",
@@ -169,6 +181,13 @@ const serverInfoItems = computed(() => {
 		items.push({
 			label: "Disk Space",
 			value: `${formatBytes(used)} / ${formatBytes(total)} (${percent}% used)`,
+		});
+	}
+
+	if (site.value?.disk_usage) {
+		items.push({
+			label: "Site Disk Usage",
+			value: formatBytes(site.value.disk_usage.bytes_used),
 		});
 	}
 
@@ -275,15 +294,6 @@ const unlinkOrganization = async () => {
 		toast.addToast("Failed to unlink organization: " + e.message, "error");
 	}
 };
-
-function formatBytes(bytes: number, decimals = 1) {
-	if (bytes === 0) return "0 B";
-	const k = 1024;
-	const dm = decimals < 0 ? 0 : decimals;
-	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-}
 </script>
 
 <template>

@@ -8,6 +8,7 @@ import type { EnrichedSite, SiteEnvironment, Organization } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
+import { formatBytes } from "../utils/format";
 
 const props = defineProps<{
 	page?: number;
@@ -213,15 +214,6 @@ const goToSite = (id: number) => {
 	router.push({ name: "site-detail", params: { id: id.toString() } });
 };
 
-function formatBytes(bytes: number, decimals = 1) {
-	if (bytes === 0) return "0 B";
-	const k = 1024;
-	const dm = decimals < 0 ? 0 : decimals;
-	const sizes = ["B", "KB", "MB", "GB", "TB"];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
-}
-
 const getServerDiskSpace = (serverId: number) => {
 	const server = dataStore.getServerById(serverId);
 	if (!server || !server.disk_space || server.disk_space.total === 0)
@@ -412,7 +404,33 @@ function formatDate(d: string | null) {
 							/>
 						</td>
 						<td class="font-medium truncate col-expand">
-							{{ site.domain }}
+							<div class="flex-row gap-2">
+								<span class="truncate">{{ site.domain }}</span>
+								<span
+									v-if="site.wp_flags?.is_multisite"
+									class="status-badge badge-sm info"
+								>
+									Multisite
+								</span>
+								<span
+									v-if="site.wp_flags?.disallow_file_mods"
+									class="status-badge badge-sm warning"
+								>
+									File Mods Disabled
+								</span>
+							</div>
+							<div
+								v-if="site.disk_usage"
+								class="text-muted font-xs"
+								:title="
+									'Disk measured: ' +
+									formatDate(site.disk_usage.measured_at)
+								"
+								style="margin-top: 2px"
+							>
+								Disk:
+								{{ formatBytes(site.disk_usage.bytes_used) }}
+							</div>
 						</td>
 						<td
 							class="hide-mobile col-medium truncate"
