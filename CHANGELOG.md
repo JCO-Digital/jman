@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.25.0 (2026-08-14)
+### 5.25.1 (2026-08-17)
+
+#### Bug Fixes
+
+- tasks: unescape plugin names in vulnerability sync (17ca993)
+
+## v5.25.0 (2026-08-14)
 
 #### Features
 
