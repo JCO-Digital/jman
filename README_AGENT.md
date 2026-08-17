@@ -137,11 +137,20 @@ When an update is found, the same Ed25519 signature verification used by `jman`/
 
 Set `selfUpdateEnabled = false` in `config.toml` to manage updates manually instead (e.g. via your own configuration management).
 
+## Troubleshooting
+
+`jman agent token list` (and the jman-ui Settings token table) show both **Last Seen** and the reporting agent's **version**. These update at different points, which makes them useful together for diagnosing a silent agent:
+
+- **Last Seen** updates on *any* authenticated request, including the manifest fetch at the start of every collection cycle.
+- **Version** only updates after a full, successfully parsed `POST /api/agent/report` — so it doubles as confirmation that reports are actually getting through, not just that the token is valid.
+
+If **Last Seen** is recent but **Version** never appears (or stops updating), the agent is authenticating fine but its reports aren't landing — check `journalctl -u jman-agent` on that server for collection or network errors. Per-site collection failures (e.g. a `du`/`wp-config.php` read failing for a specific site) are logged at normal verbosity by default, no `--debug` flag needed.
+
 ## API Endpoints
 
 `jman-api` exposes these endpoints for `jman-agent` (authenticated via the `X-Agent-Token` header, not JWT):
 
-- `GET /api/agent/manifest`: Returns the list of sites this server's token is scoped to, with their filesystem paths.
+- `GET /api/agent/manifest`: Returns the list of sites this server's token is scoped to, along with each site's Unix user and public folder name (the agent resolves the actual filesystem path itself via the OS's own user database, since site layouts vary by hosting provisioning convention).
 - `POST /api/agent/report`: Accepts a batch of collected data for those sites. Reports for sites outside the calling server's own token are rejected.
 
 And for admins managing tokens (JWT, admin level):

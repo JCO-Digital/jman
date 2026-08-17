@@ -59,4 +59,3 @@ func GetLatestSiteDiskUsage() (map[int]models.SiteDiskUsage, error) {
 
 	return result, nil
 }
-

@@ -138,7 +138,7 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 	}
 
 	rows, err := dbConn.Query(
-		`SELECT id, server_id, server_name, token_prefix, description, revoked, last_seen_at, created_at, created_by
+		`SELECT id, server_id, server_name, token_prefix, description, revoked, last_seen_at, agent_version, created_at, created_by
 		 FROM agent_tokens ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -151,14 +151,18 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 		var t models.AgentToken
 		var serverName sql.NullString
 		var lastSeen sql.NullString
+		var agentVersion sql.NullString
 		var createdBy sql.NullString
-		if err := rows.Scan(&t.ID, &t.ServerID, &serverName, &t.TokenPrefix, &t.Description, &t.Revoked, &lastSeen, &t.CreatedAt, &createdBy); err != nil {
+		if err := rows.Scan(&t.ID, &t.ServerID, &serverName, &t.TokenPrefix, &t.Description, &t.Revoked, &lastSeen, &agentVersion, &t.CreatedAt, &createdBy); err != nil {
 			return nil, fmt.Errorf("failed to scan agent token: %w", err)
 		}
 		t.ServerName = serverName.String
 		t.CreatedBy = createdBy.String
 		if lastSeen.Valid {
 			t.LastSeenAt = &lastSeen.String
+		}
+		if agentVersion.Valid {
+			t.AgentVersion = &agentVersion.String
 		}
 		tokens = append(tokens, t)
 	}
@@ -167,6 +171,21 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 	}
 
 	return tokens, nil
+}
+
+// SetAgentTokenVersion records the jman-agent version reported in a
+// successfully parsed report. This is deliberately separate from
+// TouchAgentTokenLastSeen (called by AgentAuthMiddleware for every
+// authenticated request, including manifest GETs which carry no version) —
+// only a successful report updates it, so it doubles as a signal that the
+// report path (not just authentication) is actually working.
+func SetAgentTokenVersion(tokenID int, version string) error {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_, err := dbConn.Exec(`UPDATE agent_tokens SET agent_version = ? WHERE id = ?`, version, tokenID)
+	return err
 }
 
 // RevokeAgentToken marks a token as revoked, immediately blocking its use.

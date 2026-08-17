@@ -5,15 +5,16 @@ package models
 // bcrypt hash — so TokenHash is deliberately omitted from this struct, which
 // is used for API/CLI responses.
 type AgentToken struct {
-	ID          int     `json:"id"`
-	ServerID    int     `json:"server_id"`
-	ServerName  string  `json:"server_name"`
-	TokenPrefix string  `json:"token_prefix"`
-	Description *string `json:"description"`
-	Revoked     bool    `json:"revoked"`
-	LastSeenAt  *string `json:"last_seen_at"`
-	CreatedAt   string  `json:"created_at"`
-	CreatedBy   string  `json:"created_by"`
+	ID           int     `json:"id"`
+	ServerID     int     `json:"server_id"`
+	ServerName   string  `json:"server_name"`
+	TokenPrefix  string  `json:"token_prefix"`
+	Description  *string `json:"description"`
+	Revoked      bool    `json:"revoked"`
+	LastSeenAt   *string `json:"last_seen_at"`
+	AgentVersion *string `json:"agent_version"`
+	CreatedAt    string  `json:"created_at"`
+	CreatedBy    string  `json:"created_by"`
 }
 
 // SiteDiskUsage is the most recently reported disk usage for a single site,
@@ -34,10 +35,17 @@ type SiteWpFlags struct {
 
 // AgentManifestSite is a single site entry returned to jman-agent by the
 // manifest endpoint, describing what it should collect data for locally.
+// jman-api deliberately does not compute an absolute filesystem path here —
+// site layouts vary by provisioning convention (e.g. /sites/<domain>/files
+// vs <home_folder>/files), and jman-api has no filesystem access to the
+// managed server to verify one. jman-agent runs locally as root instead, so
+// it resolves SiteUser's actual home directory via the OS's own user
+// database and joins it with PublicFolder — correct regardless of layout.
 type AgentManifestSite struct {
-	SiteID int    `json:"site_id"`
-	Domain string `json:"domain"`
-	Path   string `json:"path"`
+	SiteID       int    `json:"site_id"`
+	Domain       string `json:"domain"`
+	SiteUser     string `json:"site_user"`
+	PublicFolder string `json:"public_folder"`
 }
 
 // AgentManifest is the response body for GET /api/agent/manifest.
@@ -49,7 +57,7 @@ type AgentManifest struct {
 // AgentReportSite is a single site's worth of freshly collected data in a
 // POST /api/agent/report request body.
 type AgentReportSite struct {
-	SiteID           int   `json:"site_id"`
+	SiteID           int    `json:"site_id"`
 	DiskUsageBytes   *int64 `json:"disk_usage_bytes"`
 	IsMultisite      *bool  `json:"is_multisite"`
 	DisallowFileMods *bool  `json:"disallow_file_mods"`
@@ -57,6 +65,7 @@ type AgentReportSite struct {
 
 // AgentReport is the request body jman-agent POSTs on each collection cycle.
 type AgentReport struct {
-	CollectedAt string            `json:"collected_at"`
-	Sites       []AgentReportSite `json:"sites"`
+	CollectedAt  string            `json:"collected_at"`
+	AgentVersion string            `json:"agent_version,omitempty"`
+	Sites        []AgentReportSite `json:"sites"`
 }
