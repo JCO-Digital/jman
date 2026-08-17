@@ -212,6 +212,37 @@ const goToSite = (id: number) => {
 	}
 	router.push({ name: "site-detail", params: { id: id.toString() } });
 };
+
+function formatBytes(bytes: number, decimals = 1) {
+	if (bytes === 0) return "0 B";
+	const k = 1024;
+	const dm = decimals < 0 ? 0 : decimals;
+	const sizes = ["B", "KB", "MB", "GB", "TB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i];
+}
+
+const getServerDiskSpace = (serverId: number) => {
+	const server = dataStore.getServerById(serverId);
+	if (!server || !server.disk_space || server.disk_space.total === 0)
+		return null;
+	return server.disk_space;
+};
+
+const getServerDiskSpaceString = (serverId: number) => {
+	const diskSpace = getServerDiskSpace(serverId);
+	if (!diskSpace) return "";
+	const percent = Math.round((diskSpace.used / diskSpace.total) * 100);
+	return `${formatBytes(diskSpace.used)} / ${formatBytes(diskSpace.total)} (${percent}%)`;
+};
+
+function formatDate(d: string | null) {
+	if (!d) return "—";
+	return new Date(d).toLocaleString("de-DE", {
+		dateStyle: "short",
+		timeStyle: "short",
+	});
+}
 </script>
 
 <template>
@@ -396,8 +427,25 @@ const goToSite = (id: number) => {
 							</span>
 							<span v-else class="text-muted">—</span>
 						</td>
-						<td class="hide-mobile col-wide truncate">
-							{{ site.server }}
+						<td class="hide-mobile col-wide">
+							<div class="truncate font-medium">
+								{{ site.server }}
+							</div>
+							<div
+								v-if="getServerDiskSpace(site.server_id)"
+								class="text-muted font-xs"
+								:title="
+									'Disk updated: ' +
+									formatDate(
+										getServerDiskSpace(site.server_id)
+											?.updated_at || null,
+									)
+								"
+								style="margin-top: 2px"
+							>
+								Disk:
+								{{ getServerDiskSpaceString(site.server_id) }}
+							</div>
 						</td>
 						<td class="col-narrow text-center">
 							<span
