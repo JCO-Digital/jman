@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"time"
 
@@ -123,10 +124,11 @@ func syncVulnerabilities() error {
 			}
 
 			// Group for description
+			pluginName := html.UnescapeString(link.Report.PluginName)
 			if _, ok := pluginMap[link.Report.Slug]; !ok {
 				score := cvss
 				pluginMap[link.Report.Slug] = &models.VulnPlugin{
-					PluginName: link.Report.PluginName,
+					PluginName: pluginName,
 					Version:    siteVersion,
 					Cvss:       &score,
 				}
