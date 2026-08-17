@@ -489,6 +489,7 @@ export interface AgentToken {
 	description: string | null;
 	revoked: boolean;
 	last_seen_at: string | null;
+	agent_version: string | null;
 	created_at: string;
 	created_by: string;
 }
