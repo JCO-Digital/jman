@@ -19,7 +19,7 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 	defer reportTicker.Stop()
 
 	// Run an initial collection immediately rather than waiting for the first tick.
-	if err := collectAndReport(ctx, client); err != nil {
+	if err := collectAndReport(ctx, client, version); err != nil {
 		verb.LogPrintf(verb.Normal, "Initial collection failed: %v", err)
 	}
 
@@ -39,7 +39,7 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-reportTicker.C:
-			if err := collectAndReport(ctx, client); err != nil {
+			if err := collectAndReport(ctx, client, version); err != nil {
 				verb.LogPrintf(verb.Normal, "Collection failed: %v", err)
 			}
 		case <-selfUpdateChan:
@@ -53,32 +53,40 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 }
 
 // RunOnce performs a single collection-and-report cycle, for --once/cron use.
-func RunOnce(cfg Config) error {
+func RunOnce(cfg Config, version string) error {
 	client := NewClient(cfg)
-	return collectAndReport(context.Background(), client)
+	return collectAndReport(context.Background(), client, version)
 }
 
-func collectAndReport(ctx context.Context, client *Client) error {
+func collectAndReport(ctx context.Context, client *Client, version string) error {
 	manifest, err := client.FetchManifest(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch manifest: %w", err)
 	}
 
 	report := models.AgentReport{
-		CollectedAt: time.Now().UTC().Format(time.RFC3339),
+		CollectedAt:  time.Now().UTC().Format(time.RFC3339),
+		AgentVersion: version,
 	}
 
 	for _, site := range manifest.Sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
 
-		if bytesUsed, err := CollectDiskUsage(site.Path); err != nil {
-			verb.LogPrintf(verb.Debug, "Failed to measure disk usage for %s: %v", site.Domain, err)
+		sitePath, err := ResolveSitePath(site.SiteUser, site.PublicFolder)
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "Skipping %s: %v", site.Domain, err)
+			report.Sites = append(report.Sites, siteReport)
+			continue
+		}
+
+		if bytesUsed, err := CollectDiskUsage(sitePath); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to measure disk usage for %s at %s: %v", site.Domain, sitePath, err)
 		} else {
 			siteReport.DiskUsageBytes = &bytesUsed
 		}
 
-		if isMultisite, disallowFileMods, err := CollectWpFlags(site.Path); err != nil {
-			verb.LogPrintf(verb.Debug, "Failed to read wp-config.php flags for %s: %v", site.Domain, err)
+		if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
 		} else {
 			siteReport.IsMultisite = &isMultisite
 			siteReport.DisallowFileMods = &disallowFileMods

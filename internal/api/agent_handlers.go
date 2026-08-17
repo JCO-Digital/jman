@@ -38,13 +38,18 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		Sites:    make([]models.AgentManifestSite, 0, len(sites)),
 	}
 	for _, site := range sites {
-		// SpinupWP-managed sites are always laid out as /home/<site_user>/files
-		// on their server — the same convention CliSite relies on (Path: "files"
-		// relative to the SSH user's home directory).
+		// SiteUser/PublicFolder are handed off as-is; the agent (running
+		// locally on the server) resolves the actual absolute path itself —
+		// see the AgentManifestSite doc comment for why.
+		publicFolder := site.PublicFolder
+		if publicFolder == "" {
+			publicFolder = "files"
+		}
 		manifest.Sites = append(manifest.Sites, models.AgentManifestSite{
-			SiteID: site.ID,
-			Domain: site.Domain,
-			Path:   fmt.Sprintf("/home/%s/files", site.SiteUser),
+			SiteID:       site.ID,
+			Domain:       site.Domain,
+			SiteUser:     site.SiteUser,
+			PublicFolder: publicFolder,
 		})
 	}
 
@@ -66,6 +71,12 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
 		WriteError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
 		return
+	}
+
+	if report.AgentVersion != "" {
+		if err := db.SetAgentTokenVersion(claims.TokenID, report.AgentVersion); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to record agent version for token %d: %v", claims.TokenID, err)
+		}
 	}
 
 	// Only accept data for sites that actually belong to the reporting

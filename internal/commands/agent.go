@@ -67,7 +67,11 @@ var agentTokenListCmd = &cobra.Command{
 			if t.LastSeenAt != nil {
 				lastSeen = *t.LastSeenAt
 			}
-			fmt.Printf("#%d  %s (server %d)  prefix=%s  %s  last_seen=%s\n", t.ID, t.ServerName, t.ServerID, t.TokenPrefix, status, lastSeen)
+			version := "unknown"
+			if t.AgentVersion != nil {
+				version = *t.AgentVersion
+			}
+			fmt.Printf("#%d  %s (server %d)  prefix=%s  %s  last_seen=%s  version=%s\n", t.ID, t.ServerName, t.ServerID, t.TokenPrefix, status, lastSeen, version)
 		}
 		return nil
 	},

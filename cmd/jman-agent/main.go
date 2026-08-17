@@ -57,7 +57,7 @@ func run() int {
 	}
 
 	if flagOnce {
-		if err := agent.RunOnce(cfg); err != nil {
+		if err := agent.RunOnce(cfg, config.AppVersion); err != nil {
 			verb.Printf(verb.Normal, "%v\n", err)
 			return 1
 		}
@@ -78,7 +78,7 @@ func run() int {
 	}
 
 	// Default to a single run if neither --service nor --once was given.
-	if err := agent.RunOnce(cfg); err != nil {
+	if err := agent.RunOnce(cfg, config.AppVersion); err != nil {
 		verb.Printf(verb.Normal, "%v\n", err)
 		return 1
 	}
