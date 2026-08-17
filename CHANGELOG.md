@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.36.0 (2026-08-14)
+## 1.37.0 (2026-08-17)
+
+#### Features
+
+- task: add vulnerability status tracking to tasks (32e057e)
+
+## v1.36.0 (2026-08-14)
 
 #### Features
 
