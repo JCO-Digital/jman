@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.37.0 (2026-08-17)
+### 1.37.1 (2026-08-17)
+
+#### Bug Fixes
+
+- ui: update status badge logic in update modals (1382187)
+
+## v1.37.0 (2026-08-17)
 
 #### Features
 
