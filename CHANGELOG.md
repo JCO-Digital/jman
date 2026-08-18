@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.30.3 (2026-08-18)
+## 5.31.0 (2026-08-18)
+
+#### Features
+
+- agent: rotate site processing order to ensure fair budget usage (a20985c)
+
+### v5.30.3 (2026-08-18)
 
 #### Bug Fixes
 
