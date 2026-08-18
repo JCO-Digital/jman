@@ -36,6 +36,12 @@ function formatCompact(n: number): string {
 }
 
 function formatPeriodLabel(date: string) {
+	if (props.period === "monthly") {
+		return new Date(date).toLocaleString(undefined, {
+			month: "short",
+			year: "numeric",
+		});
+	}
 	return new Date(date).toLocaleString(undefined, {
 		month: "short",
 		day: "numeric",
@@ -128,9 +134,15 @@ const xTicks = computed(() => {
 	});
 });
 
+const periodUnit = computed(() => {
+	if (props.period === "hourly") return "hour";
+	if (props.period === "monthly") return "month";
+	return "day";
+});
+
 const ariaLabel = computed(
 	() =>
-		`Stacked area chart of human and bot requests per ${props.period === "hourly" ? "hour" : "day"} over the last ${n.value} ${props.period === "hourly" ? "hours" : "days"}.`,
+		`Stacked area chart of human and bot requests per ${periodUnit.value} over the last ${n.value} ${periodUnit.value}s.`,
 );
 
 function nearestIndex(clientX: number): number | null {
