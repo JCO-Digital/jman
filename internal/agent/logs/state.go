@@ -90,9 +90,11 @@ func (h *HourAccumulator) Add(e Entry, isBot bool, siteDomain string) {
 		h.UniqueIPs[e.RemoteAddr] = true
 	}
 
-	page := truncateKey(PathWithoutQuery(e.Path))
-	if _, ok := h.Pages[page]; ok || len(h.Pages) < maxTrackedKeysPerHour {
-		h.Pages[page]++
+	if path := PathWithoutQuery(e.Path); !isExcludedPage(path) {
+		page := truncateKey(path)
+		if _, ok := h.Pages[page]; ok || len(h.Pages) < maxTrackedKeysPerHour {
+			h.Pages[page]++
+		}
 	}
 
 	if e.Referer != "" && e.Referer != "-" && !isInternalReferrer(e.Referer, siteDomain) {
