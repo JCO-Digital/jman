@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.27.1 (2026-08-17)
+## 5.28.0 (2026-08-18)
+
+#### Features
+
+- agent: trigger fast-path self-update via manifest (c013894)
+
+### v5.27.1 (2026-08-17)
 
 #### Refactor
 
