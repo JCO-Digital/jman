@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.33.0 (2026-08-18)
+## 5.34.0 (2026-08-18)
+
+#### Features
+
+- agent: exclude admin and API paths from top pages list (e52c1cf)
+
+## v5.33.0 (2026-08-18)
 
 #### Features
 
