@@ -25,18 +25,25 @@ import (
 // beyond this budget is simply deferred to later cycles, not lost.
 const maxTrafficEntriesPerReport = 40
 
+// backlogCatchUpInterval is how soon the next collection cycle is scheduled
+// when a report deferred backlog data, instead of waiting the full
+// reportIntervalMinutes — so a large historical backlog (or simply many
+// hours already elapsed in today's live log on first deployment) drains in
+// a reasonable time rather than one small bounded chunk per ordinary
+// interval. Once no more backlog remains, scheduling reverts to normal.
+const backlogCatchUpInterval = 30 * time.Second
+
 // RunService runs the agent's continuous collection and self-update loop
 // until ctx is cancelled.
 func RunService(ctx context.Context, cfg Config, version string) error {
 	client := NewClient(cfg)
+	normalInterval := time.Duration(cfg.ReportIntervalMinutes) * time.Minute
 
-	reportTicker := time.NewTicker(time.Duration(cfg.ReportIntervalMinutes) * time.Minute)
-	defer reportTicker.Stop()
-
-	// Run an initial collection immediately rather than waiting for the first tick.
-	if err := collectAndReport(ctx, client, cfg, version); err != nil {
-		verb.LogPrintf(verb.Normal, "Initial collection failed: %v", err)
-	}
+	// A resettable timer (rather than a fixed ticker) lets each cycle choose
+	// how soon the next one runs, based on whether it found backlog to
+	// drain. Firing at 0 delay runs the first cycle immediately.
+	reportTimer := time.NewTimer(0)
+	defer reportTimer.Stop()
 
 	var selfUpdateChan <-chan time.Time
 	if cfg.SelfUpdateEnabled {
@@ -53,10 +60,20 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-reportTicker.C:
-			if err := collectAndReport(ctx, client, cfg, version); err != nil {
+		case <-reportTimer.C:
+			hasBacklog, err := collectAndReport(ctx, client, cfg, version)
+			next := normalInterval
+			if err != nil {
+				// A failed send already retried internally with its own
+				// backoff (see Client.SendReport) — don't compound that by
+				// also hammering a possibly-down jman-api with a short
+				// catch-up interval; wait the normal interval and retry.
 				verb.LogPrintf(verb.Normal, "Collection failed: %v", err)
+			} else if hasBacklog {
+				verb.LogPrintf(verb.Verbose, "Backlog remains — checking again in %s instead of the usual %s", backlogCatchUpInterval, normalInterval)
+				next = backlogCatchUpInterval
 			}
+			reportTimer.Reset(next)
 		case <-selfUpdateChan:
 			// On success this replaces the running process image and never
 			// returns; on failure it logs and the loop continues.
@@ -70,13 +87,20 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 // RunOnce performs a single collection-and-report cycle, for --once/cron use.
 func RunOnce(cfg Config, version string) error {
 	client := NewClient(cfg)
-	return collectAndReport(context.Background(), client, cfg, version)
+	hasBacklog, err := collectAndReport(context.Background(), client, cfg, version)
+	if err == nil && hasBacklog {
+		verb.LogPrintf(verb.Normal, "Backlog remains uncollected — run again soon (or use --service) to continue catching up")
+	}
+	return err
 }
 
-func collectAndReport(ctx context.Context, client *Client, cfg Config, version string) error {
+// collectAndReport runs one collection cycle and reports whether it
+// deferred any backlog (more rotated files, or more live-log lines, than
+// this cycle's budget allowed) — see backlogCatchUpInterval.
+func collectAndReport(ctx context.Context, client *Client, cfg Config, version string) (bool, error) {
 	manifest, err := client.FetchManifest(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch manifest: %w", err)
+		return false, fmt.Errorf("failed to fetch manifest: %w", err)
 	}
 
 	// jman-api's own version is a reliable signal that a newer jman-agent
@@ -111,6 +135,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	// simultaneously-backlogged sites still produces one bounded report,
 	// not one bounded-per-site report that's still too large in aggregate.
 	remainingTrafficBudget := maxTrafficEntriesPerReport
+	hasBacklog := false
 
 	for _, site := range manifest.Sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
@@ -139,7 +164,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		logState, err := logs.LoadState(cfg.StateDir, site.SiteID)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to load log state for %s: %v", site.Domain, err)
-		} else if hourly, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget); err != nil {
+		} else if hourly, more, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to collect traffic logs for %s at %s: %v", site.Domain, logsDir, err)
 		} else {
 			siteReport.TrafficHourly = hourly
@@ -148,13 +173,16 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 			if remainingTrafficBudget < 0 {
 				remainingTrafficBudget = 0
 			}
+			if more {
+				hasBacklog = true
+			}
 		}
 
 		report.Sites = append(report.Sites, siteReport)
 	}
 
 	if err := client.SendReport(ctx, report); err != nil {
-		return fmt.Errorf("failed to send report: %w", err)
+		return false, fmt.Errorf("failed to send report: %w", err)
 	}
 
 	for siteID, state := range pendingLogStates {
@@ -164,5 +192,5 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	}
 
 	verb.LogPrintf(verb.Verbose, "Reported data for %d site(s)", len(report.Sites))
-	return nil
+	return hasBacklog, nil
 }
