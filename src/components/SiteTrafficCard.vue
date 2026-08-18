@@ -16,21 +16,29 @@ const trafficStore = useTrafficAnalyticsStore();
 // Simple period toggle; the store caches per (siteId, period, days) so
 // flipping back and forth between hourly/daily doesn't refetch.
 const period = ref<TrafficPeriod>("hourly");
-const DAYS = 7; // matches API default; server caps requests at 90 anyway
+// Hourly data is only retained server-side for 48h (see jman-api's
+// site_traffic_hourly pruning), so requesting more would just silently
+// return fewer points than the window implies. Daily rollups are cheap to
+// keep much longer, so that view can show a wider range.
+const HOURLY_DAYS = 2;
+const DAILY_DAYS = 30;
+const days = computed(() =>
+	period.value === "hourly" ? HOURLY_DAYS : DAILY_DAYS,
+);
 
 const traffic = computed(
-	() => trafficStore.getTraffic(props.siteId, period.value, DAYS) ?? [],
+	() => trafficStore.getTraffic(props.siteId, period.value, days.value) ?? [],
 );
 const isLoading = computed(() =>
-	trafficStore.isLoadingTraffic(props.siteId, period.value, DAYS),
+	trafficStore.isLoadingTraffic(props.siteId, period.value, days.value),
 );
 const error = computed(() =>
-	trafficStore.getError(props.siteId, period.value, DAYS),
+	trafficStore.getError(props.siteId, period.value, days.value),
 );
 
 async function load() {
 	try {
-		await trafficStore.fetchTraffic(props.siteId, period.value, DAYS);
+		await trafficStore.fetchTraffic(props.siteId, period.value, days.value);
 	} catch (e) {
 		// Error state is already surfaced reactively via the store; nothing
 		// further to do here.
@@ -139,7 +147,7 @@ function setPeriod(p: TrafficPeriod) {
 
 			<div class="mt-4">
 				<h3 class="sub-text font-medium mb-4">
-					Requests Over the Last {{ DAYS }} Days
+					Requests Over the Last {{ days }} Days
 				</h3>
 				<TrafficChart :periods="traffic" :period="period" />
 			</div>
