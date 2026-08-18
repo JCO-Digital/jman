@@ -46,7 +46,7 @@ var rotatedAccessLogRe = regexp.MustCompile(`^access\.log-\d{8}\.gz$`)
 // more live-log lines) — callers can use this to schedule the next
 // collection cycle sooner than usual to drain a backlog faster, without
 // raising maxFinalized itself and risking an oversized report.
-func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int) ([]models.TrafficHourlyEntry, bool, error) {
+func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int, siteDomain string) ([]models.TrafficHourlyEntry, bool, error) {
 	entries, err := os.ReadDir(logsDir)
 	if err != nil {
 		return nil, false, fmt.Errorf("failed to read logs directory %s: %w", logsDir, err)
@@ -72,7 +72,7 @@ func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int) 
 	// after the entire historical backlog has drained (which, at a small
 	// per-cycle budget, could otherwise take days). Older history still
 	// backfills — just at lower priority, in the background.
-	hasMore, err := processLiveFile(filepath.Join(logsDir, "access.log"), state, currentHour, &finalized, maxFinalized)
+	hasMore, err := processLiveFile(filepath.Join(logsDir, "access.log"), state, currentHour, &finalized, maxFinalized, siteDomain)
 	if err != nil {
 		return finalized, hasMore, fmt.Errorf("failed to tail access.log: %w", err)
 	}
@@ -83,7 +83,7 @@ func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int) 
 			hasMore = true
 			break
 		}
-		if err := processRotatedFile(filepath.Join(logsDir, name), &finalized); err != nil {
+		if err := processRotatedFile(filepath.Join(logsDir, name), &finalized, siteDomain); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to process rotated log %s: %v", name, err)
 			continue // leave unmarked; retry next cycle
 		}
@@ -96,7 +96,7 @@ func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int) 
 // processRotatedFile fully parses a complete, immutable rotated log file.
 // Since the file represents an entire past day, every hour found in it is
 // necessarily already closed and is finalized immediately.
-func processRotatedFile(path string, finalized *[]models.TrafficHourlyEntry) error {
+func processRotatedFile(path string, finalized *[]models.TrafficHourlyEntry, siteDomain string) error {
 	f, err := os.Open(path)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func processRotatedFile(path string, finalized *[]models.TrafficHourlyEntry) err
 	scanner := bufio.NewScanner(gz)
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		accumulateLine(scanner.Text(), buckets)
+		accumulateLine(scanner.Text(), buckets, siteDomain)
 	}
 	if err := scanner.Err(); err != nil {
 		return fmt.Errorf("error reading gzip content: %w", err)
@@ -125,7 +125,7 @@ func processRotatedFile(path string, finalized *[]models.TrafficHourlyEntry) err
 	return nil
 }
 
-func accumulateLine(line string, buckets map[string]*HourAccumulator) {
+func accumulateLine(line string, buckets map[string]*HourAccumulator, siteDomain string) {
 	entry, err := ParseLine(line)
 	if err != nil || IsInternalTraffic(entry) {
 		return
@@ -136,7 +136,7 @@ func accumulateLine(line string, buckets map[string]*HourAccumulator) {
 		acc = newHourAccumulator(hour)
 		buckets[hour] = acc
 	}
-	acc.Add(entry, IsBotUserAgent(entry.UserAgent))
+	acc.Add(entry, IsBotUserAgent(entry.UserAgent), siteDomain)
 }
 
 // processLiveFile incrementally tails the actively-written access.log,
@@ -146,7 +146,7 @@ func accumulateLine(line string, buckets map[string]*HourAccumulator) {
 // today's not-yet-rotated file on the very first run) — unread lines and
 // any in-progress hour are simply picked up next cycle. Returns whether it
 // stopped early with unread data still remaining.
-func processLiveFile(path string, state *FileState, currentHour time.Time, finalized *[]models.TrafficHourlyEntry, maxFinalized int) (bool, error) {
+func processLiveFile(path string, state *FileState, currentHour time.Time, finalized *[]models.TrafficHourlyEntry, maxFinalized int, siteDomain string) (bool, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -188,7 +188,7 @@ func processLiveFile(path string, state *FileState, currentHour time.Time, final
 		lineBytes, readErr := reader.ReadBytes('\n')
 		if len(lineBytes) > 0 && lineBytes[len(lineBytes)-1] == '\n' {
 			line := strings.TrimRight(string(lineBytes), "\r\n")
-			processLiveLine(line, state, finalized)
+			processLiveLine(line, state, finalized, siteDomain)
 			offset += int64(len(lineBytes))
 		}
 		if readErr != nil {
@@ -211,7 +211,7 @@ func processLiveFile(path string, state *FileState, currentHour time.Time, final
 	return hasMore, nil
 }
 
-func processLiveLine(line string, state *FileState, finalized *[]models.TrafficHourlyEntry) {
+func processLiveLine(line string, state *FileState, finalized *[]models.TrafficHourlyEntry, siteDomain string) {
 	entry, err := ParseLine(line)
 	if err != nil || IsInternalTraffic(entry) {
 		return
@@ -226,7 +226,7 @@ func processLiveLine(line string, state *FileState, finalized *[]models.TrafficH
 	if state.Pending == nil {
 		state.Pending = newHourAccumulator(hour)
 	}
-	state.Pending.Add(entry, IsBotUserAgent(entry.UserAgent))
+	state.Pending.Add(entry, IsBotUserAgent(entry.UserAgent), siteDomain)
 }
 
 func inodeOf(info os.FileInfo) uint64 {

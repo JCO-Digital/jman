@@ -51,6 +51,20 @@ func runTick() {
 	if err := cleanupOrphanedTasks(); err != nil {
 		log.Printf("Error cleaning up orphaned tasks: %v", err)
 	}
+	if err := pruneSiteTraffic(); err != nil {
+		log.Printf("Error pruning old site traffic: %v", err)
+	}
+}
+
+// siteTrafficHourlyRetention is how long site_traffic_hourly rows are kept
+// before being pruned in favor of their already-computed site_traffic_daily
+// rollup — hourly detail beyond this window has no consumer (jman-ui only
+// ever requests a few days of hourly data) but was otherwise accumulating
+// forever.
+const siteTrafficHourlyRetention = 48 * time.Hour
+
+func pruneSiteTraffic() error {
+	return db.PruneOldSiteTrafficHourly(time.Now().Add(-siteTrafficHourlyRetention))
 }
 
 // syncVulnerabilities checks for vulnerabilities and updates or creates tasks accordingly.

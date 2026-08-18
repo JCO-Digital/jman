@@ -64,8 +64,10 @@ func newHourAccumulator(hour string) *HourAccumulator {
 	}
 }
 
-// Add records one classified request into the accumulator.
-func (h *HourAccumulator) Add(e Entry, isBot bool) {
+// Add records one classified request into the accumulator. siteDomain is
+// the site's own primary domain, used to drop same-site referrers (see
+// isInternalReferrer) before they can occupy one of the limited top-N slots.
+func (h *HourAccumulator) Add(e Entry, isBot bool, siteDomain string) {
 	h.RequestsTotal++
 	if isBot {
 		h.RequestsBot++
@@ -82,7 +84,7 @@ func (h *HourAccumulator) Add(e Entry, isBot bool) {
 		h.Pages[page]++
 	}
 
-	if e.Referer != "" && e.Referer != "-" {
+	if e.Referer != "" && e.Referer != "-" && !isInternalReferrer(e.Referer, siteDomain) {
 		referrer := truncateKey(e.Referer)
 		if _, ok := h.Referrers[referrer]; ok || len(h.Referrers) < maxTrackedKeysPerHour {
 			h.Referrers[referrer]++

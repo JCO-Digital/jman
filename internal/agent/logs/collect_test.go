@@ -40,7 +40,7 @@ func TestCollect_RotatedFileFinalizesImmediately(t *testing.T) {
 	state := &FileState{ProcessedRotated: map[string]bool{}}
 	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
 
-	finalized, _, err := Collect(dir, state, now, math.MaxInt)
+	finalized, _, err := Collect(dir, state, now, math.MaxInt, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -77,7 +77,7 @@ func TestCollect_LiveFileIncrementalTail(t *testing.T) {
 	stillWithinHour := time.Date(2026, 8, 17, 10, 30, 0, 0, time.UTC)
 
 	// First cycle: one line, hour not yet elapsed (now is still within it) -> nothing finalized, pending set.
-	finalized, _, err := Collect(dir, state, stillWithinHour, math.MaxInt)
+	finalized, _, err := Collect(dir, state, stillWithinHour, math.MaxInt, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -101,7 +101,7 @@ func TestCollect_LiveFileIncrementalTail(t *testing.T) {
 
 	// Second cycle, now well past the hour -> should finalize with both lines counted.
 	pastHour := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
-	finalized, _, err = Collect(dir, state, pastHour, math.MaxInt)
+	finalized, _, err = Collect(dir, state, pastHour, math.MaxInt, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -134,7 +134,7 @@ func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
 
 	// Budget of 2: only two of the three backlogged days should be
 	// processed and marked, leaving the third for a later cycle.
-	finalized, hasMore, err := Collect(dir, state, now, 2)
+	finalized, hasMore, err := Collect(dir, state, now, 2, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -156,7 +156,7 @@ func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
 
 	// A later cycle with no cap should pick up the deferred day, and report
 	// no more backlog remaining.
-	finalized, hasMore, err = Collect(dir, state, now, math.MaxInt)
+	finalized, hasMore, err = Collect(dir, state, now, math.MaxInt, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -187,7 +187,7 @@ func TestCollect_LiveFileBudgetCap(t *testing.T) {
 	state := &FileState{ProcessedRotated: map[string]bool{}}
 	now := time.Date(2026, 8, 17, 14, 0, 0, 0, time.UTC) // well past all three hours
 
-	finalized, hasMore, err := Collect(dir, state, now, 2)
+	finalized, hasMore, err := Collect(dir, state, now, 2, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -206,7 +206,7 @@ func TestCollect_LiveFileBudgetCap(t *testing.T) {
 
 	// A follow-up cycle with no cap should finalize that pending hour (the
 	// wall clock is still past it) without re-reading or double-counting it.
-	finalized, hasMore, err = Collect(dir, state, now, math.MaxInt)
+	finalized, hasMore, err = Collect(dir, state, now, math.MaxInt, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -236,7 +236,7 @@ func TestCollect_PrioritizesRecentRotatedDayOverOldBacklog(t *testing.T) {
 	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
 
 	// Budget for only one day — the recent one must win, not the old one.
-	finalized, _, err := Collect(dir, state, now, 1)
+	finalized, _, err := Collect(dir, state, now, 1, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -266,7 +266,7 @@ func TestCollect_LiveFileTakesPriorityOverRotatedBacklog(t *testing.T) {
 	now := time.Date(2026, 8, 18, 12, 0, 0, 0, time.UTC)
 
 	// Budget for only one hour total — today's live traffic must win.
-	finalized, _, err := Collect(dir, state, now, 1)
+	finalized, _, err := Collect(dir, state, now, 1, "")
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -292,7 +292,7 @@ func TestCollect_PartialTrailingLineNotConsumed(t *testing.T) {
 	state := &FileState{ProcessedRotated: map[string]bool{}}
 	now := time.Date(2026, 8, 17, 10, 1, 0, 0, time.UTC)
 
-	if _, _, err := Collect(dir, state, now, math.MaxInt); err != nil {
+	if _, _, err := Collect(dir, state, now, math.MaxInt, ""); err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -121,6 +122,60 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 	`
 	if _, err := dbConn.Exec(query, siteID, day, total, human, bot, unique, string(topPages), string(topReferrers)); err != nil {
 		return fmt.Errorf("failed to upsert daily traffic for site %d day %s: %w", siteID, day, err)
+	}
+	return nil
+}
+
+// PruneOldSiteTrafficHourly deletes site_traffic_hourly rows older than
+// cutoff. Before deleting each affected site/day's rows, it recomputes that
+// day's site_traffic_daily rollup so the daily rollup is guaranteed to
+// reflect every hourly row currently on disk (including any late-arriving
+// backlog hour) before the source data is removed — daily rollups are cheap
+// to keep indefinitely, so hourly detail is the only thing pruned.
+func PruneOldSiteTrafficHourly(cutoff time.Time) error {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	cutoffStr := cutoff.UTC().Format(time.RFC3339)
+
+	rows, err := dbConn.Query(
+		`SELECT DISTINCT site_id, date(hour) FROM site_traffic_hourly WHERE hour < ?`,
+		cutoffStr,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to find stale hourly traffic: %w", err)
+	}
+	type sitedDay struct {
+		siteID int
+		day    string
+	}
+	var stale []sitedDay
+	for rows.Next() {
+		var s sitedDay
+		if err := rows.Scan(&s.siteID, &s.day); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan stale hourly traffic row: %w", err)
+		}
+		stale = append(stale, s)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("error iterating stale hourly traffic: %w", err)
+	}
+	rows.Close()
+
+	for _, s := range stale {
+		if err := RecomputeSiteTrafficDaily(s.siteID, s.day); err != nil {
+			return fmt.Errorf("failed to recompute daily rollup for site %d day %s before pruning: %w", s.siteID, s.day, err)
+		}
+		if _, err := dbConn.Exec(
+			`DELETE FROM site_traffic_hourly WHERE site_id = ? AND date(hour) = ? AND hour < ?`,
+			s.siteID, s.day, cutoffStr,
+		); err != nil {
+			return fmt.Errorf("failed to prune hourly traffic for site %d day %s: %w", s.siteID, s.day, err)
+		}
 	}
 	return nil
 }
