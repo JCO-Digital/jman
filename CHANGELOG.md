@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.34.0 (2026-08-18)
+## 5.35.0 (2026-08-18)
+
+#### Features
+
+- api: add support for monthly site traffic aggregation (ee4b2e1)
+
+## v5.34.0 (2026-08-18)
 
 #### Features
 
