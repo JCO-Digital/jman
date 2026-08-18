@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.41.1 (2026-08-18)
+### 1.41.2 (2026-08-18)
+
+#### Bug Fixes
+
+- components: adjust traffic window based on data retention policy (b91546b)
+
+### v1.41.1 (2026-08-18)
 
 #### Refactor
 
