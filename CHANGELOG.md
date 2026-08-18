@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.40.0 (2026-08-18)
+## 1.41.0 (2026-08-18)
+
+#### Features
+
+- traffic: add interactive site traffic chart (fae032a)
+
+## v1.40.0 (2026-08-18)
 
 #### Features
 
