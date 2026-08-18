@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.41.2 (2026-08-18)
+## 1.42.0 (2026-08-18)
+
+#### Features
+
+- traffic: add monthly view to site analytics (152d505)
+
+### v1.41.2 (2026-08-18)
 
 #### Bug Fixes
 
