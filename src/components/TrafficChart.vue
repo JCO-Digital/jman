@@ -77,14 +77,9 @@ const stackPoints = computed(() =>
 );
 
 function linePath(points: { x: number; y: number }[]) {
-	if (points.length === 0) return "";
-	return (
-		`M ${points[0].x},${points[0].y} ` +
-		points
-			.slice(1)
-			.map((p) => `L ${p.x},${p.y}`)
-			.join(" ")
-	);
+	const [first, ...rest] = points;
+	if (!first) return "";
+	return `M ${first.x},${first.y} ` + rest.map((p) => `L ${p.x},${p.y}`).join(" ");
 }
 
 const humanLinePath = computed(() => linePath(humanPoints.value));
@@ -92,8 +87,10 @@ const stackLinePath = computed(() => linePath(stackPoints.value));
 
 const humanAreaPath = computed(() => {
 	const pts = humanPoints.value;
-	if (pts.length === 0) return "";
-	return `${linePath(pts)} L ${pts[pts.length - 1].x},${baselineY} L ${pts[0].x},${baselineY} Z`;
+	const first = pts[0];
+	const last = pts[pts.length - 1];
+	if (!first || !last) return "";
+	return `${linePath(pts)} L ${last.x},${baselineY} L ${first.x},${baselineY} Z`;
 });
 
 const botAreaPath = computed(() => {
@@ -125,11 +122,10 @@ const xTicks = computed(() => {
 			(i) => i >= 0 && i < count,
 		),
 	);
-	return [...indices].map((i) => ({
-		index: i,
-		x: pointX(i),
-		label: formatPeriodLabel(props.periods[i].period_start),
-	}));
+	return [...indices].flatMap((i) => {
+		const p = props.periods[i];
+		return p ? [{ index: i, x: pointX(i), label: formatPeriodLabel(p.period_start) }] : [];
+	});
 });
 
 const ariaLabel = computed(
