@@ -161,7 +161,7 @@ function formatDate(d: string | null) {
 						<td class="hide-mobile text-muted">
 							{{ formatDate(token.last_seen_at) }}
 							<div v-if="token.agent_version" class="sub-text">
-								v{{ token.agent_version }}
+								{{ token.agent_version }}
 							</div>
 						</td>
 						<td>
