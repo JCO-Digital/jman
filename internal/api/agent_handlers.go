@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -34,8 +35,9 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	manifest := models.AgentManifest{
-		ServerID: claims.ServerID,
-		Sites:    make([]models.AgentManifestSite, 0, len(sites)),
+		ServerID:   claims.ServerID,
+		Sites:      make([]models.AgentManifestSite, 0, len(sites)),
+		APIVersion: config.AppVersion,
 	}
 	for _, site := range sites {
 		// SpinupWP sites go through deploying -> deployed (or failed); a

@@ -131,7 +131,12 @@ The service runs as `root` by default (see the comments in `jman-agent.service`)
 
 ## Self-Updating
 
-`jman-agent` checks GitHub Releases for a newer version on its own schedule (`selfUpdateCheckIntervalHours`, jittered by a few minutes so a fleet of agents doesn't all check at once) — it does not depend on `jman` or `jman update` being present on the server at all.
+`jman-agent` checks GitHub Releases for a newer version two ways:
+
+- **Periodic ticker**: on its own schedule (`selfUpdateCheckIntervalHours`, jittered by a few minutes so a fleet of agents doesn't all check at once).
+- **Manifest-triggered fast path**: every `GET /api/agent/manifest` response includes `jman-api`'s own running version. Since every binary in this repo is built from one shared version per release, a newer `jman-api` implies a newer `jman-agent` release exists too — so on every collection cycle (`reportIntervalMinutes`, default 15) the agent compares that against its own version, and if it's behind, checks GitHub immediately rather than waiting for the next ticker fire. This comparison is local (no extra network call); GitHub is only actually contacted once a real version gap is detected.
+
+Neither depends on `jman` or `jman update` being present on the server at all.
 
 When an update is found, the same Ed25519 signature verification used by `jman`/`jman-api`/`jman-monitor` applies: the new binary and its `.minisig` are downloaded, the signature is checked against the hardcoded public key, and only a valid, signed binary is installed. The agent then **re-executes itself in place** (replacing its own running process image, same PID) to pick up the update immediately — it does not rely on `systemctl restart` or the service manager noticing the file changed, so this works correctly under systemd, under a plain process supervisor, or run by hand.
 
