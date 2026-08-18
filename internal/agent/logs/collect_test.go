@@ -161,6 +161,56 @@ func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
 	}
 }
 
+// TestCollect_LiveFileBudgetCap reproduces the scenario that actually broke
+// in production: on the very first run (fresh state, offset 0), the live
+// access.log already contains many hours' worth of *today's* traffic that
+// elapsed before the agent started collecting (rotation only happens once
+// a day). Without a budget on live-file processing too, all of it would be
+// finalized and sent in one oversized report.
+func TestCollect_LiveFileBudgetCap(t *testing.T) {
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "access.log")
+	hour08 := `1.1.1.1 - - [17/Aug/2026:08:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"` + "\n"
+	hour09 := `1.1.1.1 - - [17/Aug/2026:09:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"` + "\n"
+	hour10 := `1.1.1.1 - - [17/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"` + "\n"
+	if err := os.WriteFile(logPath, []byte(hour08+hour09+hour10), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := &FileState{ProcessedRotated: map[string]bool{}}
+	now := time.Date(2026, 8, 17, 14, 0, 0, 0, time.UTC) // well past all three hours
+
+	finalized, err := Collect(dir, state, now, 2)
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(finalized) != 2 {
+		t.Fatalf("expected exactly 2 finalized hours (budget-capped), got %d", len(finalized))
+	}
+	// The third hour's line was already read (a line can't be "un-read"
+	// once processed) so it's sitting as the new pending accumulator —
+	// just not finalized/sent yet, which is what the budget actually guards.
+	if state.Pending == nil || state.Pending.Hour != "2026-08-17T10:00:00Z" || state.Pending.RequestsTotal != 1 {
+		t.Fatalf("expected hour 10 to be pending (read but not finalized), got %+v", state.Pending)
+	}
+
+	// A follow-up cycle with no cap should finalize that pending hour (the
+	// wall clock is still past it) without re-reading or double-counting it.
+	finalized, err = Collect(dir, state, now, math.MaxInt)
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(finalized) != 1 {
+		t.Fatalf("expected the remaining 1 hour on the follow-up cycle, got %d", len(finalized))
+	}
+	if finalized[0].RequestsTotal != 1 {
+		t.Errorf("RequestsTotal = %d, want 1 (no duplication of the already-read line)", finalized[0].RequestsTotal)
+	}
+	if state.Pending != nil {
+		t.Errorf("expected pending to be cleared after finalization, got %+v", state.Pending)
+	}
+}
+
 func TestCollect_PartialTrailingLineNotConsumed(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "access.log")

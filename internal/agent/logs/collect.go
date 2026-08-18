@@ -26,14 +26,14 @@ var rotatedAccessLogRe = regexp.MustCompile(`^access\.log-\d{8}\.gz$`)
 // not-yet-processed rotated files) and returns any hours that are now
 // fully elapsed and ready to send.
 //
-// maxFinalized bounds how many finalized hours this call may accumulate
-// from rotated files before it stops opening further ones, leaving the
-// rest for later cycles — without this, a large historical backlog (e.g.
-// months of untouched rotated logs on the very first run of this feature)
-// would get flushed into a single report far larger than jman-api's
-// request body limit. The live file is always tailed regardless, since its
-// contribution is inherently small (at most a handful of hours). Pass a
-// very large value (e.g. math.MaxInt) for "no cap", e.g. in tests.
+// maxFinalized bounds how many finalized hours this call may accumulate in
+// total (from both rotated files and the live file) before it stops,
+// leaving the rest for later cycles — without this, a large backlog (e.g.
+// months of untouched rotated logs, or simply many hours already elapsed
+// in today's not-yet-rotated live file, on the very first run of this
+// feature) would get flushed into a single report far larger than
+// jman-api's request body limit. Pass a very large value (e.g.
+// math.MaxInt) for "no cap", e.g. in tests.
 //
 // state is mutated in place with candidate progress (new tail offset/inode,
 // processed-rotated-file markers, in-progress hour accumulator). Callers
@@ -69,7 +69,7 @@ func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int) 
 		state.ProcessedRotated[name] = true
 	}
 
-	if err := processLiveFile(filepath.Join(logsDir, "access.log"), state, currentHour, &finalized); err != nil {
+	if err := processLiveFile(filepath.Join(logsDir, "access.log"), state, currentHour, &finalized, maxFinalized); err != nil {
 		return finalized, fmt.Errorf("failed to tail access.log: %w", err)
 	}
 
@@ -124,8 +124,11 @@ func accumulateLine(line string, buckets map[string]*HourAccumulator) {
 
 // processLiveFile incrementally tails the actively-written access.log,
 // advancing state.Offset only past complete (newline-terminated) lines so
-// a line mid-write is picked up whole next cycle rather than split.
-func processLiveFile(path string, state *FileState, currentHour time.Time, finalized *[]models.TrafficHourlyEntry) error {
+// a line mid-write is picked up whole next cycle rather than split. Stops
+// early once maxFinalized is reached (e.g. many hours already elapsed in
+// today's not-yet-rotated file on the very first run) — unread lines and
+// any in-progress hour are simply picked up next cycle.
+func processLiveFile(path string, state *FileState, currentHour time.Time, finalized *[]models.TrafficHourlyEntry, maxFinalized int) error {
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -158,6 +161,10 @@ func processLiveFile(path string, state *FileState, currentHour time.Time, final
 
 	reader := bufio.NewReaderSize(f, 64*1024)
 	for {
+		if len(*finalized) >= maxFinalized {
+			verb.LogPrintf(verb.Verbose, "Deferring remaining live-log lines in %s to a later cycle (per-report budget reached)", path)
+			break
+		}
 		lineBytes, readErr := reader.ReadBytes('\n')
 		if len(lineBytes) > 0 && lineBytes[len(lineBytes)-1] == '\n' {
 			line := strings.TrimRight(string(lineBytes), "\r\n")
@@ -173,8 +180,10 @@ func processLiveFile(path string, state *FileState, currentHour time.Time, final
 	state.Offset = offset
 
 	// Close out the pending hour if the wall clock has moved past it, even
-	// if no new line has arrived to reveal that (e.g. a quiet period).
-	if state.Pending != nil && state.Pending.Hour < currentHour.Format(time.RFC3339) {
+	// if no new line has arrived to reveal that (e.g. a quiet period) — but
+	// only if there's still budget, so a cycle that stopped early above
+	// doesn't sneak one more entry in past the cap.
+	if len(*finalized) < maxFinalized && state.Pending != nil && state.Pending.Hour < currentHour.Format(time.RFC3339) {
 		*finalized = append(*finalized, state.Pending.Finalize())
 		state.Pending = nil
 	}
