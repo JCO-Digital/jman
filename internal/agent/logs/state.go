@@ -18,6 +18,12 @@ import (
 // affects the tail of the top-N ranking, not the request/bot/human totals.
 const maxTrackedKeysPerHour = 2000
 
+// maxKeyLength truncates pathological long page/referrer keys (e.g. a
+// crafted scanner URL, or a referrer with a large tracking query string)
+// before using them as map keys, bounding worst-case entry size regardless
+// of how unusual the traffic is.
+const maxKeyLength = 300
+
 // FileState is one access log file's persisted tailing state, stored
 // locally by jman-agent (never sent to jman-api). It's only advanced after
 // a successful report send, so a failed send simply results in re-reading
@@ -42,6 +48,13 @@ type HourAccumulator struct {
 	Referrers     map[string]int  `json:"referrers"`
 }
 
+func truncateKey(s string) string {
+	if len(s) > maxKeyLength {
+		return s[:maxKeyLength]
+	}
+	return s
+}
+
 func newHourAccumulator(hour string) *HourAccumulator {
 	return &HourAccumulator{
 		Hour:      hour,
@@ -64,14 +77,15 @@ func (h *HourAccumulator) Add(e Entry, isBot bool) {
 		h.UniqueIPs[e.RemoteAddr] = true
 	}
 
-	page := PathWithoutQuery(e.Path)
+	page := truncateKey(PathWithoutQuery(e.Path))
 	if _, ok := h.Pages[page]; ok || len(h.Pages) < maxTrackedKeysPerHour {
 		h.Pages[page]++
 	}
 
 	if e.Referer != "" && e.Referer != "-" {
-		if _, ok := h.Referrers[e.Referer]; ok || len(h.Referrers) < maxTrackedKeysPerHour {
-			h.Referrers[e.Referer]++
+		referrer := truncateKey(e.Referer)
+		if _, ok := h.Referrers[referrer]; ok || len(h.Referrers) < maxTrackedKeysPerHour {
+			h.Referrers[referrer]++
 		}
 	}
 }

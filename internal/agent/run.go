@@ -14,15 +14,16 @@ import (
 )
 
 // maxTrafficEntriesPerReport bounds how many finalized hourly traffic
-// entries (summed across every site on this server) a single report may
-// include. jman-api enforces a 1MB request body limit; a worst-case entry
-// (20 top pages + 20 top referrers with long URLs) runs roughly 6-9KB, so
+// entries (summed across every site on this server, and across both
+// rotated and live log processing) a single report may include. jman-api
+// enforces a 1MB request body limit; a worst-case entry (20 top pages + 20
+// top referrers, each key capped at maxKeyLength) runs roughly 12-13KB, so
 // this cap leaves a comfortable margin even on a server with many sites.
-// Without it, a large historical backlog of rotated logs (e.g. the very
-// first run of this feature after months of untouched logs) could flush
-// thousands of hours into one oversized report; any backlog beyond this
-// budget is simply deferred to later cycles, not lost.
-const maxTrafficEntriesPerReport = 60
+// Without it, a large backlog (e.g. months of untouched rotated logs, or
+// simply many hours already elapsed in today's not-yet-rotated live file)
+// could flush far more than that into one oversized report; anything
+// beyond this budget is simply deferred to later cycles, not lost.
+const maxTrafficEntriesPerReport = 40
 
 // RunService runs the agent's continuous collection and self-update loop
 // until ctx is cancelled.
