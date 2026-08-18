@@ -54,6 +54,12 @@ type AgentManifestSite struct {
 type AgentManifest struct {
 	ServerID int                 `json:"server_id"`
 	Sites    []AgentManifestSite `json:"sites"`
+	// APIVersion is jman-api's own running version. Every binary in this
+	// repo shares one version (one git tag per release), so if this is
+	// newer than the agent's own version, a newer jman-agent release should
+	// exist too — the agent uses this to trigger an immediate self-update
+	// check instead of waiting for its periodic ticker.
+	APIVersion string `json:"api_version"`
 }
 
 // AgentReportSite is a single site's worth of freshly collected data in a

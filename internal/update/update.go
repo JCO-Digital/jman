@@ -131,6 +131,24 @@ func GetLatestRelease(url string) (*Release, error) {
 	return &release, nil
 }
 
+// IsNewer reports whether latestVersion is a greater semantic version than
+// currentVersion. If currentVersion isn't valid semver (e.g. a "dev" build),
+// it's treated as "not newer" rather than an error, since there's no
+// reliable way to compare it.
+func IsNewer(latestVersion, currentVersion string) (bool, error) {
+	vCurrent, err := version.NewVersion(currentVersion)
+	if err != nil {
+		return false, nil
+	}
+
+	vLatest, err := version.NewVersion(latestVersion)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse version %s: %w", latestVersion, err)
+	}
+
+	return vLatest.GreaterThan(vCurrent), nil
+}
+
 // CheckForUpdate checks if a newer version of the CLI is available.
 // It returns the latest version string, the download URL, the signature URL, and a boolean indicating if an update is available.
 func CheckForUpdate(currentVersion string, component string) (string, string, string, bool, error) {
@@ -151,22 +169,12 @@ func CheckForUpdate(currentVersion string, component string) (string, string, st
 		}
 	}
 
-	vCurrent, err := version.NewVersion(currentVersion)
+	newer, err := IsNewer(release.TagName, currentVersion)
 	if err != nil {
-		// If current version is not semver, we can't reliably compare.
-		return release.TagName, downloadURL, sigURL, false, nil
+		return "", "", "", false, err
 	}
 
-	vLatest, err := version.NewVersion(release.TagName)
-	if err != nil {
-		return "", "", "", false, fmt.Errorf("failed to parse latest version %s: %w", release.TagName, err)
-	}
-
-	if vLatest.GreaterThan(vCurrent) && downloadURL != "" {
-		return release.TagName, downloadURL, sigURL, true, nil
-	}
-
-	return release.TagName, downloadURL, sigURL, false, nil
+	return release.TagName, downloadURL, sigURL, newer && downloadURL != "", nil
 }
 
 // DownloadAndReplace downloads the binary from downloadURL, writes it to a
