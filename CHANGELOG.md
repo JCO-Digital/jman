@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.32.0 (2026-08-18)
+## 5.33.0 (2026-08-18)
+
+#### Features
+
+- agent: aggregate historical traffic logs into daily entries (d248d05)
+
+## v5.32.0 (2026-08-18)
 
 #### Features
 
