@@ -504,3 +504,22 @@ export interface CreateAgentTokenPayload {
 export interface CreatedAgentToken extends AgentToken {
 	token: string;
 }
+
+export interface TrafficTopEntry {
+	key: string;
+	count: number;
+}
+
+export interface SiteTrafficPeriod {
+	period_start: string;
+	requests_total: number;
+	requests_human: number;
+	requests_bot: number;
+	// Note: for period=daily this is the SUM of each hour's unique-visitor
+	// count, which over-counts visitors active across multiple hours in the
+	// same day (true daily-distinct isn't tracked server-side to avoid
+	// retaining raw IPs). Treat as an approximation, not an exact count.
+	unique_visitors: number;
+	top_pages: TrafficTopEntry[];
+	top_referrers: TrafficTopEntry[];
+}

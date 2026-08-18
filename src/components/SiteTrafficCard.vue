@@ -1,0 +1,208 @@
+<script setup lang="ts">
+import { ref, computed, watch } from "vue";
+import {
+	useTrafficAnalyticsStore,
+	type TrafficPeriod,
+} from "../stores/trafficAnalytics";
+import LoadingSpinner from "./LoadingSpinner.vue";
+
+const props = defineProps<{
+	siteId: number;
+}>();
+
+const trafficStore = useTrafficAnalyticsStore();
+
+// Simple period toggle; the store caches per (siteId, period, days) so
+// flipping back and forth between hourly/daily doesn't refetch.
+const period = ref<TrafficPeriod>("hourly");
+const DAYS = 7; // matches API default; server caps requests at 90 anyway
+
+const traffic = computed(
+	() => trafficStore.getTraffic(props.siteId, period.value, DAYS) ?? [],
+);
+const isLoading = computed(() =>
+	trafficStore.isLoadingTraffic(props.siteId, period.value, DAYS),
+);
+const error = computed(() =>
+	trafficStore.getError(props.siteId, period.value, DAYS),
+);
+
+async function load() {
+	try {
+		await trafficStore.fetchTraffic(props.siteId, period.value, DAYS);
+	} catch (e) {
+		// Error state is already surfaced reactively via the store; nothing
+		// further to do here.
+		console.error("Failed to fetch site traffic:", e);
+	}
+}
+
+watch([() => props.siteId, period], load, { immediate: true });
+
+// Traffic is returned oldest-first; the most recently completed period is
+// the most useful "at a glance" snapshot.
+const latest = computed(() =>
+	traffic.value.length > 0 ? traffic.value[traffic.value.length - 1] : null,
+);
+
+const TOP_LIST_LIMIT = 10;
+const topPages = computed(
+	() => latest.value?.top_pages.slice(0, TOP_LIST_LIMIT) ?? [],
+);
+const topReferrers = computed(
+	() => latest.value?.top_referrers.slice(0, TOP_LIST_LIMIT) ?? [],
+);
+
+function formatPeriodStart(date: string) {
+	return new Date(date).toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: period.value === "hourly" ? "2-digit" : undefined,
+		minute: period.value === "hourly" ? "2-digit" : undefined,
+	});
+}
+
+function setPeriod(p: TrafficPeriod) {
+	period.value = p;
+}
+</script>
+
+<template>
+	<section class="card mt-4">
+		<div class="card-header">
+			<h2>Visitor Traffic</h2>
+			<div class="btn-group">
+				<button
+					type="button"
+					class="btn btn-sm"
+					:class="period === 'hourly' ? 'btn-primary' : 'btn-outline'"
+					@click="setPeriod('hourly')"
+				>
+					Hourly
+				</button>
+				<button
+					type="button"
+					class="btn btn-sm"
+					:class="period === 'daily' ? 'btn-primary' : 'btn-outline'"
+					@click="setPeriod('daily')"
+				>
+					Daily
+				</button>
+			</div>
+		</div>
+
+		<div v-if="isLoading && traffic.length === 0" class="loading-state">
+			<LoadingSpinner message="Loading traffic data..." />
+		</div>
+
+		<div v-else-if="error" class="loading-state text-muted">
+			<p>Failed to load traffic data: {{ error }}</p>
+		</div>
+
+		<div v-else-if="!latest" class="loading-state text-muted">
+			<p>No traffic data yet.</p>
+		</div>
+
+		<div v-else>
+			<p class="font-sm text-muted mb-4">
+				Showing latest {{ period === "hourly" ? "hour" : "day" }}:
+				{{ formatPeriodStart(latest.period_start) }}
+			</p>
+
+			<div class="info-grid">
+				<div class="info-item">
+					<span class="label">Total Requests</span>
+					<span class="value">{{
+						latest.requests_total.toLocaleString()
+					}}</span>
+				</div>
+				<div class="info-item">
+					<span class="label">Human Requests</span>
+					<span class="value">{{
+						latest.requests_human.toLocaleString()
+					}}</span>
+				</div>
+				<div class="info-item">
+					<span class="label">Bot Requests</span>
+					<span class="value">{{
+						latest.requests_bot.toLocaleString()
+					}}</span>
+				</div>
+				<div class="info-item">
+					<span class="label">Unique Visitors</span>
+					<span class="value">{{
+						latest.unique_visitors.toLocaleString()
+					}}</span>
+				</div>
+			</div>
+
+			<div class="grid-2-cols mt-4">
+				<div>
+					<h3 class="sub-text font-medium mb-4">Top Pages</h3>
+					<ol v-if="topPages.length > 0" class="ranked-list">
+						<li
+							v-for="page in topPages"
+							:key="page.key"
+							class="ranked-list-item"
+						>
+							<span class="truncate" :title="page.key">{{
+								page.key
+							}}</span>
+							<span class="text-muted">{{
+								page.count.toLocaleString()
+							}}</span>
+						</li>
+					</ol>
+					<p v-else class="text-muted font-sm">
+						No page data for this period.
+					</p>
+				</div>
+				<div>
+					<h3 class="sub-text font-medium mb-4">Top Referrers</h3>
+					<ol v-if="topReferrers.length > 0" class="ranked-list">
+						<li
+							v-for="referrer in topReferrers"
+							:key="referrer.key"
+							class="ranked-list-item"
+						>
+							<span class="truncate" :title="referrer.key">{{
+								referrer.key
+							}}</span>
+							<span class="text-muted">{{
+								referrer.count.toLocaleString()
+							}}</span>
+						</li>
+					</ol>
+					<p v-else class="text-muted font-sm">
+						No referrer data for this period.
+					</p>
+				</div>
+			</div>
+		</div>
+	</section>
+</template>
+
+<style scoped>
+.ranked-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.ranked-list-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 12px;
+	padding: 6px 0;
+	border-bottom: 1px solid var(--border-color);
+	font-size: 14px;
+
+	&:last-child {
+		border-bottom: none;
+	}
+}
+</style>
