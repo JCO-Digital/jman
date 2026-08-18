@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.41.0 (2026-08-18)
+### 1.41.1 (2026-08-18)
+
+#### Refactor
+
+- components: improve null safety in TrafficChart path calculations (0cf7086)
+
+## v1.41.0 (2026-08-18)
 
 #### Features
 
