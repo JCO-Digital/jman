@@ -5,6 +5,7 @@ import {
 	type TrafficPeriod,
 } from "../stores/trafficAnalytics";
 import LoadingSpinner from "./LoadingSpinner.vue";
+import TrafficChart from "./TrafficChart.vue";
 
 const props = defineProps<{
 	siteId: number;
@@ -136,6 +137,13 @@ function setPeriod(p: TrafficPeriod) {
 				</div>
 			</div>
 
+			<div class="mt-4">
+				<h3 class="sub-text font-medium mb-4">
+					Requests Over the Last {{ DAYS }} Days
+				</h3>
+				<TrafficChart :periods="traffic" :period="period" />
+			</div>
+
 			<div class="grid-2-cols mt-4">
 				<div>
 					<h3 class="sub-text font-medium mb-4">Top Pages</h3>
@@ -204,5 +212,14 @@ function setPeriod(p: TrafficPeriod) {
 	&:last-child {
 		border-bottom: none;
 	}
+}
+
+.ranked-list-item .truncate {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+.ranked-list-item .text-muted {
+	flex-shrink: 0;
 }
 </style>

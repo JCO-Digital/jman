@@ -162,6 +162,13 @@ const siteInfoItems = computed(() => {
 		});
 	}
 
+	if (site.value.disk_usage) {
+		items.push({
+			label: "Disk Usage",
+			value: formatBytes(site.value.disk_usage.bytes_used),
+		});
+	}
+
 	items.push({ label: "Status", value: site.value.status });
 	return items;
 });
@@ -182,13 +189,6 @@ const serverInfoItems = computed(() => {
 		items.push({
 			label: "Disk Space",
 			value: `${formatBytes(used)} / ${formatBytes(total)} (${percent}% used)`,
-		});
-	}
-
-	if (site.value?.disk_usage) {
-		items.push({
-			label: "Site Disk Usage",
-			value: formatBytes(site.value.disk_usage.bytes_used),
 		});
 	}
 
