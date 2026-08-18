@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.29.0 (2026-08-18)
+## 5.30.0 (2026-08-18)
+
+#### Features
+
+- agent: bound log processing to prevent oversized reports (7f10a80)
+
+## v5.29.0 (2026-08-18)
 
 #### Features
 
