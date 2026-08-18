@@ -191,7 +191,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		logState, err := logs.LoadState(cfg.StateDir, site.SiteID)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to load log state for %s: %v", site.Domain, err)
-		} else if hourly, more, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget); err != nil {
+		} else if hourly, more, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget, site.Domain); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to collect traffic logs for %s at %s: %v", site.Domain, logsDir, err)
 		} else {
 			siteReport.TrafficHourly = hourly
