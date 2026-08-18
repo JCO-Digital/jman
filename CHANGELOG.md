@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.30.0 (2026-08-18)
+### 5.30.1 (2026-08-18)
+
+#### Bug Fixes
+
+- agent: apply traffic report budget to live log processing (e09660d)
+
+## v5.30.0 (2026-08-18)
 
 #### Features
 
