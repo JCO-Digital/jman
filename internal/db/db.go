@@ -363,6 +363,36 @@ func initSchema() error {
 			},
 		},
 		{
+			Name: "site_traffic_hourly",
+			Columns: map[string]string{
+				"site_id":         "INTEGER NOT NULL",
+				"hour":            "DATETIME NOT NULL",
+				"requests_total":  "INTEGER DEFAULT 0",
+				"requests_human":  "INTEGER DEFAULT 0",
+				"requests_bot":    "INTEGER DEFAULT 0",
+				"unique_visitors": "INTEGER DEFAULT 0",
+				"top_pages":       "TEXT",
+				"top_referrers":   "TEXT",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"site_id", "hour"},
+		},
+		{
+			Name: "site_traffic_daily",
+			Columns: map[string]string{
+				"site_id":         "INTEGER NOT NULL",
+				"day":             "DATE NOT NULL",
+				"requests_total":  "INTEGER DEFAULT 0",
+				"requests_human":  "INTEGER DEFAULT 0",
+				"requests_bot":    "INTEGER DEFAULT 0",
+				"unique_visitors": "INTEGER DEFAULT 0",
+				"top_pages":       "TEXT",
+				"top_referrers":   "TEXT",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"site_id", "day"},
+		},
+		{
 			Name: "tasks",
 			Columns: map[string]string{
 				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -444,6 +474,14 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_disk_usage_site_id ON site_disk_usage(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_hourly_site_id ON site_traffic_hourly(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_daily_site_id ON site_traffic_daily(site_id);")
 	return err
 }
 

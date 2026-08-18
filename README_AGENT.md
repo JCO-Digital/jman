@@ -1,6 +1,6 @@
 # jman-agent
 
-`jman-agent` is a lightweight sidecar service that runs directly on each server managed by `jman`. It collects data that can't be pulled from SpinupWP or over SSH — per-site disk usage, whether a site is running WordPress Multisite, and whether `DISALLOW_FILE_MODS` is set — and pushes it to `jman-api` on a schedule.
+`jman-agent` is a lightweight sidecar service that runs directly on each server managed by `jman`. It collects data that can't be pulled from SpinupWP or over SSH — per-site disk usage, whether a site is running WordPress Multisite, whether `DISALLOW_FILE_MODS` is set, and hourly visitor traffic from access logs — and pushes it to `jman-api` on a schedule.
 
 Unlike `jman-api` and `jman-monitor`, `jman-agent` does **not** need `jman` installed alongside it. It runs standalone, on the managed server itself, with only a small config file and its own binary.
 
@@ -12,6 +12,7 @@ On each collection cycle, `jman-agent`:
 2. Collects, locally and without SSH:
    - **Disk usage** per site, via `du -sb` (falling back to a manual directory walk if `du` isn't available).
    - **WordPress flags** per site, by reading `wp-config.php` directly for the `MULTISITE` and `DISALLOW_FILE_MODS` constants.
+   - **Visitor traffic** per site, by tailing its nginx access logs — see [Visitor Traffic Analytics](#visitor-traffic-analytics) below.
 3. Sends everything back in one batched `POST /api/agent/report` request.
 
 It also checks for and installs its own updates on a schedule — see [Self-Updating](#self-updating) below.
@@ -84,6 +85,7 @@ sudo chmod 600 /etc/jman-agent/config.toml
 | `reportIntervalMinutes`          | `15`    | How often to collect and push data.                                      |
 | `selfUpdateEnabled`              | `true`  | Whether the agent checks for and installs its own updates.               |
 | `selfUpdateCheckIntervalHours`   | `24`    | How often to check for a new version.                                    |
+| `stateDir`                       | `/var/lib/jman-agent` (root) or XDG state dir | Where per-site log-tailing state (byte offsets, processed-rotation markers) is kept. Local only, never sent to jman-api. |
 
 `apiUrl` and `token` can also be set via the `JMAN_AGENT_API_URL` and `JMAN_AGENT_TOKEN` environment variables, which take precedence over the file — useful for container/secret-manager based deployments.
 
@@ -142,6 +144,20 @@ When an update is found, the same Ed25519 signature verification used by `jman`/
 
 Set `selfUpdateEnabled = false` in `config.toml` to manage updates manually instead (e.g. via your own configuration management).
 
+## Visitor Traffic Analytics
+
+`jman-agent` tails each site's nginx access logs at `/sites/<domain>/logs/access.log` and reports hourly visitor stats: total/human/bot request counts, unique visitors, and top pages/referrers.
+
+**Log rotation**: the live log is always `access.log`; rotated logs are immediately compressed as `access.log-YYYYMMDD.gz` (no numbered `.1`/`.2` intermediates). Rotated files are immutable once they exist, so each is parsed exactly once and never revisited; the live file is tailed incrementally by byte offset, advancing only past complete lines so a line still being written is picked up whole on the next cycle.
+
+**Traffic classification**:
+- Requests from jman's own synthetic traffic — jman-monitor's uptime checks (user agent `jman/1.0 ...`, or a `jman_cache_bypass` query parameter) — are excluded entirely, not counted as either human or bot, since they aren't real visitors and would otherwise inflate every site's numbers by however often jman-monitor pings it.
+- Everything else is classified as bot (a static, dependency-free user-agent substring list — `bot`, `crawl`, `spider`, `facebookexternalhit`, etc.) or human. This is a simple v1: it won't catch a bot spoofing a real browser's user agent.
+
+**Hourly close-then-send model**: an hour's data is only sent once it's fully elapsed (the wall clock has moved past it) — not incrementally every report cycle. This means jman-api can store each hour with a plain replace-style upsert (no merge logic needed) and unique-visitor counts are exact *within* an hour, at the cost of a delay of up to one report interval past the hour's end before that hour's data appears in jman-ui. The **daily** rollup shown in jman-ui is derived by summing/re-merging each day's hourly rows — its `unique_visitors` is therefore an approximate upper bound (a visitor active across multiple hours is counted once per hour), not a true daily-distinct count, and its top pages/referrers are merged from each hour's already-truncated top-20 lists rather than the day's full raw counts.
+
+**Geo-IP / country breakdown is not implemented** — deferred pending a decision on distributing a MaxMind GeoLite2 database (which requires a license key and can't be bundled with the agent binary).
+
 ## Troubleshooting
 
 `jman agent token list` (and the jman-ui Settings token table) show both **Last Seen** and the reporting agent's **version**. These update at different points, which makes them useful together for diagnosing a silent agent:
@@ -153,7 +169,9 @@ If **Last Seen** is recent but **Version** never appears (or stops updating), th
 
 A site missing from the manifest (no data reported, no error either) usually means it isn't fully `deployed` on SpinupWP yet — e.g. a staging site mid-clone. `jman-api` excludes such sites from the manifest; they'll appear automatically once deployment finishes and jman's local cache next refreshes (`jman fetch sites`).
 
-If a site *is* in the manifest but its data never shows up, check for a "no valid site path found" error in the log — the agent looks for the site first at SpinupWP's standard `/sites/<domain>/files` layout, falling back to the home directory of `site_user` (if it resolves to a real local Unix account) for servers provisioned with a dedicated user per site. If neither exists, the site is skipped and logged. Note this deliberately ignores SpinupWP's own `public_folder` field, which describes the web-server-exposed docroot (sometimes nested for security) rather than where the WordPress install itself lives.
+If a site *is* in the manifest but its disk usage/wp-flags never show up, check for a "no valid site path found" error in the log — the agent looks for the site first at SpinupWP's standard `/sites/<domain>/files` layout, falling back to the home directory of `site_user` (if it resolves to a real local Unix account) for servers provisioned with a dedicated user per site. If neither exists, the site is skipped and logged. Note this deliberately ignores SpinupWP's own `public_folder` field, which describes the web-server-exposed docroot (sometimes nested for security) rather than where the WordPress install itself lives.
+
+Traffic data specifically assumes logs live at `/sites/<domain>/logs` — this path is fixed, not resolved via the same user-home fallback as disk usage/wp-flags. A "failed to read logs directory" error means that path doesn't exist on this server (traffic is simply skipped for that site; other collected data is unaffected).
 
 ## API Endpoints
 
@@ -167,3 +185,7 @@ And for admins managing tokens (JWT, admin level):
 - `GET /api/agent-tokens`: List all agent tokens.
 - `POST /api/agent-tokens`: Create a new token for a server (returns the plaintext token once).
 - `DELETE /api/agent-tokens/{id}`: Revoke a token.
+
+And for jman-ui to display the collected data (JWT, basic level):
+
+- `GET /api/sites/{id}/traffic?period=hourly|daily&days=N`: Returns a site's aggregated visitor traffic (default `period=hourly`, `days=7`, capped at 90 days).

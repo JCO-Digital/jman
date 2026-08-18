@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"math/rand"
+	"path/filepath"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/agent/logs"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/update"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -88,27 +90,43 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		AgentVersion: version,
 	}
 
+	// Log-tailing state is only persisted after a successful send (below),
+	// so a failed report simply re-reads the same log range next cycle
+	// instead of losing or duplicating traffic data.
+	pendingLogStates := map[int]*logs.FileState{}
+
 	for _, site := range manifest.Sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
 
-		sitePath, err := ResolveSitePath(site.Domain, site.SiteUser)
+		if sitePath, err := ResolveSitePath(site.Domain, site.SiteUser); err != nil {
+			verb.LogPrintf(verb.Normal, "Skipping disk usage/wp-flags for %s: %v", site.Domain, err)
+		} else {
+			if bytesUsed, err := CollectDiskUsage(sitePath); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to measure disk usage for %s at %s: %v", site.Domain, sitePath, err)
+			} else {
+				siteReport.DiskUsageBytes = &bytesUsed
+			}
+
+			if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
+			} else {
+				siteReport.IsMultisite = &isMultisite
+				siteReport.DisallowFileMods = &disallowFileMods
+			}
+		}
+
+		// Access logs live at /sites/<domain>/logs — a sibling of the site's
+		// content directory, independent of how (or whether) that resolved
+		// above, so a site with unresolvable content can still report traffic.
+		logsDir := filepath.Join("/sites", site.Domain, "logs")
+		logState, err := logs.LoadState(cfg.StateDir, site.SiteID)
 		if err != nil {
-			verb.LogPrintf(verb.Normal, "Skipping %s: %v", site.Domain, err)
-			report.Sites = append(report.Sites, siteReport)
-			continue
-		}
-
-		if bytesUsed, err := CollectDiskUsage(sitePath); err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to measure disk usage for %s at %s: %v", site.Domain, sitePath, err)
+			verb.LogPrintf(verb.Normal, "Failed to load log state for %s: %v", site.Domain, err)
+		} else if hourly, err := logs.Collect(logsDir, logState, time.Now()); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to collect traffic logs for %s at %s: %v", site.Domain, logsDir, err)
 		} else {
-			siteReport.DiskUsageBytes = &bytesUsed
-		}
-
-		if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
-		} else {
-			siteReport.IsMultisite = &isMultisite
-			siteReport.DisallowFileMods = &disallowFileMods
+			siteReport.TrafficHourly = hourly
+			pendingLogStates[site.SiteID] = logState
 		}
 
 		report.Sites = append(report.Sites, siteReport)
@@ -117,6 +135,13 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	if err := client.SendReport(ctx, report); err != nil {
 		return fmt.Errorf("failed to send report: %w", err)
 	}
+
+	for siteID, state := range pendingLogStates {
+		if err := logs.SaveState(cfg.StateDir, siteID, state); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to save log state for site %d: %v", siteID, err)
+		}
+	}
+
 	verb.LogPrintf(verb.Verbose, "Reported data for %d site(s)", len(report.Sites))
 	return nil
 }

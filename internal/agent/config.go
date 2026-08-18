@@ -19,6 +19,10 @@ type Config struct {
 	ReportIntervalMinutes        int    `toml:"reportIntervalMinutes"`
 	SelfUpdateEnabled            bool   `toml:"selfUpdateEnabled"`
 	SelfUpdateCheckIntervalHours int    `toml:"selfUpdateCheckIntervalHours"`
+	// StateDir holds local, never-transmitted log-tailing state (byte
+	// offsets, processed-rotation markers, in-progress hourly
+	// aggregates) keyed per site. Defaults to DefaultStateDir().
+	StateDir string `toml:"stateDir"`
 }
 
 // DefaultConfigPath returns /etc/jman-agent/config.toml when running as
@@ -29,6 +33,17 @@ func DefaultConfigPath() string {
 		return "/etc/jman-agent/config.toml"
 	}
 	return filepath.Join(xdg.ConfigHome, "jman-agent", "config.toml")
+}
+
+// DefaultStateDir returns the directory jman-agent uses to persist its
+// local per-site log-tailing state. Root deployments (the expected systemd
+// setup) use /var/lib/jman-agent; otherwise it falls back to the XDG state
+// directory (for local development/testing).
+func DefaultStateDir() string {
+	if os.Geteuid() == 0 {
+		return "/var/lib/jman-agent"
+	}
+	return filepath.Join(xdg.StateHome, "jman-agent")
 }
 
 // LoadConfig reads and validates the agent config file at path. The token
@@ -81,6 +96,9 @@ func LoadConfig(path string) (Config, error) {
 	}
 	if cfg.SelfUpdateCheckIntervalHours <= 0 {
 		cfg.SelfUpdateCheckIntervalHours = 24
+	}
+	if cfg.StateDir == "" {
+		cfg.StateDir = DefaultStateDir()
 	}
 
 	return cfg, nil
