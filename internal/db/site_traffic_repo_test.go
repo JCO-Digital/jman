@@ -88,6 +88,52 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 	}
 }
 
+func TestUpsertSiteTrafficDaily(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	const siteID = 99
+	entry := models.TrafficDailyEntry{
+		Day:            "2026-01-15",
+		RequestsTotal:  50,
+		RequestsHuman:  40,
+		RequestsBot:    10,
+		UniqueVisitors: 12,
+		TopPages:       []models.TrafficTopEntry{{Key: "/", Count: 30}},
+		TopReferrers:   []models.TrafficTopEntry{{Key: "https://example.org/", Count: 5}},
+	}
+
+	if err := UpsertSiteTrafficDaily(siteID, entry); err != nil {
+		t.Fatalf("UpsertSiteTrafficDaily() error = %v", err)
+	}
+
+	daily, err := GetSiteTraffic(siteID, "daily", 3650)
+	if err != nil {
+		t.Fatalf("failed to read daily rollup: %v", err)
+	}
+	if len(daily) != 1 {
+		t.Fatalf("expected exactly 1 daily row, got %d", len(daily))
+	}
+	if daily[0].RequestsTotal != 50 || daily[0].RequestsHuman != 40 || daily[0].RequestsBot != 10 {
+		t.Errorf("daily row counts = %+v, want total=50 human=40 bot=10", daily[0])
+	}
+	if len(daily[0].TopReferrers) != 1 || daily[0].TopReferrers[0].Key != "https://example.org/" {
+		t.Errorf("TopReferrers = %+v, want the seeded referrer preserved directly (no hourly source data)", daily[0].TopReferrers)
+	}
+
+	// A second upsert for the same day must replace, not add to, the row.
+	entry.RequestsTotal = 99
+	if err := UpsertSiteTrafficDaily(siteID, entry); err != nil {
+		t.Fatalf("UpsertSiteTrafficDaily() second call error = %v", err)
+	}
+	var count int
+	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_daily WHERE site_id = ?`, siteID).Scan(&count); err != nil {
+		t.Fatalf("failed to count daily rows: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected re-upserting the same day to replace the row, not add another, count = %d", count)
+	}
+}
+
 func TestPruneOldSiteTrafficHourly_KeepsRowsWithinRetention(t *testing.T) {
 	setupTaskRepoTest(t)
 

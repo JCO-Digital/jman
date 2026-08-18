@@ -51,6 +51,48 @@ func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error 
 	return nil
 }
 
+// UpsertSiteTrafficDaily stores one already-aggregated day of traffic
+// directly into site_traffic_daily. Used for backlog jman-agent aggregated
+// client-side because it was older than its hourly retention window (see
+// models.TrafficDailyEntry) — unlike RecomputeSiteTrafficDaily, this does
+// NOT read from site_traffic_hourly; there is deliberately no hourly source
+// data behind these days, so callers must not also add them to whatever
+// day-recompute set they're tracking for hourly writes in the same report.
+func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	topPages, err := json.Marshal(entry.TopPages)
+	if err != nil {
+		return fmt.Errorf("failed to encode top pages: %w", err)
+	}
+	topReferrers, err := json.Marshal(entry.TopReferrers)
+	if err != nil {
+		return fmt.Errorf("failed to encode top referrers: %w", err)
+	}
+
+	query := `
+	INSERT INTO site_traffic_daily
+		(site_id, day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, updated_at)
+	VALUES (?, date(?), ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	ON CONFLICT(site_id, day) DO UPDATE SET
+		requests_total = excluded.requests_total,
+		requests_human = excluded.requests_human,
+		requests_bot = excluded.requests_bot,
+		unique_visitors = excluded.unique_visitors,
+		top_pages = excluded.top_pages,
+		top_referrers = excluded.top_referrers,
+		updated_at = CURRENT_TIMESTAMP;
+	`
+	_, err = dbConn.Exec(query, siteID, entry.Day, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers))
+	if err != nil {
+		return fmt.Errorf("failed to upsert daily traffic for site %d: %w", siteID, err)
+	}
+	return nil
+}
+
 // RecomputeSiteTrafficDaily rebuilds the daily rollup for a site/day from
 // its hourly rows. Safe to call repeatedly (e.g. once per hourly write) —
 // it's a pure re-aggregation, not an incremental update.

@@ -84,6 +84,25 @@ type TrafficHourlyEntry struct {
 	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
 }
 
+// TrafficDailyEntry is one full calendar day's worth of visitor traffic for
+// a site, aggregated locally by jman-agent directly from its access logs.
+// It's only used for backlog older than jman-api's site_traffic_hourly
+// retention window (see internal/tasks/scheduler.go) — sending such a day
+// as 24 individual TrafficHourlyEntry values just to have jman-api roll
+// them up and immediately prune the hourly detail would waste report
+// budget and bandwidth for no benefit. jman-api stores these directly in
+// site_traffic_daily; there is deliberately no site_traffic_hourly data
+// backing them.
+type TrafficDailyEntry struct {
+	Day            string            `json:"day"` // YYYY-MM-DD, UTC
+	RequestsTotal  int               `json:"requests_total"`
+	RequestsHuman  int               `json:"requests_human"`
+	RequestsBot    int               `json:"requests_bot"`
+	UniqueVisitors int               `json:"unique_visitors"`
+	TopPages       []TrafficTopEntry `json:"top_pages"`
+	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
+}
+
 // SiteTrafficPeriod is a single hourly or daily traffic data point returned
 // by GET /api/sites/{id}/traffic.
 type SiteTrafficPeriod struct {
@@ -104,6 +123,7 @@ type AgentReportSite struct {
 	IsMultisite      *bool                `json:"is_multisite"`
 	DisallowFileMods *bool                `json:"disallow_file_mods"`
 	TrafficHourly    []TrafficHourlyEntry `json:"traffic_hourly,omitempty"`
+	TrafficDaily     []TrafficDailyEntry  `json:"traffic_daily,omitempty"`
 }
 
 // AgentReport is the request body jman-agent POSTs on each collection cycle.
