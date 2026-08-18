@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.30.1 (2026-08-18)
+### 5.30.2 (2026-08-18)
+
+#### Bug Fixes
+
+- agent: implement backlog catch-up scheduling (4839628)
+
+### v5.30.1 (2026-08-18)
 
 #### Bug Fixes
 
