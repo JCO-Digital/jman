@@ -140,6 +140,17 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		// Pre-aggregated backlog beyond jman-agent's hourly retention window
+		// (see models.TrafficDailyEntry) — stored directly, and deliberately
+		// NOT added to dailyRollupsNeeded, since there's no corresponding
+		// hourly data to recompute from (that would just overwrite it with
+		// an empty rollup).
+		for _, daily := range siteReport.TrafficDaily {
+			if err := db.UpsertSiteTrafficDaily(siteReport.SiteID, daily); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %d day %s: %v", siteReport.SiteID, daily.Day, err)
+			}
+		}
+
 		accepted++
 	}
 

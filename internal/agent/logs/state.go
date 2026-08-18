@@ -35,11 +35,15 @@ type FileState struct {
 	Pending          *HourAccumulator `json:"pending,omitempty"`
 }
 
-// HourAccumulator collects traffic for one not-yet-closed hour across
-// multiple collection cycles. It's only finalized (see Finalize) once the
-// wall clock moves past it, at which point it's sent exactly once.
+// HourAccumulator collects traffic for one period across multiple
+// collection cycles. Usually that period is a not-yet-closed hour, only
+// finalized (see Finalize) once the wall clock moves past it, at which
+// point it's sent exactly once. The same struct also doubles as a whole-day
+// accumulator (see newDayAccumulator/FinalizeDaily) for rotated-log backlog
+// older than jman-api's hourly retention window — such a file is already a
+// complete, immutable past day, so it's always finalized immediately.
 type HourAccumulator struct {
-	Hour          string          `json:"hour"` // RFC3339, truncated to the hour, UTC
+	Hour          string          `json:"hour"` // RFC3339 hour; or, for a day accumulator, a YYYY-MM-DD day
 	RequestsTotal int             `json:"requests_total"`
 	RequestsHuman int             `json:"requests_human"`
 	RequestsBot   int             `json:"requests_bot"`
@@ -62,6 +66,13 @@ func newHourAccumulator(hour string) *HourAccumulator {
 		Pages:     map[string]int{},
 		Referrers: map[string]int{},
 	}
+}
+
+// newDayAccumulator creates an accumulator keyed by a whole calendar day
+// (YYYY-MM-DD) instead of an hour, for aggregating rotated-log backlog
+// older than jman-api's hourly retention window — see FinalizeDaily.
+func newDayAccumulator(day string) *HourAccumulator {
+	return newHourAccumulator(day)
 }
 
 // Add records one classified request into the accumulator. siteDomain is
@@ -97,6 +108,23 @@ func (h *HourAccumulator) Add(e Entry, isBot bool, siteDomain string) {
 func (h *HourAccumulator) Finalize() models.TrafficHourlyEntry {
 	return models.TrafficHourlyEntry{
 		Hour:           h.Hour,
+		RequestsTotal:  h.RequestsTotal,
+		RequestsHuman:  h.RequestsHuman,
+		RequestsBot:    h.RequestsBot,
+		UniqueVisitors: len(h.UniqueIPs),
+		TopPages:       topN(h.Pages, 20),
+		TopReferrers:   topN(h.Referrers, 20),
+	}
+}
+
+// FinalizeDaily converts a day accumulator (see newDayAccumulator) into the
+// wire format for backlog beyond the hourly retention window. Because it
+// ranks the full day's raw counts directly, this is actually more accurate
+// than jman-api's own daily rollup, which approximates a day by merging
+// each hour's already-truncated top-20 list.
+func (h *HourAccumulator) FinalizeDaily() models.TrafficDailyEntry {
+	return models.TrafficDailyEntry{
+		Day:            h.Hour,
 		RequestsTotal:  h.RequestsTotal,
 		RequestsHuman:  h.RequestsHuman,
 		RequestsBot:    h.RequestsBot,

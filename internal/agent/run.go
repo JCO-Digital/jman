@@ -13,16 +13,18 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// maxTrafficEntriesPerReport bounds how many finalized hourly traffic
-// entries (summed across every site on this server, and across both
-// rotated and live log processing) a single report may include. jman-api
-// enforces a 1MB request body limit; a worst-case entry (20 top pages + 20
-// top referrers, each key capped at maxKeyLength) runs roughly 12-13KB, so
-// this cap leaves a comfortable margin even on a server with many sites.
-// Without it, a large backlog (e.g. months of untouched rotated logs, or
-// simply many hours already elapsed in today's not-yet-rotated live file)
-// could flush far more than that into one oversized report; anything
-// beyond this budget is simply deferred to later cycles, not lost.
+// maxTrafficEntriesPerReport bounds how many finalized traffic entries —
+// hourly and daily combined (see logs.Collect) — summed across every site
+// on this server, and across both rotated and live log processing, a
+// single report may include. jman-api enforces a 1MB request body limit; a
+// worst-case entry (20 top pages + 20 top referrers, each key capped at
+// maxKeyLength) runs roughly 12-13KB regardless of whether it covers an
+// hour or a day, so this cap leaves a comfortable margin even on a server
+// with many sites. Without it, a large backlog (e.g. months of untouched
+// rotated logs, or simply many hours already elapsed in today's
+// not-yet-rotated live file) could flush far more than that into one
+// oversized report; anything beyond this budget is simply deferred to
+// later cycles, not lost.
 const maxTrafficEntriesPerReport = 40
 
 // backlogCatchUpInterval is how soon the next collection cycle is scheduled
@@ -191,21 +193,22 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		logState, err := logs.LoadState(cfg.StateDir, site.SiteID)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to load log state for %s: %v", site.Domain, err)
-		} else if hourly, more, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget, site.Domain); err != nil {
+		} else if hourly, daily, more, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget, site.Domain); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to collect traffic logs for %s at %s: %v", site.Domain, logsDir, err)
 		} else {
 			siteReport.TrafficHourly = hourly
+			siteReport.TrafficDaily = daily
 			pendingLogStates[site.SiteID] = logState
-			remainingTrafficBudget -= len(hourly)
+			remainingTrafficBudget -= len(hourly) + len(daily)
 			if remainingTrafficBudget < 0 {
 				remainingTrafficBudget = 0
 			}
 			if more {
 				hasBacklog = true
 			}
-			if len(hourly) > 0 {
-				totalTrafficEntries += len(hourly)
-				verb.LogPrintf(verb.Verbose, "%s: collected %d traffic hour(s)", site.Domain, len(hourly))
+			if len(hourly) > 0 || len(daily) > 0 {
+				totalTrafficEntries += len(hourly) + len(daily)
+				verb.LogPrintf(verb.Verbose, "%s: collected %d traffic hour(s), %d traffic day(s)", site.Domain, len(hourly), len(daily))
 			}
 		}
 
@@ -222,6 +225,6 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		}
 	}
 
-	verb.LogPrintf(verb.Normal, "Reported data for %d site(s), %d traffic hour(s)", len(report.Sites), totalTrafficEntries)
+	verb.LogPrintf(verb.Normal, "Reported data for %d site(s), %d traffic entries (hourly+daily)", len(report.Sites), totalTrafficEntries)
 	return hasBacklog, nil
 }
