@@ -13,6 +13,17 @@ import (
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
+// maxTrafficEntriesPerReport bounds how many finalized hourly traffic
+// entries (summed across every site on this server) a single report may
+// include. jman-api enforces a 1MB request body limit; a worst-case entry
+// (20 top pages + 20 top referrers with long URLs) runs roughly 6-9KB, so
+// this cap leaves a comfortable margin even on a server with many sites.
+// Without it, a large historical backlog of rotated logs (e.g. the very
+// first run of this feature after months of untouched logs) could flush
+// thousands of hours into one oversized report; any backlog beyond this
+// budget is simply deferred to later cycles, not lost.
+const maxTrafficEntriesPerReport = 60
+
 // RunService runs the agent's continuous collection and self-update loop
 // until ctx is cancelled.
 func RunService(ctx context.Context, cfg Config, version string) error {
@@ -95,6 +106,11 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	// instead of losing or duplicating traffic data.
 	pendingLogStates := map[int]*logs.FileState{}
 
+	// Shared across all sites in this cycle so a server with many
+	// simultaneously-backlogged sites still produces one bounded report,
+	// not one bounded-per-site report that's still too large in aggregate.
+	remainingTrafficBudget := maxTrafficEntriesPerReport
+
 	for _, site := range manifest.Sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
 
@@ -122,11 +138,15 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		logState, err := logs.LoadState(cfg.StateDir, site.SiteID)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to load log state for %s: %v", site.Domain, err)
-		} else if hourly, err := logs.Collect(logsDir, logState, time.Now()); err != nil {
+		} else if hourly, err := logs.Collect(logsDir, logState, time.Now(), remainingTrafficBudget); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to collect traffic logs for %s at %s: %v", site.Domain, logsDir, err)
 		} else {
 			siteReport.TrafficHourly = hourly
 			pendingLogStates[site.SiteID] = logState
+			remainingTrafficBudget -= len(hourly)
+			if remainingTrafficBudget < 0 {
+				remainingTrafficBudget = 0
+			}
 		}
 
 		report.Sites = append(report.Sites, siteReport)

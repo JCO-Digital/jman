@@ -2,6 +2,7 @@ package logs
 
 import (
 	"compress/gzip"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,7 +40,7 @@ func TestCollect_RotatedFileFinalizesImmediately(t *testing.T) {
 	state := &FileState{ProcessedRotated: map[string]bool{}}
 	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
 
-	finalized, err := Collect(dir, state, now)
+	finalized, err := Collect(dir, state, now, math.MaxInt)
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -76,7 +77,7 @@ func TestCollect_LiveFileIncrementalTail(t *testing.T) {
 	stillWithinHour := time.Date(2026, 8, 17, 10, 30, 0, 0, time.UTC)
 
 	// First cycle: one line, hour not yet elapsed (now is still within it) -> nothing finalized, pending set.
-	finalized, err := Collect(dir, state, stillWithinHour)
+	finalized, err := Collect(dir, state, stillWithinHour, math.MaxInt)
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -100,7 +101,7 @@ func TestCollect_LiveFileIncrementalTail(t *testing.T) {
 
 	// Second cycle, now well past the hour -> should finalize with both lines counted.
 	pastHour := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
-	finalized, err = Collect(dir, state, pastHour)
+	finalized, err = Collect(dir, state, pastHour, math.MaxInt)
 	if err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
@@ -118,6 +119,48 @@ func TestCollect_LiveFileIncrementalTail(t *testing.T) {
 	}
 }
 
+func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
+	dir := t.TempDir()
+	// Three separate rotated days, one hour of traffic each.
+	writeGzip(t, filepath.Join(dir, "access.log-20260814.gz"), `1.1.1.1 - - [14/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
+	writeGzip(t, filepath.Join(dir, "access.log-20260815.gz"), `1.1.1.1 - - [15/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
+	writeGzip(t, filepath.Join(dir, "access.log-20260816.gz"), `1.1.1.1 - - [16/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
+	if err := os.WriteFile(filepath.Join(dir, "access.log"), nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := &FileState{ProcessedRotated: map[string]bool{}}
+	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
+
+	// Budget of 2: only two of the three backlogged days should be
+	// processed and marked, leaving the third for a later cycle.
+	finalized, err := Collect(dir, state, now, 2)
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(finalized) != 2 {
+		t.Fatalf("expected 2 finalized hours (budget-capped), got %d", len(finalized))
+	}
+	processedCount := 0
+	for _, name := range []string{"access.log-20260814.gz", "access.log-20260815.gz", "access.log-20260816.gz"} {
+		if state.ProcessedRotated[name] {
+			processedCount++
+		}
+	}
+	if processedCount != 2 {
+		t.Fatalf("expected exactly 2 rotated files marked processed, got %d", processedCount)
+	}
+
+	// A later cycle with no cap should pick up the deferred day.
+	finalized, err = Collect(dir, state, now, math.MaxInt)
+	if err != nil {
+		t.Fatalf("Collect() error = %v", err)
+	}
+	if len(finalized) != 1 {
+		t.Fatalf("expected the remaining 1 backlogged hour on the follow-up cycle, got %d", len(finalized))
+	}
+}
+
 func TestCollect_PartialTrailingLineNotConsumed(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "access.log")
@@ -129,7 +172,7 @@ func TestCollect_PartialTrailingLineNotConsumed(t *testing.T) {
 	state := &FileState{ProcessedRotated: map[string]bool{}}
 	now := time.Date(2026, 8, 17, 10, 1, 0, 0, time.UTC)
 
-	if _, err := Collect(dir, state, now); err != nil {
+	if _, err := Collect(dir, state, now, math.MaxInt); err != nil {
 		t.Fatalf("Collect() error = %v", err)
 	}
 

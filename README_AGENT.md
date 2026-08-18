@@ -158,6 +158,8 @@ Set `selfUpdateEnabled = false` in `config.toml` to manage updates manually inst
 
 **Geo-IP / country breakdown is not implemented** — deferred pending a decision on distributing a MaxMind GeoLite2 database (which requires a license key and can't be bundled with the agent binary).
 
+**Historical backlog on first deployment**: if `access.log-*.gz` files already exist when the agent first starts collecting for a site (common — SpinupWP keeps months of rotated logs), the agent doesn't process the entire backlog in one report. Each cycle only finalizes up to a bounded number of hours (shared across every site on the server, to keep the request comfortably under jman-api's 1MB body limit even on a busy multi-site server) — any remaining backlog is simply picked up on subsequent cycles. This means a fresh deployment with a large backlog can take a while (hours, occasionally longer on a server with many busy sites) to fully catch up; no data is lost or skipped in the process, it just arrives gradually.
+
 ## Troubleshooting
 
 `jman agent token list` (and the jman-ui Settings token table) show both **Last Seen** and the reporting agent's **version**. These update at different points, which makes them useful together for diagnosing a silent agent:
