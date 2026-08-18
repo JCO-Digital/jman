@@ -252,6 +252,85 @@ func topNFromCounts(counts map[string]int) []models.TrafficTopEntry {
 	return entries
 }
 
+// GetSiteTrafficMonthly returns a site's visitor traffic aggregated into
+// calendar months, oldest first, looking back `days` days. It's computed on
+// the fly from site_traffic_daily — there's no dedicated monthly table,
+// since daily rows are cheap enough to keep indefinitely (a full year is
+// only ~365 rows to group per site).
+//
+// unique_visitors is the sum of each day's unique count, which over-counts
+// a visitor active across multiple days in the same month (same caveat as
+// RecomputeSiteTrafficDaily's own hourly-to-daily rollup). top_pages/
+// top_referrers are similarly derived by merging each day's already-
+// truncated top-N list, not the full month's raw counts.
+func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, error) {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := dbConn.Query(
+		`SELECT day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers
+		 FROM site_traffic_daily WHERE site_id = ? AND day >= date('now', ?) ORDER BY day ASC`,
+		siteID, fmt.Sprintf("-%d days", days),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query site traffic for monthly rollup: %w", err)
+	}
+	defer rows.Close()
+
+	type monthAgg struct {
+		total, human, bot, unique int
+		pageCounts                map[string]int
+		referrerCounts            map[string]int
+	}
+	var order []string
+	byMonth := map[string]*monthAgg{}
+
+	for rows.Next() {
+		var day string
+		var t, h, b, u int
+		var pagesJSON, referrersJSON string
+		if err := rows.Scan(&day, &t, &h, &b, &u, &pagesJSON, &referrersJSON); err != nil {
+			return nil, fmt.Errorf("failed to scan daily traffic row: %w", err)
+		}
+		if len(day) < 7 {
+			continue // defensive: malformed day value, shouldn't happen
+		}
+		month := day[:7] // "YYYY-MM" prefix of the stored "YYYY-MM-DD" day
+		agg, ok := byMonth[month]
+		if !ok {
+			agg = &monthAgg{pageCounts: map[string]int{}, referrerCounts: map[string]int{}}
+			byMonth[month] = agg
+			order = append(order, month) // rows arrive day-ascending, so months are first-seen in order
+		}
+		agg.total += t
+		agg.human += h
+		agg.bot += b
+		agg.unique += u
+		mergeTopEntries(agg.pageCounts, pagesJSON)
+		mergeTopEntries(agg.referrerCounts, referrersJSON)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating site traffic for monthly rollup: %w", err)
+	}
+
+	result := make([]models.SiteTrafficPeriod, 0, len(order))
+	for _, month := range order {
+		agg := byMonth[month]
+		result = append(result, models.SiteTrafficPeriod{
+			PeriodStart:    month,
+			RequestsTotal:  agg.total,
+			RequestsHuman:  agg.human,
+			RequestsBot:    agg.bot,
+			UniqueVisitors: agg.unique,
+			TopPages:       topNFromCounts(agg.pageCounts),
+			TopReferrers:   topNFromCounts(agg.referrerCounts),
+		})
+	}
+	return result, nil
+}
+
 // GetSiteTraffic returns a site's hourly or daily traffic for the last
 // `days` days, oldest first.
 func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPeriod, error) {

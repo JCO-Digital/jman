@@ -134,6 +134,62 @@ func TestUpsertSiteTrafficDaily(t *testing.T) {
 	}
 }
 
+func TestGetSiteTrafficMonthly(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	const siteID = 5
+	now := time.Now().UTC()
+	// Anchor to whole-month boundaries (rather than n-days-ago offsets from
+	// `now`) so this test's month groupings are correct regardless of which
+	// day of the month it happens to run on.
+	prevMonthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -1, 0)
+	dayA := prevMonthStart.AddDate(0, 0, 10)  // previous month
+	dayB := prevMonthStart.AddDate(0, 0, 11)  // same month as dayA
+	dayC := prevMonthStart.AddDate(0, -1, 10) // the month before that
+
+	seed := func(day time.Time, entry models.TrafficDailyEntry) {
+		t.Helper()
+		entry.Day = day.Format("2006-01-02")
+		if err := UpsertSiteTrafficDaily(siteID, entry); err != nil {
+			t.Fatalf("failed to seed daily entry for %s: %v", entry.Day, err)
+		}
+	}
+	seed(dayA, models.TrafficDailyEntry{
+		RequestsTotal: 10, RequestsHuman: 8, RequestsBot: 2, UniqueVisitors: 4,
+		TopReferrers: []models.TrafficTopEntry{{Key: "https://a.com/", Count: 3}},
+	})
+	seed(dayB, models.TrafficDailyEntry{
+		RequestsTotal: 5, RequestsHuman: 5, RequestsBot: 0, UniqueVisitors: 2,
+		TopReferrers: []models.TrafficTopEntry{{Key: "https://a.com/", Count: 1}, {Key: "https://b.com/", Count: 2}},
+	})
+	seed(dayC, models.TrafficDailyEntry{RequestsTotal: 20, RequestsHuman: 15, RequestsBot: 5, UniqueVisitors: 6})
+
+	months, err := GetSiteTrafficMonthly(siteID, 100)
+	if err != nil {
+		t.Fatalf("GetSiteTrafficMonthly() error = %v", err)
+	}
+	if len(months) != 2 {
+		t.Fatalf("expected 2 monthly rows (dayA/dayB share a month), got %d: %+v", len(months), months)
+	}
+
+	older, newer := months[0], months[1]
+	if want := dayC.Format("2006-01"); older.PeriodStart != want {
+		t.Errorf("months[0].PeriodStart = %q, want %q", older.PeriodStart, want)
+	}
+	if want := dayA.Format("2006-01"); newer.PeriodStart != want {
+		t.Errorf("months[1].PeriodStart = %q, want %q", newer.PeriodStart, want)
+	}
+	if older.RequestsTotal != 20 {
+		t.Errorf("older month RequestsTotal = %d, want 20", older.RequestsTotal)
+	}
+	if newer.RequestsTotal != 15 || newer.RequestsHuman != 13 || newer.RequestsBot != 2 || newer.UniqueVisitors != 6 {
+		t.Errorf("newer month aggregate = %+v, want total=15 human=13 bot=2 unique=6 (summed across dayA+dayB)", newer)
+	}
+	if len(newer.TopReferrers) != 2 || newer.TopReferrers[0].Key != "https://a.com/" || newer.TopReferrers[0].Count != 4 {
+		t.Errorf("merged top referrers = %+v, want https://a.com/ count=4 ranked first (merged across dayA+dayB)", newer.TopReferrers)
+	}
+}
+
 func TestPruneOldSiteTrafficHourly_KeepsRowsWithinRetention(t *testing.T) {
 	setupTaskRepoTest(t)
 
