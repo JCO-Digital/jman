@@ -136,6 +136,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	// not one bounded-per-site report that's still too large in aggregate.
 	remainingTrafficBudget := maxTrafficEntriesPerReport
 	hasBacklog := false
+	totalTrafficEntries := 0
 
 	for _, site := range manifest.Sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
@@ -176,6 +177,10 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 			if more {
 				hasBacklog = true
 			}
+			if len(hourly) > 0 {
+				totalTrafficEntries += len(hourly)
+				verb.LogPrintf(verb.Verbose, "%s: collected %d traffic hour(s)", site.Domain, len(hourly))
+			}
 		}
 
 		report.Sites = append(report.Sites, siteReport)
@@ -191,6 +196,6 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		}
 	}
 
-	verb.LogPrintf(verb.Verbose, "Reported data for %d site(s)", len(report.Sites))
+	verb.LogPrintf(verb.Normal, "Reported data for %d site(s), %d traffic hour(s)", len(report.Sites), totalTrafficEntries)
 	return hasBacklog, nil
 }

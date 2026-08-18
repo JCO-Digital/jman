@@ -165,7 +165,12 @@ func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPe
 
 	table := "site_traffic_hourly"
 	periodCol := "hour"
-	cutoffExpr := "datetime('now', ?)"
+	// hour is stored as RFC3339 ("...T...Z", matching Go's time.RFC3339
+	// formatting on the agent side) — strftime with an explicit format
+	// produces a directly comparable string. SQLite's own datetime()
+	// defaults to a space-separated, non-'Z'-suffixed format instead, which
+	// would compare incorrectly against RFC3339 values via a plain TEXT >=.
+	cutoffExpr := "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)"
 	if period == "daily" {
 		table = "site_traffic_daily"
 		periodCol = "day"
