@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.31.0 (2026-08-18)
+## 5.32.0 (2026-08-18)
+
+#### Features
+
+- logs: filter internal referrers and prune hourly traffic (263f26a)
+
+## v5.31.0 (2026-08-18)
 
 #### Features
 
