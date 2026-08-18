@@ -62,13 +62,48 @@ type AgentManifest struct {
 	APIVersion string `json:"api_version"`
 }
 
+// TrafficTopEntry is a single ranked entry (a page path or a referrer) in a
+// top-N list, truncated agent-side before sending.
+type TrafficTopEntry struct {
+	Key   string `json:"key"`
+	Count int    `json:"count"`
+}
+
+// TrafficHourlyEntry is one fully-elapsed hour's worth of visitor traffic
+// for a site, as aggregated locally by jman-agent from its access logs.
+// jman-agent only ever sends a given hour once it's closed (the wall clock
+// has moved past it), so jman-api can persist these with a plain
+// replace-style upsert — no incremental merging required.
+type TrafficHourlyEntry struct {
+	Hour           string            `json:"hour"` // RFC3339, truncated to the hour, UTC
+	RequestsTotal  int               `json:"requests_total"`
+	RequestsHuman  int               `json:"requests_human"`
+	RequestsBot    int               `json:"requests_bot"`
+	UniqueVisitors int               `json:"unique_visitors"`
+	TopPages       []TrafficTopEntry `json:"top_pages"`
+	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
+}
+
+// SiteTrafficPeriod is a single hourly or daily traffic data point returned
+// by GET /api/sites/{id}/traffic.
+type SiteTrafficPeriod struct {
+	PeriodStart    string            `json:"period_start"`
+	RequestsTotal  int               `json:"requests_total"`
+	RequestsHuman  int               `json:"requests_human"`
+	RequestsBot    int               `json:"requests_bot"`
+	UniqueVisitors int               `json:"unique_visitors"`
+	TopPages       []TrafficTopEntry `json:"top_pages"`
+	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
+}
+
 // AgentReportSite is a single site's worth of freshly collected data in a
 // POST /api/agent/report request body.
 type AgentReportSite struct {
-	SiteID           int    `json:"site_id"`
-	DiskUsageBytes   *int64 `json:"disk_usage_bytes"`
-	IsMultisite      *bool  `json:"is_multisite"`
-	DisallowFileMods *bool  `json:"disallow_file_mods"`
+	SiteID           int                  `json:"site_id"`
+	DiskUsageBytes   *int64               `json:"disk_usage_bytes"`
+	IsMultisite      *bool                `json:"is_multisite"`
+	DisallowFileMods *bool                `json:"disallow_file_mods"`
+	TrafficHourly    []TrafficHourlyEntry `json:"traffic_hourly,omitempty"`
 }
 
 // AgentReport is the request body jman-agent POSTs on each collection cycle.

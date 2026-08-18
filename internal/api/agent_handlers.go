@@ -103,6 +103,12 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 		measuredAt = time.Now().UTC().Format(time.RFC3339)
 	}
 
+	type siteDay struct {
+		siteID int
+		day    string
+	}
+	dailyRollupsNeeded := map[siteDay]bool{}
+
 	accepted := 0
 	for _, siteReport := range report.Sites {
 		if !allowedSiteIDs[siteReport.SiteID] {
@@ -124,7 +130,23 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		for _, hourly := range siteReport.TrafficHourly {
+			if err := db.UpsertSiteTrafficHourly(siteReport.SiteID, hourly); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %d hour %s: %v", siteReport.SiteID, hourly.Hour, err)
+				continue
+			}
+			if hourTime, err := time.Parse(time.RFC3339, hourly.Hour); err == nil {
+				dailyRollupsNeeded[siteDay{siteID: siteReport.SiteID, day: hourTime.Format("2006-01-02")}] = true
+			}
+		}
+
 		accepted++
+	}
+
+	for sd := range dailyRollupsNeeded {
+		if err := db.RecomputeSiteTrafficDaily(sd.siteID, sd.day); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to recompute daily traffic rollup for site %d day %s: %v", sd.siteID, sd.day, err)
+		}
 	}
 
 	WriteJSON(w, http.StatusOK, map[string]int{"accepted": accepted, "rejected": len(report.Sites) - accepted})
