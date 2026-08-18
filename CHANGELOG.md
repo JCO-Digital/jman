@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.39.0 (2026-08-17)
+## 1.40.0 (2026-08-18)
+
+#### Features
+
+- components: implement site traffic analytics card (c8c343d)
+
+#### Refactor
+
+- settings: remove v-prefix from agent version display (7ab09ca)
+
+## v1.39.0 (2026-08-17)
 
 #### Features
 
