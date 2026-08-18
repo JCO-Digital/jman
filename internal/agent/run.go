@@ -94,6 +94,29 @@ func RunOnce(cfg Config, version string) error {
 	return err
 }
 
+// reportRotationCounter rotates which site is first in line for the shared
+// traffic budget each cycle (see rotateSites). Without this, a site that
+// always happens to come after another site with a perpetually large
+// backlog in manifest.Sites' fixed order would never get any budget at
+// all — not just delayed, starved indefinitely, since the earlier site(s)
+// exhaust the budget every single cycle in the same fixed order.
+var reportRotationCounter int
+
+// rotateSites returns sites reordered so that element `counter % len(sites)`
+// comes first, wrapping around. Called with an ever-incrementing counter,
+// this cycles every site through the "front of the queue" position over
+// time, so budget starvation for any one site is temporary, not permanent.
+func rotateSites(sites []models.AgentManifestSite, counter int) []models.AgentManifestSite {
+	if len(sites) == 0 {
+		return sites
+	}
+	offset := counter % len(sites)
+	rotated := make([]models.AgentManifestSite, 0, len(sites))
+	rotated = append(rotated, sites[offset:]...)
+	rotated = append(rotated, sites[:offset]...)
+	return rotated
+}
+
 // collectAndReport runs one collection cycle and reports whether it
 // deferred any backlog (more rotated files, or more live-log lines, than
 // this cycle's budget allowed) — see backlogCatchUpInterval.
@@ -138,7 +161,10 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	hasBacklog := false
 	totalTrafficEntries := 0
 
-	for _, site := range manifest.Sites {
+	sites := rotateSites(manifest.Sites, reportRotationCounter)
+	reportRotationCounter++
+
+	for _, site := range sites {
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
 
 		if sitePath, err := ResolveSitePath(site.Domain, site.SiteUser); err != nil {

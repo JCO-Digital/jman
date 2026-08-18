@@ -164,6 +164,8 @@ Set `selfUpdateEnabled = false` in `config.toml` to manage updates manually inst
 
 **Catch-up scheduling**: when a collection cycle (in `--service` mode) had to defer backlog because it hit the per-report budget, the agent schedules its *next* cycle after a short catch-up interval (30 seconds) instead of waiting the full `reportIntervalMinutes` — so a large backlog drains in minutes rather than potentially days, without ever risking an oversized report. Once a cycle finds nothing left to defer, it reverts to the normal interval. A cycle that fails to send (e.g. `jman-api` unreachable) always waits the normal interval before retrying, regardless of backlog, since `POST /api/agent/report` already retries with its own backoff — this avoids compounding a real outage with rapid retries. Running `jman-agent --once -v` by hand will also tell you if backlog remains ("Backlog remains uncollected — run again soon...").
 
+**Fairness across sites**: the traffic budget is shared across every site on the server, consumed in order. Without care, a site with a perpetually large backlog could exhaust the whole budget every single cycle before sites later in the list ever got a turn — not just delayed, starved indefinitely. To prevent that, which site is first in line rotates by one position every cycle, so every site cycles through the front of the queue over time and none can be permanently starved by another.
+
 ## Troubleshooting
 
 `jman agent token list` (and the jman-ui Settings token table) show both **Last Seen** and the reporting agent's **version**. These update at different points, which makes them useful together for diagnosing a silent agent:
