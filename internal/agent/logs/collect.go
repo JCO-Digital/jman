@@ -26,12 +26,21 @@ var rotatedAccessLogRe = regexp.MustCompile(`^access\.log-\d{8}\.gz$`)
 // not-yet-processed rotated files) and returns any hours that are now
 // fully elapsed and ready to send.
 //
+// maxFinalized bounds how many finalized hours this call may accumulate
+// from rotated files before it stops opening further ones, leaving the
+// rest for later cycles — without this, a large historical backlog (e.g.
+// months of untouched rotated logs on the very first run of this feature)
+// would get flushed into a single report far larger than jman-api's
+// request body limit. The live file is always tailed regardless, since its
+// contribution is inherently small (at most a handful of hours). Pass a
+// very large value (e.g. math.MaxInt) for "no cap", e.g. in tests.
+//
 // state is mutated in place with candidate progress (new tail offset/inode,
 // processed-rotated-file markers, in-progress hour accumulator). Callers
 // must NOT persist it until the resulting report has been sent
 // successfully — on failure, discard the mutated state and retry from the
 // last-saved one next cycle, which simply re-reads the same log range.
-func Collect(logsDir string, state *FileState, now time.Time) ([]models.TrafficHourlyEntry, error) {
+func Collect(logsDir string, state *FileState, now time.Time, maxFinalized int) ([]models.TrafficHourlyEntry, error) {
 	entries, err := os.ReadDir(logsDir)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read logs directory %s: %w", logsDir, err)
@@ -49,6 +58,10 @@ func Collect(logsDir string, state *FileState, now time.Time) ([]models.TrafficH
 	var finalized []models.TrafficHourlyEntry
 
 	for _, name := range rotated {
+		if len(finalized) >= maxFinalized {
+			verb.LogPrintf(verb.Verbose, "Deferring remaining rotated logs in %s to a later cycle (per-report budget reached)", logsDir)
+			break
+		}
 		if err := processRotatedFile(filepath.Join(logsDir, name), &finalized); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to process rotated log %s: %v", name, err)
 			continue // leave unmarked; retry next cycle
