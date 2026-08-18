@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.30.2 (2026-08-18)
+### 5.30.3 (2026-08-18)
+
+#### Bug Fixes
+
+- agent: correct traffic date comparison and improve logging (e4c8a90)
+
+### v5.30.2 (2026-08-18)
 
 #### Bug Fixes
 
