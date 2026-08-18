@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.28.0 (2026-08-18)
+## 5.29.0 (2026-08-18)
+
+#### Features
+
+- agent: implement log-based traffic tracking and collection (4a09098)
+
+## v5.28.0 (2026-08-18)
 
 #### Features
 
