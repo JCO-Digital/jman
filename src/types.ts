@@ -515,10 +515,11 @@ export interface SiteTrafficPeriod {
 	requests_total: number;
 	requests_human: number;
 	requests_bot: number;
-	// Note: for period=daily this is the SUM of each hour's unique-visitor
-	// count, which over-counts visitors active across multiple hours in the
-	// same day (true daily-distinct isn't tracked server-side to avoid
-	// retaining raw IPs). Treat as an approximation, not an exact count.
+	// Note: for period=daily/monthly this is the SUM of each finer-grained
+	// period's unique-visitor count, which over-counts visitors active
+	// across multiple hours/days within the same day/month (true
+	// daily/monthly-distinct isn't tracked server-side to avoid retaining
+	// raw IPs). Treat as an approximation, not an exact count.
 	unique_visitors: number;
 	top_pages: TrafficTopEntry[];
 	top_referrers: TrafficTopEntry[];

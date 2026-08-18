@@ -19,12 +19,23 @@ const period = ref<TrafficPeriod>("hourly");
 // Hourly data is only retained server-side for 48h (see jman-api's
 // site_traffic_hourly pruning), so requesting more would just silently
 // return fewer points than the window implies. Daily rollups are cheap to
-// keep much longer, so that view can show a wider range.
+// keep much longer, so that view can show a wider range. Monthly is
+// aggregated on the fly from daily rows, so 366 days comfortably covers up
+// to 12 months — most sites won't have that much history yet, which is
+// fine, the chart just renders however many months actually come back.
 const HOURLY_DAYS = 2;
 const DAILY_DAYS = 30;
-const days = computed(() =>
-	period.value === "hourly" ? HOURLY_DAYS : DAILY_DAYS,
-);
+const MONTHLY_DAYS = 366;
+const days = computed(() => {
+	if (period.value === "hourly") return HOURLY_DAYS;
+	if (period.value === "monthly") return MONTHLY_DAYS;
+	return DAILY_DAYS;
+});
+const windowLabel = computed(() => {
+	if (period.value === "hourly") return `Last ${HOURLY_DAYS} Days`;
+	if (period.value === "monthly") return "Last 12 Months";
+	return `Last ${DAILY_DAYS} Days`;
+});
 
 const traffic = computed(
 	() => trafficStore.getTraffic(props.siteId, period.value, days.value) ?? [],
@@ -63,6 +74,12 @@ const topReferrers = computed(
 );
 
 function formatPeriodStart(date: string) {
+	if (period.value === "monthly") {
+		return new Date(date).toLocaleString(undefined, {
+			month: "short",
+			year: "numeric",
+		});
+	}
 	return new Date(date).toLocaleString(undefined, {
 		month: "short",
 		day: "numeric",
@@ -97,6 +114,16 @@ function setPeriod(p: TrafficPeriod) {
 				>
 					Daily
 				</button>
+				<button
+					type="button"
+					class="btn btn-sm"
+					:class="
+						period === 'monthly' ? 'btn-primary' : 'btn-outline'
+					"
+					@click="setPeriod('monthly')"
+				>
+					Monthly
+				</button>
 			</div>
 		</div>
 
@@ -114,7 +141,14 @@ function setPeriod(p: TrafficPeriod) {
 
 		<div v-else>
 			<p class="font-sm text-muted mb-4">
-				Showing latest {{ period === "hourly" ? "hour" : "day" }}:
+				Showing latest
+				{{
+					period === "hourly"
+						? "hour"
+						: period === "daily"
+							? "day"
+							: "month"
+				}}:
 				{{ formatPeriodStart(latest.period_start) }}
 			</p>
 
@@ -147,7 +181,7 @@ function setPeriod(p: TrafficPeriod) {
 
 			<div class="mt-4">
 				<h3 class="sub-text font-medium mb-4">
-					Requests Over the Last {{ days }} Days
+					Requests Over the {{ windowLabel }}
 				</h3>
 				<TrafficChart :periods="traffic" :period="period" />
 			</div>

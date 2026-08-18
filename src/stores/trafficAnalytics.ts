@@ -4,7 +4,7 @@ import { useAuthStore } from "./auth";
 import type { SiteTrafficPeriod } from "../types";
 import { BASE_URL } from "../utils/api";
 
-export type TrafficPeriod = "hourly" | "daily";
+export type TrafficPeriod = "hourly" | "daily" | "monthly";
 
 function cacheKey(siteId: number, period: TrafficPeriod, days: number) {
 	return `${siteId}:${period}:${days}`;
@@ -20,9 +20,11 @@ export const useTrafficAnalyticsStore = defineStore("trafficAnalytics", () => {
 	const error = ref<Record<string, string | null>>({});
 
 	/**
-	 * GET /api/sites/{id}/traffic?period=hourly|daily&days=N
-	 * Fetches hourly or daily visitor traffic for a site, oldest first.
-	 * Results are cached per (siteId, period, days) combination.
+	 * GET /api/sites/{id}/traffic?period=hourly|daily|monthly&days=N
+	 * Fetches hourly, daily, or monthly visitor traffic for a site, oldest
+	 * first — for monthly, `days` is how far back to look before grouping
+	 * into calendar months, not a count of months. Results are cached per
+	 * (siteId, period, days) combination.
 	 */
 	async function fetchTraffic(
 		siteId: number,
