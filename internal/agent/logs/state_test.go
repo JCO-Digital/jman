@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,33 @@ func TestHourAccumulator_TruncatesLongKeys(t *testing.T) {
 		if len(key) > maxKeyLength {
 			t.Errorf("referrer key length = %d, want <= %d", len(key), maxKeyLength)
 		}
+	}
+}
+
+// TestHourAccumulator_AddHandlesNilMapsFromOldPersistedState reproduces a
+// production panic: a Pending accumulator persisted to disk (see
+// FileState.Pending / LoadState) by a jman-agent version that predates the
+// status_codes field unmarshals with StatusCodes left nil (json.Unmarshal
+// doesn't initialize a map for a missing key), and the next Add() call on
+// it must not panic on that nil map.
+func TestHourAccumulator_AddHandlesNilMapsFromOldPersistedState(t *testing.T) {
+	oldJSON := `{"hour":"2026-08-17T10:00:00Z","requests_total":5,"requests_human":5,"requests_bot":0,"unique_ips":{"1.1.1.1":true},"pages":{"/":5},"referrers":{}}`
+
+	var acc HourAccumulator
+	if err := json.Unmarshal([]byte(oldJSON), &acc); err != nil {
+		t.Fatalf("failed to unmarshal old-format accumulator: %v", err)
+	}
+	if acc.StatusCodes != nil {
+		t.Fatalf("test fixture invalid: expected StatusCodes to be nil after unmarshaling JSON without that field, got %+v", acc.StatusCodes)
+	}
+
+	acc.Add(Entry{RemoteAddr: "2.2.2.2", Path: "/", Status: 200}, false, "")
+
+	if acc.StatusCodes["200"] != 1 {
+		t.Errorf("StatusCodes[200] = %d, want 1", acc.StatusCodes["200"])
+	}
+	if acc.Pages["/"] != 6 {
+		t.Errorf("Pages[/] = %d, want 6 (5 from the old state plus this Add)", acc.Pages["/"])
 	}
 }
 

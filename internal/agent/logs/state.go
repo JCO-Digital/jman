@@ -82,6 +82,24 @@ func newDayAccumulator(day string) *HourAccumulator {
 // the site's own primary domain, used to drop same-site referrers (see
 // isInternalReferrer) before they can occupy one of the limited top-N slots.
 func (h *HourAccumulator) Add(e Entry, isBot bool, siteDomain string) {
+	// A Pending accumulator loaded from a state file persisted by an older
+	// jman-agent version (see LoadState) may predate a field added here
+	// since, and json.Unmarshal leaves a missing map field as nil rather
+	// than initializing it — guard every map against that before any
+	// index-assignment below, which would otherwise panic on a nil map.
+	if h.UniqueIPs == nil {
+		h.UniqueIPs = map[string]bool{}
+	}
+	if h.Pages == nil {
+		h.Pages = map[string]int{}
+	}
+	if h.Referrers == nil {
+		h.Referrers = map[string]int{}
+	}
+	if h.StatusCodes == nil {
+		h.StatusCodes = map[string]int{}
+	}
+
 	h.RequestsTotal++
 	if isBot {
 		h.RequestsBot++
