@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.35.0 (2026-08-18)
+## 5.36.0 (2026-08-20)
+
+#### Features
+
+- agent: track HTTP status codes and improve log filtering (3bac2a4)
+
+## v5.35.0 (2026-08-18)
 
 #### Features
 
