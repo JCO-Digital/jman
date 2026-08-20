@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.36.0 (2026-08-20)
+### 5.36.1 (2026-08-20)
+
+#### Bug Fixes
+
+- agent: handle nil maps when loading legacy state (4a07583)
+
+## v5.36.0 (2026-08-20)
 
 #### Features
 
