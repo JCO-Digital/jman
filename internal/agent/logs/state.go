@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -50,6 +51,7 @@ type HourAccumulator struct {
 	UniqueIPs     map[string]bool `json:"unique_ips"`
 	Pages         map[string]int  `json:"pages"`
 	Referrers     map[string]int  `json:"referrers"`
+	StatusCodes   map[string]int  `json:"status_codes"`
 }
 
 func truncateKey(s string) string {
@@ -61,10 +63,11 @@ func truncateKey(s string) string {
 
 func newHourAccumulator(hour string) *HourAccumulator {
 	return &HourAccumulator{
-		Hour:      hour,
-		UniqueIPs: map[string]bool{},
-		Pages:     map[string]int{},
-		Referrers: map[string]int{},
+		Hour:        hour,
+		UniqueIPs:   map[string]bool{},
+		Pages:       map[string]int{},
+		Referrers:   map[string]int{},
+		StatusCodes: map[string]int{},
 	}
 }
 
@@ -90,17 +93,27 @@ func (h *HourAccumulator) Add(e Entry, isBot bool, siteDomain string) {
 		h.UniqueIPs[e.RemoteAddr] = true
 	}
 
-	if path := PathWithoutQuery(e.Path); !isExcludedPage(path) {
+	// Status codes are tracked for every request regardless of path or
+	// status — the key space is inherently bounded (ParseLine only accepts
+	// a 3-digit status), so no maxTrackedKeysPerHour cap is needed here.
+	h.StatusCodes[strconv.Itoa(e.Status)]++
+
+	// Only a real page view (status 200, not a WordPress system path)
+	// competes for a top-pages slot; a 404/301/500 isn't a "page" someone
+	// actually viewed.
+	if path := PathWithoutQuery(e.Path); e.Status == 200 && !isExcludedPage(path) {
 		page := truncateKey(path)
 		if _, ok := h.Pages[page]; ok || len(h.Pages) < maxTrackedKeysPerHour {
 			h.Pages[page]++
 		}
 	}
 
-	if e.Referer != "" && e.Referer != "-" && !isInternalReferrer(e.Referer, siteDomain) {
-		referrer := truncateKey(e.Referer)
-		if _, ok := h.Referrers[referrer]; ok || len(h.Referrers) < maxTrackedKeysPerHour {
-			h.Referrers[referrer]++
+	if e.Referer != "" && e.Referer != "-" {
+		if refHost := normalizeReferrerHost(e.Referer); refHost != "" && !isInternalReferrer(refHost, siteDomain) {
+			refHost = truncateKey(refHost)
+			if _, ok := h.Referrers[refHost]; ok || len(h.Referrers) < maxTrackedKeysPerHour {
+				h.Referrers[refHost]++
+			}
 		}
 	}
 }
@@ -116,6 +129,7 @@ func (h *HourAccumulator) Finalize() models.TrafficHourlyEntry {
 		UniqueVisitors: len(h.UniqueIPs),
 		TopPages:       topN(h.Pages, 20),
 		TopReferrers:   topN(h.Referrers, 20),
+		StatusCodes:    topN(h.StatusCodes, 20),
 	}
 }
 
@@ -133,6 +147,7 @@ func (h *HourAccumulator) FinalizeDaily() models.TrafficDailyEntry {
 		UniqueVisitors: len(h.UniqueIPs),
 		TopPages:       topN(h.Pages, 20),
 		TopReferrers:   topN(h.Referrers, 20),
+		StatusCodes:    topN(h.StatusCodes, 20),
 	}
 }
 

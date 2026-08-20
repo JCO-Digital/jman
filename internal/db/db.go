@@ -373,7 +373,15 @@ func initSchema() error {
 				"unique_visitors": "INTEGER DEFAULT 0",
 				"top_pages":       "TEXT",
 				"top_referrers":   "TEXT",
-				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				// DEFAULT '' (not just nullable TEXT) matters here: the
+				// migrateTable recreate-and-copy migration only copies
+				// columns common to the old and new schema, so pre-existing
+				// rows get this newly-added column filled from its column
+				// default — without one they'd be NULL, and every existing
+				// row-scan in site_traffic_repo.go scans this column
+				// straight into a Go string, which errors on NULL.
+				"status_codes": "TEXT DEFAULT ''",
+				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 			PrimaryKey: []string{"site_id", "hour"},
 		},
@@ -388,6 +396,7 @@ func initSchema() error {
 				"unique_visitors": "INTEGER DEFAULT 0",
 				"top_pages":       "TEXT",
 				"top_referrers":   "TEXT",
+				"status_codes":    "TEXT DEFAULT ''", // see site_traffic_hourly's status_codes comment
 				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 			PrimaryKey: []string{"site_id", "day"},

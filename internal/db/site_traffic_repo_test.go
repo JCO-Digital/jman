@@ -24,6 +24,7 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 		UniqueVisitors: 3,
 		TopPages:       []models.TrafficTopEntry{{Key: "/", Count: 5}},
 		TopReferrers:   []models.TrafficTopEntry{{Key: "https://google.com/", Count: 2}},
+		StatusCodes:    []models.TrafficTopEntry{{Key: "200", Count: 4}, {Key: "404", Count: 1}},
 	}
 	recentEntry := models.TrafficHourlyEntry{
 		Hour:           recentHour.Format(time.RFC3339),
@@ -81,6 +82,9 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 			if len(d.TopReferrers) != 1 || d.TopReferrers[0].Key != "https://google.com/" {
 				t.Errorf("daily rollup TopReferrers = %+v, want the pruned hour's referrer preserved", d.TopReferrers)
 			}
+			if len(d.StatusCodes) != 2 || d.StatusCodes[0].Key != "200" || d.StatusCodes[0].Count != 4 {
+				t.Errorf("daily rollup StatusCodes = %+v, want the pruned hour's status codes preserved", d.StatusCodes)
+			}
 		}
 	}
 	if !found {
@@ -100,6 +104,7 @@ func TestUpsertSiteTrafficDaily(t *testing.T) {
 		UniqueVisitors: 12,
 		TopPages:       []models.TrafficTopEntry{{Key: "/", Count: 30}},
 		TopReferrers:   []models.TrafficTopEntry{{Key: "https://example.org/", Count: 5}},
+		StatusCodes:    []models.TrafficTopEntry{{Key: "200", Count: 45}, {Key: "404", Count: 5}},
 	}
 
 	if err := UpsertSiteTrafficDaily(siteID, entry); err != nil {
@@ -118,6 +123,9 @@ func TestUpsertSiteTrafficDaily(t *testing.T) {
 	}
 	if len(daily[0].TopReferrers) != 1 || daily[0].TopReferrers[0].Key != "https://example.org/" {
 		t.Errorf("TopReferrers = %+v, want the seeded referrer preserved directly (no hourly source data)", daily[0].TopReferrers)
+	}
+	if len(daily[0].StatusCodes) != 2 || daily[0].StatusCodes[0].Key != "200" || daily[0].StatusCodes[0].Count != 45 {
+		t.Errorf("StatusCodes = %+v, want the seeded status codes preserved directly", daily[0].StatusCodes)
 	}
 
 	// A second upsert for the same day must replace, not add to, the row.
@@ -157,10 +165,12 @@ func TestGetSiteTrafficMonthly(t *testing.T) {
 	seed(dayA, models.TrafficDailyEntry{
 		RequestsTotal: 10, RequestsHuman: 8, RequestsBot: 2, UniqueVisitors: 4,
 		TopReferrers: []models.TrafficTopEntry{{Key: "https://a.com/", Count: 3}},
+		StatusCodes:  []models.TrafficTopEntry{{Key: "200", Count: 9}, {Key: "404", Count: 1}},
 	})
 	seed(dayB, models.TrafficDailyEntry{
 		RequestsTotal: 5, RequestsHuman: 5, RequestsBot: 0, UniqueVisitors: 2,
 		TopReferrers: []models.TrafficTopEntry{{Key: "https://a.com/", Count: 1}, {Key: "https://b.com/", Count: 2}},
+		StatusCodes:  []models.TrafficTopEntry{{Key: "200", Count: 5}},
 	})
 	seed(dayC, models.TrafficDailyEntry{RequestsTotal: 20, RequestsHuman: 15, RequestsBot: 5, UniqueVisitors: 6})
 
@@ -187,6 +197,59 @@ func TestGetSiteTrafficMonthly(t *testing.T) {
 	}
 	if len(newer.TopReferrers) != 2 || newer.TopReferrers[0].Key != "https://a.com/" || newer.TopReferrers[0].Count != 4 {
 		t.Errorf("merged top referrers = %+v, want https://a.com/ count=4 ranked first (merged across dayA+dayB)", newer.TopReferrers)
+	}
+	if len(newer.StatusCodes) != 2 || newer.StatusCodes[0].Key != "200" || newer.StatusCodes[0].Count != 14 {
+		t.Errorf("merged status codes = %+v, want 200 count=14 ranked first (merged across dayA+dayB)", newer.StatusCodes)
+	}
+	if len(older.StatusCodes) != 0 {
+		t.Errorf("older month StatusCodes = %+v, want empty (dayC had none seeded)", older.StatusCodes)
+	}
+}
+
+// TestGetSiteTraffic_HandlesRowsWithoutStatusCodesColumn simulates a row
+// written before the status_codes column existed. migrateTable's
+// recreate-and-copy migration omits any column not present in the old
+// schema from its copy INSERT, so such a row relies on the column's
+// DEFAULT ” (see internal/db/db.go's site_traffic_hourly/site_traffic_daily
+// definitions) rather than getting NULL — without that default, scanning
+// this column straight into a Go string would error.
+func TestGetSiteTraffic_HandlesRowsWithoutStatusCodesColumn(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	const siteID = 11
+	hour := time.Now().UTC().Add(-1 * time.Hour).Truncate(time.Hour).Format(time.RFC3339)
+	day := time.Now().UTC().Format("2006-01-02")
+
+	// top_pages/top_referrers are populated here (as any genuinely
+	// pre-existing row would already have them) — status_codes is the only
+	// column omitted, since it's the one that's actually new.
+	if _, err := GetDB().Exec(
+		`INSERT INTO site_traffic_hourly (site_id, hour, requests_total, top_pages, top_referrers) VALUES (?, ?, ?, '[]', '[]')`,
+		siteID, hour, 1,
+	); err != nil {
+		t.Fatalf("failed to seed hourly row without status_codes: %v", err)
+	}
+	if _, err := GetDB().Exec(
+		`INSERT INTO site_traffic_daily (site_id, day, requests_total, top_pages, top_referrers) VALUES (?, date(?), ?, '[]', '[]')`,
+		siteID, day, 1,
+	); err != nil {
+		t.Fatalf("failed to seed daily row without status_codes: %v", err)
+	}
+
+	hourly, err := GetSiteTraffic(siteID, "hourly", 7)
+	if err != nil {
+		t.Fatalf("GetSiteTraffic(hourly) error = %v", err)
+	}
+	if len(hourly) != 1 || len(hourly[0].StatusCodes) != 0 {
+		t.Errorf("hourly = %+v, want 1 row with empty StatusCodes", hourly)
+	}
+
+	daily, err := GetSiteTraffic(siteID, "daily", 7)
+	if err != nil {
+		t.Fatalf("GetSiteTraffic(daily) error = %v", err)
+	}
+	if len(daily) != 1 || len(daily[0].StatusCodes) != 0 {
+		t.Errorf("daily = %+v, want 1 row with empty StatusCodes", daily)
 	}
 }
 
