@@ -82,6 +82,11 @@ type TrafficHourlyEntry struct {
 	UniqueVisitors int               `json:"unique_visitors"`
 	TopPages       []TrafficTopEntry `json:"top_pages"`
 	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
+	// StatusCodes is a raw connection count per HTTP status code (e.g.
+	// "200", "404"), independent of TopPages — every request counts here,
+	// including ones excluded from TopPages (non-200 or a WordPress system
+	// path).
+	StatusCodes []TrafficTopEntry `json:"status_codes"`
 }
 
 // TrafficDailyEntry is one full calendar day's worth of visitor traffic for
@@ -101,6 +106,7 @@ type TrafficDailyEntry struct {
 	UniqueVisitors int               `json:"unique_visitors"`
 	TopPages       []TrafficTopEntry `json:"top_pages"`
 	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
+	StatusCodes    []TrafficTopEntry `json:"status_codes"`
 }
 
 // SiteTrafficPeriod is a single hourly or daily traffic data point returned
@@ -113,6 +119,7 @@ type SiteTrafficPeriod struct {
 	UniqueVisitors int               `json:"unique_visitors"`
 	TopPages       []TrafficTopEntry `json:"top_pages"`
 	TopReferrers   []TrafficTopEntry `json:"top_referrers"`
+	StatusCodes    []TrafficTopEntry `json:"status_codes"`
 }
 
 // AgentReportSite is a single site's worth of freshly collected data in a

@@ -30,11 +30,15 @@ func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error 
 	if err != nil {
 		return fmt.Errorf("failed to encode top referrers: %w", err)
 	}
+	statusCodes, err := json.Marshal(entry.StatusCodes)
+	if err != nil {
+		return fmt.Errorf("failed to encode status codes: %w", err)
+	}
 
 	query := `
 	INSERT INTO site_traffic_hourly
-		(site_id, hour, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, updated_at)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		(site_id, hour, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes, updated_at)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	ON CONFLICT(site_id, hour) DO UPDATE SET
 		requests_total = excluded.requests_total,
 		requests_human = excluded.requests_human,
@@ -42,9 +46,10 @@ func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error 
 		unique_visitors = excluded.unique_visitors,
 		top_pages = excluded.top_pages,
 		top_referrers = excluded.top_referrers,
+		status_codes = excluded.status_codes,
 		updated_at = CURRENT_TIMESTAMP;
 	`
-	_, err = dbConn.Exec(query, siteID, entry.Hour, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers))
+	_, err = dbConn.Exec(query, siteID, entry.Hour, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers), string(statusCodes))
 	if err != nil {
 		return fmt.Errorf("failed to upsert hourly traffic for site %d: %w", siteID, err)
 	}
@@ -72,11 +77,15 @@ func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
 	if err != nil {
 		return fmt.Errorf("failed to encode top referrers: %w", err)
 	}
+	statusCodes, err := json.Marshal(entry.StatusCodes)
+	if err != nil {
+		return fmt.Errorf("failed to encode status codes: %w", err)
+	}
 
 	query := `
 	INSERT INTO site_traffic_daily
-		(site_id, day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, updated_at)
-	VALUES (?, date(?), ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		(site_id, day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes, updated_at)
+	VALUES (?, date(?), ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	ON CONFLICT(site_id, day) DO UPDATE SET
 		requests_total = excluded.requests_total,
 		requests_human = excluded.requests_human,
@@ -84,9 +93,10 @@ func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
 		unique_visitors = excluded.unique_visitors,
 		top_pages = excluded.top_pages,
 		top_referrers = excluded.top_referrers,
+		status_codes = excluded.status_codes,
 		updated_at = CURRENT_TIMESTAMP;
 	`
-	_, err = dbConn.Exec(query, siteID, entry.Day, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers))
+	_, err = dbConn.Exec(query, siteID, entry.Day, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers), string(statusCodes))
 	if err != nil {
 		return fmt.Errorf("failed to upsert daily traffic for site %d: %w", siteID, err)
 	}
@@ -110,7 +120,7 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 	}
 
 	rows, err := dbConn.Query(
-		`SELECT requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers
+		`SELECT requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes
 		 FROM site_traffic_hourly WHERE site_id = ? AND date(hour) = date(?)`,
 		siteID, day,
 	)
@@ -122,11 +132,12 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 	var total, human, bot, unique int
 	pageCounts := map[string]int{}
 	referrerCounts := map[string]int{}
+	statusCounts := map[string]int{}
 
 	for rows.Next() {
 		var t, h, b, u int
-		var pagesJSON, referrersJSON string
-		if err := rows.Scan(&t, &h, &b, &u, &pagesJSON, &referrersJSON); err != nil {
+		var pagesJSON, referrersJSON, statusJSON string
+		if err := rows.Scan(&t, &h, &b, &u, &pagesJSON, &referrersJSON, &statusJSON); err != nil {
 			return fmt.Errorf("failed to scan hourly traffic row: %w", err)
 		}
 		total += t
@@ -135,6 +146,7 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 		unique += u
 		mergeTopEntries(pageCounts, pagesJSON)
 		mergeTopEntries(referrerCounts, referrersJSON)
+		mergeTopEntries(statusCounts, statusJSON)
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("error iterating hourly traffic: %w", err)
@@ -148,11 +160,15 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 	if err != nil {
 		return fmt.Errorf("failed to encode daily top referrers: %w", err)
 	}
+	statusCodes, err := json.Marshal(topNFromCounts(statusCounts))
+	if err != nil {
+		return fmt.Errorf("failed to encode daily status codes: %w", err)
+	}
 
 	query := `
 	INSERT INTO site_traffic_daily
-		(site_id, day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, updated_at)
-	VALUES (?, date(?), ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		(site_id, day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes, updated_at)
+	VALUES (?, date(?), ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	ON CONFLICT(site_id, day) DO UPDATE SET
 		requests_total = excluded.requests_total,
 		requests_human = excluded.requests_human,
@@ -160,9 +176,10 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 		unique_visitors = excluded.unique_visitors,
 		top_pages = excluded.top_pages,
 		top_referrers = excluded.top_referrers,
+		status_codes = excluded.status_codes,
 		updated_at = CURRENT_TIMESTAMP;
 	`
-	if _, err := dbConn.Exec(query, siteID, day, total, human, bot, unique, string(topPages), string(topReferrers)); err != nil {
+	if _, err := dbConn.Exec(query, siteID, day, total, human, bot, unique, string(topPages), string(topReferrers), string(statusCodes)); err != nil {
 		return fmt.Errorf("failed to upsert daily traffic for site %d day %s: %w", siteID, day, err)
 	}
 	return nil
@@ -270,7 +287,7 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 	}
 
 	rows, err := dbConn.Query(
-		`SELECT day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers
+		`SELECT day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes
 		 FROM site_traffic_daily WHERE site_id = ? AND day >= date('now', ?) ORDER BY day ASC`,
 		siteID, fmt.Sprintf("-%d days", days),
 	)
@@ -283,6 +300,7 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 		total, human, bot, unique int
 		pageCounts                map[string]int
 		referrerCounts            map[string]int
+		statusCounts              map[string]int
 	}
 	var order []string
 	byMonth := map[string]*monthAgg{}
@@ -290,8 +308,8 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 	for rows.Next() {
 		var day string
 		var t, h, b, u int
-		var pagesJSON, referrersJSON string
-		if err := rows.Scan(&day, &t, &h, &b, &u, &pagesJSON, &referrersJSON); err != nil {
+		var pagesJSON, referrersJSON, statusJSON string
+		if err := rows.Scan(&day, &t, &h, &b, &u, &pagesJSON, &referrersJSON, &statusJSON); err != nil {
 			return nil, fmt.Errorf("failed to scan daily traffic row: %w", err)
 		}
 		if len(day) < 7 {
@@ -300,7 +318,7 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 		month := day[:7] // "YYYY-MM" prefix of the stored "YYYY-MM-DD" day
 		agg, ok := byMonth[month]
 		if !ok {
-			agg = &monthAgg{pageCounts: map[string]int{}, referrerCounts: map[string]int{}}
+			agg = &monthAgg{pageCounts: map[string]int{}, referrerCounts: map[string]int{}, statusCounts: map[string]int{}}
 			byMonth[month] = agg
 			order = append(order, month) // rows arrive day-ascending, so months are first-seen in order
 		}
@@ -310,6 +328,7 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 		agg.unique += u
 		mergeTopEntries(agg.pageCounts, pagesJSON)
 		mergeTopEntries(agg.referrerCounts, referrersJSON)
+		mergeTopEntries(agg.statusCounts, statusJSON)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating site traffic for monthly rollup: %w", err)
@@ -326,6 +345,7 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 			UniqueVisitors: agg.unique,
 			TopPages:       topNFromCounts(agg.pageCounts),
 			TopReferrers:   topNFromCounts(agg.referrerCounts),
+			StatusCodes:    topNFromCounts(agg.statusCounts),
 		})
 	}
 	return result, nil
@@ -354,7 +374,7 @@ func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPe
 	}
 
 	query := fmt.Sprintf(
-		`SELECT %s, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers
+		`SELECT %s, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes
 		 FROM %s WHERE site_id = ? AND %s >= %s ORDER BY %s ASC`,
 		periodCol, table, periodCol, cutoffExpr, periodCol,
 	)
@@ -368,12 +388,13 @@ func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPe
 	result := []models.SiteTrafficPeriod{}
 	for rows.Next() {
 		var p models.SiteTrafficPeriod
-		var pagesJSON, referrersJSON string
-		if err := rows.Scan(&p.PeriodStart, &p.RequestsTotal, &p.RequestsHuman, &p.RequestsBot, &p.UniqueVisitors, &pagesJSON, &referrersJSON); err != nil {
+		var pagesJSON, referrersJSON, statusJSON string
+		if err := rows.Scan(&p.PeriodStart, &p.RequestsTotal, &p.RequestsHuman, &p.RequestsBot, &p.UniqueVisitors, &pagesJSON, &referrersJSON, &statusJSON); err != nil {
 			return nil, fmt.Errorf("failed to scan site traffic row: %w", err)
 		}
 		_ = json.Unmarshal([]byte(pagesJSON), &p.TopPages)
 		_ = json.Unmarshal([]byte(referrersJSON), &p.TopReferrers)
+		_ = json.Unmarshal([]byte(statusJSON), &p.StatusCodes)
 		result = append(result, p)
 	}
 	if err := rows.Err(); err != nil {
