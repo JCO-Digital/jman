@@ -72,6 +72,28 @@ const topPages = computed(
 const topReferrers = computed(
 	() => latest.value?.top_referrers.slice(0, TOP_LIST_LIMIT) ?? [],
 );
+// No slicing here (unlike topPages/topReferrers above) — realistically only
+// a handful of distinct status codes ever appear, well under the backend's
+// own 20-entry cap.
+const statusCodes = computed(() => latest.value?.status_codes ?? []);
+
+// Maps a status code's leading digit to a `.status-badge` color modifier
+// (see src/styles/components.css) — anything outside 2xx-5xx (e.g. a rare
+// 1xx) falls back to the neutral "info" style.
+function statusBadgeClass(code: string): string {
+	switch (code.charAt(0)) {
+		case "2":
+			return "success";
+		case "3":
+			return "info";
+		case "4":
+			return "warning";
+		case "5":
+			return "error";
+		default:
+			return "info";
+	}
+}
 
 function formatPeriodStart(date: string) {
 	if (period.value === "monthly") {
@@ -177,6 +199,22 @@ function setPeriod(p: TrafficPeriod) {
 						latest.unique_visitors.toLocaleString()
 					}}</span>
 				</div>
+				<div
+					v-if="statusCodes.length > 0"
+					class="info-item info-item--full-width"
+				>
+					<span class="label">Status Codes</span>
+					<div class="status-badge-row">
+						<span
+							v-for="sc in statusCodes"
+							:key="sc.key"
+							class="status-badge badge-sm"
+							:class="statusBadgeClass(sc.key)"
+						>
+							{{ sc.key }} · {{ sc.count.toLocaleString() }}
+						</span>
+					</div>
+				</div>
 			</div>
 
 			<div class="mt-4">
@@ -233,6 +271,16 @@ function setPeriod(p: TrafficPeriod) {
 </template>
 
 <style scoped>
+.info-item--full-width {
+	grid-column: 1 / -1;
+}
+
+.status-badge-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
 .ranked-list {
 	list-style: none;
 	margin: 0;
