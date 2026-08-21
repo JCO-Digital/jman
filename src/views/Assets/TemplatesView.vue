@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAssetStore } from "../../stores/assetStore";
+import { usePaymentMethodsStore } from "../../stores/paymentMethods";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import type { Asset, AssetType, BillingFrequency } from "../../types";
@@ -11,6 +12,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import { useConfirm } from "../../composables/useConfirm";
 
 const assetStore = useAssetStore();
+const paymentMethodsStore = usePaymentMethodsStore();
 const authStore = useAuthStore();
 const toast = useToastStore();
 const route = useRoute();
@@ -27,11 +29,23 @@ const assetForm = ref({
 	description: "",
 	default_freq: "Yearly" as BillingFrequency,
 	active: true,
+	payment_method_id: null as number | null,
+	quantity: 1,
+	next_payment: "",
+	management_url: "",
+	management_account: "",
 });
 const priceInput = ref("0.00");
+const purchasePriceInput = ref("0.00");
 
 const normalizePriceInput = () => {
 	priceInput.value = (parseFloat(priceInput.value) || 0).toFixed(2);
+};
+
+const normalizePurchasePriceInput = () => {
+	purchasePriceInput.value = (
+		parseFloat(purchasePriceInput.value) || 0
+	).toFixed(2);
 };
 
 const assetTypeOptions: AssetType[] = [
@@ -60,7 +74,10 @@ const filteredAssets = computed(() => {
 });
 
 const loadAssets = async () => {
-	await assetStore.fetchAssets();
+	await Promise.all([
+		assetStore.fetchAssets(),
+		paymentMethodsStore.fetchPaymentMethods(),
+	]);
 
 	if (route.query.create === "true") {
 		openAddModal();
@@ -81,8 +98,14 @@ const openAddModal = () => {
 		description: "",
 		default_freq: "Yearly",
 		active: true,
+		payment_method_id: null,
+		quantity: 1,
+		next_payment: "",
+		management_url: "",
+		management_account: "",
 	};
 	priceInput.value = "0.00";
+	purchasePriceInput.value = "0.00";
 	showModal.value = true;
 };
 
@@ -95,8 +118,16 @@ const openEditModal = (asset: Asset) => {
 		description: asset.description || "",
 		default_freq: asset.default_freq || "Yearly",
 		active: asset.active,
+		payment_method_id: asset.payment_method_id,
+		quantity: asset.quantity || 1,
+		next_payment: asset.next_payment
+			? asset.next_payment.split("T")[0] || ""
+			: "",
+		management_url: asset.management_url || "",
+		management_account: asset.management_account || "",
 	};
 	priceInput.value = ((asset.default_price || 0) / 100).toFixed(2);
+	purchasePriceInput.value = ((asset.purchase_price || 0) / 100).toFixed(2);
 	showModal.value = true;
 };
 
@@ -107,6 +138,14 @@ const handleSubmit = async () => {
 			default_price: Math.round(
 				(parseFloat(priceInput.value) || 0) * 100,
 			),
+			purchase_price: Math.round(
+				(parseFloat(purchasePriceInput.value) || 0) * 100,
+			),
+			management_url: assetForm.value.management_url || null,
+			management_account: assetForm.value.management_account || null,
+			next_payment: assetForm.value.next_payment
+				? new Date(assetForm.value.next_payment).toISOString()
+				: null,
 		};
 		if (editingAsset.value) {
 			await assetStore.updateAsset(editingAsset.value.id, payload);
@@ -163,6 +202,13 @@ const formatCurrency = (cents: number) => {
 					>
 						<AppIcon name="tag" size="18" />
 						<span>Manage Assets</span>
+					</button>
+					<button
+						class="btn btn-secondary"
+						@click="$router.push({ name: 'payment-methods' })"
+					>
+						<AppIcon name="credit-card" size="18" />
+						<span>Payment Methods</span>
 					</button>
 				</div>
 			</template>
@@ -234,6 +280,22 @@ const formatCurrency = (cents: number) => {
 						<p v-if="asset.description" class="description">
 							{{ asset.description }}
 						</p>
+						<p
+							v-if="asset.payment_method_name"
+							class="sub-text text-muted"
+						>
+							Paid via {{ asset.payment_method_name }}
+						</p>
+						<p
+							v-if="asset.purchase_price"
+							class="sub-text text-muted"
+						>
+							Cost:
+							{{ formatCurrency(asset.purchase_price || 0) }}
+							<template v-if="(asset.quantity || 1) !== 1">
+								/ {{ asset.quantity }}
+							</template>
+						</p>
 					</div>
 
 					<div class="asset-card-footer">
@@ -241,6 +303,9 @@ const formatCurrency = (cents: number) => {
 							{{ formatCurrency(asset.default_price || 0) }}
 						</div>
 						<div class="freq">{{ asset.default_freq }}</div>
+						<span class="status-badge inactive">
+							{{ asset.usage_count ?? 0 }} linked
+						</span>
 					</div>
 				</div>
 			</div>
@@ -295,7 +360,7 @@ const formatCurrency = (cents: number) => {
 
 					<div class="form-row">
 						<div class="form-group">
-							<label for="price">Default Price (€)</label>
+							<label for="price">Sell Price (€)</label>
 							<input
 								id="price"
 								v-model="priceInput"
@@ -316,6 +381,84 @@ const formatCurrency = (cents: number) => {
 								</option>
 							</select>
 						</div>
+					</div>
+
+					<div class="form-row">
+						<div class="form-group">
+							<label for="purchase-price"
+								>Purchase Price (€)</label
+							>
+							<input
+								id="purchase-price"
+								v-model="purchasePriceInput"
+								type="number"
+								step="0.01"
+								@blur="normalizePurchasePriceInput"
+							/>
+						</div>
+						<div class="form-group">
+							<label for="quantity">Quantity</label>
+							<input
+								id="quantity"
+								v-model.number="assetForm.quantity"
+								type="number"
+								min="1"
+								step="1"
+							/>
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="payment-method">Payment Method</label>
+						<select
+							id="payment-method"
+							v-model="assetForm.payment_method_id"
+						>
+							<option :value="null">No payment method</option>
+							<option
+								v-for="pm in paymentMethodsStore.paymentMethods"
+								:key="pm.id"
+								:value="pm.id"
+							>
+								{{ pm.name }} ({{ pm.type }})
+							</option>
+						</select>
+					</div>
+
+					<div class="form-row">
+						<div class="form-group">
+							<label for="next-payment"
+								>Next Payment (optional)</label
+							>
+							<input
+								id="next-payment"
+								v-model="assetForm.next_payment"
+								type="date"
+							/>
+						</div>
+						<div class="form-group">
+							<label for="management-url"
+								>Management URL (optional)</label
+							>
+							<input
+								id="management-url"
+								v-model="assetForm.management_url"
+								type="url"
+								placeholder="https://..."
+							/>
+						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="management-account"
+							>Management Account (optional)</label
+						>
+						<input
+							id="management-account"
+							v-model="assetForm.management_account"
+							type="email"
+							placeholder="e.g. purchases@example.com"
+						/>
 					</div>
 
 					<div class="form-group">
