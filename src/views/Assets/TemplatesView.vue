@@ -408,24 +408,23 @@ const formatCurrency = (cents: number) => {
 						</div>
 					</div>
 
-					<div class="form-group">
-						<label for="payment-method">Payment Method</label>
-						<select
-							id="payment-method"
-							v-model="assetForm.payment_method_id"
-						>
-							<option :value="null">No payment method</option>
-							<option
-								v-for="pm in paymentMethodsStore.paymentMethods"
-								:key="pm.id"
-								:value="pm.id"
-							>
-								{{ pm.name }} ({{ pm.type }})
-							</option>
-						</select>
-					</div>
-
 					<div class="form-row">
+						<div class="form-group">
+							<label for="payment-method">Payment Method</label>
+							<select
+								id="payment-method"
+								v-model="assetForm.payment_method_id"
+							>
+								<option :value="null">No payment method</option>
+								<option
+									v-for="pm in paymentMethodsStore.paymentMethods"
+									:key="pm.id"
+									:value="pm.id"
+								>
+									{{ pm.name }} ({{ pm.type }})
+								</option>
+							</select>
+						</div>
 						<div class="form-group">
 							<label for="next-payment"
 								>Next Payment (optional)</label
@@ -436,6 +435,9 @@ const formatCurrency = (cents: number) => {
 								type="date"
 							/>
 						</div>
+					</div>
+
+					<div class="form-row">
 						<div class="form-group">
 							<label for="management-url"
 								>Management URL (optional)</label
@@ -447,18 +449,17 @@ const formatCurrency = (cents: number) => {
 								placeholder="https://..."
 							/>
 						</div>
-					</div>
-
-					<div class="form-group">
-						<label for="management-account"
-							>Management Account (optional)</label
-						>
-						<input
-							id="management-account"
-							v-model="assetForm.management_account"
-							type="email"
-							placeholder="e.g. purchases@example.com"
-						/>
+						<div class="form-group">
+							<label for="management-account"
+								>Management Account (optional)</label
+							>
+							<input
+								id="management-account"
+								v-model="assetForm.management_account"
+								type="email"
+								placeholder="e.g. purchases@example.com"
+							/>
+						</div>
 					</div>
 
 					<div class="form-group">
