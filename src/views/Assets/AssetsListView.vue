@@ -440,6 +440,37 @@ const formatDate = (dateString: string | null) => {
 								>
 									{{ asset.description }}
 								</div>
+								<div
+									v-if="
+										asset.asset_purchase_price ||
+										asset.payment_method_name
+									"
+									class="sub-text text-muted"
+									style="margin-top: 4px"
+								>
+									<template v-if="asset.asset_purchase_price">
+										Purchase:
+										{{
+											formatCurrency(
+												asset.asset_purchase_price,
+											)
+										}}
+										<template
+											v-if="
+												(asset.asset_quantity || 1) > 1
+											"
+											>/
+											{{ asset.asset_quantity }}</template
+										>
+									</template>
+									<span v-if="asset.payment_method_name">
+										<template
+											v-if="asset.asset_purchase_price"
+											>·
+										</template>
+										{{ asset.payment_method_name }}</span
+									>
+								</div>
 							</td>
 							<td>
 								{{ formatCurrency(asset.price) }}

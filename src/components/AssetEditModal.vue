@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, onMounted } from "vue";
 import type {
 	Asset,
 	BillingFrequency,
@@ -9,6 +9,7 @@ import type {
 	Organization,
 } from "../types";
 import { useAssetStore } from "../stores/assetStore";
+import { usePaymentMethodsStore } from "../stores/paymentMethods";
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -26,6 +27,7 @@ const emit = defineEmits<{
 }>();
 
 const assetStore = useAssetStore();
+const paymentMethodsStore = usePaymentMethodsStore();
 const assetSearchQuery = ref("");
 const availableAssetTemplates = ref<Asset[]>([]);
 
@@ -37,8 +39,30 @@ const assetForm = ref({
 	next_billing: "",
 	status: "active" as OrganizationAssetStatus,
 	description: "",
+	payment_method_id: null as number | null,
 });
 const priceInput = ref("0.00");
+
+onMounted(() => {
+	paymentMethodsStore.fetchPaymentMethods();
+});
+
+// Read-only cost info from the linked template, shown for context only (not editable here).
+// Populated from props.asset when editing, or from the selected/prefilled template when linking.
+const linkedTemplateCost = ref<{
+	purchase_price?: number | null;
+	quantity?: number | null;
+	next_payment?: string | null;
+	management_url?: string | null;
+	management_account?: string | null;
+} | null>(null);
+
+const formatCurrency = (cents: number) => {
+	return new Intl.NumberFormat("de-DE", {
+		style: "currency",
+		currency: "EUR",
+	}).format(cents / 100);
+};
 
 const isEditing = ref(false);
 
@@ -66,10 +90,18 @@ watch(
 						: "",
 					status: props.asset.status,
 					description: props.asset.description || "",
+					payment_method_id: props.asset.payment_method_id,
 				};
 				priceInput.value = (props.asset.price / 100).toFixed(2);
 				assetSearchQuery.value =
 					props.asset.asset?.name || props.asset.asset_name || "";
+				linkedTemplateCost.value = {
+					purchase_price: props.asset.asset_purchase_price,
+					quantity: props.asset.asset_quantity,
+					next_payment: props.asset.asset_next_payment,
+					management_url: props.asset.asset_management_url,
+					management_account: props.asset.asset_management_account,
+				};
 			} else if (props.prefill) {
 				isEditing.value = false;
 				const { template, siteId } = props.prefill;
@@ -81,12 +113,20 @@ watch(
 					next_billing: new Date().toISOString().split("T")[0] || "",
 					status: "active",
 					description: "",
+					payment_method_id: template.payment_method_id,
 				};
 				priceInput.value = (
 					(template.default_price || 0) / 100
 				).toFixed(2);
 				assetSearchQuery.value = template.name;
 				availableAssetTemplates.value = [];
+				linkedTemplateCost.value = {
+					purchase_price: template.purchase_price,
+					quantity: template.quantity,
+					next_payment: template.next_payment,
+					management_url: template.management_url,
+					management_account: template.management_account,
+				};
 			} else {
 				isEditing.value = false;
 				assetForm.value = {
@@ -97,9 +137,11 @@ watch(
 					next_billing: "",
 					status: "active",
 					description: "",
+					payment_method_id: null,
 				};
 				priceInput.value = "0.00";
 				assetSearchQuery.value = "";
+				linkedTemplateCost.value = null;
 			}
 		}
 	},
@@ -121,8 +163,16 @@ const selectAssetTemplate = (template: Asset) => {
 	priceInput.value = ((template.default_price || 0) / 100).toFixed(2);
 	assetForm.value.billing_freq = template.default_freq || "Yearly";
 	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
+	assetForm.value.payment_method_id = template.payment_method_id;
 	assetSearchQuery.value = template.name;
 	availableAssetTemplates.value = [];
+	linkedTemplateCost.value = {
+		purchase_price: template.purchase_price,
+		quantity: template.quantity,
+		next_payment: template.next_payment,
+		management_url: template.management_url,
+		management_account: template.management_account,
+	};
 };
 
 const handleSave = async () => {
@@ -215,7 +265,7 @@ const close = () => {
 					}}</span>
 				</div>
 
-				<div class="form-group" v-if="!isEditing">
+				<div v-if="!isEditing" class="form-group">
 					<label for="a-search">Search Asset Template</label>
 					<input
 						id="a-search"
@@ -299,6 +349,24 @@ const close = () => {
 				</div>
 
 				<div class="form-group">
+					<label for="a-payment-method">Payment Method</label>
+					<select
+						id="a-payment-method"
+						v-model="assetForm.payment_method_id"
+						:disabled="!isOrgSelected"
+					>
+						<option :value="null">No payment method</option>
+						<option
+							v-for="pm in paymentMethodsStore.paymentMethods"
+							:key="pm.id"
+							:value="pm.id"
+						>
+							{{ pm.name }} ({{ pm.type }})
+						</option>
+					</select>
+				</div>
+
+				<div class="form-group">
 					<label for="a-identifier">
 						Identifier
 						<span class="label-info"
@@ -311,6 +379,44 @@ const close = () => {
 						type="text"
 						:disabled="!isOrgSelected"
 					/>
+				</div>
+
+				<div v-if="linkedTemplateCost" class="form-group">
+					<label>Template Cost Info (read-only)</label>
+					<div class="readonly-value">
+						Purchase:
+						{{
+							formatCurrency(
+								linkedTemplateCost.purchase_price || 0,
+							)
+						}}
+						<template
+							v-if="(linkedTemplateCost.quantity || 1) !== 1"
+						>
+							/ {{ linkedTemplateCost.quantity }}
+						</template>
+						<template v-if="linkedTemplateCost.next_payment">
+							· Next payment:
+							{{
+								new Date(
+									linkedTemplateCost.next_payment,
+								).toLocaleDateString()
+							}}
+						</template>
+						<template v-if="linkedTemplateCost.management_account">
+							· Account:
+							{{ linkedTemplateCost.management_account }}
+						</template>
+						<template v-if="linkedTemplateCost.management_url">
+							·
+							<a
+								:href="linkedTemplateCost.management_url"
+								target="_blank"
+								rel="noopener noreferrer"
+								>Manage</a
+							>
+						</template>
+					</div>
 				</div>
 
 				<div class="form-row">

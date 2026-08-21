@@ -301,6 +301,25 @@ export type AssetType =
 	| "General";
 export type BillingFrequency = "Yearly" | "Quarterly" | "Monthly" | "One-time";
 
+export type PaymentMethodType = "Buy" | "Sell";
+
+export interface PaymentMethod {
+	id: number;
+	name: string;
+	type: PaymentMethodType;
+	expiry_date: string | null;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export interface CreatePaymentMethodPayload {
+	name: string;
+	type: PaymentMethodType;
+	expiry_date?: string | null;
+}
+
 export interface Asset {
 	id: number;
 	type: AssetType;
@@ -310,6 +329,14 @@ export interface Asset {
 	default_price: number | null;
 	default_freq: BillingFrequency | null;
 	active: boolean;
+	payment_method_id: number | null;
+	payment_method_name?: string;
+	purchase_price: number | null;
+	quantity: number;
+	next_payment: string | null;
+	management_url: string | null;
+	management_account: string | null;
+	usage_count?: number;
 	created_at: string;
 	created_by: string;
 	updated_at: string;
@@ -333,6 +360,13 @@ export interface OrganizationAsset {
 	last_billed: string | null;
 	status: OrganizationAssetStatus;
 	description: string | null;
+	payment_method_id: number | null;
+	payment_method_name?: string;
+	asset_purchase_price?: number;
+	asset_quantity?: number;
+	asset_next_payment?: string | null;
+	asset_management_url?: string;
+	asset_management_account?: string;
 	created_at: string;
 	created_by: string;
 	updated_at: string;
