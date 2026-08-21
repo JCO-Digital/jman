@@ -36,6 +36,13 @@ func CreateAssetHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Name and Type are required")
 		return
 	}
+	if asset.Quantity < 0 {
+		WriteError(w, http.StatusBadRequest, "Quantity must be greater than 0")
+		return
+	}
+	if asset.Quantity == 0 {
+		asset.Quantity = 1
+	}
 
 	asset.ID = 0
 	username := getUsername(r)
@@ -106,6 +113,14 @@ func UpdateAssetHandler(w http.ResponseWriter, r *http.Request) {
 	asset.DefaultPrice = updates.DefaultPrice
 	asset.DefaultFreq = updates.DefaultFreq
 	asset.Active = updates.Active
+	asset.PaymentMethodID = updates.PaymentMethodID
+	asset.PurchasePrice = updates.PurchasePrice
+	asset.NextPayment = updates.NextPayment
+	asset.ManagementURL = updates.ManagementURL
+	asset.ManagementAccount = updates.ManagementAccount
+	if updates.Quantity > 0 {
+		asset.Quantity = updates.Quantity
+	}
 
 	username := getUsername(r)
 	if err := db.SaveAsset(asset, username); err != nil {
@@ -198,6 +213,9 @@ func CreateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 			if oa.Identifier == "" && template.Type != models.AssetTypeDomain {
 				oa.Identifier = template.Identifier
 			}
+			if oa.PaymentMethodID == nil && template.PaymentMethodID != nil {
+				oa.PaymentMethodID = template.PaymentMethodID
+			}
 		}
 	}
 
@@ -276,6 +294,7 @@ func UpdateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 		oa.Status = updates.Status
 	}
 	oa.Description = updates.Description
+	oa.PaymentMethodID = updates.PaymentMethodID
 
 	username := getUsername(r)
 	if err := db.SaveOrganizationAsset(oa, username); err != nil {
