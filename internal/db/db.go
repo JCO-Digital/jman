@@ -256,39 +256,59 @@ func initSchema() error {
 			PrimaryKey: []string{"site_id", "organization_id"},
 		},
 		{
+			Name: "payment_methods",
+			Columns: map[string]string{
+				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"name":        "TEXT NOT NULL",
+				"type":        "TEXT NOT NULL",
+				"expiry_date": "DATETIME",
+				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":  "TEXT",
+				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":  "TEXT",
+			},
+		},
+		{
 			Name: "assets",
 			Columns: map[string]string{
-				"id":            "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"type":          "TEXT NOT NULL",
-				"identifier":    "TEXT",
-				"name":          "TEXT NOT NULL",
-				"description":   "TEXT",
-				"default_price": "INTEGER",
-				"default_freq":  "TEXT",
-				"active":        "BOOLEAN DEFAULT 1",
-				"created_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":    "TEXT",
-				"updated_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by":    "TEXT",
+				"id":                 "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"type":               "TEXT NOT NULL",
+				"identifier":         "TEXT",
+				"name":               "TEXT NOT NULL",
+				"description":        "TEXT",
+				"default_price":      "INTEGER",
+				"default_freq":       "TEXT",
+				"active":             "BOOLEAN DEFAULT 1",
+				"payment_method_id":  "INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL",
+				"purchase_price":     "INTEGER DEFAULT 0",
+				"quantity":           "INTEGER DEFAULT 1",
+				"next_payment":       "DATETIME",
+				"management_url":     "TEXT DEFAULT ''",
+				"management_account": "TEXT DEFAULT ''",
+				"created_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":         "TEXT",
+				"updated_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":         "TEXT",
 			},
 		},
 		{
 			Name: "organization_assets",
 			Columns: map[string]string{
-				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"organization_id": "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
-				"site_id":         "INTEGER",
-				"asset_id":        "INTEGER REFERENCES assets(id) ON DELETE SET NULL",
-				"identifier":      "TEXT",
-				"price":           "INTEGER",
-				"billing_freq":    "TEXT",
-				"next_billing":    "DATETIME",
-				"status":          "TEXT DEFAULT 'active'",
-				"description":     "TEXT",
-				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":      "TEXT",
-				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by":      "TEXT",
+				"id":                "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"organization_id":   "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
+				"site_id":           "INTEGER",
+				"asset_id":          "INTEGER REFERENCES assets(id) ON DELETE SET NULL",
+				"identifier":        "TEXT",
+				"price":             "INTEGER",
+				"billing_freq":      "TEXT",
+				"next_billing":      "DATETIME",
+				"status":            "TEXT DEFAULT 'active'",
+				"description":       "TEXT",
+				"payment_method_id": "INTEGER REFERENCES payment_methods(id) ON DELETE SET NULL",
+				"created_at":        "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":        "TEXT",
+				"updated_at":        "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":        "TEXT",
 			},
 		},
 		{
@@ -459,6 +479,14 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_asset_payments_asset_id ON asset_payments(org_asset_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_assets_payment_method_id ON assets(payment_method_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_organization_assets_payment_method_id ON organization_assets(payment_method_id);")
 	if err != nil {
 		return err
 	}

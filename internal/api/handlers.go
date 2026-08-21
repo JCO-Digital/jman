@@ -81,6 +81,13 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PATCH /api/contacts/{id}", edit(UpdateContactHandler))
 	mux.Handle("DELETE /api/contacts/{id}", edit(DeleteContactHandler))
 
+	// --- Payment Method routes ---
+	mux.Handle("GET /api/payment-methods", basic(ListPaymentMethodsHandler))
+	mux.Handle("POST /api/payment-methods", edit(CreatePaymentMethodHandler))
+	mux.Handle("GET /api/payment-methods/{id}", basic(GetPaymentMethodHandler))
+	mux.Handle("PATCH /api/payment-methods/{id}", edit(UpdatePaymentMethodHandler))
+	mux.Handle("DELETE /api/payment-methods/{id}", edit(DeletePaymentMethodHandler))
+
 	// --- Asset routes ---
 	mux.Handle("GET /api/assets", basic(ListAssetsHandler))
 	mux.Handle("POST /api/assets", edit(CreateAssetHandler))
