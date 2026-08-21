@@ -2,6 +2,7 @@
 import { computed, type Component } from "vue";
 import IconCheck from "./icons/IconCheck.vue";
 import IconChevronRight from "./icons/IconChevronRight.vue";
+import IconCopy from "./icons/IconCopy.vue";
 import IconCreditCard from "./icons/IconCreditCard.vue";
 import IconDragHandle from "./icons/IconDragHandle.vue";
 import IconEdit from "./icons/IconEdit.vue";
@@ -27,6 +28,7 @@ const props = defineProps<{
 const iconMap: Record<string, Component> = {
 	check: IconCheck,
 	"chevron-right": IconChevronRight,
+	copy: IconCopy,
 	"credit-card": IconCreditCard,
 	"drag-handle": IconDragHandle,
 	edit: IconEdit,

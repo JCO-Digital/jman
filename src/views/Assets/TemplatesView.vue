@@ -189,6 +189,45 @@ const urlDomain = (url: string) => {
 		return url;
 	}
 };
+
+const copyDescriptionAndExtract = async () => {
+	const description = assetForm.value.description;
+	try {
+		await navigator.clipboard.writeText(description);
+	} catch (e: any) {
+		toast.addToast("Failed to copy to clipboard: " + e.message, "error");
+		return;
+	}
+
+	if (parseFloat(purchasePriceInput.value) === 0) {
+		const priceMatch = description.match(/price\s*:?\s*([\d.,]+)\s*€/i);
+		if (priceMatch?.[1]) {
+			const normalized = priceMatch[1].replace(",", ".");
+			const price = parseFloat(normalized);
+			if (!isNaN(price)) {
+				purchasePriceInput.value = price.toFixed(2);
+			}
+		}
+	}
+
+	if (assetForm.value.management_url === "") {
+		const urlMatch = description.match(/https?:\/\/[^\s,]+/i);
+		if (urlMatch) {
+			assetForm.value.management_url = urlMatch[0];
+		}
+	}
+
+	if (assetForm.value.management_account === "") {
+		const emailMatch = description.match(
+			/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+		);
+		if (emailMatch) {
+			assetForm.value.management_account = emailMatch[0];
+		}
+	}
+
+	toast.addToast("Description copied to clipboard", "success");
+};
 </script>
 
 <template>
@@ -488,7 +527,17 @@ const urlDomain = (url: string) => {
 					</div>
 
 					<div class="form-group">
-						<label for="description">Description</label>
+						<div class="flex-row gap-2 items-center">
+							<label for="description">Description</label>
+							<button
+								type="button"
+								class="icon-btn icon-btn-sm"
+								title="Copy description (and auto-fill purchase price/URL/account if empty)"
+								@click="copyDescriptionAndExtract"
+							>
+								<AppIcon name="copy" size="16" />
+							</button>
+						</div>
 						<textarea
 							id="description"
 							v-model="assetForm.description"
