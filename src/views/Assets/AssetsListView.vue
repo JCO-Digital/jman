@@ -309,7 +309,10 @@ const formatDate = (dateString: string | null) => {
 		</div>
 
 		<main class="table-container">
-			<div v-if="isLoading" class="loading-container">
+			<div
+				v-if="isLoading && assets.length === 0"
+				class="loading-container"
+			>
 				<LoadingSpinner message="Loading all assets..." />
 			</div>
 

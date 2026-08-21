@@ -181,6 +181,14 @@ const formatCurrency = (cents: number) => {
 		currency: "EUR",
 	}).format(cents / 100);
 };
+
+const urlDomain = (url: string) => {
+	try {
+		return new URL(url).hostname.replace(/^www\./, "");
+	} catch {
+		return url;
+	}
+};
 </script>
 
 <template>
@@ -224,7 +232,10 @@ const formatCurrency = (cents: number) => {
 		</div>
 
 		<main class="content">
-			<div v-if="assetStore.isLoading" class="loading-container">
+			<div
+				v-if="assetStore.isLoading && assetStore.assets.length === 0"
+				class="loading-container"
+			>
 				<LoadingSpinner message="Loading asset templates..." />
 			</div>
 
@@ -294,6 +305,20 @@ const formatCurrency = (cents: number) => {
 							{{ formatCurrency(asset.purchase_price || 0) }}
 							<template v-if="(asset.quantity || 1) !== 1">
 								/ {{ asset.quantity }}
+							</template>
+						</p>
+						<p
+							v-if="asset.management_url"
+							class="sub-text text-muted"
+						>
+							<a
+								:href="asset.management_url"
+								target="_blank"
+								rel="noopener noreferrer"
+								>{{ urlDomain(asset.management_url) }}</a
+							>
+							<template v-if="asset.management_account">
+								· {{ asset.management_account }}
 							</template>
 						</p>
 					</div>

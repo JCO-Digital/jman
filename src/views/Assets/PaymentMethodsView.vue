@@ -155,7 +155,13 @@ const isExpiringSoon = (pm: PaymentMethod) => {
 		</div>
 
 		<main class="content">
-			<div v-if="paymentMethodsStore.isLoading" class="loading-container">
+			<div
+				v-if="
+					paymentMethodsStore.isLoading &&
+					paymentMethodsStore.paymentMethods.length === 0
+				"
+				class="loading-container"
+			>
 				<LoadingSpinner message="Loading payment methods..." />
 			</div>
 
