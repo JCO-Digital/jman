@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.36.1 (2026-08-20)
+## 5.37.0 (2026-08-21)
+
+#### Features
+
+- api: add payment method support to assets (3f06eec)
+
+### v5.36.1 (2026-08-20)
 
 #### Bug Fixes
 
