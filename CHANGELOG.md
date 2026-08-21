@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.44.2 (2026-08-21)
+## 1.45.0 (2026-08-21)
+
+#### Features
+
+- ui: add copy-and-extract functionality to asset description (2b11613)
+
+### v1.44.2 (2026-08-21)
 
 #### Bug Fixes
 
