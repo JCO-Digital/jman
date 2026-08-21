@@ -1,6 +1,12 @@
 # Changelog
 
-### 1.44.1 (2026-08-21)
+### 1.44.2 (2026-08-21)
+
+#### Bug Fixes
+
+- assets: improve loading states and add asset management details (3edf6e0)
+
+### v1.44.1 (2026-08-21)
 
 #### Refactor
 
