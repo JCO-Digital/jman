@@ -523,4 +523,8 @@ export interface SiteTrafficPeriod {
 	unique_visitors: number;
 	top_pages: TrafficTopEntry[];
 	top_referrers: TrafficTopEntry[];
+	// Raw connection count per HTTP status code (e.g. "200", "404"),
+	// independent of top_pages — every request counts here, including ones
+	// excluded from top_pages (non-200 or a WordPress system path).
+	status_codes: TrafficTopEntry[];
 }
