@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.44.0 (2026-08-21)
+### 1.44.1 (2026-08-21)
+
+#### Refactor
+
+- views: improve layout of asset form fields (04b8b46)
+
+## v1.44.0 (2026-08-21)
 
 #### Features
 
