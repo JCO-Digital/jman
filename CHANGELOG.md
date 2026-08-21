@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.43.0 (2026-08-21)
+## 1.44.0 (2026-08-21)
+
+#### Features
+
+- assets: add payment methods management (69816fb)
+
+## v1.43.0 (2026-08-21)
 
 #### Features
 
