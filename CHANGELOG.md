@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.42.0 (2026-08-18)
+## 1.43.0 (2026-08-21)
+
+#### Features
+
+- ui: display status codes in site traffic card (2621e51)
+
+## v1.42.0 (2026-08-18)
 
 #### Features
 
