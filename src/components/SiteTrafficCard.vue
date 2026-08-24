@@ -16,14 +16,14 @@ const trafficStore = useTrafficAnalyticsStore();
 // Simple period toggle; the store caches per (siteId, period, days) so
 // flipping back and forth between hourly/daily doesn't refetch.
 const period = ref<TrafficPeriod>("hourly");
-// Hourly data is only retained server-side for 48h (see jman-api's
+// Hourly data is only retained server-side for 168h/7 days (see jman-api's
 // site_traffic_hourly pruning), so requesting more would just silently
 // return fewer points than the window implies. Daily rollups are cheap to
 // keep much longer, so that view can show a wider range. Monthly is
 // aggregated on the fly from daily rows, so 366 days comfortably covers up
 // to 12 months — most sites won't have that much history yet, which is
 // fine, the chart just renders however many months actually come back.
-const HOURLY_DAYS = 2;
+const HOURLY_DAYS = 7;
 const DAILY_DAYS = 30;
 const MONTHLY_DAYS = 366;
 const days = computed(() => {
