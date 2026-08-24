@@ -28,13 +28,16 @@ type Column struct {
 	Type  ColumnType `json:"type"`
 }
 
-// ParamType enumerates supported input kinds. Only ParamDateRange ships
-// today; new kinds can be added here as reports need them, without changing
-// the Report interface or the HTTP layer.
+// ParamType enumerates supported input kinds. New kinds can be added here as
+// reports need them, without changing the Report interface or the HTTP layer.
 type ParamType string
 
 const (
 	ParamDateRange ParamType = "daterange"
+	// ParamEndDate is a single date input with no lower bound — used by
+	// reports that want to show everything up to a cutoff, including
+	// anything already overdue (e.g. upcoming billing).
+	ParamEndDate ParamType = "enddate"
 )
 
 // ParamDef describes one input field a report accepts, so the frontend can
@@ -148,4 +151,18 @@ func ParseDateRange(q url.Values, maxRangeDays int) (start, end string, err erro
 	}
 
 	return startT.Format(dateLayout), endT.Format(dateLayout), nil
+}
+
+// ParseEndDate parses a single ?end=YYYY-MM-DD query param, defaulting to
+// defaultEnd when absent.
+func ParseEndDate(q url.Values, defaultEnd time.Time) (string, error) {
+	raw := q.Get("end")
+	if raw == "" {
+		return defaultEnd.Format(dateLayout), nil
+	}
+	t, err := time.Parse(dateLayout, raw)
+	if err != nil {
+		return "", fmt.Errorf("invalid end date %q: must be YYYY-MM-DD", raw)
+	}
+	return t.Format(dateLayout), nil
 }

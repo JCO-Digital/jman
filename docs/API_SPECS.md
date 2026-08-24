@@ -342,6 +342,14 @@ Returns metadata for every registered report, including its input parameters.
 		"params": [
 			{ "key": "range", "type": "daterange", "label": "Date range", "required": false }
 		]
+	},
+	{
+		"id": "upcoming-billing",
+		"name": "Upcoming Asset Billing",
+		"description": "Active organization assets due to be billed by the selected date, including any already overdue.",
+		"params": [
+			{ "key": "end", "type": "enddate", "label": "Show billing due before", "required": false }
+		]
 	}
 ]
 ```
@@ -350,10 +358,15 @@ Returns metadata for every registered report, including its input parameters.
 
 `GET /reports/{id}/run` (Protected: `basic`)
 
-Query parameters depend on the report's `params`; currently only
-`daterange`-typed params are supported, taking `start`/`end` as `YYYY-MM-DD`
-(both optional — default to the trailing 30 days). Returns `400` for an
-unparseable or out-of-bounds range, `404` for an unknown report ID.
+Query parameters depend on the report's `params`:
+- `daterange` takes `start`/`end` as `YYYY-MM-DD` (both optional — default to
+  the trailing 30 days).
+- `enddate` takes a single `end` as `YYYY-MM-DD` (optional — defaults to one
+  month from today). There is no lower bound, so results already past due
+  are always included alongside anything up to `end`.
+
+Returns `400` for an unparseable or out-of-bounds range, `404` for an unknown
+report ID.
 
 `GET /reports/traffic/run?start=2026-01-01&end=2026-01-31`
 
@@ -389,6 +402,26 @@ unparseable or out-of-bounds range, `404` for an unknown report ID.
 	],
 	"rows": [
 		{ "organization": "Acme Inc", "identifier": "acme.example.com", "asset_name": "Yoast SEO", "asset_type": "Plugin", "billing_freq": "Monthly", "status": "active", "amount": 2000, "payment_date": "2026-01-15", "info": "January renewal" }
+	]
+}
+```
+
+`GET /reports/upcoming-billing/run?end=2026-02-28`
+
+```json
+{
+	"columns": [
+		{ "key": "organization", "label": "Organization", "type": "text" },
+		{ "key": "identifier", "label": "Identifier", "type": "text" },
+		{ "key": "asset_name", "label": "Asset", "type": "text" },
+		{ "key": "asset_type", "label": "Type", "type": "text" },
+		{ "key": "billing_freq", "label": "Billing Frequency", "type": "text" },
+		{ "key": "price", "label": "Price", "type": "currency" },
+		{ "key": "next_billing", "label": "Next Billing", "type": "date" },
+		{ "key": "status", "label": "Status", "type": "text" }
+	],
+	"rows": [
+		{ "organization": "Acme Inc", "identifier": "acme.example.com", "asset_name": "Yoast SEO", "asset_type": "Plugin", "billing_freq": "Monthly", "price": 2000, "next_billing": "2026-01-15", "status": "active" }
 	]
 }
 ```
