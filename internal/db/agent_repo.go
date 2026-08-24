@@ -138,7 +138,7 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 	}
 
 	rows, err := dbConn.Query(
-		`SELECT id, server_id, server_name, token_prefix, description, revoked, last_seen_at, agent_version, created_at, created_by
+		`SELECT id, server_id, server_name, token_prefix, description, revoked, last_seen_at, agent_version, created_at, created_by, stale_alert_sent_at
 		 FROM agent_tokens ORDER BY created_at DESC`,
 	)
 	if err != nil {
@@ -153,7 +153,8 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 		var lastSeen sql.NullString
 		var agentVersion sql.NullString
 		var createdBy sql.NullString
-		if err := rows.Scan(&t.ID, &t.ServerID, &serverName, &t.TokenPrefix, &t.Description, &t.Revoked, &lastSeen, &agentVersion, &t.CreatedAt, &createdBy); err != nil {
+		var staleAlertSentAt sql.NullString
+		if err := rows.Scan(&t.ID, &t.ServerID, &serverName, &t.TokenPrefix, &t.Description, &t.Revoked, &lastSeen, &agentVersion, &t.CreatedAt, &createdBy, &staleAlertSentAt); err != nil {
 			return nil, fmt.Errorf("failed to scan agent token: %w", err)
 		}
 		t.ServerName = serverName.String
@@ -164,6 +165,9 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 		if agentVersion.Valid {
 			t.AgentVersion = &agentVersion.String
 		}
+		if staleAlertSentAt.Valid {
+			t.StaleAlertSentAt = &staleAlertSentAt.String
+		}
 		tokens = append(tokens, t)
 	}
 	if err := rows.Err(); err != nil {
@@ -171,6 +175,29 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 	}
 
 	return tokens, nil
+}
+
+// MarkAgentTokenStaleAlerted records that a "hasn't reported in" alert was
+// just sent for this token's current staleness episode (see
+// internal/tasks/agent_health.go), so it isn't re-alerted every tick.
+func MarkAgentTokenStaleAlerted(tokenID int) error {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_, err := dbConn.Exec(`UPDATE agent_tokens SET stale_alert_sent_at = CURRENT_TIMESTAMP WHERE id = ?`, tokenID)
+	return err
+}
+
+// ClearAgentTokenStaleAlert resets a token's staleness episode once it's
+// reporting again, so the next time it goes stale a fresh alert fires.
+func ClearAgentTokenStaleAlert(tokenID int) error {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_, err := dbConn.Exec(`UPDATE agent_tokens SET stale_alert_sent_at = NULL WHERE id = ?`, tokenID)
+	return err
 }
 
 // SetAgentTokenVersion records the jman-agent version reported in a

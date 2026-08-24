@@ -15,6 +15,10 @@ type AgentToken struct {
 	AgentVersion *string `json:"agent_version"`
 	CreatedAt    string  `json:"created_at"`
 	CreatedBy    string  `json:"created_by"`
+	// StaleAlertSentAt is internal bookkeeping for the staleness alert in
+	// internal/tasks/agent_health.go — deliberately excluded from API/CLI
+	// responses via json:"-", same treatment as TokenHash above.
+	StaleAlertSentAt *string `json:"-"`
 }
 
 // SiteDiskUsage is the most recently reported disk usage for a single site,

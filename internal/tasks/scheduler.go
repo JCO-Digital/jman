@@ -54,16 +54,26 @@ func runTick() {
 	if err := pruneSiteTraffic(); err != nil {
 		log.Printf("Error pruning old site traffic: %v", err)
 	}
+	if err := checkStaleAgents(); err != nil {
+		log.Printf("Error checking for stale agents: %v", err)
+	}
 }
 
 // siteTrafficHourlyRetention is how long site_traffic_hourly rows are kept
 // before being pruned in favor of their already-computed site_traffic_daily
 // rollup — hourly detail beyond this window has no consumer (jman-ui only
-// ever requests a few days of hourly data) but was otherwise accumulating
-// forever.
-const siteTrafficHourlyRetention = 48 * time.Hour
+// ever requests a week of hourly data) but was otherwise accumulating
+// forever. Must mirror hourlyRetentionWindow in
+// internal/agent/logs/collect.go.
+const siteTrafficHourlyRetention = 168 * time.Hour
 
 func pruneSiteTraffic() error {
+	// Finalize each completed day's site_traffic_daily rollup before pruning
+	// touches any of its source hourly rows — see FinalizeCompletedDailyRollups
+	// and PruneOldSiteTrafficHourly's doc comments for why the order matters.
+	if err := db.FinalizeCompletedDailyRollups(); err != nil {
+		return fmt.Errorf("failed to finalize completed daily rollups: %w", err)
+	}
 	return db.PruneOldSiteTrafficHourly(time.Now().Add(-siteTrafficHourlyRetention))
 }
 

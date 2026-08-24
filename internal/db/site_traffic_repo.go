@@ -185,12 +185,95 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 	return nil
 }
 
+// FinalizeCompletedDailyRollups recomputes the site_traffic_daily rollup for
+// every (site, day) in site_traffic_hourly whose day is strictly before
+// today (UTC) and hasn't been finalized yet (site_traffic_daily.finalized_at
+// IS NULL for that day). It's meant to run once per scheduler tick, well
+// before PruneOldSiteTrafficHourly ever touches those same rows.
+//
+// Each (site, day) is only ever recomputed here ONCE — the tick that first
+// sees it as fully elapsed — and then marked finalized so later ticks skip
+// it. This is deliberate, not just an optimization: PruneOldSiteTrafficHourly
+// deletes a day's hourly rows incrementally, one hourly tick at a time (see
+// its own doc comment), so if this function kept re-deriving a day's total
+// from "whatever hourly rows currently exist" on every tick, it would
+// eventually run again after some — but not all — of that day's rows had
+// already been deleted, permanently shrinking the stored total toward
+// whatever sliver happened to remain. Recomputing exactly once, while every
+// hourly row is still guaranteed present, is what avoids that. It's also
+// what makes the hourly-to-daily conversion happen as soon as the date
+// changes (worst case one tick of lag past UTC midnight) instead of only
+// being derived at the tail end of the retention window.
+func FinalizeCompletedDailyRollups() error {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	today := time.Now().UTC().Format("2006-01-02")
+
+	rows, err := dbConn.Query(
+		`SELECT DISTINCT h.site_id, date(h.hour) FROM site_traffic_hourly h
+		 WHERE date(h.hour) < ?
+		 AND NOT EXISTS (
+		 	SELECT 1 FROM site_traffic_daily d
+		 	WHERE d.site_id = h.site_id AND d.day = date(h.hour) AND d.finalized_at IS NOT NULL
+		 )`,
+		today,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to find completed days to finalize: %w", err)
+	}
+	type sitedDay struct {
+		siteID int
+		day    string
+	}
+	var completed []sitedDay
+	for rows.Next() {
+		var s sitedDay
+		if err := rows.Scan(&s.siteID, &s.day); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to scan completed-day row: %w", err)
+		}
+		completed = append(completed, s)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("error iterating completed-day rows: %w", err)
+	}
+	rows.Close()
+
+	for _, s := range completed {
+		if err := RecomputeSiteTrafficDaily(s.siteID, s.day); err != nil {
+			return fmt.Errorf("failed to finalize daily rollup for site %d day %s: %w", s.siteID, s.day, err)
+		}
+		if _, err := dbConn.Exec(
+			`UPDATE site_traffic_daily SET finalized_at = CURRENT_TIMESTAMP WHERE site_id = ? AND day = date(?)`,
+			s.siteID, s.day,
+		); err != nil {
+			return fmt.Errorf("failed to mark daily rollup finalized for site %d day %s: %w", s.siteID, s.day, err)
+		}
+	}
+	return nil
+}
+
 // PruneOldSiteTrafficHourly deletes site_traffic_hourly rows older than
-// cutoff. Before deleting each affected site/day's rows, it recomputes that
-// day's site_traffic_daily rollup so the daily rollup is guaranteed to
-// reflect every hourly row currently on disk (including any late-arriving
-// backlog hour) before the source data is removed — daily rollups are cheap
-// to keep indefinitely, so hourly detail is the only thing pruned.
+// cutoff, but only for days already finalized by FinalizeCompletedDailyRollups
+// (site_traffic_daily.finalized_at set). It does NOT recompute
+// site_traffic_daily itself — by the time a day's rows are old enough to be
+// pruned here, its rollup was already finalized, typically days earlier,
+// from hourly data that was still completely intact at the time. Restricting
+// deletion to already-finalized days also means an old, in-progress, or
+// not-yet-finalized day (e.g. the scheduler having been down across a day
+// boundary) is never pruned out from under a finalization that hasn't run
+// yet — deletion always waits for finalization, never races ahead of it.
+//
+// A prior design recomputed the daily rollup as part of this same function,
+// from whatever hourly rows happened to still exist at prune time — since
+// this runs once per hour while a day's rows are deleted incrementally, each
+// tick's recompute saw progressively fewer hours than the last, permanently
+// driving the stored total toward whatever sliver of the day happened to
+// still be present right before its last hourly row was deleted.
 func PruneOldSiteTrafficHourly(cutoff time.Time) error {
 	dbConn := GetDB()
 	if dbConn == nil {
@@ -199,42 +282,18 @@ func PruneOldSiteTrafficHourly(cutoff time.Time) error {
 
 	cutoffStr := cutoff.UTC().Format(time.RFC3339)
 
-	rows, err := dbConn.Query(
-		`SELECT DISTINCT site_id, date(hour) FROM site_traffic_hourly WHERE hour < ?`,
+	if _, err := dbConn.Exec(
+		`DELETE FROM site_traffic_hourly
+		 WHERE hour < ?
+		 AND EXISTS (
+		 	SELECT 1 FROM site_traffic_daily d
+		 	WHERE d.site_id = site_traffic_hourly.site_id
+		 	AND d.day = date(site_traffic_hourly.hour)
+		 	AND d.finalized_at IS NOT NULL
+		 )`,
 		cutoffStr,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to find stale hourly traffic: %w", err)
-	}
-	type sitedDay struct {
-		siteID int
-		day    string
-	}
-	var stale []sitedDay
-	for rows.Next() {
-		var s sitedDay
-		if err := rows.Scan(&s.siteID, &s.day); err != nil {
-			rows.Close()
-			return fmt.Errorf("failed to scan stale hourly traffic row: %w", err)
-		}
-		stale = append(stale, s)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return fmt.Errorf("error iterating stale hourly traffic: %w", err)
-	}
-	rows.Close()
-
-	for _, s := range stale {
-		if err := RecomputeSiteTrafficDaily(s.siteID, s.day); err != nil {
-			return fmt.Errorf("failed to recompute daily rollup for site %d day %s before pruning: %w", s.siteID, s.day, err)
-		}
-		if _, err := dbConn.Exec(
-			`DELETE FROM site_traffic_hourly WHERE site_id = ? AND date(hour) = ? AND hour < ?`,
-			s.siteID, s.day, cutoffStr,
-		); err != nil {
-			return fmt.Errorf("failed to prune hourly traffic for site %d day %s: %w", s.siteID, s.day, err)
-		}
+	); err != nil {
+		return fmt.Errorf("failed to prune old hourly traffic: %w", err)
 	}
 	return nil
 }

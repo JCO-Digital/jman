@@ -125,18 +125,18 @@ func TestCollect_LiveFileIncrementalTail(t *testing.T) {
 func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
 	dir := t.TempDir()
 	// Three separate rotated days, one hour of traffic each. Relative to
-	// `now` below, Aug 14 falls outside the 48h hourly retention window
-	// (aggregated as a single daily entry), while Aug 15 and Aug 16 are
-	// still within it (aggregated hourly) — see hourlyRetentionWindow.
-	writeGzip(t, filepath.Join(dir, "access.log-20260814.gz"), `1.1.1.1 - - [14/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
-	writeGzip(t, filepath.Join(dir, "access.log-20260815.gz"), `1.1.1.1 - - [15/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
-	writeGzip(t, filepath.Join(dir, "access.log-20260816.gz"), `1.1.1.1 - - [16/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
+	// `now` below, Aug 10 falls outside the 168h/7-day hourly retention
+	// window (aggregated as a single daily entry), while Aug 22 and Aug 23
+	// are still within it (aggregated hourly) — see hourlyRetentionWindow.
+	writeGzip(t, filepath.Join(dir, "access.log-20260810.gz"), `1.1.1.1 - - [10/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
+	writeGzip(t, filepath.Join(dir, "access.log-20260822.gz"), `1.1.1.1 - - [22/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
+	writeGzip(t, filepath.Join(dir, "access.log-20260823.gz"), `1.1.1.1 - - [23/Aug/2026:10:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"`+"\n")
 	if err := os.WriteFile(filepath.Join(dir, "access.log"), nil, 0644); err != nil {
 		t.Fatal(err)
 	}
 
 	state := &FileState{ProcessedRotated: map[string]bool{}}
-	now := time.Date(2026, 8, 17, 12, 0, 0, 0, time.UTC)
+	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
 
 	// Budget of 2 (hourly + daily entries combined): only two of the three
 	// backlogged days should be processed and marked, leaving the third for
@@ -149,13 +149,13 @@ func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
 		t.Fatalf("expected 2 finalized hours (budget-capped), got %d", len(finalized))
 	}
 	if len(dailyFinalized) != 0 {
-		t.Fatalf("expected no daily entries yet (the old Aug 14 day hasn't been reached), got %d", len(dailyFinalized))
+		t.Fatalf("expected no daily entries yet (the old Aug 10 day hasn't been reached), got %d", len(dailyFinalized))
 	}
 	if !hasMore {
 		t.Error("expected hasMore=true with a rotated day still deferred")
 	}
 	processedCount := 0
-	for _, name := range []string{"access.log-20260814.gz", "access.log-20260815.gz", "access.log-20260816.gz"} {
+	for _, name := range []string{"access.log-20260810.gz", "access.log-20260822.gz", "access.log-20260823.gz"} {
 		if state.ProcessedRotated[name] {
 			processedCount++
 		}
@@ -177,8 +177,8 @@ func TestCollect_BudgetDefersRemainingBacklog(t *testing.T) {
 	if len(dailyFinalized) != 1 {
 		t.Fatalf("expected the remaining backlogged day as 1 daily entry on the follow-up cycle, got %d", len(dailyFinalized))
 	}
-	if dailyFinalized[0].Day != "2026-08-14" {
-		t.Errorf("Day = %q, want 2026-08-14", dailyFinalized[0].Day)
+	if dailyFinalized[0].Day != "2026-08-10" {
+		t.Errorf("Day = %q, want 2026-08-10", dailyFinalized[0].Day)
 	}
 	if hasMore {
 		t.Error("expected hasMore=false once the backlog is fully drained")
@@ -301,7 +301,7 @@ func TestCollect_LiveFileTakesPriorityOverRotatedBacklog(t *testing.T) {
 func TestCollect_OldRotatedDayAggregatesToDaily(t *testing.T) {
 	dir := t.TempDir()
 	// Four hours of traffic spread across one very old day (well beyond the
-	// 48h hourly retention window), including a bot request, an internal
+	// 168h/7-day hourly retention window), including a bot request, an internal
 	// jman request, and a repeat visitor across two different hours (to
 	// confirm daily unique-visitor dedup spans the whole day, not per hour).
 	lines := `1.1.1.1 - - [01/Jun/2026:08:00:00 +0000] "GET / HTTP/2.0" 200 100 "-" "Mozilla/5.0"` + "\n" +

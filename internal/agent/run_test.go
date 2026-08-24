@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -62,5 +64,30 @@ func TestRotateSites_NoStarvation(t *testing.T) {
 func TestRotateSites_Empty(t *testing.T) {
 	if got := rotateSites(nil, 5); len(got) != 0 {
 		t.Errorf("expected empty result for empty input, got %v", got)
+	}
+}
+
+func TestRecoverPanic_ConvertsPanicToError(t *testing.T) {
+	_, err := recoverPanic(func() (bool, error) {
+		panic("nil map write")
+	})
+	if err == nil {
+		t.Fatal("expected a recovered panic to surface as an error, got nil")
+	}
+	if !strings.Contains(err.Error(), "nil map write") {
+		t.Errorf("error = %q, want it to mention the panic value", err.Error())
+	}
+}
+
+func TestRecoverPanic_PassesThroughNormalResult(t *testing.T) {
+	wantErr := errors.New("boom")
+	hasBacklog, err := recoverPanic(func() (bool, error) {
+		return true, wantErr
+	})
+	if !hasBacklog {
+		t.Errorf("hasBacklog = false, want true")
+	}
+	if !errors.Is(err, wantErr) {
+		t.Errorf("err = %v, want %v", err, wantErr)
 	}
 }

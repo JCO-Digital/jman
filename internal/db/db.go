@@ -361,6 +361,13 @@ func initSchema() error {
 				"agent_version": "TEXT",
 				"created_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"created_by":    "TEXT",
+				// stale_alert_sent_at tracks the current staleness alert
+				// episode (see internal/tasks/agent_health.go): set when a
+				// "hasn't reported in" Slack alert is sent, cleared once the
+				// agent reports again — so the next time it goes stale, a
+				// fresh alert fires instead of being silently deduped by
+				// slack_messages' permanent exact-text matching.
+				"stale_alert_sent_at": "DATETIME",
 			},
 		},
 		{
@@ -417,7 +424,20 @@ func initSchema() error {
 				"top_pages":       "TEXT",
 				"top_referrers":   "TEXT",
 				"status_codes":    "TEXT DEFAULT ''", // see site_traffic_hourly's status_codes comment
-				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				// finalized_at is set exactly once, by
+				// FinalizeCompletedDailyRollups, the first time this day is
+				// recomputed after fully closing (as opposed to the
+				// continuous intraday recomputes AgentReportHandler triggers
+				// while the day is still in progress, which leave this NULL).
+				// RecomputeSiteTrafficDaily's upsert deliberately never
+				// touches this column, so it's safe to call from either path
+				// without one clobbering the other's signal. Deliberately
+				// nullable with no DEFAULT: pre-existing rows (and any day
+				// whose hourly source rows are already gone) simply stay
+				// NULL, which correctly excludes them from
+				// PruneOldSiteTrafficHourly's finalized-only deletion check.
+				"finalized_at": "DATETIME",
+				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 			PrimaryKey: []string{"site_id", "day"},
 		},
