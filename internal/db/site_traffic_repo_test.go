@@ -146,6 +146,42 @@ func TestUpsertSiteTrafficDaily(t *testing.T) {
 	}
 }
 
+func TestGetSiteTrafficDailyRange(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	seed := func(siteID int, day string, total int) {
+		t.Helper()
+		entry := models.TrafficDailyEntry{Day: day, RequestsTotal: total, RequestsHuman: total}
+		if err := UpsertSiteTrafficDaily(siteID, entry); err != nil {
+			t.Fatalf("failed to seed daily entry for site %d day %s: %v", siteID, day, err)
+		}
+	}
+
+	seed(1, "2026-01-01", 10)
+	seed(1, "2026-01-02", 20)
+	seed(2, "2026-01-02", 30)
+	seed(1, "2025-12-31", 99) // out of range, must be excluded
+
+	rows, err := GetSiteTrafficDailyRange("2026-01-01", "2026-01-02")
+	if err != nil {
+		t.Fatalf("GetSiteTrafficDailyRange() error = %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("expected 3 rows in range, got %d: %+v", len(rows), rows)
+	}
+
+	// Ordered by site_id ASC, day ASC.
+	if rows[0].SiteID != 1 || rows[0].Day != "2026-01-01" || rows[0].RequestsTotal != 10 {
+		t.Errorf("rows[0] = %+v, want site 1, day 2026-01-01, total 10", rows[0])
+	}
+	if rows[1].SiteID != 1 || rows[1].Day != "2026-01-02" || rows[1].RequestsTotal != 20 {
+		t.Errorf("rows[1] = %+v, want site 1, day 2026-01-02, total 20", rows[1])
+	}
+	if rows[2].SiteID != 2 || rows[2].Day != "2026-01-02" || rows[2].RequestsTotal != 30 {
+		t.Errorf("rows[2] = %+v, want site 2, day 2026-01-02, total 30", rows[2])
+	}
+}
+
 func TestGetSiteTrafficMonthly(t *testing.T) {
 	setupTaskRepoTest(t)
 

@@ -461,6 +461,64 @@ func GetAssetPaymentsByAsset(orgAssetID int) ([]models.AssetPayment, error) {
 	return payments, nil
 }
 
+// GetAssetPaymentsInRange returns all asset_payments with payment_date in
+// [start, end] (inclusive, "YYYY-MM-DD"), enriched with organization/asset
+// context, ordered by organization then payment date, for use by the
+// asset/billing report.
+func GetAssetPaymentsInRange(start, end string) ([]models.AssetPaymentReportRow, error) {
+	db := GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	query := `
+	SELECT o.id, o.name, oa.id, oa.identifier, a.name, a.type, oa.billing_freq, oa.status,
+	       ap.id, ap.amount, ap.payment_date, ap.info
+	FROM asset_payments ap
+	JOIN organization_assets oa ON ap.org_asset_id = oa.id
+	JOIN organizations o ON oa.organization_id = o.id
+	LEFT JOIN assets a ON oa.asset_id = a.id
+	WHERE ap.payment_date >= ? AND ap.payment_date <= ?
+	ORDER BY o.name ASC, ap.payment_date ASC
+	`
+	// Compared as plain ISO8601 text against the stored column (matching
+	// GetSiteTraffic's cutoff-expression convention) rather than wrapping
+	// the column in date()/strftime() — the modernc.org/sqlite driver's
+	// DATE/DATETIME column handling doesn't play well with SQL date
+	// functions applied to the column itself. end is extended to the end
+	// of its day so a payment_date with a non-midnight time-of-day on the
+	// last day is still included.
+	rows, err := db.Query(query, start, end+"T23:59:59Z")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query asset payments for report: %w", err)
+	}
+	defer rows.Close()
+
+	result := []models.AssetPaymentReportRow{}
+	for rows.Next() {
+		var row models.AssetPaymentReportRow
+		var assetName, assetType sql.NullString
+		if err := rows.Scan(
+			&row.OrganizationID, &row.OrganizationName, &row.OrgAssetID, &row.Identifier,
+			&assetName, &assetType, &row.BillingFreq, &row.Status,
+			&row.PaymentID, &row.Amount, &row.PaymentDate, &row.Info,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan asset payment report row: %w", err)
+		}
+		if assetName.Valid {
+			row.AssetName = assetName.String
+		}
+		if assetType.Valid {
+			row.AssetType = assetType.String
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating asset payment report rows: %w", err)
+	}
+	return result, nil
+}
+
 func DeleteAssetPayment(id int) error {
 	db := GetDB()
 	if db == nil {

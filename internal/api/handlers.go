@@ -129,6 +129,10 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/tasks/{id}/complete", edit(CompleteTaskHandler))
 	mux.Handle("DELETE /api/tasks/{id}", edit(DeleteTaskHandler))
 
+	// --- Report routes ---
+	mux.Handle("GET /api/reports", basic(ListReportsHandler))
+	mux.Handle("GET /api/reports/{id}/run", basic(RunReportHandler))
+
 	// --- Settings routes ---
 	mux.Handle("GET /api/settings", basic(ListSettingsHandler))
 	mux.Handle("GET /api/settings/{key}", basic(GetSettingHandler))
