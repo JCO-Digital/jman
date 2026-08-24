@@ -12,6 +12,7 @@ import IconOrganization from "./icons/IconOrganization.vue";
 import IconPlugin from "./icons/IconPlugin.vue";
 import IconPlusCircle from "./icons/IconPlusCircle.vue";
 import IconRefresh from "./icons/IconRefresh.vue";
+import IconReport from "./icons/IconReport.vue";
 import IconSettings from "./icons/IconSettings.vue";
 import IconSite from "./icons/IconSite.vue";
 import IconTag from "./icons/IconTag.vue";
@@ -38,6 +39,7 @@ const iconMap: Record<string, Component> = {
 	plugin: IconPlugin,
 	"plus-circle": IconPlusCircle,
 	refresh: IconRefresh,
+	report: IconReport,
 	settings: IconSettings,
 	site: IconSite,
 	tag: IconTag,

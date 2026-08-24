@@ -562,3 +562,34 @@ export interface SiteTrafficPeriod {
 	// excluded from top_pages (non-200 or a WordPress system path).
 	status_codes: TrafficTopEntry[];
 }
+
+export type ReportColumnType = "text" | "number" | "currency" | "date";
+
+export interface ReportColumn {
+	key: string;
+	label: string;
+	type: ReportColumnType;
+}
+
+// Only "daterange" ships for now; more input kinds can be added later.
+export type ReportParamType = "daterange";
+
+export interface ReportParamDef {
+	key: string;
+	type: ReportParamType;
+	label: string;
+	required: boolean;
+	default?: string;
+}
+
+export interface ReportMeta {
+	id: string;
+	name: string;
+	description: string;
+	params: ReportParamDef[];
+}
+
+export interface ReportResult {
+	columns: ReportColumn[];
+	rows: Record<string, string | number | null>[];
+}
