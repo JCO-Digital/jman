@@ -1,6 +1,13 @@
 # Changelog
 
-## 1.46.0 (2026-08-24)
+## 1.47.0 (2026-08-24)
+
+#### Features
+
+- reports: add support for enddate parameter type (0cbff9e)
+- reports: add report list and runner views (d91a1cb)
+
+## v1.46.0 (2026-08-24)
 
 #### Features
 
