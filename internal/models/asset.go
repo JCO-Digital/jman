@@ -89,3 +89,20 @@ type AssetPayment struct {
 	CreatedAt   time.Time `json:"created_at"`
 	CreatedBy   string    `json:"created_by"`
 }
+
+// AssetPaymentReportRow is a single payment enriched with organization/asset
+// context, used by the asset/billing report.
+type AssetPaymentReportRow struct {
+	OrganizationID   int              `json:"organization_id"`
+	OrganizationName string           `json:"organization_name"`
+	OrgAssetID       int              `json:"org_asset_id"`
+	Identifier       string           `json:"identifier"`
+	AssetName        string           `json:"asset_name"`
+	AssetType        string           `json:"asset_type"`
+	BillingFreq      BillingFrequency `json:"billing_freq"`
+	Status           AssetStatus      `json:"status"`
+	PaymentID        int              `json:"payment_id"`
+	Amount           int              `json:"amount"` // stored in cents
+	PaymentDate      time.Time        `json:"payment_date"`
+	Info             string           `json:"info"`
+}

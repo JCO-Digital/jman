@@ -410,6 +410,47 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 	return result, nil
 }
 
+// GetSiteTrafficDailyRange returns per-site daily traffic rows for every
+// site with data in [start, end] (inclusive, "YYYY-MM-DD"), ordered by site
+// then day, for use by the cross-site traffic report. Unlike GetSiteTraffic/
+// GetSiteTrafficMonthly, this is not scoped to a single site.
+func GetSiteTrafficDailyRange(start, end string) ([]models.SiteTrafficDailyRow, error) {
+	dbConn := GetDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := dbConn.Query(
+		`SELECT site_id, day, requests_total, requests_human, requests_bot, unique_visitors
+		 FROM site_traffic_daily WHERE day >= ? AND day <= ? ORDER BY site_id ASC, day ASC`,
+		start, end,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query site traffic for report: %w", err)
+	}
+	defer rows.Close()
+
+	result := []models.SiteTrafficDailyRow{}
+	for rows.Next() {
+		var row models.SiteTrafficDailyRow
+		if err := rows.Scan(&row.SiteID, &row.Day, &row.RequestsTotal, &row.RequestsHuman, &row.RequestsBot, &row.UniqueVisitors); err != nil {
+			return nil, fmt.Errorf("failed to scan site traffic report row: %w", err)
+		}
+		// The DATE column can round-trip as a bare date or a full
+		// midnight timestamp depending on the sqlite driver (see the
+		// PeriodStart caveat in GetSiteTraffic) — only the date portion is
+		// guaranteed, so normalize it here for report output.
+		if len(row.Day) > 10 {
+			row.Day = row.Day[:10]
+		}
+		result = append(result, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating site traffic report rows: %w", err)
+	}
+	return result, nil
+}
+
 // GetSiteTraffic returns a site's hourly or daily traffic for the last
 // `days` days, oldest first.
 func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPeriod, error) {

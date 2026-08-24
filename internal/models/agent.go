@@ -126,6 +126,19 @@ type SiteTrafficPeriod struct {
 	StatusCodes    []TrafficTopEntry `json:"status_codes"`
 }
 
+// SiteTrafficDailyRow is a single site's daily traffic row, used by the
+// cross-site traffic report — unlike SiteTrafficPeriod (a single site's own
+// breakdown), this carries the site ID so report rows from multiple sites
+// can be enriched with a site label after the query.
+type SiteTrafficDailyRow struct {
+	SiteID         int    `json:"site_id"`
+	Day            string `json:"day"`
+	RequestsTotal  int    `json:"requests_total"`
+	RequestsHuman  int    `json:"requests_human"`
+	RequestsBot    int    `json:"requests_bot"`
+	UniqueVisitors int    `json:"unique_visitors"`
+}
+
 // AgentReportSite is a single site's worth of freshly collected data in a
 // POST /api/agent/report request body.
 type AgentReportSite struct {

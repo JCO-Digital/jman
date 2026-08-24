@@ -313,6 +313,88 @@ These endpoints require at least **`basic`** level.
 
 ---
 
+## Reports (Read-Only)
+
+Backend-defined tabular reports. The frontend renders the returned columns/rows
+as a table and generates CSV export client-side — there is no separate export
+endpoint.
+
+### List Reports
+
+`GET /reports` (Protected: `basic`)
+
+Returns metadata for every registered report, including its input parameters.
+
+```json
+[
+	{
+		"id": "traffic",
+		"name": "Traffic Analytics",
+		"description": "Total visitor traffic per site for the selected date range.",
+		"params": [
+			{ "key": "range", "type": "daterange", "label": "Date range", "required": false }
+		]
+	},
+	{
+		"id": "asset-billing",
+		"name": "Asset & Billing Ledger",
+		"description": "Payments recorded against billable organization assets for the selected date range.",
+		"params": [
+			{ "key": "range", "type": "daterange", "label": "Date range", "required": false }
+		]
+	}
+]
+```
+
+### Run a Report
+
+`GET /reports/{id}/run` (Protected: `basic`)
+
+Query parameters depend on the report's `params`; currently only
+`daterange`-typed params are supported, taking `start`/`end` as `YYYY-MM-DD`
+(both optional — default to the trailing 30 days). Returns `400` for an
+unparseable or out-of-bounds range, `404` for an unknown report ID.
+
+`GET /reports/traffic/run?start=2026-01-01&end=2026-01-31`
+
+```json
+{
+	"columns": [
+		{ "key": "site", "label": "Site", "type": "text" },
+		{ "key": "requests_total", "label": "Total Requests", "type": "number" },
+		{ "key": "requests_human", "label": "Human Requests", "type": "number" },
+		{ "key": "requests_bot", "label": "Bot Requests", "type": "number" },
+		{ "key": "unique_visitors", "label": "Unique Visitors", "type": "number" }
+	],
+	"rows": [
+		{ "site": "example.com", "requests_total": 3600, "requests_human": 2900, "requests_bot": 700, "unique_visitors": 950 }
+	]
+}
+```
+
+`GET /reports/asset-billing/run?start=2026-01-01&end=2026-01-31`
+
+```json
+{
+	"columns": [
+		{ "key": "organization", "label": "Organization", "type": "text" },
+		{ "key": "identifier", "label": "Identifier", "type": "text" },
+		{ "key": "asset_name", "label": "Asset", "type": "text" },
+		{ "key": "asset_type", "label": "Type", "type": "text" },
+		{ "key": "billing_freq", "label": "Billing Frequency", "type": "text" },
+		{ "key": "status", "label": "Status", "type": "text" },
+		{ "key": "amount", "label": "Amount", "type": "currency" },
+		{ "key": "payment_date", "label": "Payment Date", "type": "date" },
+		{ "key": "info", "label": "Info", "type": "text" }
+	],
+	"rows": [
+		{ "organization": "Acme Inc", "identifier": "acme.example.com", "asset_name": "Yoast SEO", "asset_type": "Plugin", "billing_freq": "Monthly", "status": "active", "amount": 2000, "payment_date": "2026-01-15", "info": "January renewal" }
+	]
+}
+```
+
+---
+
 ## Organization Management (Read/Write)
 
 ### Organizations
