@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.37.0 (2026-08-21)
+## 5.38.0 (2026-08-24)
+
+#### Features
+
+- monitor: Add agent staleness detection and alerts (8b98adc)
+
+## v5.37.0 (2026-08-21)
 
 #### Features
 
