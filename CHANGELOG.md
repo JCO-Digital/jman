@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.45.0 (2026-08-21)
+## 1.46.0 (2026-08-24)
+
+#### Features
+
+- components: increase hourly traffic data retention window to 7 days (4281eef)
+
+## v1.45.0 (2026-08-21)
 
 #### Features
 
