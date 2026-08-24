@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"strings"
 	"testing"
 	"time"
@@ -41,9 +42,12 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 		t.Fatalf("failed to seed recent hourly entry: %v", err)
 	}
 
-	// Note: no manual RecomputeSiteTrafficDaily call here — the point of
-	// this test is that PruneOldSiteTrafficHourly itself guarantees the
-	// daily rollup is up to date before it deletes the source hourly row.
+	// Mirrors production's pruneSiteTraffic(): finalize completed days'
+	// daily rollups (the old hour's day is already fully in the past) before
+	// pruning touches their source hourly rows.
+	if err := FinalizeCompletedDailyRollups(); err != nil {
+		t.Fatalf("FinalizeCompletedDailyRollups() error = %v", err)
+	}
 	if err := PruneOldSiteTrafficHourly(now.Add(-48 * time.Hour)); err != nil {
 		t.Fatalf("PruneOldSiteTrafficHourly() error = %v", err)
 	}
@@ -274,5 +278,165 @@ func TestPruneOldSiteTrafficHourly_KeepsRowsWithinRetention(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected the within-retention row to survive pruning, count = %d", count)
+	}
+}
+
+// TestFinalizeCompletedDailyRollups checks that only fully-elapsed days
+// (strictly before today, UTC) get their site_traffic_daily rollup computed
+// — today's in-progress day is left alone (it's kept live by the ingest-time
+// recompute in AgentReportHandler instead), and finalizing a day never
+// deletes its source hourly rows.
+func TestFinalizeCompletedDailyRollups(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	const siteID = 13
+	now := time.Now().UTC()
+	yesterday := now.AddDate(0, 0, -1)
+
+	seedHour := func(hour time.Time, total int) {
+		entry := models.TrafficHourlyEntry{Hour: hour.Truncate(time.Hour).Format(time.RFC3339), RequestsTotal: total}
+		if err := UpsertSiteTrafficHourly(siteID, entry); err != nil {
+			t.Fatalf("failed to seed hourly entry for %s: %v", entry.Hour, err)
+		}
+	}
+	seedHour(yesterday.Add(10*time.Hour), 10)
+	seedHour(yesterday.Add(11*time.Hour), 20)
+	seedHour(now, 99) // today — must not be finalized yet
+
+	if err := FinalizeCompletedDailyRollups(); err != nil {
+		t.Fatalf("FinalizeCompletedDailyRollups() error = %v", err)
+	}
+
+	daily, err := GetSiteTraffic(siteID, "daily", 3650)
+	if err != nil {
+		t.Fatalf("failed to read daily rollup: %v", err)
+	}
+	yesterdayStr := yesterday.Format("2006-01-02")
+	todayStr := now.Format("2006-01-02")
+	var gotYesterday, gotToday bool
+	for _, d := range daily {
+		if strings.HasPrefix(d.PeriodStart, yesterdayStr) {
+			gotYesterday = true
+			if d.RequestsTotal != 30 {
+				t.Errorf("yesterday's daily total = %d, want 30 (10+20)", d.RequestsTotal)
+			}
+		}
+		if strings.HasPrefix(d.PeriodStart, todayStr) {
+			gotToday = true
+		}
+	}
+	if !gotYesterday {
+		t.Errorf("expected a finalized daily rollup for yesterday (%s)", yesterdayStr)
+	}
+	if gotToday {
+		t.Errorf("today (%s) should not be finalized yet — it's still in progress", todayStr)
+	}
+
+	var hourlyCount int
+	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
+		t.Fatalf("failed to count hourly rows: %v", err)
+	}
+	if hourlyCount != 3 {
+		t.Errorf("FinalizeCompletedDailyRollups must not delete hourly rows, got %d remaining, want 3", hourlyCount)
+	}
+
+	var finalizedAt sql.NullString
+	if err := GetDB().QueryRow(
+		`SELECT finalized_at FROM site_traffic_daily WHERE site_id = ? AND day = ?`, siteID, yesterdayStr,
+	).Scan(&finalizedAt); err != nil {
+		t.Fatalf("failed to read finalized_at: %v", err)
+	}
+	if !finalizedAt.Valid {
+		t.Fatalf("expected finalized_at to be set for yesterday after finalization")
+	}
+
+	// A late-arriving hourly row for the same day (e.g. AgentReportHandler's
+	// ingest-time recompute picking up backlog) must not clear finalized_at —
+	// otherwise PruneOldSiteTrafficHourly's finalized-only deletion check
+	// (and re-finalization) would race against it again.
+	seedHour(yesterday.Add(12*time.Hour), 5)
+	if err := RecomputeSiteTrafficDaily(siteID, yesterdayStr); err != nil {
+		t.Fatalf("RecomputeSiteTrafficDaily() error = %v", err)
+	}
+	var finalizedAtAfter sql.NullString
+	if err := GetDB().QueryRow(
+		`SELECT finalized_at FROM site_traffic_daily WHERE site_id = ? AND day = ?`, siteID, yesterdayStr,
+	).Scan(&finalizedAtAfter); err != nil {
+		t.Fatalf("failed to re-read finalized_at: %v", err)
+	}
+	if !finalizedAtAfter.Valid || finalizedAtAfter.String != finalizedAt.String {
+		t.Errorf("RecomputeSiteTrafficDaily must preserve finalized_at, got %v, want unchanged %v", finalizedAtAfter, finalizedAt)
+	}
+}
+
+// TestPruneOldSiteTrafficHourly_MultiTickDoesNotCorruptDailyTotal reproduces
+// the scenario that used to corrupt daily rollups: a single calendar day's
+// hourly rows being deleted incrementally across many scheduler ticks (the
+// cutoff sliding forward one hour at a time) rather than all at once. The
+// previous PruneOldSiteTrafficHourly recomputed the daily rollup from
+// whatever hourly rows happened to still exist on every tick, so the stored
+// total shrank a little each time a tick deleted a few more of the day's
+// hours out from under the next recompute. With daily finalization decoupled
+// from pruning, the total must stay correct throughout.
+func TestPruneOldSiteTrafficHourly_MultiTickDoesNotCorruptDailyTotal(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	const siteID = 21
+	day := time.Now().UTC().AddDate(0, 0, -3).Truncate(24 * time.Hour)
+
+	hours := []time.Time{
+		day.Add(0 * time.Hour),
+		day.Add(1 * time.Hour),
+		day.Add(2 * time.Hour),
+		day.Add(3 * time.Hour),
+		day.Add(4 * time.Hour),
+	}
+	const perHourTotal = 10
+	wantDailyTotal := perHourTotal * len(hours)
+
+	for _, h := range hours {
+		entry := models.TrafficHourlyEntry{Hour: h.Format(time.RFC3339), RequestsTotal: perHourTotal}
+		if err := UpsertSiteTrafficHourly(siteID, entry); err != nil {
+			t.Fatalf("failed to seed hourly entry for %s: %v", entry.Hour, err)
+		}
+	}
+
+	// Simulate one scheduler tick per hourly row, each advancing the prune
+	// cutoff just past one more of the day's hours — exactly how
+	// pruneSiteTraffic's hourly ticker chips away at a day in production.
+	for i, h := range hours {
+		if err := FinalizeCompletedDailyRollups(); err != nil {
+			t.Fatalf("tick %d: FinalizeCompletedDailyRollups() error = %v", i, err)
+		}
+		cutoff := h.Add(1 * time.Hour)
+		if err := PruneOldSiteTrafficHourly(cutoff); err != nil {
+			t.Fatalf("tick %d: PruneOldSiteTrafficHourly() error = %v", i, err)
+		}
+
+		daily, err := GetSiteTraffic(siteID, "daily", 3650)
+		if err != nil {
+			t.Fatalf("tick %d: failed to read daily rollup: %v", i, err)
+		}
+		dayStr := day.Format("2006-01-02")
+		found := false
+		for _, d := range daily {
+			if strings.HasPrefix(d.PeriodStart, dayStr) {
+				found = true
+				if d.RequestsTotal != wantDailyTotal {
+					t.Errorf("tick %d: daily total = %d, want %d (must not shrink as hourly rows are incrementally pruned)", i, d.RequestsTotal, wantDailyTotal)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("tick %d: expected a daily rollup for %s", i, dayStr)
+		}
+	}
+
+	var hourlyCount int
+	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
+		t.Fatalf("failed to count hourly rows: %v", err)
+	}
+	if hourlyCount != 0 {
+		t.Errorf("expected all of the day's hourly rows to be pruned by the final tick, got %d remaining", hourlyCount)
 	}
 }

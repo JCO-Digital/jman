@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/agent/logs"
@@ -63,7 +64,7 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-reportTimer.C:
-			hasBacklog, err := collectAndReport(ctx, client, cfg, version)
+			hasBacklog, err := safeCollectAndReport(ctx, client, cfg, version)
 			next := normalInterval
 			if err != nil {
 				// A failed send already retried internally with its own
@@ -117,6 +118,35 @@ func rotateSites(sites []models.AgentManifestSite, counter int) []models.AgentMa
 	rotated = append(rotated, sites[offset:]...)
 	rotated = append(rotated, sites[:offset]...)
 	return rotated
+}
+
+// safeCollectAndReport wraps collectAndReport with a recover(), so a panic
+// during collection (e.g. a forward-incompatible on-disk state file from an
+// older agent version — this has happened before, see
+// internal/agent/logs/state_test.go's
+// TestHourAccumulator_AddHandlesNilMapsFromOldPersistedState) degrades to a
+// failed cycle instead of crashing the process. Under systemd's
+// Restart=always this loop's report cycle fires immediately on every
+// process start (reportTimer above), before the self-update ticker ever
+// gets a chance to run — so an unrecovered panic here would crash-loop the
+// agent forever, unable to ever reach a newer release that might fix it.
+func safeCollectAndReport(ctx context.Context, client *Client, cfg Config, version string) (bool, error) {
+	return recoverPanic(func() (bool, error) {
+		return collectAndReport(ctx, client, cfg, version)
+	})
+}
+
+// recoverPanic runs fn, converting any panic into an error instead of
+// letting it propagate — pulled out of safeCollectAndReport so the recover
+// behavior itself can be unit tested without needing a full collection cycle
+// to actually panic.
+func recoverPanic(fn func() (bool, error)) (hasBacklog bool, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic during collection: %v\n%s", r, debug.Stack())
+		}
+	}()
+	return fn()
 }
 
 // collectAndReport runs one collection cycle and reports whether it

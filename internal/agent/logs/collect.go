@@ -25,12 +25,11 @@ var rotatedAccessLogRe = regexp.MustCompile(`^access\.log-\d{8}\.gz$`)
 // hourlyRetentionWindow mirrors jman-api's site_traffic_hourly retention
 // (siteTrafficHourlyRetention in internal/tasks/scheduler.go): a rotated
 // log day older than this would arrive, get rolled into a daily rollup, and
-// have its hourly rows pruned within about an hour of being received.
-// Sending it as up to 24 individual hourly entries just to have jman-api
-// immediately discard the hourly detail wastes report budget and
-// bandwidth, so such a day is aggregated into a single TrafficDailyEntry
-// instead (see FinalizeDaily).
-const hourlyRetentionWindow = 48 * time.Hour
+// have its hourly rows pruned shortly after being received. Sending it as
+// up to 24 individual hourly entries just to have jman-api discard the
+// hourly detail wastes report budget and bandwidth, so such a day is
+// aggregated into a single TrafficDailyEntry instead (see FinalizeDaily).
+const hourlyRetentionWindow = 168 * time.Hour
 
 // Collect processes new lines from a site's access logs (live + any
 // not-yet-processed rotated files) and returns any hours (and, for backlog
