@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useReportsStore } from "../../stores/reports";
 import type { ReportResult } from "../../types";
@@ -16,13 +16,10 @@ const props = defineProps<{
 const router = useRouter();
 const reportsStore = useReportsStore();
 
-const today = new Date().toISOString().split("T")[0] as string;
-const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
-	.toISOString()
-	.split("T")[0] as string;
+const formatDate = (date: Date) => date.toISOString().split("T")[0] as string;
 
-const start = ref(thirtyDaysAgo);
-const end = ref(today);
+const start = ref("");
+const end = ref("");
 const result = ref<ReportResult | null>(null);
 const isRunning = ref(false);
 const error = ref<string | null>(null);
@@ -35,6 +32,32 @@ const rowsPerPage = ref(50);
 const report = computed(() => reportsStore.getReport(props.id));
 const hasDateRange = computed(
 	() => report.value?.params.some((p) => p.type === "daterange") ?? false,
+);
+const endDateParam = computed(() =>
+	report.value?.params.find((p) => p.type === "enddate"),
+);
+
+// Defaults depend on which param type the report declares, so they can only
+// be set once its metadata has loaded — mirrors the backend's own defaults
+// (trailing 30 days for daterange, one month out for enddate) for a sane
+// initial view before the user picks their own dates.
+watch(
+	report,
+	(r) => {
+		if (!r || start.value || end.value) return;
+		if (r.params.some((p) => p.type === "daterange")) {
+			const today = new Date();
+			end.value = formatDate(today);
+			start.value = formatDate(
+				new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000),
+			);
+		} else if (endDateParam.value) {
+			const oneMonthOut = new Date();
+			oneMonthOut.setMonth(oneMonthOut.getMonth() + 1);
+			end.value = formatDate(oneMonthOut);
+		}
+	},
+	{ immediate: true },
 );
 
 onMounted(async () => {
@@ -112,10 +135,11 @@ const handleRowsPerPageUpdate = (newRowsPerPage: number) => {
 
 const handleExport = () => {
 	if (!result.value) return;
+	const dateSuffix = start.value ? `${start.value}-${end.value}` : end.value;
 	exportReportToCsv(
 		result.value.columns,
 		result.value.rows,
-		`${props.id}-${start.value}-${end.value}.csv`,
+		`${props.id}-${dateSuffix}.csv`,
 	);
 };
 
@@ -167,6 +191,12 @@ const goBack = () => {
 						<input id="report-end" v-model="end" type="date" />
 					</div>
 				</template>
+				<div v-else-if="endDateParam" class="form-group">
+					<label for="report-end-only">{{
+						endDateParam.label
+					}}</label>
+					<input id="report-end-only" v-model="end" type="date" />
+				</div>
 				<button
 					class="btn btn-primary"
 					:disabled="isRunning"

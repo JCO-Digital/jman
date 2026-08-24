@@ -571,8 +571,7 @@ export interface ReportColumn {
 	type: ReportColumnType;
 }
 
-// Only "daterange" ships for now; more input kinds can be added later.
-export type ReportParamType = "daterange";
+export type ReportParamType = "daterange" | "enddate";
 
 export interface ReportParamDef {
 	key: string;
