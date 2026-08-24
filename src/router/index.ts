@@ -88,6 +88,17 @@ const router = createRouter({
 			component: () => import("../views/TasksView.vue"),
 		},
 		{
+			path: "/reports",
+			name: "reports",
+			component: () => import("../views/Reports/ReportsListView.vue"),
+		},
+		{
+			path: "/reports/:id",
+			name: "report-runner",
+			component: () => import("../views/Reports/ReportRunnerView.vue"),
+			props: true,
+		},
+		{
 			path: "/",
 			name: "home",
 			component: () => import("../views/DashboardView.vue"),

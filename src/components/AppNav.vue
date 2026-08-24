@@ -86,6 +86,17 @@ const handleRefresh = () => {
 				>
 					Assets
 				</RouterLink>
+				<RouterLink
+					to="/reports"
+					class="nav-item"
+					:class="{
+						active:
+							route.name === 'reports' ||
+							route.name === 'report-runner',
+					}"
+				>
+					Reports
+				</RouterLink>
 			</div>
 			<div class="flex-row gap-4">
 				<button
