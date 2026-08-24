@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.38.0 (2026-08-24)
+## 5.39.0 (2026-08-24)
+
+#### Features
+
+- reports: add upcoming billing report (3be5484)
+- api: implement report generation framework (64ec520)
+
+## v5.38.0 (2026-08-24)
 
 #### Features
 
