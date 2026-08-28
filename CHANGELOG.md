@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.39.0 (2026-08-24)
+## 5.40.0 (2026-08-28)
+
+#### Features
+
+- api: implement site update ledger (345dcf2)
+- commands: add setup compat command (a837e90)
+
+## v5.39.0 (2026-08-24)
 
 #### Features
 
