@@ -2,6 +2,8 @@
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
+import { useAuthStore } from "../stores/auth";
+import { BASE_URL } from "../utils/api";
 import AppIcon from "./AppIcon.vue";
 import type { Plugin, PluginUpdateResult } from "../types";
 
@@ -101,7 +103,10 @@ async function fetchUpdates() {
 	}
 }
 
-async function updatePlugin(pluginName: string): Promise<boolean> {
+async function updatePlugin(
+	pluginName: string,
+	skipLedger?: boolean,
+): Promise<boolean> {
 	pluginStatus.value[pluginName] = "updating";
 	pluginError.value[pluginName] = "";
 
@@ -109,6 +114,7 @@ async function updatePlugin(pluginName: string): Promise<boolean> {
 		const result = await pluginUpdatesStore.updatePlugin(
 			props.siteId,
 			pluginName,
+			skipLedger,
 		);
 		pluginResult.value[pluginName] = result;
 		pluginStatus.value[pluginName] = "success";
@@ -122,9 +128,77 @@ async function updatePlugin(pluginName: string): Promise<boolean> {
 
 async function runUpdates(entries: Plugin[]) {
 	isUpdatingAll.value = true;
+
+	const totalAvailableBefore = updates.value.filter(isPending).length;
+
+	const attempted: {
+		name: string;
+		oldVersion: string;
+		newVersion?: string;
+		error?: string;
+		success: boolean;
+	}[] = [];
+
 	for (const plugin of entries) {
-		await updatePlugin(plugin.name);
+		await updatePlugin(plugin.name, true);
+
+		const status = pluginStatus.value[plugin.name];
+		const res = pluginResult.value[plugin.name];
+		const errMessage = pluginError.value[plugin.name];
+
+		attempted.push({
+			name: plugin.name,
+			oldVersion: plugin.version,
+			newVersion:
+				status === "success" && res ? res.new_version : plugin.version,
+			error: status === "error" ? errMessage : undefined,
+			success: status === "success",
+		});
 	}
+
+	if (attempted.length > 0) {
+		const successes = attempted.filter((a) => a.success);
+		const failures = attempted.filter((a) => !a.success);
+
+		let status: "full" | "partial" | "failed" = "failed";
+		if (failures.length > 0) {
+			status = "failed";
+		} else if (successes.length === totalAvailableBefore) {
+			status = "full";
+		} else {
+			status = "partial";
+		}
+
+		const ledgerData = {
+			updates: attempted.map((a) => ({
+				plugin: a.name,
+				old_version: a.oldVersion,
+				new_version: a.newVersion,
+				status: a.success ? "success" : "failed",
+				error: a.error,
+			})),
+			summary: `Bulk update of ${attempted.length} plugin(s): ${successes.length} succeeded, ${failures.length} failed.`,
+		};
+
+		try {
+			const authStore = useAuthStore();
+			await fetch(`${BASE_URL}/sites/${props.siteId}/update-ledger`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					...authStore.authHeader,
+				},
+				body: JSON.stringify({
+					update_type: "plugin",
+					status: status,
+					data_json: JSON.stringify(ledgerData),
+				}),
+			});
+		} catch (e) {
+			console.error("Failed to write bulk update ledger entry", e);
+		}
+	}
+
 	isUpdatingAll.value = false;
 }
 

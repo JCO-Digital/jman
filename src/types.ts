@@ -121,6 +121,7 @@ export interface Site {
 	environment?: SiteEnvironment;
 	disk_usage?: SiteDiskUsage;
 	wp_flags?: SiteWpFlags;
+	last_update?: SiteUpdateLedgerEntry;
 }
 
 export interface Plugin {
@@ -220,6 +221,16 @@ export interface MonitorStatus {
 	failure_count: number;
 	last_checked: string | null;
 	status_message?: string;
+}
+
+export interface SiteUpdateLedgerEntry {
+	id: number;
+	site_id: number;
+	update_type: "core" | "plugin" | "theme";
+	status: "full" | "partial" | "failed";
+	data_json?: string;
+	updated_by: string;
+	updated_at: string;
 }
 
 export type IgnoreType = "site" | "server" | "plugin" | "vulnerability";

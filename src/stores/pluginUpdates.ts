@@ -36,6 +36,7 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	async function updatePlugin(
 		siteId: number,
 		pluginName: string,
+		skipLedger?: boolean,
 	): Promise<PluginUpdateResult | null> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
 			method: "POST",
@@ -43,7 +44,10 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 				"Content-Type": "application/json",
 				...authStore.authHeader,
 			},
-			body: JSON.stringify({ plugin: pluginName }),
+			body: JSON.stringify({
+				plugin: pluginName,
+				skip_ledger: !!skipLedger,
+			}),
 		});
 
 		if (!res.ok) {

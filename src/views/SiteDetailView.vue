@@ -17,6 +17,8 @@ import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
 import { formatBytes } from "../utils/format";
+import type { SiteUpdateLedgerEntry } from "../types";
+import { BASE_URL } from "../utils/api";
 
 const props = defineProps<{
 	id: string;
@@ -37,9 +39,118 @@ const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
 const site = computed(() => dataStore.getSiteById(siteId));
 
+// Update Ledger state
+const ledgerEntries = ref<SiteUpdateLedgerEntry[]>([]);
+const showAddLedgerModal = ref(false);
+const newLedgerType = ref<"core" | "plugin" | "theme">("plugin");
+const newLedgerStatus = ref<"full" | "partial" | "failed">("full");
+const newLedgerDetails = ref("");
+const isSavingLedger = ref(false);
+
+const fetchLedger = async () => {
+	try {
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/update-ledger`, {
+			headers: authStore.authHeader,
+		});
+		if (res.ok) {
+			const data = await res.json();
+			ledgerEntries.value = data || [];
+		}
+	} catch (e) {
+		console.error("Failed to fetch update ledger", e);
+	}
+};
+
+const saveManualLedgerEntry = async () => {
+	isSavingLedger.value = true;
+	try {
+		let dataJSON = "";
+		if (newLedgerDetails.value.trim()) {
+			dataJSON = JSON.stringify({ note: newLedgerDetails.value.trim() });
+		}
+
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/update-ledger`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				...authStore.authHeader,
+			},
+			body: JSON.stringify({
+				update_type: newLedgerType.value,
+				status: newLedgerStatus.value,
+				data_json: dataJSON,
+			}),
+		});
+
+		if (res.ok) {
+			toast.addToast("Manual update logged successfully.", "success");
+			showAddLedgerModal.value = false;
+			newLedgerDetails.value = "";
+			newLedgerType.value = "plugin";
+			newLedgerStatus.value = "full";
+			await fetchLedger();
+			await dataStore.refreshData();
+		} else {
+			toast.addToast("Failed to log manual update.", "error");
+		}
+	} catch (e: any) {
+		toast.addToast("Error: " + e.message, "error");
+	} finally {
+		isSavingLedger.value = false;
+	}
+};
+
+function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
+	if (!entry.data_json) return "—";
+	try {
+		const data = JSON.parse(entry.data_json);
+		if (data.summary) {
+			let txt = data.summary;
+			if (data.updates && data.updates.length > 0) {
+				const pluginsList = data.updates
+					.map(
+						(u: any) =>
+							`${u.plugin} (${u.status === "success" ? "✓" : "✗"})`,
+					)
+					.join(", ");
+				txt += `\nPlugins: ${pluginsList}`;
+			}
+			return txt;
+		}
+		if (data.plugin) {
+			let txt = `Plugin: ${data.plugin}`;
+			if (data.old_version || data.new_version) {
+				txt += ` (${data.old_version || "?"} → ${data.new_version || "?"})`;
+			}
+			if (data.error) {
+				txt += ` [Error: ${data.error}]`;
+			}
+			return txt;
+		}
+		if (data.note) {
+			return data.note;
+		}
+		return JSON.stringify(data, null, 2);
+	} catch (e) {
+		return entry.data_json;
+	}
+}
+
+function formatDate(d: string | Date | null) {
+	if (!d) return "—";
+	return new Date(d).toLocaleString("de-DE", {
+		dateStyle: "short",
+		timeStyle: "short",
+	});
+}
+
 // Fetch initial data
 onMounted(async () => {
-	await Promise.all([dataStore.initData(), ignoreStore.fetchIgnoreEntries()]);
+	await Promise.all([
+		dataStore.initData(),
+		ignoreStore.fetchIgnoreEntries(),
+		fetchLedger(),
+	]);
 });
 
 // Watch for domain changes to fetch monitor status
@@ -499,6 +610,84 @@ const unlinkOrganization = async () => {
 					</table>
 				</div>
 			</section>
+
+			<section class="card mt-4">
+				<div class="card-header">
+					<h2>Update Ledger</h2>
+					<button
+						v-if="authStore.canEdit"
+						class="btn btn-primary btn-sm"
+						@click="showAddLedgerModal = true"
+					>
+						Log Manual Update
+					</button>
+				</div>
+				<div class="table-container">
+					<table class="data-table">
+						<thead>
+							<tr>
+								<th>Type</th>
+								<th>Status</th>
+								<th>Details</th>
+								<th>User</th>
+								<th>Timestamp</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-if="
+									!ledgerEntries || ledgerEntries.length === 0
+								"
+							>
+								<td colspan="5" class="empty-state">
+									No update ledger entries recorded.
+								</td>
+							</tr>
+							<tr
+								v-for="entry in ledgerEntries || []"
+								:key="entry.id"
+							>
+								<td>
+									<span class="status-badge badge-sm info">
+										{{ entry.update_type.toUpperCase() }}
+									</span>
+								</td>
+								<td>
+									<span
+										:class="[
+											'status-badge',
+											'badge-sm',
+											entry.status === 'full'
+												? 'active'
+												: entry.status === 'partial'
+													? 'warning'
+													: 'error',
+										]"
+									>
+										{{ entry.status }}
+									</span>
+								</td>
+								<td
+									class="font-xs text-muted"
+									style="
+										max-width: 300px;
+										word-wrap: break-word;
+										white-space: pre-wrap;
+									"
+								>
+									{{ formatLedgerDetails(entry) }}
+								</td>
+								<td class="font-medium">
+									{{ entry.updated_by }}
+								</td>
+								<td class="text-muted">
+									{{ formatDate(entry.updated_at) }}
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			</section>
 		</main>
 		<main v-else class="content mt-4">
 			<div class="card">
@@ -519,7 +708,12 @@ const unlinkOrganization = async () => {
 		<PluginUpdateModal
 			:visible="showPluginUpdateModal"
 			:site-id="siteId"
-			@close="showPluginUpdateModal = false"
+			@close="
+				() => {
+					showPluginUpdateModal = false;
+					fetchLedger();
+				}
+			"
 		/>
 
 		<!-- Link Organization Modal -->
@@ -588,6 +782,64 @@ const unlinkOrganization = async () => {
 							@click="showLinkModal = false"
 						>
 							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Add Ledger Modal -->
+		<div
+			v-if="showAddLedgerModal"
+			class="modal-overlay"
+			@click.self="showAddLedgerModal = false"
+		>
+			<div class="modal-content card" style="max-width: 450px">
+				<h2>Log Manual Update</h2>
+				<div class="content mt-4">
+					<div class="form-group mb-4">
+						<label for="ledger-type">Update Type</label>
+						<select id="ledger-type" v-model="newLedgerType">
+							<option value="plugin">Plugin</option>
+							<option value="core">WordPress Core</option>
+							<option value="theme">Theme</option>
+						</select>
+					</div>
+
+					<div class="form-group mb-4">
+						<label for="ledger-status">Status</label>
+						<select id="ledger-status" v-model="newLedgerStatus">
+							<option value="full">Full Success</option>
+							<option value="partial">Partial</option>
+							<option value="failed">Failed</option>
+						</select>
+					</div>
+
+					<div class="form-group mb-4">
+						<label for="ledger-details"
+							>Details / Notes (Optional)</label
+						>
+						<textarea
+							id="ledger-details"
+							v-model="newLedgerDetails"
+							placeholder="E.g., Updated WooCommerce from WP Admin"
+							rows="3"
+						></textarea>
+					</div>
+
+					<div class="form-actions mt-4">
+						<button
+							class="btn btn-outline"
+							@click="showAddLedgerModal = false"
+						>
+							Cancel
+						</button>
+						<button
+							class="btn btn-primary"
+							:disabled="isSavingLedger"
+							@click="saveManualLedgerEntry"
+						>
+							{{ isSavingLedger ? "Saving..." : "Save Log" }}
 						</button>
 					</div>
 				</div>
