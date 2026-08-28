@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.47.0 (2026-08-24)
+## 1.48.0 (2026-08-28)
+
+#### Features
+
+- site: implement site update ledger (224ebda)
+
+## v1.47.0 (2026-08-24)
 
 #### Features
 
