@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.48.0 (2026-08-28)
+## 1.49.0 (2026-08-28)
+
+#### Features
+
+- SiteDetailView: add expand/collapse toggle for ledger entries (ec45ece)
+
+## v1.48.0 (2026-08-28)
 
 #### Features
 
