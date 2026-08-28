@@ -467,6 +467,18 @@ func initSchema() error {
 				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
+		{
+			Name: "site_update_ledger",
+			Columns: map[string]string{
+				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":     "INTEGER NOT NULL",
+				"update_type": "TEXT NOT NULL",
+				"status":      "TEXT NOT NULL",
+				"data_json":   "TEXT",
+				"updated_by":  "TEXT",
+				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
 	}
 
 	// Drop old ignore tables if they exist
@@ -539,6 +551,10 @@ func initSchema() error {
 		return err
 	}
 	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_daily_site_id ON site_traffic_daily(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_id ON site_update_ledger(site_id);")
 	return err
 }
 
