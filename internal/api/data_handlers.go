@@ -103,6 +103,12 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	latestUpdates, err := db.GetLatestSiteUpdateLedgerEntries()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+
 	for i, site := range sites {
 		sites[i].Environment = models.SiteEnvironmentType(environments[site.ID])
 		if usage, ok := diskUsage[site.ID]; ok {
@@ -110,6 +116,9 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if flags, ok := wpFlags[site.ID]; ok {
 			sites[i].WpFlags = &flags
+		}
+		if lastUp, ok := latestUpdates[site.ID]; ok {
+			sites[i].LastUpdate = &lastUp
 		}
 	}
 
@@ -244,7 +253,8 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Plugin string `json:"plugin"`
+		Plugin     string `json:"plugin"`
+		SkipLedger bool   `json:"skip_ledger"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -286,6 +296,30 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		response.OldVersion = currentVersion
 		response.NewVersion = currentVersion
 		response.Error = err.Error()
+
+		// Save to site update ledger
+		ledgerData := map[string]interface{}{
+			"plugin":      body.Plugin,
+			"old_version": currentVersion,
+			"new_version": currentVersion,
+			"error":       err.Error(),
+		}
+		ledgerJSON, _ := json.Marshal(ledgerData)
+		username := "system"
+		claims := GetAuthClaims(r.Context())
+		if claims != nil {
+			username = claims.Username
+		}
+		if !body.SkipLedger {
+			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
+				SiteID:     siteID,
+				UpdateType: "plugin",
+				Status:     "failed",
+				DataJSON:   string(ledgerJSON),
+				UpdatedBy:  username,
+			})
+		}
+
 		WriteJSON(w, http.StatusInternalServerError, response)
 		return
 	}
@@ -319,8 +353,54 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		response.NewVersion = response.OldVersion
 		response.Error = "Plugin update failed"
+
+		// Save to site update ledger
+		ledgerData := map[string]interface{}{
+			"plugin":      body.Plugin,
+			"old_version": response.OldVersion,
+			"new_version": response.NewVersion,
+			"error":       response.Error,
+		}
+		ledgerJSON, _ := json.Marshal(ledgerData)
+		username := "system"
+		claims := GetAuthClaims(r.Context())
+		if claims != nil {
+			username = claims.Username
+		}
+		if !body.SkipLedger {
+			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
+				SiteID:     siteID,
+				UpdateType: "plugin",
+				Status:     "failed",
+				DataJSON:   string(ledgerJSON),
+				UpdatedBy:  username,
+			})
+		}
+
 		WriteJSON(w, http.StatusInternalServerError, response)
 		return
+	}
+
+	// Save successful update to site update ledger
+	ledgerData := map[string]interface{}{
+		"plugin":      body.Plugin,
+		"old_version": response.OldVersion,
+		"new_version": response.NewVersion,
+	}
+	ledgerJSON, _ := json.Marshal(ledgerData)
+	username := "system"
+	claims := GetAuthClaims(r.Context())
+	if claims != nil {
+		username = claims.Username
+	}
+	if !body.SkipLedger {
+		_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
+			SiteID:     siteID,
+			UpdateType: "plugin",
+			Status:     "full",
+			DataJSON:   string(ledgerJSON),
+			UpdatedBy:  username,
+		})
 	}
 
 	// Refresh the full plugin list for this site so all versions and
@@ -345,4 +425,67 @@ func getSiteByID(id int) (*models.CliSite, error) {
 		}
 	}
 	return nil, fmt.Errorf("site with ID %d not found", id)
+}
+
+// SiteUpdateLedgerHandler returns the update history ledger for a site.
+func SiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	entries, err := db.GetSiteUpdateLedger(siteID)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, entries)
+}
+
+// CreateSiteUpdateLedgerHandler manually adds an entry to the site update ledger.
+func CreateSiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	var req struct {
+		UpdateType string `json:"update_type"`
+		Status     string `json:"status"`
+		DataJSON   string `json:"data_json"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if req.UpdateType == "" || req.Status == "" {
+		WriteError(w, http.StatusBadRequest, "update_type and status are required")
+		return
+	}
+
+	username := "system"
+	claims := GetAuthClaims(r.Context())
+	if claims != nil {
+		username = claims.Username
+	}
+
+	entry := models.SiteUpdateLedgerEntry{
+		SiteID:     siteID,
+		UpdateType: req.UpdateType,
+		Status:     req.Status,
+		DataJSON:   req.DataJSON,
+		UpdatedBy:  username,
+	}
+
+	if err := db.SaveSiteUpdateLedgerEntry(&entry); err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save entry: %v", err))
+		return
+	}
+
+	WriteJSON(w, http.StatusCreated, map[string]string{"status": "success"})
 }

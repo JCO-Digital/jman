@@ -115,6 +115,10 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/sites/{id}/plugin-updates", execute(SitePluginUpdatesHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-updates", execute(SitePluginUpdateHandler))
 
+	// --- Update Ledger routes ---
+	mux.Handle("GET /api/sites/{id}/update-ledger", basic(SiteUpdateLedgerHandler))
+	mux.Handle("POST /api/sites/{id}/update-ledger", edit(CreateSiteUpdateLedgerHandler))
+
 	// --- Note routes ---
 	mux.Handle("GET /api/notes", basic(ListNotesHandler))
 	mux.Handle("POST /api/notes", edit(CreateNoteHandler))
