@@ -144,6 +144,30 @@ function formatDate(d: string | Date | null) {
 	});
 }
 
+const expandedLedgerEntries = ref<Set<number>>(new Set());
+
+const toggleExpandLedgerEntry = (id: number) => {
+	if (expandedLedgerEntries.value.has(id)) {
+		expandedLedgerEntries.value.delete(id);
+	} else {
+		expandedLedgerEntries.value.add(id);
+	}
+};
+
+const isLedgerEntryExpanded = (id: number) => {
+	return expandedLedgerEntries.value.has(id);
+};
+
+const getFirstLine = (entry: SiteUpdateLedgerEntry) => {
+	const details = formatLedgerDetails(entry);
+	return details.split("\n")[0];
+};
+
+const hasMultipleLines = (entry: SiteUpdateLedgerEntry) => {
+	const details = formatLedgerDetails(entry);
+	return details.includes("\n") || details.length > 55;
+};
+
 // Fetch initial data
 onMounted(async () => {
 	await Promise.all([
@@ -669,13 +693,49 @@ const unlinkOrganization = async () => {
 								</td>
 								<td
 									class="font-xs text-muted"
-									style="
-										max-width: 300px;
-										word-wrap: break-word;
-										white-space: pre-wrap;
-									"
+									style="max-width: 350px"
 								>
-									{{ formatLedgerDetails(entry) }}
+									<div
+										style="
+											display: flex;
+											flex-direction: column;
+										"
+									>
+										<div
+											:style="
+												isLedgerEntryExpanded(entry.id)
+													? 'white-space: pre-wrap; word-break: break-word;'
+													: 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;'
+											"
+										>
+											{{
+												isLedgerEntryExpanded(entry.id)
+													? formatLedgerDetails(entry)
+													: getFirstLine(entry)
+											}}
+										</div>
+										<button
+											v-if="hasMultipleLines(entry)"
+											class="btn btn-text btn-sm mt-1 p-0 text-left"
+											style="
+												font-size: 11px;
+												height: auto;
+												min-height: 0;
+												align-self: flex-start;
+											"
+											@click.stop="
+												toggleExpandLedgerEntry(
+													entry.id,
+												)
+											"
+										>
+											{{
+												isLedgerEntryExpanded(entry.id)
+													? "Show Less"
+													: "Show More"
+											}}
+										</button>
+									</div>
 								</td>
 								<td class="font-medium">
 									{{ entry.updated_by }}
