@@ -378,9 +378,7 @@ const close = () => {
 				<div class="form-group">
 					<label for="a-identifier">
 						Identifier
-						<span class="label-info"
-							>(Domain, License Key, etc.)</span
-						>
+						<span class="label-info">(Domain, Slug, etc.)</span>
 					</label>
 					<input
 						id="a-identifier"
