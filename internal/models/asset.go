@@ -49,7 +49,8 @@ type Asset struct {
 	NextPayment       *time.Time       `json:"next_payment"`
 	ManagementURL     string           `json:"management_url"`
 	ManagementAccount string           `json:"management_account"` // email the purchase/account is managed under
-	UsageCount        int              `json:"usage_count"`        // number of linked organization_assets, only populated by GetAllAssets
+	LicenseKey        string           `json:"license_key"`
+	UsageCount        int              `json:"usage_count"` // number of linked organization_assets, only populated by GetAllAssets
 	AuditFields
 }
 
@@ -76,6 +77,8 @@ type OrganizationAsset struct {
 	AssetNextPayment       *time.Time `json:"asset_next_payment,omitempty"`
 	AssetManagementURL     string     `json:"asset_management_url,omitempty"`
 	AssetManagementAccount string     `json:"asset_management_account,omitempty"`
+	AssetLicenseKey        string     `json:"asset_license_key,omitempty"`
+	LicenseKey             string     `json:"license_key"`
 	AuditFields
 }
 

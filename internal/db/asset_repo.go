@@ -19,11 +19,11 @@ func SaveAsset(asset *models.Asset, username string) error {
 	now := time.Now()
 	if asset.ID == 0 {
 		query := `
-		INSERT INTO assets (type, identifier, name, description, default_price, default_freq, active, payment_method_id, purchase_price, quantity, next_payment, management_url, management_account, created_at, created_by, updated_at, updated_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO assets (type, identifier, name, description, default_price, default_freq, active, payment_method_id, purchase_price, quantity, next_payment, management_url, management_account, license_key, created_at, created_by, updated_at, updated_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
 		result, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active,
-			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, now, username, now, username)
+			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, asset.LicenseKey, now, username, now, username)
 		if err != nil {
 			return fmt.Errorf("failed to insert asset: %w", err)
 		}
@@ -36,11 +36,11 @@ func SaveAsset(asset *models.Asset, username string) error {
 	} else {
 		query := `
 		UPDATE assets SET type = ?, identifier = ?, name = ?, description = ?, default_price = ?, default_freq = ?, active = ?,
-		       payment_method_id = ?, purchase_price = ?, quantity = ?, next_payment = ?, management_url = ?, management_account = ?, updated_at = ?, updated_by = ?
+		       payment_method_id = ?, purchase_price = ?, quantity = ?, next_payment = ?, management_url = ?, management_account = ?, license_key = ?, updated_at = ?, updated_by = ?
 		WHERE id = ?
 		`
 		_, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active,
-			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, now, username, asset.ID)
+			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, asset.LicenseKey, now, username, asset.ID)
 		if err != nil {
 			return fmt.Errorf("failed to update asset: %w", err)
 		}
@@ -58,7 +58,7 @@ func GetAsset(id int) (*models.Asset, error) {
 
 	query := `
 	SELECT a.id, a.type, a.identifier, a.name, a.description, a.default_price, a.default_freq, a.active,
-	       a.payment_method_id, a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account,
+	       a.payment_method_id, a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account, a.license_key,
 	       a.created_at, a.created_by, a.updated_at, a.updated_by, pm.name
 	FROM assets a
 	LEFT JOIN payment_methods pm ON a.payment_method_id = pm.id
@@ -68,7 +68,7 @@ func GetAsset(id int) (*models.Asset, error) {
 	var pmName sql.NullString
 	err := db.QueryRow(query, id).Scan(
 		&a.ID, &a.Type, &a.Identifier, &a.Name, &a.Description, &a.DefaultPrice, &a.DefaultFreq, &a.Active,
-		&a.PaymentMethodID, &a.PurchasePrice, &a.Quantity, &a.NextPayment, &a.ManagementURL, &a.ManagementAccount,
+		&a.PaymentMethodID, &a.PurchasePrice, &a.Quantity, &a.NextPayment, &a.ManagementURL, &a.ManagementAccount, &a.LicenseKey,
 		&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &a.UpdatedBy, &pmName,
 	)
 	if err == sql.ErrNoRows {
@@ -91,7 +91,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 
 	query := `
 	SELECT a.id, a.type, a.identifier, a.name, a.description, a.default_price, a.default_freq, a.active,
-	       a.payment_method_id, a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account,
+	       a.payment_method_id, a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account, a.license_key,
 	       a.created_at, a.created_by, a.updated_at, a.updated_by,
 	       pm.name, COUNT(oa.id) AS usage_count
 	FROM assets a
@@ -119,7 +119,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 		var pmName sql.NullString
 		if err := rows.Scan(
 			&a.ID, &a.Type, &a.Identifier, &a.Name, &a.Description, &a.DefaultPrice, &a.DefaultFreq, &a.Active,
-			&a.PaymentMethodID, &a.PurchasePrice, &a.Quantity, &a.NextPayment, &a.ManagementURL, &a.ManagementAccount,
+			&a.PaymentMethodID, &a.PurchasePrice, &a.Quantity, &a.NextPayment, &a.ManagementURL, &a.ManagementAccount, &a.LicenseKey,
 			&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &a.UpdatedBy, &pmName, &a.UsageCount,
 		); err != nil {
 			return nil, err
@@ -155,10 +155,10 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 	now := time.Now()
 	if oa.ID == 0 {
 		query := `
-		INSERT INTO organization_assets (organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, payment_method_id, created_at, created_by, updated_at, updated_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO organization_assets (organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, payment_method_id, license_key, created_at, created_by, updated_at, updated_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
-		result, err := db.Exec(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, now, username, now, username)
+		result, err := db.Exec(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, oa.LicenseKey, now, username, now, username)
 		if err != nil {
 			return fmt.Errorf("failed to insert organization asset: %w", err)
 		}
@@ -170,10 +170,10 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 		oa.UpdatedBy = username
 	} else {
 		query := `
-		UPDATE organization_assets SET site_id = ?, asset_id = ?, identifier = ?, price = ?, billing_freq = ?, next_billing = ?, status = ?, description = ?, payment_method_id = ?, updated_at = ?, updated_by = ?
+		UPDATE organization_assets SET site_id = ?, asset_id = ?, identifier = ?, price = ?, billing_freq = ?, next_billing = ?, status = ?, description = ?, payment_method_id = ?, license_key = ?, updated_at = ?, updated_by = ?
 		WHERE id = ?
 		`
-		_, err := db.Exec(query, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, now, username, oa.ID)
+		_, err := db.Exec(query, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, oa.LicenseKey, now, username, oa.ID)
 		if err != nil {
 			return fmt.Errorf("failed to update organization asset: %w", err)
 		}
@@ -191,9 +191,9 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 
 	query := `
 	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
-	       oa.next_billing, oa.status, oa.description, oa.payment_method_id, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
+	       oa.next_billing, oa.status, oa.description, oa.payment_method_id, oa.license_key, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
 	       o.name, a.name, a.type, pm.name,
-	       a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account
+	       a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account, a.license_key
 	FROM organization_assets oa
 	LEFT JOIN organizations o ON oa.organization_id = o.id
 	LEFT JOIN assets a ON oa.asset_id = a.id
@@ -204,12 +204,12 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	var orgName, assetName, assetType, pmName sql.NullString
 	var assetPurchasePrice, assetQuantity sql.NullInt64
 	var assetNextPayment sql.NullTime
-	var assetManagementURL, assetManagementAccount sql.NullString
+	var assetManagementURL, assetManagementAccount, assetLicenseKey sql.NullString
 	err := db.QueryRow(query, id).Scan(
 		&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
-		&oa.NextBilling, &oa.Status, &oa.Description, &oa.PaymentMethodID, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
+		&oa.NextBilling, &oa.Status, &oa.Description, &oa.PaymentMethodID, &oa.LicenseKey, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
 		&orgName, &assetName, &assetType, &pmName,
-		&assetPurchasePrice, &assetQuantity, &assetNextPayment, &assetManagementURL, &assetManagementAccount,
+		&assetPurchasePrice, &assetQuantity, &assetNextPayment, &assetManagementURL, &assetManagementAccount, &assetLicenseKey,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -244,6 +244,9 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	if assetManagementAccount.Valid {
 		oa.AssetManagementAccount = assetManagementAccount.String
 	}
+	if assetLicenseKey.Valid {
+		oa.AssetLicenseKey = assetLicenseKey.String
+	}
 	return &oa, nil
 }
 
@@ -255,9 +258,9 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 
 	query := `
 	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
-	       oa.next_billing, oa.status, oa.description, oa.payment_method_id, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
+	       oa.next_billing, oa.status, oa.description, oa.payment_method_id, oa.license_key, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
 	       o.name as organization_name, a.name as asset_name, a.type as asset_type, pm.name as payment_method_name,
-	       a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account
+	       a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account, a.license_key as asset_license_key
 	FROM organization_assets oa
 	LEFT JOIN organizations o ON oa.organization_id = o.id
 	LEFT JOIN assets a ON oa.asset_id = a.id
@@ -312,9 +315,9 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 
 	query := `
 	SELECT oa.id, oa.organization_id, oa.site_id, oa.asset_id, oa.identifier, oa.price, oa.billing_freq,
-	       oa.next_billing, oa.status, oa.description, oa.payment_method_id, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
+	       oa.next_billing, oa.status, oa.description, oa.payment_method_id, oa.license_key, oa.created_at, oa.created_by, oa.updated_at, oa.updated_by,
 	       o.name as organization_name, a.name as asset_name, a.type as asset_type, pm.name as payment_method_name,
-	       a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account
+	       a.purchase_price, a.quantity, a.next_payment, a.management_url, a.management_account, a.license_key as asset_license_key
 	FROM organization_assets oa
 	LEFT JOIN organizations o ON oa.organization_id = o.id
 	LEFT JOIN assets a ON oa.asset_id = a.id
@@ -350,12 +353,12 @@ func scanOrganizationAssetRow(rows *sql.Rows) (models.OrganizationAsset, error) 
 	var orgName, assetName, assetType, pmName sql.NullString
 	var assetPurchasePrice, assetQuantity sql.NullInt64
 	var assetNextPayment sql.NullTime
-	var assetManagementURL, assetManagementAccount sql.NullString
+	var assetManagementURL, assetManagementAccount, assetLicenseKey sql.NullString
 	err := rows.Scan(
 		&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
-		&oa.NextBilling, &oa.Status, &oa.Description, &oa.PaymentMethodID, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
+		&oa.NextBilling, &oa.Status, &oa.Description, &oa.PaymentMethodID, &oa.LicenseKey, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
 		&orgName, &assetName, &assetType, &pmName,
-		&assetPurchasePrice, &assetQuantity, &assetNextPayment, &assetManagementURL, &assetManagementAccount,
+		&assetPurchasePrice, &assetQuantity, &assetNextPayment, &assetManagementURL, &assetManagementAccount, &assetLicenseKey,
 	)
 	if err != nil {
 		return oa, err
@@ -386,6 +389,9 @@ func scanOrganizationAssetRow(rows *sql.Rows) (models.OrganizationAsset, error) 
 	}
 	if assetManagementAccount.Valid {
 		oa.AssetManagementAccount = assetManagementAccount.String
+	}
+	if assetLicenseKey.Valid {
+		oa.AssetLicenseKey = assetLicenseKey.String
 	}
 	return oa, nil
 }
