@@ -327,7 +327,8 @@ func TestFinalizeCompletedDailyRollups(t *testing.T) {
 
 	const siteID = 13
 	now := time.Now().UTC()
-	yesterday := now.AddDate(0, 0, -1)
+	nowMidnight := now.Truncate(24 * time.Hour)
+	yesterday := nowMidnight.AddDate(0, 0, -1)
 
 	seedHour := func(hour time.Time, total int) {
 		entry := models.TrafficHourlyEntry{Hour: hour.Truncate(time.Hour).Format(time.RFC3339), RequestsTotal: total}
