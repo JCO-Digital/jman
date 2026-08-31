@@ -30,6 +30,19 @@ const toast = useToastStore();
 
 const showEditModal = ref(false);
 const editingAsset = ref<OrganizationAsset | null>(null);
+
+const revealedKeys = ref<Record<number, boolean>>({});
+const toggleReveal = (id: number) => {
+	revealedKeys.value[id] = !revealedKeys.value[id];
+};
+const copyKey = async (keyText: string) => {
+	try {
+		await navigator.clipboard.writeText(keyText);
+		toast.addToast("License key copied to clipboard", "success");
+	} catch (err: any) {
+		toast.addToast("Failed to copy to clipboard", "error");
+	}
+};
 const organizationSites = ref<Site[]>([]);
 const selectedOrgId = ref<number | null>(null);
 
@@ -473,6 +486,71 @@ const formatDate = (dateString: string | null) => {
 										</template>
 										{{ asset.payment_method_name }}</span
 									>
+								</div>
+								<div
+									v-if="
+										asset.license_key ||
+										asset.asset_license_key
+									"
+									class="sub-text text-muted"
+									style="
+										margin-top: 4px;
+										display: flex;
+										align-items: center;
+										gap: 6px;
+									"
+									@click.stop
+								>
+									<span
+										>Key:
+										<code style="font-family: monospace">{{
+											revealedKeys[asset.id]
+												? asset.license_key ||
+													asset.asset_license_key
+												: "••••••••••••••••"
+										}}</code></span
+									>
+									<button
+										type="button"
+										class="icon-btn icon-btn-sm"
+										:title="
+											revealedKeys[asset.id]
+												? 'Hide'
+												: 'Reveal'
+										"
+										@click="toggleReveal(asset.id)"
+										style="
+											padding: 2px 4px;
+											display: inline-flex;
+										"
+									>
+										<AppIcon
+											:name="
+												revealedKeys[asset.id]
+													? 'eye-off'
+													: 'eye'
+											"
+											size="14"
+										/>
+									</button>
+									<button
+										type="button"
+										class="icon-btn icon-btn-sm"
+										title="Copy Key"
+										@click="
+											copyKey(
+												asset.license_key ||
+													asset.asset_license_key ||
+													'',
+											)
+										"
+										style="
+											padding: 2px 4px;
+											display: inline-flex;
+										"
+									>
+										<AppIcon name="copy" size="14" />
+									</button>
 								</div>
 							</td>
 							<td>

@@ -44,6 +44,19 @@ const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
 const linkedSites = ref<Site[]>([]);
 const orgAssets = ref<EnrichedOrganizationAsset[]>([]);
+
+const revealedKeys = ref<Record<number, boolean>>({});
+const toggleReveal = (id: number) => {
+	revealedKeys.value[id] = !revealedKeys.value[id];
+};
+const copyKey = async (keyText: string) => {
+	try {
+		await navigator.clipboard.writeText(keyText);
+		toast.addToast("License key copied to clipboard", "success");
+	} catch (err: any) {
+		toast.addToast("Failed to copy to clipboard", "error");
+	}
+};
 const isLoading = ref(true);
 const error = ref<string | null>(null);
 
@@ -673,6 +686,78 @@ const sitesAudit = computed(() => {
 													(s) => s.id === oa.site_id,
 												)?.domain || "Unknown Site"
 											}}
+										</div>
+										<div
+											v-if="
+												oa.license_key ||
+												oa.asset_license_key
+											"
+											class="sub-text text-muted"
+											style="
+												margin-top: 4px;
+												display: flex;
+												align-items: center;
+												gap: 6px;
+											"
+										>
+											<span
+												>Key:
+												<code
+													style="
+														font-family: monospace;
+													"
+													>{{
+														revealedKeys[oa.id]
+															? oa.license_key ||
+																oa.asset_license_key
+															: "••••••••••••••••"
+													}}</code
+												></span
+											>
+											<button
+												type="button"
+												class="icon-btn icon-btn-sm"
+												:title="
+													revealedKeys[oa.id]
+														? 'Hide'
+														: 'Reveal'
+												"
+												@click="toggleReveal(oa.id)"
+												style="
+													padding: 2px 4px;
+													display: inline-flex;
+												"
+											>
+												<AppIcon
+													:name="
+														revealedKeys[oa.id]
+															? 'eye-off'
+															: 'eye'
+													"
+													size="14"
+												/>
+											</button>
+											<button
+												type="button"
+												class="icon-btn icon-btn-sm"
+												title="Copy Key"
+												@click="
+													copyKey(
+														oa.license_key ||
+															oa.asset_license_key ||
+															'',
+													)
+												"
+												style="
+													padding: 2px 4px;
+													display: inline-flex;
+												"
+											>
+												<AppIcon
+													name="copy"
+													size="14"
+												/>
+											</button>
 										</div>
 									</td>
 									<td>{{ oa.identifier }}</td>
