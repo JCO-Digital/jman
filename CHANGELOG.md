@@ -1,6 +1,16 @@
 # Changelog
 
-## 1.49.0 (2026-08-28)
+## 1.50.0 (2026-08-31)
+
+#### Features
+
+- assets: add license key support (d387794)
+
+#### Bug Fixes
+
+- ui: update asset identifier helper text (3e9904a)
+
+## v1.49.0 (2026-08-28)
 
 #### Features
 
