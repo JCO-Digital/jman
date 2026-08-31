@@ -112,3 +112,81 @@ func TestGetAssetPaymentsInRange(t *testing.T) {
 		t.Errorf("custom.OrganizationName = %q, want %q", custom.OrganizationName, "Acme Inc")
 	}
 }
+
+func TestAssetLicenseKeys(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	org := models.Organization{Name: "Acme Corp"}
+	if err := SaveOrganization(&org, "tester"); err != nil {
+		t.Fatalf("failed to seed organization: %v", err)
+	}
+
+	// 1. Create template with a license key
+	template := models.Asset{
+		Type:       models.AssetTypePlugin,
+		Name:       "WP Rocket",
+		Identifier: "wp-rocket",
+		LicenseKey: "template_key_123",
+	}
+	if err := SaveAsset(&template, "tester"); err != nil {
+		t.Fatalf("failed to save asset template: %v", err)
+	}
+
+	retrievedTemplate, err := GetAsset(template.ID)
+	if err != nil {
+		t.Fatalf("failed to get asset template: %v", err)
+	}
+	if retrievedTemplate.LicenseKey != "template_key_123" {
+		t.Errorf("expected template LicenseKey 'template_key_123', got %q", retrievedTemplate.LicenseKey)
+	}
+
+	// 2. Create organization asset with empty license key (should inherit from template)
+	oaInherited := models.OrganizationAsset{
+		OrganizationID: org.ID,
+		AssetID:        &template.ID,
+		Identifier:     "inherited-license.example.com",
+		Price:          1500,
+		BillingFreq:    models.BillingFrequencyMonthly,
+		Status:         models.AssetStatusActive,
+		LicenseKey:     "", // empty means inherit
+	}
+	if err := SaveOrganizationAsset(&oaInherited, "tester"); err != nil {
+		t.Fatalf("failed to save organization asset: %v", err)
+	}
+
+	retrievedOaInherited, err := GetOrganizationAsset(oaInherited.ID)
+	if err != nil {
+		t.Fatalf("failed to get organization asset: %v", err)
+	}
+	if retrievedOaInherited.LicenseKey != "" {
+		t.Errorf("expected organization asset LicenseKey to be empty, got %q", retrievedOaInherited.LicenseKey)
+	}
+	if retrievedOaInherited.AssetLicenseKey != "template_key_123" {
+		t.Errorf("expected mirrored AssetLicenseKey 'template_key_123', got %q", retrievedOaInherited.AssetLicenseKey)
+	}
+
+	// 3. Create organization asset with an overridden license key
+	oaOverridden := models.OrganizationAsset{
+		OrganizationID: org.ID,
+		AssetID:        &template.ID,
+		Identifier:     "overridden-license.example.com",
+		Price:          1500,
+		BillingFreq:    models.BillingFrequencyMonthly,
+		Status:         models.AssetStatusActive,
+		LicenseKey:     "overridden_key_456",
+	}
+	if err := SaveOrganizationAsset(&oaOverridden, "tester"); err != nil {
+		t.Fatalf("failed to save organization asset with overridden key: %v", err)
+	}
+
+	retrievedOaOverridden, err := GetOrganizationAsset(oaOverridden.ID)
+	if err != nil {
+		t.Fatalf("failed to get organization asset: %v", err)
+	}
+	if retrievedOaOverridden.LicenseKey != "overridden_key_456" {
+		t.Errorf("expected overridden LicenseKey 'overridden_key_456', got %q", retrievedOaOverridden.LicenseKey)
+	}
+	if retrievedOaOverridden.AssetLicenseKey != "template_key_123" {
+		t.Errorf("expected mirrored AssetLicenseKey 'template_key_123' even when overridden, got %q", retrievedOaOverridden.AssetLicenseKey)
+	}
+}
