@@ -118,6 +118,7 @@ func UpdateAssetHandler(w http.ResponseWriter, r *http.Request) {
 	asset.NextPayment = updates.NextPayment
 	asset.ManagementURL = updates.ManagementURL
 	asset.ManagementAccount = updates.ManagementAccount
+	asset.LicenseKey = updates.LicenseKey
 	if updates.Quantity > 0 {
 		asset.Quantity = updates.Quantity
 	}
@@ -295,6 +296,7 @@ func UpdateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	oa.Description = updates.Description
 	oa.PaymentMethodID = updates.PaymentMethodID
+	oa.LicenseKey = updates.LicenseKey
 
 	username := getUsername(r)
 	if err := db.SaveOrganizationAsset(oa, username); err != nil {
