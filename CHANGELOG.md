@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.40.0 (2026-08-28)
+## 5.41.0 (2026-08-31)
+
+#### Features
+
+- db: add license key field to assets and organization assets (7ada15b)
+
+#### Tests
+
+- db: ensure correct yesterday date for traffic rollup test (b0b749b)
+- db: add tests for asset license key inheritance logic (7d6db7f)
+
+## v5.40.0 (2026-08-28)
 
 #### Features
 
