@@ -40,6 +40,7 @@ const assetForm = ref({
 	status: "active" as OrganizationAssetStatus,
 	description: "",
 	payment_method_id: null as number | null,
+	license_key: "",
 });
 const priceInput = ref("0.00");
 
@@ -55,6 +56,7 @@ const linkedTemplateCost = ref<{
 	next_payment?: string | null;
 	management_url?: string | null;
 	management_account?: string | null;
+	license_key?: string | null;
 } | null>(null);
 
 const formatCurrency = (cents: number) => {
@@ -91,6 +93,7 @@ watch(
 					status: props.asset.status,
 					description: props.asset.description || "",
 					payment_method_id: props.asset.payment_method_id,
+					license_key: props.asset.license_key || "",
 				};
 				priceInput.value = (props.asset.price / 100).toFixed(2);
 				assetSearchQuery.value =
@@ -101,6 +104,7 @@ watch(
 					next_payment: props.asset.asset_next_payment,
 					management_url: props.asset.asset_management_url,
 					management_account: props.asset.asset_management_account,
+					license_key: props.asset.asset_license_key,
 				};
 			} else if (props.prefill) {
 				isEditing.value = false;
@@ -114,6 +118,7 @@ watch(
 					status: "active",
 					description: "",
 					payment_method_id: template.payment_method_id,
+					license_key: "",
 				};
 				priceInput.value = (
 					(template.default_price || 0) / 100
@@ -126,6 +131,7 @@ watch(
 					next_payment: template.next_payment,
 					management_url: template.management_url,
 					management_account: template.management_account,
+					license_key: template.license_key,
 				};
 			} else {
 				isEditing.value = false;
@@ -138,6 +144,7 @@ watch(
 					status: "active",
 					description: "",
 					payment_method_id: null,
+					license_key: "",
 				};
 				priceInput.value = "0.00";
 				assetSearchQuery.value = "";
@@ -164,6 +171,7 @@ const selectAssetTemplate = (template: Asset) => {
 	assetForm.value.billing_freq = template.default_freq || "Yearly";
 	assetForm.value.next_billing = new Date().toISOString().split("T")[0] || "";
 	assetForm.value.payment_method_id = template.payment_method_id;
+	assetForm.value.license_key = "";
 	assetSearchQuery.value = template.name;
 	availableAssetTemplates.value = [];
 	linkedTemplateCost.value = {
@@ -172,6 +180,7 @@ const selectAssetTemplate = (template: Asset) => {
 		next_payment: template.next_payment,
 		management_url: template.management_url,
 		management_account: template.management_account,
+		license_key: template.license_key,
 	};
 };
 
@@ -377,6 +386,26 @@ const close = () => {
 						id="a-identifier"
 						v-model="assetForm.identifier"
 						type="text"
+						:disabled="!isOrgSelected"
+					/>
+				</div>
+
+				<div class="form-group">
+					<label for="a-license-key">
+						License Key
+						<span class="label-info"
+							>(Overrides template default)</span
+						>
+					</label>
+					<input
+						id="a-license-key"
+						v-model="assetForm.license_key"
+						type="text"
+						:placeholder="
+							linkedTemplateCost?.license_key
+								? `Inherited: ${linkedTemplateCost.license_key}`
+								: 'e.g. key_xyz (optional)'
+						"
 						:disabled="!isOrgSelected"
 					/>
 				</div>

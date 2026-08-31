@@ -347,6 +347,7 @@ export interface Asset {
 	next_payment: string | null;
 	management_url: string | null;
 	management_account: string | null;
+	license_key?: string | null;
 	usage_count?: number;
 	created_at: string;
 	created_by: string;
@@ -378,6 +379,8 @@ export interface OrganizationAsset {
 	asset_next_payment?: string | null;
 	asset_management_url?: string;
 	asset_management_account?: string;
+	license_key?: string | null;
+	asset_license_key?: string;
 	created_at: string;
 	created_by: string;
 	updated_at: string;

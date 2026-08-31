@@ -22,6 +22,19 @@ const searchQuery = ref((route.query.search as string) || "");
 const showModal = ref(false);
 const editingAsset = ref<Asset | null>(null);
 
+const revealedKeys = ref<Record<number, boolean>>({});
+const toggleReveal = (id: number) => {
+	revealedKeys.value[id] = !revealedKeys.value[id];
+};
+const copyKey = async (keyText: string) => {
+	try {
+		await navigator.clipboard.writeText(keyText);
+		toast.addToast("License key copied to clipboard", "success");
+	} catch (err: any) {
+		toast.addToast("Failed to copy to clipboard", "error");
+	}
+};
+
 const assetForm = ref({
 	type: "Plugin" as AssetType,
 	name: "",
@@ -34,6 +47,7 @@ const assetForm = ref({
 	next_payment: "",
 	management_url: "",
 	management_account: "",
+	license_key: "",
 });
 const priceInput = ref("0.00");
 const purchasePriceInput = ref("0.00");
@@ -103,6 +117,7 @@ const openAddModal = () => {
 		next_payment: "",
 		management_url: "",
 		management_account: "",
+		license_key: "",
 	};
 	priceInput.value = "0.00";
 	purchasePriceInput.value = "0.00";
@@ -125,6 +140,7 @@ const openEditModal = (asset: Asset) => {
 			: "",
 		management_url: asset.management_url || "",
 		management_account: asset.management_account || "",
+		license_key: asset.license_key || "",
 	};
 	priceInput.value = ((asset.default_price || 0) / 100).toFixed(2);
 	purchasePriceInput.value = ((asset.purchase_price || 0) / 100).toFixed(2);
@@ -360,6 +376,52 @@ const copyDescriptionAndExtract = async () => {
 								· {{ asset.management_account }}
 							</template>
 						</p>
+						<p
+							v-if="asset.license_key"
+							class="sub-text text-muted"
+							style="
+								margin-top: 4px;
+								display: flex;
+								align-items: center;
+								gap: 6px;
+							"
+						>
+							<span
+								>Key:
+								<code style="font-family: monospace">{{
+									revealedKeys[asset.id]
+										? asset.license_key
+										: "••••••••••••••••"
+								}}</code></span
+							>
+							<button
+								type="button"
+								class="icon-btn icon-btn-sm"
+								:title="
+									revealedKeys[asset.id] ? 'Hide' : 'Reveal'
+								"
+								@click.stop="toggleReveal(asset.id)"
+								style="padding: 2px 4px; display: inline-flex"
+							>
+								<AppIcon
+									:name="
+										revealedKeys[asset.id]
+											? 'eye-off'
+											: 'eye'
+									"
+									size="14"
+								/>
+							</button>
+							<button
+								type="button"
+								class="icon-btn icon-btn-sm"
+								title="Copy Key"
+								@click.stop="copyKey(asset.license_key)"
+								style="padding: 2px 4px; display: inline-flex"
+							>
+								<AppIcon name="copy" size="14" />
+							</button>
+						</p>
 					</div>
 
 					<div class="asset-card-footer">
@@ -524,6 +586,16 @@ const copyDescriptionAndExtract = async () => {
 								placeholder="e.g. purchases@example.com"
 							/>
 						</div>
+					</div>
+
+					<div class="form-group">
+						<label for="license-key">License Key (optional)</label>
+						<input
+							id="license-key"
+							v-model="assetForm.license_key"
+							type="text"
+							placeholder="e.g. key_xyz..."
+						/>
 					</div>
 
 					<div class="form-group">
