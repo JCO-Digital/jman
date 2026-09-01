@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.50.0 (2026-08-31)
+## 1.51.0 (2026-09-01)
+
+#### Features
+
+- site: display system user in site detail view (f6ee054)
+
+## v1.50.0 (2026-08-31)
 
 #### Features
 
