@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.51.0 (2026-09-01)
+## 1.52.0 (2026-09-01)
+
+#### Features
+
+- components: add secondary copy functionality to InfoCard (ed8077d)
+
+## v1.51.0 (2026-09-01)
 
 #### Features
 
