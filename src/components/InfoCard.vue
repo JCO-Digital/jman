@@ -8,6 +8,8 @@ export interface InfoItem {
 	isLink?: boolean;
 	href?: string;
 	copyable?: boolean;
+	secondaryCopyValue?: string;
+	secondaryCopyTitle?: string;
 }
 
 defineProps<{
@@ -16,6 +18,7 @@ defineProps<{
 }>();
 
 const copiedIndex = ref<number | null>(null);
+const copiedSecondaryIndex = ref<number | null>(null);
 
 const copyToClipboard = async (
 	value: string | number | undefined | null,
@@ -28,6 +31,18 @@ const copyToClipboard = async (
 		copiedIndex.value = index;
 		setTimeout(() => {
 			copiedIndex.value = null;
+		}, 2000);
+	} catch (err) {
+		console.error("Failed to copy: ", err);
+	}
+};
+
+const copySecondary = async (value: string, index: number) => {
+	try {
+		await navigator.clipboard.writeText(value);
+		copiedSecondaryIndex.value = index;
+		setTimeout(() => {
+			copiedSecondaryIndex.value = null;
 		}, 2000);
 	} catch (err) {
 		console.error("Failed to copy: ", err);
@@ -61,6 +76,37 @@ const copyToClipboard = async (
 							>Copied!</span
 						>
 					</span>
+
+					<button
+						v-if="item.secondaryCopyValue"
+						type="button"
+						class="icon-btn icon-btn-sm"
+						:title="
+							item.secondaryCopyTitle || 'Copy alternative value'
+						"
+						@click.stop="
+							copySecondary(item.secondaryCopyValue, index)
+						"
+						style="
+							display: inline-flex;
+							align-items: center;
+							border: none;
+							background: transparent;
+							cursor: pointer;
+							color: var(--text-muted);
+							padding: 2px 4px;
+							margin-left: 4px;
+						"
+					>
+						<AppIcon
+							:name="
+								copiedSecondaryIndex === index
+									? 'check'
+									: 'copy'
+							"
+							size="14"
+						/>
+					</button>
 
 					<a
 						v-if="item.isLink && item.href"

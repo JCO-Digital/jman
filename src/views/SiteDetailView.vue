@@ -283,6 +283,10 @@ const siteInfoItems = computed(() => {
 			label: "System User",
 			value: site.value.site_user,
 			copyable: true,
+			secondaryCopyValue: server.value
+				? `${site.value.site_user}@${server.value.name}`
+				: undefined,
+			secondaryCopyTitle: `Copy connection string: ${site.value.site_user}@${server.value?.name || "server"}`,
 		});
 	}
 
