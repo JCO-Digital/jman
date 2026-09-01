@@ -278,6 +278,14 @@ const siteInfoItems = computed(() => {
 		{ label: "WordPress", value: site.value.is_wordpress ? "Yes" : "No" },
 	];
 
+	if (site.value.site_user) {
+		items.push({
+			label: "System User",
+			value: site.value.site_user,
+			copyable: true,
+		});
+	}
+
 	if (site.value.wp_flags) {
 		items.push({
 			label: "Multisite",
