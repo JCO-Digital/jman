@@ -57,7 +57,6 @@ function snapshot() {
 		) ?? [],
 	);
 	updates.value = instances
-		.filter((p) => p.update !== "")
 		.map((p) => ({
 			...p,
 			site_domain:
@@ -129,7 +128,7 @@ watch(
 				<div class="content">
 					<div v-if="updates.length === 0" class="loading-state">
 						<p class="text-muted">
-							No updates available for this plugin.
+							This plugin is not installed on any sites.
 						</p>
 					</div>
 
@@ -158,12 +157,15 @@ watch(
 													class="text-muted font-xs"
 													>{{ entry.version }}</span
 												>
-												<span class="text-muted px-2"
-													>→</span
-												>
-												<span class="font-medium">{{
-													entry.update
-												}}</span>
+												<template v-if="entry.update">
+													<span
+														class="text-muted px-2"
+														>→</span
+													>
+													<span class="font-medium">{{
+														entry.update
+													}}</span>
+												</template>
 											</div>
 										</td>
 										<td class="hide-mobile">

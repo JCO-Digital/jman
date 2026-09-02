@@ -158,11 +158,15 @@ const manageAssetTemplate = () => {
 				<div class="card-header">
 					<h2>Installed on Sites</h2>
 					<button
-						v-if="authStore.canExecute && sitesWithUpdates"
+						v-if="authStore.canExecute"
 						class="btn btn-primary btn-sm"
 						@click="showUpdateModal = true"
 					>
-						Update Available
+						{{
+							sitesWithUpdates
+								? "Update Available"
+								: "Update Plugin"
+						}}
 					</button>
 				</div>
 				<div class="table-container">
