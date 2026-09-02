@@ -119,11 +119,16 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 		}
 		if (data.plugin) {
 			let txt = `Plugin: ${data.plugin}`;
-			if (data.old_version || data.new_version) {
-				txt += ` (${data.old_version || "?"} → ${data.new_version || "?"})`;
-			}
 			if (data.error) {
 				txt += ` [Error: ${data.error}]`;
+			} else if (
+				data.old_version &&
+				data.new_version &&
+				data.old_version === data.new_version
+			) {
+				txt += ` (Already up to date: ${data.new_version})`;
+			} else if (data.old_version || data.new_version) {
+				txt += ` (${data.old_version || "?"} → ${data.new_version || "?"})`;
 			}
 			return txt;
 		}
