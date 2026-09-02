@@ -1,6 +1,20 @@
 # Changelog
 
-## 5.42.0 (2026-09-02)
+### 5.42.1 (2026-09-02)
+
+#### Bug Fixes
+
+- db: refuse startup whenever the legacy jman.db still exists (6a00ec9)
+
+#### Refactor
+
+- separate jman CLI and jman-api into independent processes/data (7e63b8c)
+
+#### Continuous Integration
+
+- release: deploy jman-api binary to server after release build (ae7bbff)
+
+## v5.42.0 (2026-09-02)
 
 #### Features
 
