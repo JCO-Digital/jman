@@ -12,7 +12,7 @@ import (
 
 // SaveIgnoreEntry saves or updates an ignore entry.
 func SaveIgnoreEntry(entry *models.IgnoreEntry, username string) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -55,7 +55,7 @@ func SaveIgnoreEntry(entry *models.IgnoreEntry, username string) error {
 
 // GetIgnoreEntry fetches a single ignore entry by ID.
 func GetIgnoreEntry(id int) (*models.IgnoreEntry, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -83,7 +83,7 @@ func GetIgnoreEntry(id int) (*models.IgnoreEntry, error) {
 
 // GetAllIgnoreEntries returns all ignore entries, optionally filtered by type.
 func GetAllIgnoreEntries(entryType string) ([]models.IgnoreEntry, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -119,7 +119,7 @@ func GetAllIgnoreEntries(entryType string) ([]models.IgnoreEntry, error) {
 
 // DeleteIgnoreEntry removes an ignore entry.
 func DeleteIgnoreEntry(id int) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}

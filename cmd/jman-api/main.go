@@ -10,6 +10,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/backup"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/monitor"
+	"github.com/JCO-Digital/jman/internal/refresh"
 	"github.com/JCO-Digital/jman/internal/tasks"
 	"github.com/spf13/cobra"
 )
@@ -25,7 +27,13 @@ Use subcommands (useradd, hashpw, totp-setup) to manage users and credentials.`,
 		if err := config.Init(); err != nil {
 			return err
 		}
-		return db.Init()
+		if err := db.CheckSplitState(); err != nil {
+			return err
+		}
+		if err := db.InitInventory(); err != nil {
+			return err
+		}
+		return db.InitAPI()
 	},
 	RunE: runServe,
 }
@@ -63,6 +71,16 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Start the task scheduler
 	tasks.StartScheduler(cmd.Context())
+
+	// Start the data refresh scheduler (replaces the external `jman fetch` cron job)
+	refresh.StartScheduler(cmd.Context())
+
+	// Start the site-monitoring scheduler (replaces the standalone jman-monitor daemon)
+	if !config.Cfg.MonitorDisabled {
+		if err := monitor.StartScheduler(cmd.Context()); err != nil {
+			return err
+		}
+	}
 
 	log.Printf("Starting jman-api (version: %s) on :%s", config.AppVersion, port)
 	return http.ListenAndServe(":"+port, handler)

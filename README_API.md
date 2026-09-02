@@ -283,6 +283,43 @@ The login endpoint is rate-limited to prevent brute-force attacks:
 - **Lockout:** After 5 failures, the username is locked out for 15 minutes.
 - **Reset:** A successful login resets the failure counter.
 
+## Data Refresh
+
+`jman-api` refreshes its own cached data in the background — it no longer depends on an
+external `jman fetch` cron job. Two independent schedulers run inside the API process:
+
+- A **fast tick** (default every 5 minutes) refreshes the SpinupWP servers/sites cache.
+- A **slow tick** (default every 30 minutes) refreshes installed plugins, plugin metadata,
+  plugin vulnerabilities, and WordPress core versions/vulnerabilities — the more expensive
+  work, since it fans out over SSH/wp-cli to every managed site.
+
+If you have an external cron or systemd-timer job running `jman fetch` against this host,
+remove it — `jman-api` now performs this refresh internally. Leaving the old job in place is
+harmless but redundant (both would compete for the same limited SSH/wp-cli concurrency
+against your managed servers).
+
+Configuration (in `config.toml` or as `JMAN_*` environment variables):
+
+| Key | Env var | Default | Description |
+| --- | --- | --- | --- |
+| `refreshDisabled` | `JMAN_REFRESHDISABLED` | `false` | Disable both refresh schedulers. |
+| `refreshFastInterval` | `JMAN_REFRESHFASTINTERVAL` | `5` | Fast-tick interval, in minutes. |
+| `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30` | Slow-tick interval, in minutes. |
+
+The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
+only the automatic external-cron dependency has been removed.
+
+## Site Monitoring
+
+`jman-api` also runs the uptime-monitoring scheduler in-process (the same scheduler
+previously only available via the standalone `jman-monitor` daemon — see `README_MONITOR.md`).
+Set `monitorDisabled = true` (or `JMAN_MONITORDISABLED=true`) to turn this off, for example if
+you are still running a separate `jman-monitor` process against the same database during a
+migration window. **Never run both jman-api's in-process monitor and a standalone
+`jman-monitor` process against the same database at the same time** — each can independently
+decide a site is down and send its own Slack alert, so running both risks duplicate/flapping
+notifications and unnecessary database write contention.
+
 ## Security Notes
 
 - The API does not handle TLS directly. It should be run behind a reverse proxy (nginx, Caddy, etc.) that terminates TLS.
@@ -290,5 +327,3 @@ The login endpoint is rate-limited to prevent brute-force attacks:
 - Error messages for wrong username vs. wrong password are intentionally identical to prevent user enumeration.
 - JWT tokens are signed with HS256 (HMAC-SHA256) using the `jwtSecret` from `users.toml`.
 - Tokens are stateless and cannot be individually revoked. The configurable token lifetime (default: 24 hours) limits exposure.
-
-_Note: The API does not fetch new data. You must use the `jman` CLI to populate and update the cache._

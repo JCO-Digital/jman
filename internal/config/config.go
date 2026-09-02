@@ -25,14 +25,35 @@ type Runtime struct {
 
 // AppConfig represents the user-defined settings mapped from the config file or environment variables.
 type AppConfig struct {
-	TokenSpinup         string            `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
-	TokenSlack          string            `toml:"slackToken" mapstructure:"slackToken"`
-	SlackChannel        string            `toml:"slackChannel" mapstructure:"slackChannel"`
-	SlackMonitorChannel string            `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
-	SlackTasksChannel   string            `toml:"slackTasksChannel" mapstructure:"slackTasksChannel"`
-	MonitorThreshold    int               `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
-	MonitorTimeout      int               `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
-	MonitorCacheBypass  bool              `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
+	TokenSpinup string `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
+	// APIURL/APIUsername configure the `jman agent token` subcommands' HTTP
+	// client to jman-api (agent_tokens lives in jman-api's own database, not
+	// the shared inventory database the rest of the CLI reads/writes
+	// directly). Deliberately no password field here — it's prompted for
+	// interactively and never stored in config.toml.
+	APIURL              string `toml:"apiURL" mapstructure:"apiURL"`
+	APIUsername         string `toml:"apiUsername" mapstructure:"apiUsername"`
+	TokenSlack          string `toml:"slackToken" mapstructure:"slackToken"`
+	SlackChannel        string `toml:"slackChannel" mapstructure:"slackChannel"`
+	SlackMonitorChannel string `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
+	SlackTasksChannel   string `toml:"slackTasksChannel" mapstructure:"slackTasksChannel"`
+	MonitorThreshold    int    `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
+	MonitorTimeout      int    `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
+	MonitorCacheBypass  bool   `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
+	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
+	// Set this to true if a standalone jman-monitor process is still running
+	// against the same database during a migration window — never run both
+	// against the same database at once (see internal/monitor/state.go's
+	// globalWriteMu doc comment for why).
+	MonitorDisabled bool `toml:"monitorDisabled" mapstructure:"monitorDisabled"`
+	// RefreshDisabled turns off jman-api's in-process data-refresh scheduler
+	// (the in-process replacement for the external `jman fetch` cron job).
+	RefreshDisabled bool `toml:"refreshDisabled" mapstructure:"refreshDisabled"`
+	// RefreshFastInterval/RefreshSlowInterval are the tick intervals, in
+	// minutes, for the refresh scheduler's cheap (servers/sites) and
+	// expensive (plugins/vulnerabilities/core versions) work respectively.
+	RefreshFastInterval int               `toml:"refreshFastInterval" mapstructure:"refreshFastInterval"`
+	RefreshSlowInterval int               `toml:"refreshSlowInterval" mapstructure:"refreshSlowInterval"`
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
 	BehindProxy         bool              `toml:"behindProxy" mapstructure:"behindProxy"`
@@ -79,6 +100,10 @@ func loadConfig() error {
 	viper.SetDefault("monitorThreshold", 3)
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("monitorCacheBypass", false)
+	viper.SetDefault("monitorDisabled", false)
+	viper.SetDefault("refreshDisabled", false)
+	viper.SetDefault("refreshFastInterval", 5)
+	viper.SetDefault("refreshSlowInterval", 30)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
 	// Default to trusting proxy headers only from loopback, the common case
@@ -110,6 +135,10 @@ func loadConfig() error {
 		"monitorThreshold":    "MONITORTHRESHOLD",
 		"monitorTimeout":      "MONITORTIMEOUT",
 		"monitorCacheBypass":  "MONITORCACHEBYPASS",
+		"monitorDisabled":     "MONITORDISABLED",
+		"refreshDisabled":     "REFRESHDISABLED",
+		"refreshFastInterval": "REFRESHFASTINTERVAL",
+		"refreshSlowInterval": "REFRESHSLOWINTERVAL",
 		"cvssThreshold":       "CVSSTHRESHOLD",
 		"vulnThreshold":       "VULNTHRESHOLD",
 		"allowedOrigins":      "ALLOWEDORIGINS",

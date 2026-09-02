@@ -8,7 +8,7 @@ import (
 
 // SetSiteEnvironment inserts or updates the environment classification for a site.
 func SetSiteEnvironment(siteID int, environment string, updatedBy string) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -32,7 +32,7 @@ func SetSiteEnvironment(siteID int, environment string, updatedBy string) error 
 // ClearSiteEnvironment removes the environment classification for a site,
 // making it unclassified again.
 func ClearSiteEnvironment(siteID int) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -46,7 +46,7 @@ func ClearSiteEnvironment(siteID int) error {
 
 // GetAllSiteEnvironments returns a map of site ID to environment for every classified site.
 func GetAllSiteEnvironments() (map[int]string, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

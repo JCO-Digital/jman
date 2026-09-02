@@ -53,7 +53,7 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 	}
 
 	var hourlyCount int
-	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
+	if err := GetAPIDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
 		t.Fatalf("failed to count hourly rows: %v", err)
 	}
 	if hourlyCount != 1 {
@@ -61,7 +61,7 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 	}
 
 	var remainingHour string
-	if err := GetDB().QueryRow(`SELECT hour FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&remainingHour); err != nil {
+	if err := GetAPIDB().QueryRow(`SELECT hour FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&remainingHour); err != nil {
 		t.Fatalf("failed to read remaining hourly row: %v", err)
 	}
 	if remainingHour != recentEntry.Hour {
@@ -138,7 +138,7 @@ func TestUpsertSiteTrafficDaily(t *testing.T) {
 		t.Fatalf("UpsertSiteTrafficDaily() second call error = %v", err)
 	}
 	var count int
-	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_daily WHERE site_id = ?`, siteID).Scan(&count); err != nil {
+	if err := GetAPIDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_daily WHERE site_id = ?`, siteID).Scan(&count); err != nil {
 		t.Fatalf("failed to count daily rows: %v", err)
 	}
 	if count != 1 {
@@ -263,13 +263,13 @@ func TestGetSiteTraffic_HandlesRowsWithoutStatusCodesColumn(t *testing.T) {
 	// top_pages/top_referrers are populated here (as any genuinely
 	// pre-existing row would already have them) — status_codes is the only
 	// column omitted, since it's the one that's actually new.
-	if _, err := GetDB().Exec(
+	if _, err := GetAPIDB().Exec(
 		`INSERT INTO site_traffic_hourly (site_id, hour, requests_total, top_pages, top_referrers) VALUES (?, ?, ?, '[]', '[]')`,
 		siteID, hour, 1,
 	); err != nil {
 		t.Fatalf("failed to seed hourly row without status_codes: %v", err)
 	}
-	if _, err := GetDB().Exec(
+	if _, err := GetAPIDB().Exec(
 		`INSERT INTO site_traffic_daily (site_id, day, requests_total, top_pages, top_referrers) VALUES (?, date(?), ?, '[]', '[]')`,
 		siteID, day, 1,
 	); err != nil {
@@ -309,7 +309,7 @@ func TestPruneOldSiteTrafficHourly_KeepsRowsWithinRetention(t *testing.T) {
 	}
 
 	var count int
-	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&count); err != nil {
+	if err := GetAPIDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&count); err != nil {
 		t.Fatalf("failed to count hourly rows: %v", err)
 	}
 	if count != 1 {
@@ -370,7 +370,7 @@ func TestFinalizeCompletedDailyRollups(t *testing.T) {
 	}
 
 	var hourlyCount int
-	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
+	if err := GetAPIDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
 		t.Fatalf("failed to count hourly rows: %v", err)
 	}
 	if hourlyCount != 3 {
@@ -378,7 +378,7 @@ func TestFinalizeCompletedDailyRollups(t *testing.T) {
 	}
 
 	var finalizedAt sql.NullString
-	if err := GetDB().QueryRow(
+	if err := GetAPIDB().QueryRow(
 		`SELECT finalized_at FROM site_traffic_daily WHERE site_id = ? AND day = ?`, siteID, yesterdayStr,
 	).Scan(&finalizedAt); err != nil {
 		t.Fatalf("failed to read finalized_at: %v", err)
@@ -396,7 +396,7 @@ func TestFinalizeCompletedDailyRollups(t *testing.T) {
 		t.Fatalf("RecomputeSiteTrafficDaily() error = %v", err)
 	}
 	var finalizedAtAfter sql.NullString
-	if err := GetDB().QueryRow(
+	if err := GetAPIDB().QueryRow(
 		`SELECT finalized_at FROM site_traffic_daily WHERE site_id = ? AND day = ?`, siteID, yesterdayStr,
 	).Scan(&finalizedAtAfter); err != nil {
 		t.Fatalf("failed to re-read finalized_at: %v", err)
@@ -470,7 +470,7 @@ func TestPruneOldSiteTrafficHourly_MultiTickDoesNotCorruptDailyTotal(t *testing.
 	}
 
 	var hourlyCount int
-	if err := GetDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
+	if err := GetAPIDB().QueryRow(`SELECT COUNT(*) FROM site_traffic_hourly WHERE site_id = ?`, siteID).Scan(&hourlyCount); err != nil {
 		t.Fatalf("failed to count hourly rows: %v", err)
 	}
 	if hourlyCount != 0 {

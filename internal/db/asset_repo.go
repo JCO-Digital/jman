@@ -11,7 +11,7 @@ import (
 // --- Asset Repository (Templates) ---
 
 func SaveAsset(asset *models.Asset, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -51,7 +51,7 @@ func SaveAsset(asset *models.Asset, username string) error {
 }
 
 func GetAsset(id int) (*models.Asset, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -84,7 +84,7 @@ func GetAsset(id int) (*models.Asset, error) {
 }
 
 func GetAllAssets(search string) ([]models.Asset, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -136,7 +136,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 }
 
 func DeleteAsset(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -147,7 +147,7 @@ func DeleteAsset(id int) error {
 // --- Organization Asset Repository (Links) ---
 
 func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -184,7 +184,7 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 }
 
 func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -251,7 +251,7 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 }
 
 func GetAllOrganizationAssets(search, status, before string) ([]models.OrganizationAsset, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -308,7 +308,7 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 }
 
 func GetOrganizationAssetsByOrganization(organizationID int) ([]models.OrganizationAsset, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -397,7 +397,7 @@ func scanOrganizationAssetRow(rows *sql.Rows) (models.OrganizationAsset, error) 
 }
 
 func DeleteOrganizationAsset(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -408,7 +408,7 @@ func DeleteOrganizationAsset(id int) error {
 // --- Asset Payment Repository ---
 
 func SaveAssetPayment(payment *models.AssetPayment, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -441,7 +441,7 @@ func SaveAssetPayment(payment *models.AssetPayment, username string) error {
 }
 
 func GetAssetPaymentsByAsset(orgAssetID int) ([]models.AssetPayment, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -472,7 +472,7 @@ func GetAssetPaymentsByAsset(orgAssetID int) ([]models.AssetPayment, error) {
 // context, ordered by organization then payment date, for use by the
 // asset/billing report.
 func GetAssetPaymentsInRange(start, end string) ([]models.AssetPaymentReportRow, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -526,7 +526,7 @@ func GetAssetPaymentsInRange(start, end string) ([]models.AssetPaymentReportRow,
 }
 
 func DeleteAssetPayment(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}

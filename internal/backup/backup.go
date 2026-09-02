@@ -46,26 +46,39 @@ func StartScheduler(ctx context.Context) {
 	}()
 }
 
-// PerformBackup creates a snapshot of the current database using VACUUM INTO.
-// It also manages a symlink to the latest backup and cleans up files older than 48 hours.
+// PerformBackup creates a snapshot of each database (inventory.db and
+// api.db) using VACUUM INTO. It also manages a "latest" symlink per
+// database and cleans up files older than 48 hours. A failure backing up
+// one database doesn't prevent the other from being attempted.
 func PerformBackup() error {
-	start := time.Now()
-	// Ensure backup directory exists
 	if err := os.MkdirAll(config.RunData.BackupDir, 0755); err != nil {
 		return fmt.Errorf("failed to create backup directory: %w", err)
 	}
 
+	errInventory := backupOne("inventory", db.BackupInventory)
+	errAPI := backupOne("api", db.BackupAPI)
+
+	if errInventory != nil {
+		return errInventory
+	}
+	return errAPI
+}
+
+// backupOne performs a VACUUM INTO backup for a single database, identified
+// by prefix (e.g. "inventory" or "api"), and refreshes its "latest" symlink.
+func backupOne(prefix string, backupFn func(destPath string) error) error {
+	start := time.Now()
+
 	timestamp := start.Format("20060102-150405")
-	backupFileName := fmt.Sprintf("jman-%s.db", timestamp)
+	backupFileName := fmt.Sprintf("%s-%s.db", prefix, timestamp)
 	backupPath := filepath.Join(config.RunData.BackupDir, backupFileName)
 
-	// Perform the backup using the database package
-	if err := db.Backup(backupPath); err != nil {
-		return err
+	if err := backupFn(backupPath); err != nil {
+		return fmt.Errorf("%s database backup failed: %w", prefix, err)
 	}
 
-	// Update the 'latest.db' symlink
-	latestPath := filepath.Join(config.RunData.BackupDir, "latest.db")
+	// Update the '<prefix>-latest.db' symlink
+	latestPath := filepath.Join(config.RunData.BackupDir, prefix+"-latest.db")
 
 	// Remove existing symlink or file if it exists
 	_ = os.Remove(latestPath)
@@ -73,16 +86,17 @@ func PerformBackup() error {
 	// Create new symlink pointing to the new backup file.
 	// We use a relative path for the target so the directory remains portable.
 	if err := os.Symlink(backupFileName, latestPath); err != nil {
-		log.Printf("Warning: failed to update 'latest.db' symlink: %v", err)
+		log.Printf("Warning: failed to update '%s-latest.db' symlink: %v", prefix, err)
 	}
 
-	log.Printf("Database backup successful: %s (took %v)", backupFileName, time.Since(start))
+	log.Printf("%s database backup successful: %s (took %v)", prefix, backupFileName, time.Since(start))
 
-	return cleanupOldBackups()
+	return cleanupOldBackups(prefix)
 }
 
-// cleanupOldBackups removes backup files older than 48 hours.
-func cleanupOldBackups() error {
+// cleanupOldBackups removes backup files for the given database prefix
+// older than 48 hours.
+func cleanupOldBackups(prefix string) error {
 	files, err := os.ReadDir(config.RunData.BackupDir)
 	if err != nil {
 		return fmt.Errorf("failed to read backup directory for cleanup: %w", err)
@@ -91,6 +105,7 @@ func cleanupOldBackups() error {
 	now := time.Now()
 	retentionPeriod := 48 * time.Hour
 	deletedCount := 0
+	fileNamePrefix := prefix + "-"
 
 	for _, file := range files {
 		if file.IsDir() {
@@ -98,8 +113,8 @@ func cleanupOldBackups() error {
 		}
 
 		name := file.Name()
-		// Only touch files that match our backup pattern jman-YYYYMMDD-HHMMSS.db
-		if !strings.HasPrefix(name, "jman-") || !strings.HasSuffix(name, ".db") || name == "latest.db" {
+		// Only touch files that match our backup pattern <prefix>-YYYYMMDD-HHMMSS.db
+		if !strings.HasPrefix(name, fileNamePrefix) || !strings.HasSuffix(name, ".db") || name == prefix+"-latest.db" {
 			continue
 		}
 
@@ -119,7 +134,7 @@ func cleanupOldBackups() error {
 	}
 
 	if deletedCount > 0 {
-		log.Printf("Cleaned up %d old backup(s)", deletedCount)
+		log.Printf("Cleaned up %d old %s backup(s)", deletedCount, prefix)
 	}
 
 	return nil

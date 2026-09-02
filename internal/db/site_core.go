@@ -9,7 +9,7 @@ import (
 
 // SaveSiteCore inserts or updates the installed WordPress core version for a site.
 func SaveSiteCore(siteID int, version string) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -31,7 +31,7 @@ func SaveSiteCore(siteID int, version string) error {
 
 // GetAllSiteCore retrieves the installed WordPress core version for every known site.
 func GetAllSiteCore() ([]models.SiteCore, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -56,7 +56,7 @@ func GetAllSiteCore() ([]models.SiteCore, error) {
 
 // GetSiteCoreLastUpdates returns a map of site IDs to their last core-version fetch timestamp.
 func GetSiteCoreLastUpdates() (map[int]string, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

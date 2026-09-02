@@ -11,7 +11,7 @@ import (
 // --- Organization Repository ---
 
 func SaveOrganization(org *models.Organization, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -48,7 +48,7 @@ func SaveOrganization(org *models.Organization, username string) error {
 }
 
 func GetOrganization(id int) (*models.Organization, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -68,7 +68,7 @@ func GetOrganization(id int) (*models.Organization, error) {
 }
 
 func GetAllOrganizations(search string) ([]models.Organization, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -103,7 +103,7 @@ func GetAllOrganizations(search string) ([]models.Organization, error) {
 }
 
 func DeleteOrganization(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -114,7 +114,7 @@ func DeleteOrganization(id int) error {
 // --- Contact Repository ---
 
 func SaveContact(contact *models.Contact, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -151,7 +151,7 @@ func SaveContact(contact *models.Contact, username string) error {
 }
 
 func GetContact(id int) (*models.Contact, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -171,7 +171,7 @@ func GetContact(id int) (*models.Contact, error) {
 }
 
 func GetContactsByOrganization(organizationID int) ([]models.Contact, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -198,7 +198,7 @@ func GetContactsByOrganization(organizationID int) ([]models.Contact, error) {
 }
 
 func DeleteContact(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -209,7 +209,7 @@ func DeleteContact(id int) error {
 // --- Site-Organization Mapping Repository ---
 
 func LinkSiteToOrganization(siteID, organizationID int, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -224,7 +224,7 @@ func LinkSiteToOrganization(siteID, organizationID int, username string) error {
 }
 
 func UnlinkSiteFromOrganization(siteID, organizationID int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -235,7 +235,7 @@ func UnlinkSiteFromOrganization(siteID, organizationID int) error {
 }
 
 func GetOrganizationBySite(siteID int) (*models.Organization, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -260,7 +260,7 @@ func GetOrganizationBySite(siteID int) (*models.Organization, error) {
 }
 
 func GetSitesByOrganization(organizationID int) ([]int, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -289,7 +289,7 @@ func GetSitesByOrganization(organizationID int) ([]int, error) {
 // --- Notes Repository ---
 
 func SaveNote(note *models.Note, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -326,7 +326,7 @@ func SaveNote(note *models.Note, username string) error {
 }
 
 func GetNotes(parentType models.NoteParentType, parentID string) ([]models.Note, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -353,7 +353,7 @@ func GetNotes(parentType models.NoteParentType, parentID string) ([]models.Note,
 }
 
 func DeleteNote(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -362,7 +362,7 @@ func DeleteNote(id int) error {
 }
 
 func GetNote(id int) (*models.Note, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

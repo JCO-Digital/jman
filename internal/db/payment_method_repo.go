@@ -11,7 +11,7 @@ import (
 // --- Payment Method Repository ---
 
 func SavePaymentMethod(pm *models.PaymentMethod, username string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -48,7 +48,7 @@ func SavePaymentMethod(pm *models.PaymentMethod, username string) error {
 }
 
 func GetPaymentMethod(id int) (*models.PaymentMethod, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -68,7 +68,7 @@ func GetPaymentMethod(id int) (*models.PaymentMethod, error) {
 }
 
 func GetAllPaymentMethods(search, pmType string) ([]models.PaymentMethod, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -106,7 +106,7 @@ func GetAllPaymentMethods(search, pmType string) ([]models.PaymentMethod, error)
 }
 
 func DeletePaymentMethod(id int) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}

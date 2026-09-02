@@ -26,7 +26,7 @@ func setupSettingsTest(t *testing.T) {
 	oldDataDir := config.RunData.DataDir
 	config.RunData.DataDir = tempDir
 
-	if err := db.Init(); err != nil {
+	if err := db.InitAPI(); err != nil {
 		t.Fatalf("Failed to init DB: %v", err)
 	}
 

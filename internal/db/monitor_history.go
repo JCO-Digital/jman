@@ -9,7 +9,7 @@ import (
 
 // GetMonitorHistory returns monitoring history for all sites for the specified number of hours.
 func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -53,7 +53,7 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 
 // GetMonitorStatus returns the current monitoring status for a specific domain.
 func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -90,7 +90,7 @@ func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
 
 // GetAllMonitorStatuses returns the current monitoring status for all sites.
 func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

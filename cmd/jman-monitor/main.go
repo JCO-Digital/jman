@@ -52,8 +52,21 @@ func run() int {
 		return 1
 	}
 
-	// Initialize database
-	if err := db.Init(); err != nil {
+	if err := db.CheckSplitState(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	// jman-monitor needs both databases: the shared inventory database for
+	// ignore rules, and jman-api's own database for monitor_status/history
+	// and Slack dedup. This standalone daemon is deprecated in favor of
+	// jman-api's built-in monitor scheduler (see README_MONITOR.md) — never
+	// run both against the same databases at the same time.
+	if err := db.InitInventory(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
+		return 1
+	}
+	if err := db.InitAPI(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
 		return 1
 	}

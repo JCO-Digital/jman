@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -12,9 +13,21 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// jman's data is split across two SQLite databases:
+//
+//   - inventory.db holds refreshable inventory data (plugin/site/core
+//     versions, ignore rules) that both the `jman` CLI and `jman-api` read
+//     and write.
+//   - api.db holds jman-api's own business data (organizations, billing,
+//     tasks, monitor state, agent tokens, traffic, ...) that only jman-api
+//     (and, transitionally, a standalone jman-monitor) ever touches.
+//
+// GetInventoryDB/GetAPIDB are deliberately not aliased to each other, so
+// every call site must be explicit about which database it means.
 var (
-	dbInstance *sql.DB
-	dbMutex    sync.Mutex
+	inventoryDB *sql.DB
+	apiDB       *sql.DB
+	dbMutex     sync.Mutex
 )
 
 // TableDefinition represents the desired state of a database table.
@@ -24,27 +37,44 @@ type TableDefinition struct {
 	PrimaryKey []string          // Optional composite primary key
 }
 
-// Init initializes the SQLite database.
-// It creates the database file in the data directory if it doesn't exist.
-func Init() error {
-	dbMutex.Lock()
-	defer dbMutex.Unlock()
+// CheckSplitState returns an error if the data directory is in an
+// inconsistent, partially-migrated state: the legacy pre-split jman.db file
+// coexists with either of the new split database files. Every binary
+// (jman, jman-api, jman-monitor) should call this before InitInventory/
+// InitAPI so a partial or interrupted migration is never silently ignored.
+func CheckSplitState() error {
+	legacyPath := filepath.Join(config.RunData.DataDir, "jman.db")
+	inventoryPath := filepath.Join(config.RunData.DataDir, "inventory.db")
+	apiPath := filepath.Join(config.RunData.DataDir, "api.db")
 
-	if dbInstance != nil {
-		return nil
+	if fileExists(legacyPath) && (fileExists(inventoryPath) || fileExists(apiPath)) {
+		return fmt.Errorf(
+			"both the legacy database %s and a split database file exist in %s — "+
+				"this looks like an interrupted migration; run `jman-api migrate-db` to "+
+				"resolve it, or restore from backup, before starting any jman binary",
+			legacyPath, config.RunData.DataDir,
+		)
 	}
 
-	dbPath := filepath.Join(config.RunData.DataDir, "jman.db")
+	return nil
+}
 
-	// Open the database connection.
-	db, err := sql.Open("sqlite", dbPath)
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// openDB opens a SQLite database file with the pragma set jman relies on
+// for concurrency and reliability (shared by both inventory.db and api.db).
+func openDB(path string) (*sql.DB, error) {
+	conn, err := sql.Open("sqlite", path)
 	if err != nil {
-		return fmt.Errorf("failed to open database: %w", err)
+		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Limit to a single connection to avoid "database is locked" errors.
 	// SQLite works best with a single connection when performing concurrent writes.
-	db.SetMaxOpenConns(1)
+	conn.SetMaxOpenConns(1)
 
 	// Set pragmas for better concurrency and reliability.
 	// WAL mode allows multiple readers and one writer simultaneously.
@@ -55,43 +85,100 @@ func Init() error {
 		"PRAGMA busy_timeout=5000",
 		"PRAGMA foreign_keys=ON",
 	}
-
 	for _, p := range pragmas {
-		if _, pragmaErr := db.Exec(p); pragmaErr != nil {
-			db.Close()
-			return fmt.Errorf("failed to set pragma %q: %w", p, pragmaErr)
+		if _, err := conn.Exec(p); err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("failed to set pragma %q: %w", p, err)
 		}
 	}
 
-	// Check connection
-	if pingErr := db.Ping(); pingErr != nil {
-		db.Close()
-		return fmt.Errorf("failed to ping database: %w", pingErr)
+	if err := conn.Ping(); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	dbInstance = db
+	return conn, nil
+}
 
-	// Initialize schemas with migration support
-	if schemaErr := initSchema(); schemaErr != nil {
-		db.Close()
-		dbInstance = nil
-		return fmt.Errorf("failed to initialize schema: %w", schemaErr)
+// InitInventory initializes the shared SQLite inventory database in the data
+// directory, creating it if it doesn't exist. This is the database jman's
+// own CLI commands read and write.
+func InitInventory() error {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	if inventoryDB != nil {
+		return nil
+	}
+
+	dbPath := filepath.Join(config.RunData.DataDir, "inventory.db")
+	conn, err := openDB(dbPath)
+	if err != nil {
+		return err
+	}
+
+	inventoryDB = conn
+	if err := initInventorySchema(); err != nil {
+		conn.Close()
+		inventoryDB = nil
+		return fmt.Errorf("failed to initialize inventory schema: %w", err)
 	}
 
 	return nil
 }
 
-// GetDB returns the global database instance.
-func GetDB() *sql.DB {
-	return dbInstance
-}
-
-// Backup creates a snapshot of the database using VACUUM INTO.
-func Backup(destPath string) error {
+// InitAPI initializes jman-api's own SQLite database in the data directory,
+// creating it if it doesn't exist. Only jman-api (and, transitionally, a
+// standalone jman-monitor) needs to call this.
+func InitAPI() error {
 	dbMutex.Lock()
 	defer dbMutex.Unlock()
 
-	if dbInstance == nil {
+	if apiDB != nil {
+		return nil
+	}
+
+	dbPath := filepath.Join(config.RunData.DataDir, "api.db")
+	conn, err := openDB(dbPath)
+	if err != nil {
+		return err
+	}
+
+	apiDB = conn
+	if err := initAPISchema(); err != nil {
+		conn.Close()
+		apiDB = nil
+		return fmt.Errorf("failed to initialize api schema: %w", err)
+	}
+
+	return nil
+}
+
+// GetInventoryDB returns the shared inventory database instance.
+func GetInventoryDB() *sql.DB {
+	return inventoryDB
+}
+
+// GetAPIDB returns jman-api's own database instance.
+func GetAPIDB() *sql.DB {
+	return apiDB
+}
+
+// BackupInventory creates a snapshot of the inventory database using VACUUM INTO.
+func BackupInventory(destPath string) error {
+	return backupDB(inventoryDB, destPath)
+}
+
+// BackupAPI creates a snapshot of the api database using VACUUM INTO.
+func BackupAPI(destPath string) error {
+	return backupDB(apiDB, destPath)
+}
+
+func backupDB(conn *sql.DB, destPath string) error {
+	dbMutex.Lock()
+	defer dbMutex.Unlock()
+
+	if conn == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
@@ -100,28 +187,39 @@ func Backup(destPath string) error {
 	escapedPath := strings.ReplaceAll(destPath, "'", "''")
 	query := fmt.Sprintf("VACUUM INTO '%s'", escapedPath)
 
-	if _, err := dbInstance.Exec(query); err != nil {
+	if _, err := conn.Exec(query); err != nil {
 		return fmt.Errorf("VACUUM INTO failed: %w", err)
 	}
 
 	return nil
 }
 
-// Close closes the database connection.
+// Close closes whichever database handles have been opened. Safe to call
+// even if only one (or neither) of InitInventory/InitAPI was ever called.
 func Close() error {
 	dbMutex.Lock()
 	defer dbMutex.Unlock()
 
-	if dbInstance != nil {
-		err := dbInstance.Close()
-		dbInstance = nil
-		return err
+	var firstErr error
+	if inventoryDB != nil {
+		if err := inventoryDB.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		inventoryDB = nil
 	}
-	return nil
+	if apiDB != nil {
+		if err := apiDB.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		apiDB = nil
+	}
+	return firstErr
 }
 
-// initSchema creates the necessary tables and migrates them if they've changed.
-func initSchema() error {
+// initInventorySchema creates/migrates the tables that live in inventory.db:
+// refreshable plugin/site/core inventory data, plus the unified ignore list
+// (used by both `jman vuln`, running standalone, and jman-api's schedulers).
+func initInventorySchema() error {
 	tables := []TableDefinition{
 		{
 			Name: "plugin_info",
@@ -169,6 +267,43 @@ func initSchema() error {
 			},
 		},
 		{
+			Name: "ignore_entries",
+			Columns: map[string]string{
+				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"type":             "TEXT NOT NULL",
+				"target":           "TEXT NOT NULL",
+				"reason":           "TEXT",
+				"negated_site_ids": "TEXT",
+				"use_for_monitor":  "BOOLEAN DEFAULT 0",
+				"use_for_vuln":     "BOOLEAN DEFAULT 0",
+				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":       "TEXT",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":       "TEXT",
+			},
+		},
+	}
+
+	// Drop old ignore tables if they exist (pre-dates the unified ignore_entries table).
+	_, _ = inventoryDB.Exec("DROP TABLE IF EXISTS monitor_ignored_sites")
+	_, _ = inventoryDB.Exec("DROP TABLE IF EXISTS monitor_ignored_history")
+	_, _ = inventoryDB.Exec("DROP TABLE IF EXISTS vuln_ignored")
+
+	for _, table := range tables {
+		if err := migrateTable(inventoryDB, table); err != nil {
+			return fmt.Errorf("failed to migrate table %s: %w", table.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// initAPISchema creates/migrates the tables that live in api.db: jman-api's
+// own business data, exclusively owned by jman-api (and, transitionally, a
+// standalone jman-monitor for the monitor_status/monitor_history tables).
+func initAPISchema() error {
+	tables := []TableDefinition{
+		{
 			Name: "slack_messages",
 			Columns: map[string]string{
 				"hash":      "TEXT PRIMARY KEY",
@@ -199,22 +334,6 @@ func initSchema() error {
 				"first_seen": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"last_seen":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"count":      "INTEGER DEFAULT 1",
-			},
-		},
-		{
-			Name: "ignore_entries",
-			Columns: map[string]string{
-				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"type":             "TEXT NOT NULL",
-				"target":           "TEXT NOT NULL",
-				"reason":           "TEXT",
-				"negated_site_ids": "TEXT",
-				"use_for_monitor":  "BOOLEAN DEFAULT 0",
-				"use_for_vuln":     "BOOLEAN DEFAULT 0",
-				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":       "TEXT",
-				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by":       "TEXT",
 			},
 		},
 		{
@@ -483,97 +602,92 @@ func initSchema() error {
 		},
 	}
 
-	// Drop old ignore tables if they exist
-	_, _ = dbInstance.Exec("DROP TABLE IF EXISTS monitor_ignored_sites")
-	_, _ = dbInstance.Exec("DROP TABLE IF EXISTS monitor_ignored_history")
-	_, _ = dbInstance.Exec("DROP TABLE IF EXISTS vuln_ignored")
-
 	for _, table := range tables {
-		if err := migrateTable(table); err != nil {
+		if err := migrateTable(apiDB, table); err != nil {
 			return fmt.Errorf("failed to migrate table %s: %w", table.Name, err)
 		}
 	}
 
 	// Manual index management
-	_, err := dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);")
+	_, err := apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);")
 	if err != nil {
 		return err
 	}
 
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_organization_id ON contacts(organization_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_contacts_organization_id ON contacts(organization_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_type, parent_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_notes_parent ON notes(parent_type, parent_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_organization_assets_org_id ON organization_assets(organization_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_organization_assets_org_id ON organization_assets(organization_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_asset_payments_asset_id ON asset_payments(org_asset_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_asset_payments_asset_id ON asset_payments(org_asset_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_assets_payment_method_id ON assets(payment_method_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_assets_payment_method_id ON assets(payment_method_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_organization_assets_payment_method_id ON organization_assets(payment_method_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_organization_assets_payment_method_id ON organization_assets(payment_method_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_site_id ON tasks(site_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_site_id ON tasks(site_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_completed_by ON tasks(completed_by);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_completed_by ON tasks(completed_by);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_agent_tokens_server_id ON agent_tokens(server_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_agent_tokens_server_id ON agent_tokens(server_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_disk_usage_site_id ON site_disk_usage(site_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_disk_usage_site_id ON site_disk_usage(site_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_hourly_site_id ON site_traffic_hourly(site_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_hourly_site_id ON site_traffic_hourly(site_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_daily_site_id ON site_traffic_daily(site_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_daily_site_id ON site_traffic_daily(site_id);")
 	if err != nil {
 		return err
 	}
-	_, err = dbInstance.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_id ON site_update_ledger(site_id);")
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_id ON site_update_ledger(site_id);")
 	return err
 }
 
 // migrateTable compares the current database table schema with the desired definition.
 // SQLite has restrictions on ALTER TABLE (e.g., adding columns with non-constant defaults like CURRENT_TIMESTAMP).
 // To be robust, this implementation uses the "recreate and copy" pattern if changes are detected.
-func migrateTable(def TableDefinition) error {
+func migrateTable(conn *sql.DB, def TableDefinition) error {
 	// Disable foreign keys during migration to avoid broken references when renaming tables.
 	// PRAGMA foreign_keys must be set outside of a transaction.
-	if _, err := dbInstance.Exec("PRAGMA foreign_keys=OFF"); err != nil {
+	if _, err := conn.Exec("PRAGMA foreign_keys=OFF"); err != nil {
 		return fmt.Errorf("failed to disable foreign keys: %w", err)
 	}
 	defer func() {
-		_, _ = dbInstance.Exec("PRAGMA foreign_keys=ON")
+		_, _ = conn.Exec("PRAGMA foreign_keys=ON")
 	}()
 
-	tx, err := dbInstance.Begin()
+	tx, err := conn.Begin()
 	if err != nil {
 		return err
 	}

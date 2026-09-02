@@ -10,7 +10,7 @@ import (
 
 // SavePluginInfo inserts or updates a plugin's metadata in the database.
 func SavePluginInfo(info models.PluginInfo) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -52,7 +52,7 @@ func SavePluginInfo(info models.PluginInfo) error {
 
 // GetPluginInfo retrieves a plugin's metadata and its last fetch timestamp from the database.
 func GetPluginInfo(slug string) (*models.PluginInfo, time.Time, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, time.Time{}, fmt.Errorf("database not initialized")
 	}
@@ -92,7 +92,7 @@ func GetPluginInfo(slug string) (*models.PluginInfo, time.Time, error) {
 
 // DeletePluginInfo removes a plugin's metadata from the database.
 func DeletePluginInfo(slug string) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -108,7 +108,7 @@ func DeletePluginInfo(slug string) error {
 
 // GetAllPluginSlugs returns a list of all plugin slugs currently in the database.
 func GetAllPluginSlugs() ([]string, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -134,7 +134,7 @@ func GetAllPluginSlugs() ([]string, error) {
 
 // GetAllPluginInfo returns a list of all plugin metadata stored in the database.
 func GetAllPluginInfo() ([]models.PluginInfo, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

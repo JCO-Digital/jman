@@ -17,8 +17,17 @@ import (
 
 // ScanOptions defines the parameters for a vulnerability scan.
 type ScanOptions struct {
-	Mode          string  // "list" or "sites"
-	Slack         bool    // whether to send reports to Slack
+	Mode string // "list" or "sites"
+	// Slack sends matching reports via internal/slack.SendMessage. Its
+	// per-message dedup (backed by the api.db slack_messages table) is only
+	// available when the calling process has api.db open — jman-api does,
+	// but the standalone `jman vuln --slack` CLI command only opens
+	// inventory.db, so each manual run re-sends every matching report with
+	// no cross-run dedup. That's an accepted tradeoff for an explicit,
+	// operator-triggered flag, not a bug: slack.SendMessage degrades
+	// gracefully (send-without-dedup) rather than failing when no database
+	// connection is available.
+	Slack         bool
 	CVSSThreshold float64 // threshold for reporting (0 to disable)
 	SiteSearch    string  // filter by site name (case-insensitive)
 }

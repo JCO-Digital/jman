@@ -7,7 +7,7 @@ import (
 
 // GetSiteMode returns the current monitoring mode for a given domain from the database.
 func GetSiteMode(domain string) (string, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return "", fmt.Errorf("database not initialized")
 	}
