@@ -37,22 +37,29 @@ type TableDefinition struct {
 	PrimaryKey []string          // Optional composite primary key
 }
 
-// CheckSplitState returns an error if the data directory is in an
-// inconsistent, partially-migrated state: the legacy pre-split jman.db file
-// coexists with either of the new split database files. Every binary
-// (jman, jman-api, jman-monitor) should call this before InitInventory/
-// InitAPI so a partial or interrupted migration is never silently ignored.
+// CheckSplitState returns an error if the legacy pre-split jman.db file
+// still exists. Every binary (jman, jman-api, jman-monitor) should call
+// this before InitInventory/InitAPI, so:
+//
+//   - An un-migrated install (only jman.db exists) is never allowed to
+//     silently proceed — without this check, InitInventory/InitAPI would
+//     just create brand-new *empty* inventory.db/api.db files next to the
+//     untouched jman.db, and the process would run against empty data
+//     with no error at all.
+//   - A partially-migrated install (jman.db plus one or both split files,
+//     from an interrupted `migrate-db` run) is also caught, rather than
+//     starting up against incomplete data.
+//
+// In both cases the fix is the same: run `jman-api migrate-db`, which has
+// its own (separate) detection logic for exactly these states.
 func CheckSplitState() error {
 	legacyPath := filepath.Join(config.RunData.DataDir, "jman.db")
-	inventoryPath := filepath.Join(config.RunData.DataDir, "inventory.db")
-	apiPath := filepath.Join(config.RunData.DataDir, "api.db")
 
-	if fileExists(legacyPath) && (fileExists(inventoryPath) || fileExists(apiPath)) {
+	if fileExists(legacyPath) {
 		return fmt.Errorf(
-			"both the legacy database %s and a split database file exist in %s — "+
-				"this looks like an interrupted migration; run `jman-api migrate-db` to "+
-				"resolve it, or restore from backup, before starting any jman binary",
-			legacyPath, config.RunData.DataDir,
+			"legacy database %s still exists — run `jman-api migrate-db` to split it "+
+				"into inventory.db and api.db before starting any jman binary",
+			legacyPath,
 		)
 	}
 
