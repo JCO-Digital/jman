@@ -1,6 +1,12 @@
 # Changelog
 
-## 1.52.0 (2026-09-01)
+### 1.52.1 (2026-09-02)
+
+#### Bug Fixes
+
+- plugin: allow update modal interaction for installed plugins (be84d83)
+
+## v1.52.0 (2026-09-01)
 
 #### Features
 
