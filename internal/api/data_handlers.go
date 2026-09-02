@@ -356,7 +356,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
 				SiteID:     siteID,
 				UpdateType: "plugin",
-				Status:     "full",
+				Status:     "partial",
 				DataJSON:   string(ledgerJSON),
 				UpdatedBy:  username,
 			})
@@ -420,7 +420,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
 			SiteID:     siteID,
 			UpdateType: "plugin",
-			Status:     "full",
+			Status:     "partial",
 			DataJSON:   string(ledgerJSON),
 			UpdatedBy:  username,
 		})
