@@ -339,6 +339,29 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		response.OldVersion = currentVersion
 		response.NewVersion = currentVersion
+
+		// Save to site update ledger
+		ledgerData := map[string]interface{}{
+			"plugin":      body.Plugin,
+			"old_version": currentVersion,
+			"new_version": currentVersion,
+		}
+		ledgerJSON, _ := json.Marshal(ledgerData)
+		username := "system"
+		claims := GetAuthClaims(r.Context())
+		if claims != nil {
+			username = claims.Username
+		}
+		if !body.SkipLedger {
+			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
+				SiteID:     siteID,
+				UpdateType: "plugin",
+				Status:     "full",
+				DataJSON:   string(ledgerJSON),
+				UpdatedBy:  username,
+			})
+		}
+
 		WriteJSON(w, http.StatusOK, response)
 		return
 	}
