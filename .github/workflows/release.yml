@@ -47,6 +47,24 @@ jobs:
           MINISIGN_PRIVATE_KEY: ${{ secrets.MINISIGN_PRIVATE_KEY }}
         run: go run cmd/sign-binaries/main.go bin/jman bin/jman-api bin/jman-monitor bin/jman-agent
 
+      - name: Install SSH Key
+        if: steps.foonver.outputs.is_bumped == 'true'
+        uses: shimataro/ssh-key-action@v2
+        with:
+          key: ${{ secrets.SSH_KEY }}
+          name: id_ed25519
+          known_hosts: ${{ vars.SSH_KNOWN_HOSTS }}
+
+      - name: Deploy API binary
+        if: steps.foonver.outputs.is_bumped == 'true'
+        run: >-
+          rsync -lci bin/jman-api
+          ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}:${{ vars.BACKEND_DEPLOY_PATH }}bin/jman-api
+
+      - name: Restart jman-api service
+        if: steps.foonver.outputs.is_bumped == 'true'
+        run: ssh ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }} 'sudo systemctl restart ${{ vars.BACKEND_SERVICE_NAME }}'
+
       - name: Create GitHub Release
         if: steps.foonver.outputs.is_bumped == 'true'
         uses: softprops/action-gh-release@v2
