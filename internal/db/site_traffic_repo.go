@@ -17,7 +17,7 @@ const topEntryLimit = 20
 // site. jman-agent only ever sends a given hour once it's closed, so this
 // is a plain replace-style upsert — no incremental merging needed.
 func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -64,7 +64,7 @@ func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error 
 // data behind these days, so callers must not also add them to whatever
 // day-recompute set they're tracking for hourly writes in the same report.
 func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -114,7 +114,7 @@ func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
 // hour's already-truncated top-N lists, not the full day's raw counts — an
 // accepted approximation, not the exact daily top-N.
 func RecomputeSiteTrafficDaily(siteID int, day string) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -205,7 +205,7 @@ func RecomputeSiteTrafficDaily(siteID int, day string) error {
 // changes (worst case one tick of lag past UTC midnight) instead of only
 // being derived at the tail end of the retention window.
 func FinalizeCompletedDailyRollups() error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -275,7 +275,7 @@ func FinalizeCompletedDailyRollups() error {
 // driving the stored total toward whatever sliver of the day happened to
 // still be present right before its last hourly row was deleted.
 func PruneOldSiteTrafficHourly(cutoff time.Time) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -340,7 +340,7 @@ func topNFromCounts(counts map[string]int) []models.TrafficTopEntry {
 // top_referrers are similarly derived by merging each day's already-
 // truncated top-N list, not the full month's raw counts.
 func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -415,7 +415,7 @@ func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, er
 // then day, for use by the cross-site traffic report. Unlike GetSiteTraffic/
 // GetSiteTrafficMonthly, this is not scoped to a single site.
 func GetSiteTrafficDailyRange(start, end string) ([]models.SiteTrafficDailyRow, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -454,7 +454,7 @@ func GetSiteTrafficDailyRange(start, end string) ([]models.SiteTrafficDailyRow, 
 // GetSiteTraffic returns a site's hourly or daily traffic for the last
 // `days` days, oldest first.
 func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPeriod, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

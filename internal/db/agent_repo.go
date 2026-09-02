@@ -28,7 +28,7 @@ type AgentClaims struct {
 // form "<id>.<secret>". The plaintext value cannot be recovered later — only
 // TokenPrefix (its first 8 characters) is retained for display purposes.
 func CreateAgentToken(serverID int, serverName, description, createdBy string) (models.AgentToken, string, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return models.AgentToken{}, "", fmt.Errorf("database not initialized")
 	}
@@ -84,7 +84,7 @@ func CreateAgentToken(serverID int, serverName, description, createdBy string) (
 // verifies the secret against its stored hash. It fails for unknown,
 // malformed, revoked, or mismatched tokens.
 func VerifyAgentToken(raw string) (*AgentClaims, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -121,7 +121,7 @@ func VerifyAgentToken(raw string) (*AgentClaims, error) {
 // TouchAgentTokenLastSeen updates the last_seen_at timestamp for a token.
 // Failures are non-fatal to callers — this is best-effort bookkeeping.
 func TouchAgentTokenLastSeen(tokenID int) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -132,7 +132,7 @@ func TouchAgentTokenLastSeen(tokenID int) error {
 // ListAgentTokens returns every agent token (including revoked ones), most
 // recently created first.
 func ListAgentTokens() ([]models.AgentToken, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -181,7 +181,7 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 // just sent for this token's current staleness episode (see
 // internal/tasks/agent_health.go), so it isn't re-alerted every tick.
 func MarkAgentTokenStaleAlerted(tokenID int) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -192,7 +192,7 @@ func MarkAgentTokenStaleAlerted(tokenID int) error {
 // ClearAgentTokenStaleAlert resets a token's staleness episode once it's
 // reporting again, so the next time it goes stale a fresh alert fires.
 func ClearAgentTokenStaleAlert(tokenID int) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -207,7 +207,7 @@ func ClearAgentTokenStaleAlert(tokenID int) error {
 // only a successful report updates it, so it doubles as a signal that the
 // report path (not just authentication) is actually working.
 func SetAgentTokenVersion(tokenID int, version string) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -217,7 +217,7 @@ func SetAgentTokenVersion(tokenID int, version string) error {
 
 // RevokeAgentToken marks a token as revoked, immediately blocking its use.
 func RevokeAgentToken(id int) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}

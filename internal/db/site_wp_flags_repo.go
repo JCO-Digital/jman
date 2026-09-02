@@ -8,7 +8,7 @@ import (
 
 // SetSiteWpFlags inserts or updates the current WordPress config flags for a site.
 func SetSiteWpFlags(siteID int, isMultisite, disallowFileMods bool) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -30,7 +30,7 @@ func SetSiteWpFlags(siteID int, isMultisite, disallowFileMods bool) error {
 
 // GetAllSiteWpFlags returns a map of site ID to its current WordPress config flags.
 func GetAllSiteWpFlags() (map[int]models.SiteWpFlags, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

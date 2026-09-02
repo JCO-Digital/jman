@@ -38,7 +38,7 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 
 	message = utils.StripANSI(message)
 	hash := hashMessage(message)
-	database := db.GetDB()
+	database := db.GetAPIDB()
 
 	if database != nil {
 		migrationOnce.Do(func() {

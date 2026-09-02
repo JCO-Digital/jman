@@ -8,7 +8,7 @@ import (
 
 // RecordSiteDiskUsage inserts a new disk usage measurement for a site.
 func RecordSiteDiskUsage(siteID int, bytesUsed int64, measuredAt string) error {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -27,7 +27,7 @@ func RecordSiteDiskUsage(siteID int, bytesUsed int64, measuredAt string) error {
 // GetLatestSiteDiskUsage returns a map of site ID to its most recent disk
 // usage measurement, for every site that has ever reported one.
 func GetLatestSiteDiskUsage() (map[int]models.SiteDiskUsage, error) {
-	dbConn := GetDB()
+	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

@@ -9,7 +9,7 @@ import (
 
 // SaveSiteUpdateLedgerEntry inserts a new update ledger entry for a site.
 func SaveSiteUpdateLedgerEntry(entry *models.SiteUpdateLedgerEntry) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -37,7 +37,7 @@ func SaveSiteUpdateLedgerEntry(entry *models.SiteUpdateLedgerEntry) error {
 
 // GetSiteUpdateLedger retrieves all update ledger entries for a specific site, sorted by newest first.
 func GetSiteUpdateLedger(siteID int) ([]models.SiteUpdateLedgerEntry, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -82,7 +82,7 @@ func GetSiteUpdateLedger(siteID int) ([]models.SiteUpdateLedgerEntry, error) {
 
 // GetLatestSiteUpdateLedgerEntry retrieves the most recent update ledger entry for a specific site.
 func GetLatestSiteUpdateLedgerEntry(siteID int) (*models.SiteUpdateLedgerEntry, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -122,7 +122,7 @@ func GetLatestSiteUpdateLedgerEntry(siteID int) (*models.SiteUpdateLedgerEntry, 
 // GetLatestSiteUpdateLedgerEntries retrieves the most recent update ledger entry for all sites,
 // returned as a map of site_id -> entry.
 func GetLatestSiteUpdateLedgerEntries() (map[int]models.SiteUpdateLedgerEntry, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

@@ -13,7 +13,7 @@ var ErrTaskNotFound = errors.New("task not found")
 
 // SaveTask inserts or updates a task in the database.
 func SaveTask(task *models.Task, username string) error {
-	database := GetDB()
+	database := GetAPIDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -83,7 +83,7 @@ func SaveTask(task *models.Task, username string) error {
 
 // GetTask retrieves a single task by ID.
 func GetTask(id int) (*models.Task, error) {
-	database := GetDB()
+	database := GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -126,7 +126,7 @@ type TaskFilter struct {
 
 // GetTasks retrieves tasks based on the provided filter.
 func GetTasks(filter TaskFilter) ([]models.Task, error) {
-	database := GetDB()
+	database := GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -208,7 +208,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 // can't both observe "not yet completed" and both spawn a recurring
 // follow-up task.
 func CompleteTask(id int, username string) (*models.Task, error) {
-	database := GetDB()
+	database := GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -337,7 +337,7 @@ func parseCustomDuration(s string) (time.Duration, error) {
 
 // DeleteTask removes a task from the database.
 func DeleteTask(id int) error {
-	database := GetDB()
+	database := GetAPIDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -347,7 +347,7 @@ func DeleteTask(id int) error {
 
 // GetOpenVulnerabilityTask searches for an incomplete vulnerability task for a site.
 func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
-	database := GetDB()
+	database := GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

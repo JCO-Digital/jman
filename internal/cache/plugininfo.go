@@ -271,7 +271,7 @@ func isSpecialPlugin(slug string, specialOnlyMap map[string]bool) (bool, error) 
 		return false, nil
 	}
 
-	dbConn := db.GetDB()
+	dbConn := db.GetInventoryDB()
 	if dbConn == nil {
 		return false, fmt.Errorf("database not initialized")
 	}

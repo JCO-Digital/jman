@@ -9,7 +9,7 @@ import (
 
 // SaveSitePlugin inserts or updates a plugin record for a specific site.
 func SaveSitePlugin(plugin models.WPPlugin) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -44,7 +44,7 @@ func SaveSitePlugin(plugin models.WPPlugin) error {
 
 // GetSitePlugins retrieves all plugins installed on a specific site.
 func GetSitePlugins(siteID int) ([]models.WPPlugin, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -84,7 +84,7 @@ func GetSitePlugins(siteID int) ([]models.WPPlugin, error) {
 // DeleteSitePlugins removes all plugin records for a specific site.
 // This is useful when performing a full refresh of a site's plugin list.
 func DeleteSitePlugins(siteID int) error {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -100,7 +100,7 @@ func DeleteSitePlugins(siteID int) error {
 
 // GetAllSitePlugins retrieves every plugin instance across all sites.
 func GetAllSitePlugins() ([]models.WPPlugin, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -134,7 +134,7 @@ func GetAllSitePlugins() ([]models.WPPlugin, error) {
 
 // GetSitesWithPlugin returns a list of site IDs where a specific plugin is installed.
 func GetSitesWithPlugin(slug string) ([]int, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -160,7 +160,7 @@ func GetSitesWithPlugin(slug string) ([]int, error) {
 
 // GetSitePluginLastUpdates returns a map of site IDs to their last plugin update timestamp.
 func GetSitePluginLastUpdates() (map[int]string, error) {
-	db := GetDB()
+	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}

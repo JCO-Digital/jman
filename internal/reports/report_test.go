@@ -24,8 +24,11 @@ func setupReportsTest(t *testing.T) {
 	oldDataDir := config.RunData.DataDir
 	config.RunData.DataDir = tempDir
 
-	if err := db.Init(); err != nil {
-		t.Fatalf("failed to init DB: %v", err)
+	if err := db.InitInventory(); err != nil {
+		t.Fatalf("failed to init inventory DB: %v", err)
+	}
+	if err := db.InitAPI(); err != nil {
+		t.Fatalf("failed to init api DB: %v", err)
 	}
 
 	t.Cleanup(func() {

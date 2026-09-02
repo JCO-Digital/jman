@@ -1,5 +1,14 @@
 # jman-monitor
 
+> **Deprecated.** `jman-api` now runs this same monitoring scheduler in-process (see the
+> "Site Monitoring" section of `README_API.md`), so a separate `jman-monitor` process is no
+> longer required for new installs. The standalone binary and this doc remain for the
+> transition period and for split-host deployments. **Never run the standalone
+> `jman-monitor --service` daemon and jman-api's in-process monitor against the same
+> database at the same time** — set `monitorDisabled = true` in jman-api's config first if
+> you need to keep this daemon running temporarily. See "Alerting Logic" below for why
+> running both is unsafe.
+
 `jman-monitor` is a sidecar utility for the `jman` toolset that provides automated uptime monitoring for your WordPress sites. It performs lightweight HTTP checks against all sites cached by `jman` and sends alerts via Slack when downtime is detected.
 
 ## How it Works

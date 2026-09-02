@@ -53,7 +53,7 @@ type State struct {
 
 // LoadState reads the monitor state from the database.
 func LoadState() (*State, error) {
-	database := db.GetDB()
+	database := db.GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -136,7 +136,7 @@ func (s *State) SaveState() error {
 // SaveSiteStatus updates or inserts the status for a single site in the database.
 // It handles its own synchronization for both the SiteStatus object and the database.
 func SaveSiteStatus(status *SiteStatus) error {
-	database := db.GetDB()
+	database := db.GetAPIDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
 	}
@@ -230,7 +230,7 @@ func (s *State) RemoveStatus(domain string) {
 
 	delete(s.Sites, domain)
 
-	database := db.GetDB()
+	database := db.GetAPIDB()
 	if database != nil {
 		globalWriteMu.Lock()
 		defer globalWriteMu.Unlock()
@@ -241,7 +241,7 @@ func (s *State) RemoveStatus(domain string) {
 // RecordHistory updates the history table with the current check result.
 func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
 	domain = strings.ToLower(domain)
-	database := db.GetDB()
+	database := db.GetAPIDB()
 	if database == nil {
 		return
 	}

@@ -22,7 +22,15 @@ func run() int {
 		return 1
 	}
 
-	if err := db.Init(); err != nil {
+	if err := db.CheckSplitState(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	// jman only ever needs the shared inventory database (plugin/site/core
+	// data, ignore rules) — jman-api's own business data lives in a separate
+	// database the CLI never opens directly.
+	if err := db.InitInventory(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error initializing database: %v\n", err)
 		return 1
 	}

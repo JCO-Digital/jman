@@ -5,7 +5,6 @@ import (
 	"slices"
 
 	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
@@ -39,32 +38,32 @@ var (
 				verb.PrintErrorln(verb.Normal, "Fetching latest data from SpinupWP...")
 			}
 
-			if slices.Contains([]string{"servers", "basic", "all"}, operation) {
-				servers, err := cache.RefreshCachedServers(ttl)
-				if err != nil {
-					return fmt.Errorf("error fetching servers: %w", err)
-				}
-				verb.PrintErrorf(verb.Verbose, "Successfully fetched and cached %d servers.\n", len(servers))
-			}
-
-			if slices.Contains([]string{"sites", "basic", "all"}, operation) {
-				sites, err := cache.RefreshCachedSites(ttl)
-				if err != nil {
-					return fmt.Errorf("error fetching sites: %w", err)
-				}
-				verb.Printf(verb.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
-
-				classified, err := db.AutoClassifySiteEnvironments(sites)
-				if err != nil {
-					verb.PrintErrorf(verb.Normal, "Warning: failed to auto-classify site environments: %v\n", err)
-				} else if classified > 0 {
-					verb.Printf(verb.Verbose, "Auto-classified environment for %d sites.\n", classified)
+			fetchServers := slices.Contains([]string{"servers", "basic", "all"}, operation)
+			fetchSites := slices.Contains([]string{"sites", "basic", "all"}, operation)
+			if fetchServers || fetchSites {
+				// RefreshServersAndSites always does both, so an operation asking
+				// for just one of them still refreshes the other under the hood
+				// (matches today's cost profile: both calls are cheap, and this
+				// keeps the auto-classification side effect tied to a fresh site list).
+				if _, _, err := cache.RefreshServersAndSites(ttl); err != nil {
+					return err
 				}
 			}
 
-			fetchPlugins := slices.Contains([]string{"plugins", "all"}, operation)
-			fetchVulns := slices.Contains([]string{"vulns", "all"}, operation)
-			fetchInfo := slices.Contains([]string{"info", "plugins", "all"}, operation)
+			if operation == "all" {
+				// "all" always wants the full plugins+info+vulns+core sequence,
+				// so it maps directly onto the shared full-refresh routine also
+				// used by the in-process refresh scheduler.
+				if err := cache.RunFullRefresh(ttl); err != nil {
+					return err
+				}
+				verb.PrintErrorln(verb.Normal, "Cache update complete.")
+				return nil
+			}
+
+			fetchPlugins := operation == "plugins"
+			fetchVulns := operation == "vulns"
+			fetchInfo := slices.Contains([]string{"info", "plugins"}, operation)
 
 			if fetchPlugins || fetchVulns || fetchInfo {
 				pTTL := ttl

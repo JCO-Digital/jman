@@ -11,7 +11,7 @@ import (
 
 // GetSetting retrieves a specific setting for a user by key.
 func GetSetting(userID, key string) (*models.Setting, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -39,7 +39,7 @@ func GetSetting(userID, key string) (*models.Setting, error) {
 
 // GetAllSettings retrieves all settings for a specific user.
 func GetAllSettings(userID string) ([]models.Setting, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -75,7 +75,7 @@ func GetAllSettings(userID string) ([]models.Setting, error) {
 
 // SaveSetting creates or updates a setting for a user.
 func SaveSetting(userID, key string, value any) (*models.Setting, error) {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
@@ -104,7 +104,7 @@ func SaveSetting(userID, key string, value any) (*models.Setting, error) {
 
 // DeleteSetting removes a setting for a user.
 func DeleteSetting(userID, key string) error {
-	db := GetDB()
+	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}

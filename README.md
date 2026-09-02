@@ -87,6 +87,13 @@ slackChannel = "#alerts" # (optional, defaults to #testing)
 cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
 vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
 
+# Required only for `jman agent token` (create/list/revoke) — these talk to
+# jman-api over HTTP, since agent tokens live in jman-api's own database.
+# You'll be prompted for your jman-api password (and TOTP, if configured);
+# it's never stored in this file.
+apiURL = "https://jman-api.example.com" # (optional)
+apiUsername = "admin" # (optional, must be an admin-level jman-api user)
+
 # Plugin aliases for shorthand installs
 [pluginAliases]
 jquest = "https://github.com/JCO-Digital/jquest-plugin/releases/latest/download/jquest.zip"

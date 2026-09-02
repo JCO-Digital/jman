@@ -20,8 +20,14 @@ func setupTaskRepoTest(t *testing.T) {
 	oldDataDir := config.RunData.DataDir
 	config.RunData.DataDir = tempDir
 
-	if err := Init(); err != nil {
-		t.Fatalf("failed to init DB: %v", err)
+	// Shared setup helper for the whole package's test suite, used by tests
+	// against both inventory tables (e.g. site_environment) and api tables
+	// (e.g. tasks, assets, site_traffic), so both databases are initialized.
+	if err := InitInventory(); err != nil {
+		t.Fatalf("failed to init inventory DB: %v", err)
+	}
+	if err := InitAPI(); err != nil {
+		t.Fatalf("failed to init api DB: %v", err)
 	}
 
 	t.Cleanup(func() {
