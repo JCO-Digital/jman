@@ -1,6 +1,16 @@
 # Changelog
 
-## 5.41.0 (2026-08-31)
+## 5.42.0 (2026-09-02)
+
+#### Features
+
+- api: add ledger logging for site plugin updates (0a9ac19)
+
+#### Bug Fixes
+
+- api: update ledger status to partial on plugin updates (3c9ee18)
+
+## v5.41.0 (2026-08-31)
 
 #### Features
 
