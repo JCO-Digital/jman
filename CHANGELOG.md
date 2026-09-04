@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.44.0 (2026-09-04)
+## 5.45.0 (2026-09-04)
+
+#### Features
+
+- tasks: notify assignee on task create/change/assign (4b94442)
+
+## v5.44.0 (2026-09-04)
 
 #### Features
 
