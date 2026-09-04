@@ -143,6 +143,10 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/settings/{key}", basic(SaveSettingHandler))
 	mux.Handle("PATCH /api/settings/{key}", basic(PatchSettingHandler))
 	mux.Handle("DELETE /api/settings/{key}", basic(DeleteSettingHandler))
+
+	// --- Vulnerability task settings (admin) ---
+	mux.Handle("GET /api/vuln-settings", admin(GetVulnSettingsHandler))
+	mux.Handle("POST /api/vuln-settings", admin(SaveVulnSettingsHandler(&usersCfg)))
 }
 
 // HealthHandler returns a simple health check response.

@@ -1,7 +1,62 @@
 <script setup lang="ts">
+import { ref, onMounted } from "vue";
 import { useSettingsStore } from "../../stores/settings";
+import { useAuthStore } from "../../stores/auth";
+import { useUserStore } from "../../stores/user";
+import { BASE_URL } from "../../utils/api";
+import type { VulnSettings } from "../../types";
 
 const settingsStore = useSettingsStore();
+const authStore = useAuthStore();
+const userStore = useUserStore();
+
+// ─── Default Vulnerability Task Assignee (admin only) ───────────────────────
+
+const vulnDefaultAssignee = ref("");
+const vulnAssigneeSaving = ref(false);
+const vulnAssigneeSuccess = ref("");
+const vulnAssigneeError = ref("");
+
+onMounted(async () => {
+	if (!authStore.canAdmin) return;
+	userStore.ensureUsers();
+	try {
+		const res = await fetch(`${BASE_URL}/vuln-settings`, {
+			headers: authStore.authHeader,
+		});
+		if (res.ok) {
+			const data: VulnSettings = await res.json();
+			vulnDefaultAssignee.value = data.defaultAssignee;
+		}
+	} catch (e) {
+		console.error("Failed to fetch vulnerability task settings", e);
+	}
+});
+
+async function saveVulnAssignee() {
+	vulnAssigneeSaving.value = true;
+	vulnAssigneeSuccess.value = "";
+	vulnAssigneeError.value = "";
+	try {
+		const res = await fetch(`${BASE_URL}/vuln-settings`, {
+			method: "POST",
+			headers: {
+				...authStore.authHeader,
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({
+				defaultAssignee: vulnDefaultAssignee.value,
+			}),
+		});
+		if (!res.ok) throw new Error("Failed to save");
+		vulnAssigneeSuccess.value = "Saved.";
+	} catch (e: any) {
+		vulnAssigneeError.value =
+			e.message || "Failed to save default assignee.";
+	} finally {
+		vulnAssigneeSaving.value = false;
+	}
+}
 </script>
 
 <template>
@@ -76,6 +131,48 @@ const settingsStore = useSettingsStore();
 					vulnerability widget (Default: 8).
 				</p>
 			</div>
+		</div>
+	</section>
+
+	<section v-if="authStore.canAdmin" class="card">
+		<h2>Vulnerability Task Assignment</h2>
+		<div class="content mt-4">
+			<div class="form-group max-w-320">
+				<label for="vuln-default-assignee">Default Assignee</label>
+				<select
+					id="vuln-default-assignee"
+					v-model="vulnDefaultAssignee"
+				>
+					<option value="">— Unassigned —</option>
+					<option
+						v-for="user in userStore.users"
+						:key="user.username"
+						:value="user.username"
+					>
+						{{ user.displayName }}
+					</option>
+				</select>
+				<p class="help-text">
+					When set, newly-created vulnerability tasks are
+					automatically assigned to this user. Existing tasks are not
+					affected.
+				</p>
+			</div>
+
+			<div v-if="vulnAssigneeSuccess" class="feedback success">
+				{{ vulnAssigneeSuccess }}
+			</div>
+			<div v-if="vulnAssigneeError" class="feedback error">
+				{{ vulnAssigneeError }}
+			</div>
+
+			<button
+				class="btn btn-primary"
+				:disabled="vulnAssigneeSaving"
+				@click="saveVulnAssignee"
+			>
+				{{ vulnAssigneeSaving ? "Saving..." : "Save" }}
+			</button>
 		</div>
 	</section>
 </template>

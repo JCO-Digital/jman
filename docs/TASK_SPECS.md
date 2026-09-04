@@ -48,8 +48,8 @@ The `jman-api` process runs a background task scheduler (every hour) for reminde
 - Runs as part of the refresh scheduler's slow tick (not the hourly task tick), immediately after vulnerability data is fetched — see `README_API.md`'s "Data Refresh" section.
 - Scans for vulnerabilities across all sites.
 - If vulnerabilities exceed configured thresholds (`CVSSThreshold` or `VulnThreshold`):
-    - **Update**: If an open vulnerability task for the site already exists, it updates the description, priority, and metadata.
-    - **Create**: If no open task exists, it creates a new `one-time` task.
+    - **Update**: If an open vulnerability task for the site already exists, it updates the description, priority, and metadata. `assigned_to` is left untouched.
+    - **Create**: If no open task exists, it creates a new `one-time` task. If a default assignee is configured (`GET/POST /vuln-settings`, admin only — see `API_SPECS.md`), the new task's `assigned_to` is set to that user.
 - **Priority Mapping**:
     - CVSS >= 7.0: `high`
     - CVSS >= 4.0: `medium`

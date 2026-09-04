@@ -561,6 +561,32 @@ Any valid JSON value.
 
 Removes the setting with the specified key.
 
+### Vulnerability Task Settings
+
+Unlike the per-user settings above, these two endpoints manage a single global setting (admin only).
+
+`GET /vuln-settings` (Protected: `admin`)
+
+Returns the configured default assignee for newly-created vulnerability tasks (see [Background Automation](TASK_SPECS.md)).
+
+**Response (200 OK)**
+
+```json
+{ "defaultAssignee": "username" }
+```
+
+An empty `defaultAssignee` means vulnerability tasks are left unassigned.
+
+`POST /vuln-settings` (Protected: `admin`)
+
+Sets the default assignee. `defaultAssignee` must be an existing username, or empty to clear it. Only applies to newly-created vulnerability tasks — existing tasks are not reassigned.
+
+**Request Body**
+
+```json
+{ "defaultAssignee": "username" }
+```
+
 ---
 
 ### Vulnerability Data
