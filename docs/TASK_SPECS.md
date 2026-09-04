@@ -42,9 +42,10 @@ When a task of type `repeating` or `dynamic` is marked as `completed`:
 
 ## Background Automation (Scheduler)
 
-The `jman-api` process runs a background scheduler (every hour) that performs the following tasks:
+The `jman-api` process runs a background task scheduler (every hour) for reminders and cleanup, plus a separate refresh scheduler whose slow tick (default every 30 minutes, see `README_API.md`) drives vulnerability syncing right after it fetches fresh vulnerability data.
 
 ### 1. Vulnerability Syncing
+- Runs as part of the refresh scheduler's slow tick (not the hourly task tick), immediately after vulnerability data is fetched — see `README_API.md`'s "Data Refresh" section.
 - Scans for vulnerabilities across all sites.
 - If vulnerabilities exceed configured thresholds (`CVSSThreshold` or `VulnThreshold`):
     - **Update**: If an open vulnerability task for the site already exists, it updates the description, priority, and metadata.
@@ -53,6 +54,7 @@ The `jman-api` process runs a background scheduler (every hour) that performs th
     - CVSS >= 7.0: `high`
     - CVSS >= 4.0: `medium`
     - Otherwise: `low`
+- In the same step, a detailed per-site vulnerability report (plugin/CVSS breakdown) is also posted to the `slackChannel` Slack channel, deduplicated against previously-sent reports — this is independent of the Task Reminders below, and replaces what used to be a separate `jman vuln sites --slack` cron job.
 
 ### 2. Task Reminders
 - Sends Slack notifications for `pending` tasks that have reached their `reminder_date`.
