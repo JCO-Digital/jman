@@ -114,6 +114,18 @@ func SyncVulnerabilities() error {
 		}
 	}
 
+	// Look up the configured default assignee once for this run — applied
+	// only to newly-created tasks, not to updates of existing open tasks,
+	// so a manual reassignment/unassignment is never overwritten.
+	defaultAssignee := ""
+	if setting, err := db.GetSetting(db.SystemSettingsUserID, db.DefaultVulnAssigneeSettingKey); err != nil {
+		log.Printf("Warning: failed to load default vuln assignee setting: %v", err)
+	} else if setting != nil {
+		if v, ok := setting.Value.(string); ok {
+			defaultAssignee = v
+		}
+	}
+
 	// Load site names for titles
 	sites, _ := cache.GetFastSiteList()
 	siteNameMap := make(map[int]string)
@@ -222,6 +234,10 @@ func SyncVulnerabilities() error {
 				Metadata:     &metadataStr,
 				ReminderDate: &now,
 				DueDate:      &due,
+			}
+			if defaultAssignee != "" {
+				assignee := defaultAssignee
+				newTask.AssignedTo = &assignee
 			}
 			if err := db.SaveTask(newTask, "system"); err != nil {
 				log.Printf("Error creating vuln task for site %d: %v", siteID, err)
