@@ -45,16 +45,28 @@ jobs:
 
       - name: Run foonver
         id: foonver
-        uses: foonly/foonver@v0.9.1
+        uses: foonly/foonver@v0.14.0
         with:
           command: "auto"
           changelog: "true"
           push: "true"
+          # web/package.json isn't discovered by foonver itself (it only scans
+          # the repo root, not subdirectories) but web/src/App.vue imports and
+          # displays its version directly, so keep it in sync — foonver finds
+          # the current version.json value in web/package.json and rewrites it
+          # to the new version, in the same commit/tag as version.json's bump.
+          version_sync: "web/package.json"
 
       - name: Build Release Binary
         # Re-build now that the new tag exists, so the version is embedded correctly
         if: steps.foonver.outputs.is_bumped == 'true'
         run: make build
+
+      - name: Build Release UI
+        # Re-build now that web/package.json has the new version (synced by
+        # foonver above), so the deployed footer (App.vue) shows it correctly.
+        if: steps.foonver.outputs.is_bumped == 'true'
+        run: make build-ui
 
       - name: Sign Binaries
         if: steps.foonver.outputs.is_bumped == 'true'
