@@ -92,10 +92,8 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if task.AssignedTo != nil && *task.AssignedTo != "" {
-		taskCopy := task
-		go tasks.NotifyTaskAssigned(&taskCopy)
-	}
+	taskCopy := task
+	go tasks.NotifyTaskChange(nil, &taskCopy, claims.Username)
 
 	WriteJSON(w, http.StatusCreated, task)
 }
@@ -119,6 +117,7 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Task not found")
 		return
 	}
+	before := *existing
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -181,13 +180,6 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 			existing.LastNotifiedAt = nil
 		}
 		existing.AssignedTo = updates.AssignedTo
-
-		// If a new user is assigned, send a notification
-		if isChanged && newAssignee != nil && *newAssignee != "" {
-			// Pass a copy to the goroutine to avoid data races
-			taskCopy := *existing
-			go tasks.NotifyTaskAssigned(&taskCopy)
-		}
 	}
 	if has("due_date") {
 		existing.DueDate = updates.DueDate
@@ -204,6 +196,9 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	taskCopy := *existing
+	go tasks.NotifyTaskChange(&before, &taskCopy, claims.Username)
+
 	WriteJSON(w, http.StatusOK, existing)
 }
 
@@ -217,6 +212,16 @@ func CompleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	before, err := db.GetTask(id)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
+	if before == nil {
+		WriteError(w, http.StatusNotFound, "Task not found")
+		return
+	}
+
 	task, err := db.CompleteTask(id, claims.Username)
 	if err != nil {
 		if errors.Is(err, db.ErrTaskNotFound) {
@@ -226,6 +231,9 @@ func CompleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Failed to complete task")
 		return
 	}
+
+	taskCopy := *task
+	go tasks.NotifyTaskChange(before, &taskCopy, claims.Username)
 
 	WriteJSON(w, http.StatusOK, task)
 }

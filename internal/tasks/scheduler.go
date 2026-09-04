@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -213,11 +214,14 @@ func SyncVulnerabilities() error {
 
 		if task != nil {
 			// Update existing task
+			before := *task
 			task.Priority = priority
 			task.Description = &description
 			task.Metadata = &metadataStr
 			if err := db.SaveTask(task, "system"); err != nil {
 				log.Printf("Error updating vuln task for site %d: %v", siteID, err)
+			} else {
+				NotifyTaskChange(&before, task, "system")
 			}
 		} else {
 			// Create new task
@@ -241,6 +245,8 @@ func SyncVulnerabilities() error {
 			}
 			if err := db.SaveTask(newTask, "system"); err != nil {
 				log.Printf("Error creating vuln task for site %d: %v", siteID, err)
+			} else {
+				NotifyTaskChange(nil, newTask, "system")
 			}
 		}
 	}
@@ -317,14 +323,125 @@ func sendSlackReminder(task *models.Task) {
 	}
 }
 
-// NotifyTaskAssigned sends a notification to a user when a task is assigned to them.
-func NotifyTaskAssigned(task *models.Task) {
-	message := fmt.Sprintf("📋 *New Task Assigned: %s*\nPriority: %s", task.Title, task.Priority)
-	if task.DueDate != nil {
-		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
+// NotifyTaskChange notifies current's assignee about a task being created,
+// (re)assigned to them, or otherwise edited — unless they are the one who
+// made the change themselves (actor). old is nil for a newly-created task;
+// actor is the username performing the change ("system" for scheduler-driven
+// changes, which never matches a real assignee, so those always notify).
+//
+// A create or (re)assignment sends the full task; any other change sends
+// only what changed (title/type/priority are always included for context).
+func NotifyTaskChange(old, current *models.Task, actor string) {
+	if current.AssignedTo == nil || *current.AssignedTo == "" {
+		return
+	}
+	if actor != "" && actor == *current.AssignedTo {
+		return
 	}
 
-	sendToAssignee(task, message)
+	wasAlreadyAssignedToThem := old != nil && old.AssignedTo != nil && *old.AssignedTo == *current.AssignedTo
+
+	var message string
+	if !wasAlreadyAssignedToThem {
+		message = formatFullTaskMessage(current, old == nil)
+	} else {
+		changes := diffTaskFields(old, current)
+		if len(changes) == 0 {
+			return
+		}
+		message = formatTaskChangeMessage(current, changes)
+	}
+
+	sendToAssignee(current, message)
+}
+
+// formatFullTaskMessage renders the complete task, used when a task is
+// created or (re)assigned to someone.
+func formatFullTaskMessage(task *models.Task, created bool) string {
+	header := "📋 *Task Assigned to You*"
+	if created {
+		header = "🆕 *New Task Assigned to You*"
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%s: %s\n", header, task.Title)
+	fmt.Fprintf(&sb, "Type: %s | Priority: %s | Status: %s\n", task.Type, task.Priority, task.Status)
+	if task.Description != nil && *task.Description != "" {
+		fmt.Fprintf(&sb, "Description: %s\n", *task.Description)
+	}
+	if task.DueDate != nil {
+		fmt.Fprintf(&sb, "Due: %s\n", task.DueDate.Format("2006-01-02"))
+	}
+	if task.ReminderDate != nil {
+		fmt.Fprintf(&sb, "Reminder: %s\n", task.ReminderDate.Format("2006-01-02"))
+	}
+	if task.Interval != nil && *task.Interval != "" {
+		fmt.Fprintf(&sb, "Repeats: every %s\n", *task.Interval)
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// formatTaskChangeMessage renders only what changed, with title/type/priority
+// always shown for context.
+func formatTaskChangeMessage(task *models.Task, changes []taskFieldChange) string {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "📝 *Task Updated: %s*\n", task.Title)
+	fmt.Fprintf(&sb, "Type: %s | Priority: %s\n", task.Type, task.Priority)
+	sb.WriteString("Changes:\n")
+	for _, c := range changes {
+		oldVal, newVal := c.Old, c.New
+		if oldVal == "" {
+			oldVal = "—"
+		}
+		if newVal == "" {
+			newVal = "—"
+		}
+		fmt.Fprintf(&sb, "• %s: %s → %s\n", c.Label, oldVal, newVal)
+	}
+	return strings.TrimRight(sb.String(), "\n")
+}
+
+// taskFieldChange is one changed field, formatted for display.
+type taskFieldChange struct {
+	Label    string
+	Old, New string
+}
+
+// diffTaskFields compares the user-editable fields of old and current
+// (excluding AssignedTo, handled separately by NotifyTaskChange) and returns
+// only those that differ.
+func diffTaskFields(old, current *models.Task) []taskFieldChange {
+	var changes []taskFieldChange
+	add := func(label, oldVal, newVal string) {
+		if oldVal != newVal {
+			changes = append(changes, taskFieldChange{label, oldVal, newVal})
+		}
+	}
+
+	add("Title", old.Title, current.Title)
+	add("Type", string(old.Type), string(current.Type))
+	add("Priority", string(old.Priority), string(current.Priority))
+	add("Status", string(old.Status), string(current.Status))
+	add("Description", derefStr(old.Description), derefStr(current.Description))
+	add("Due Date", formatDatePtr(old.DueDate), formatDatePtr(current.DueDate))
+	add("Reminder Date", formatDatePtr(old.ReminderDate), formatDatePtr(current.ReminderDate))
+	add("Interval", derefStr(old.Interval), derefStr(current.Interval))
+
+	return changes
+}
+
+func derefStr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func formatDatePtr(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format("2006-01-02")
 }
 
 func sendToAssignee(task *models.Task, message string) bool {

@@ -68,6 +68,16 @@ The `jman-api` process runs a background task scheduler (every hour) for reminde
 - Periodically checks for tasks linked to `site_id` or `server_id` that no longer exist in the cache.
 - Orphaned tasks are automatically marked as `skipped`.
 
+## Assignment & Change Notifications
+
+Unlike the reminders above (which fire later, once `reminder_date` arrives), this notifies the assignee immediately whenever a task is created, edited, or (re)assigned — via `POST /tasks`, `PATCH /tasks/{id}`, `POST /tasks/{id}/complete`, and the automated vulnerability sync above.
+
+- **No self-notifications**: if the person making the change is the task's assignee, nothing is sent.
+- **No assignee, no notification**: an unassigned task never triggers this (it's still covered by the Task Reminders above once assigned and due).
+- **Created, or (re)assigned to someone**: sends the full task (title, type, priority, status, description, due/reminder dates, recurrence interval).
+- **Any other change while the assignee stays the same** (status, priority, title, description, due date, reminder date, interval): sends only the fields that changed — but title and type/priority are always included for context, even when they didn't change.
+- Routing is the same as Task Reminders: a Slack DM via the assignee's `slack_id` setting, with no channel fallback (an edit no one is assigned to notifies no one).
+
 ## API Endpoints
 
 All endpoints are prefixed with `/api`.
