@@ -1,0 +1,165 @@
+/* Main Layout Container */
+.view-container {
+	max-width: 1200px;
+	width: 95%;
+	margin: 0 auto;
+	padding: 20px;
+
+	@media (max-width: 640px) {
+		width: 100%;
+		padding: 16px 12px;
+	}
+}
+
+/* Generic Content Wrapper */
+.content {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+/* App Shell (Main Navigation and Container) */
+.app-container {
+	min-height: 100vh;
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+
+	& .main-content {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+	}
+
+	& .app-nav {
+		background-color: var(--bg-card);
+		border-bottom: 1px solid var(--border-color);
+		padding: 0 20px;
+
+		@media (max-width: 640px) {
+			padding: 0 12px;
+		}
+
+		& .nav-container {
+			max-width: 1200px;
+			margin: 0 auto;
+			display: flex;
+			gap: 24px;
+
+			@media (max-width: 768px) {
+				gap: 12px;
+				overflow-x: auto;
+				-webkit-overflow-scrolling: touch;
+			}
+
+			& .nav-item {
+				padding: 16px 4px;
+				color: var(--text-muted);
+				text-decoration: none;
+				font-weight: 500;
+				font-size: 14px;
+				border-bottom: 2px solid transparent;
+				transition: all 0.2s ease;
+
+				&:hover {
+					color: var(--text-main);
+				}
+
+				&.active {
+					color: var(--primary);
+					border-bottom-color: var(--primary);
+				}
+			}
+		}
+	}
+
+	& .app-footer {
+		margin-top: auto;
+		padding: 1rem;
+		text-align: center;
+		font-size: 0.875rem;
+		color: var(--text-muted);
+	}
+}
+
+/* Flex Grid Utilities */
+.flex-row {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+.flex-between {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+
+/* Responsive Utilities */
+.hide-mobile {
+	@media (max-width: 640px) {
+		display: none !important;
+	}
+}
+
+.show-mobile {
+	@media (min-width: 641px) {
+		display: none !important;
+	}
+}
+
+.justify-end {
+	justify-content: flex-end;
+}
+
+.px-2 {
+	padding-left: 0.5rem;
+	padding-right: 0.5rem;
+}
+
+/* Grid Layouts */
+.dashboard-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+	gap: 24px;
+}
+
+.grid-2-cols {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	gap: 24px;
+
+	@media (max-width: 1024px) {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* Width & Text Utilities */
+.w-full {
+	width: 100%;
+}
+
+.max-w-160 {
+	max-width: 160px;
+}
+
+.max-w-320 {
+	max-width: 320px;
+}
+
+.max-w-640 {
+	max-width: 640px;
+}
+
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ml-4 {
+	margin-left: 1rem;
+}
