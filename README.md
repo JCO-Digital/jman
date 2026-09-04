@@ -197,12 +197,15 @@ In addition to the main `jman` CLI, this repository includes sidecar utilities:
 - **[jman-api](README_API.md)**: A lightweight REST API to serve cached data.
 - **[jman-monitor](README_MONITOR.md)**: An automated uptime monitoring and Slack alerting tool.
 - **[jman-agent](README_AGENT.md)**: A self-updating agent that runs on managed servers to report per-site disk usage and WordPress config flags.
+- **[jman-ui](web/README.md)**: A Vue 3 + Vite web frontend that consumes `jman-api` for dashboards, site/asset management, and monitoring views.
 
 ## Development
 
 - **Run locally without compiling:** `go run ./cmd/jman <command>`
 - **Test:** `make test`
 - **Format:** `make format`
+- **Run the API with hot reload:** `make dev-api`
+- **Run the web UI dev server:** `make dev-ui` (see [web/README.md](web/README.md) for frontend-specific details)
 
 ## License
 

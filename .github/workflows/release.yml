@@ -28,6 +28,19 @@ jobs:
       - name: Verify Build
         run: make build
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Verify UI Build
+        run: make build-ui
+
       - name: Run foonver
         id: foonver
         uses: foonly/foonver@v0.9.1
@@ -64,6 +77,12 @@ jobs:
       - name: Restart jman-api service
         if: steps.foonver.outputs.is_bumped == 'true'
         run: ssh ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }} 'sudo systemctl restart ${{ vars.BACKEND_SERVICE_NAME }}'
+
+      - name: Deploy UI files
+        if: steps.foonver.outputs.is_bumped == 'true'
+        run: >-
+          rsync -rlci --delete web/dist/
+          ${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}:${{ vars.FRONTEND_DEPLOY_PATH }}
 
       - name: Create GitHub Release
         if: steps.foonver.outputs.is_bumped == 'true'

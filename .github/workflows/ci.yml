@@ -35,3 +35,34 @@ jobs:
               "channel": "C0ANZD53XAS",
               "text": ${{ toJSON(format('❌ jman CI {0} failed on PR.', github.sha)) }}
             }
+
+  test-ui:
+    name: Test and Verify UI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Verify Build
+        run: make build-ui
+
+      - name: Slack notification (failure)
+        if: failure()
+        uses: slackapi/slack-github-action@v2
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          payload: |
+            {
+              "channel": "C0ANZD53XAS",
+              "text": ${{ toJSON(format('❌ jman UI CI {0} failed on PR.', github.sha)) }}
+            }
