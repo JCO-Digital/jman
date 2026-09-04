@@ -1,6 +1,8 @@
 // Package refresh keeps jman-api's cached SpinupWP/plugin/vulnerability data
 // fresh with an in-process scheduler, replacing the external `jman fetch`
-// cron job that jman-api previously depended on.
+// cron job that jman-api previously depended on. Its slow tick also syncs
+// vulnerability Tasks and sends the Slack vulnerability summary, replacing
+// the external `jman vuln sites --slack` cron job.
 package refresh
 
 import (
@@ -11,6 +13,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/slack"
+	"github.com/JCO-Digital/jman/internal/tasks"
+	"github.com/JCO-Digital/jman/internal/vuln"
 )
 
 // StartScheduler starts the background routines that keep servers/sites
@@ -100,9 +104,21 @@ func runFastTick() {
 // whole tick, so no Slack alert is raised here — that's routine noise
 // (a single unreachable server over SSH), not something that should page
 // anyone.
+//
+// On success, it syncs vulnerability findings into Tasks and sends the
+// per-site Slack vulnerability report — run here, right after the data that
+// feeds them is fetched, rather than on a separate fixed schedule.
 func runSlowTick() {
 	if err := cache.RunFullRefresh(slowTTL()); err != nil {
 		log.Printf("Refresh scheduler: full refresh failed: %v", err)
+		return
+	}
+
+	if err := tasks.SyncVulnerabilities(); err != nil {
+		log.Printf("Refresh scheduler: vuln task sync failed: %v", err)
+	}
+	if err := vuln.ScanVulnerabilities(vuln.ScanOptions{Mode: "sites", Slack: true}); err != nil {
+		log.Printf("Refresh scheduler: vuln Slack report failed: %v", err)
 	}
 }
 

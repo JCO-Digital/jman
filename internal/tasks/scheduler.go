@@ -42,9 +42,6 @@ func StartScheduler(ctx context.Context) {
 
 func runTick() {
 	log.Println("Running task scheduler tick...")
-	if err := syncVulnerabilities(); err != nil {
-		log.Printf("Error syncing vulnerabilities to tasks: %v", err)
-	}
 	if err := processReminders(); err != nil {
 		log.Printf("Error processing task reminders: %v", err)
 	}
@@ -77,8 +74,12 @@ func pruneSiteTraffic() error {
 	return db.PruneOldSiteTrafficHourly(time.Now().Add(-siteTrafficHourlyRetention))
 }
 
-// syncVulnerabilities checks for vulnerabilities and updates or creates tasks accordingly.
-func syncVulnerabilities() error {
+// SyncVulnerabilities checks for vulnerabilities and updates or creates tasks
+// accordingly. Called by internal/refresh's slow tick right after it fetches
+// fresh vulnerability data, rather than on this package's own hourly ticker —
+// keeping it to a single call site avoids two independent tickers racing the
+// same check-then-insert task creation for a site.
+func SyncVulnerabilities() error {
 	matcher, err := db.NewVulnIgnoreMatcher()
 	if err != nil {
 		log.Printf("Warning: failed to load ignore entries: %v", err)

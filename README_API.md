@@ -291,12 +291,16 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
 - A **fast tick** (default every 5 minutes) refreshes the SpinupWP servers/sites cache.
 - A **slow tick** (default every 30 minutes) refreshes installed plugins, plugin metadata,
   plugin vulnerabilities, and WordPress core versions/vulnerabilities — the more expensive
-  work, since it fans out over SSH/wp-cli to every managed site.
+  work, since it fans out over SSH/wp-cli to every managed site. On success, it also syncs
+  vulnerability findings into Tasks (creating/updating a `Task` per affected site — see
+  `docs/TASK_SPECS.md`) and posts a per-site vulnerability summary to Slack
+  (`slackChannel`), deduplicated against previously-sent reports.
 
-If you have an external cron or systemd-timer job running `jman fetch` against this host,
-remove it — `jman-api` now performs this refresh internally. Leaving the old job in place is
-harmless but redundant (both would compete for the same limited SSH/wp-cli concurrency
-against your managed servers).
+If you have an external cron or systemd-timer job running `jman fetch` or
+`jman vuln sites --slack` against this host, remove it — `jman-api` now performs both of
+these internally. Leaving the old jobs in place is harmless but redundant (they'd compete
+for the same limited SSH/wp-cli concurrency, and would send Slack messages without the
+cross-run dedup `jman-api` gets from having `api.db` open).
 
 Configuration (in `config.toml` or as `JMAN_*` environment variables):
 
