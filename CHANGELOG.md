@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.43.0 (2026-09-04)
+## 5.44.0 (2026-09-04)
+
+#### Features
+
+- tasks: add configurable default assignee for vulnerability tasks (cec4e60)
+- api: trigger vuln task sync + Slack report from data refresh (b9c599d)
+
+#### Bug Fixes
+
+- release: keep web/package.json version in sync with version.json (aec2832)
+
+## v5.43.0 (2026-09-04)
 
 #### Features
 
