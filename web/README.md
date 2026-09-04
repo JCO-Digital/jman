@@ -1,6 +1,6 @@
 # JMan UI
 
-JMan UI is a modern web interface built with Vue 3, TypeScript, and Vite for managing servers, sites, and their associated plugins.
+JMan UI is a modern web interface built with Vue 3, TypeScript, and Vite for managing servers, sites, and their associated plugins. It lives at `web/` in the [jman](../README.md) monorepo and talks to `jman-api`.
 
 ## Features
 
@@ -27,12 +27,14 @@ Make sure you have the following installed on your machine:
 
 ## Getting Started
 
-### 1. Clone the repository and install dependencies
+### 1. Install dependencies
 
 ```bash
-# Install dependencies
+cd web
 pnpm install
 ```
+
+(Or from the repo root: `make install-ui`.)
 
 ### 2. Environment Setup
 
@@ -64,7 +66,7 @@ pnpm run preview
 ## Project Structure
 
 ```text
-jman-ui/
+web/
 ├── public/             # Static assets
 ├── src/
 │   ├── assets/         # Project assets (images, fonts, etc.)

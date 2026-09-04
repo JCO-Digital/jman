@@ -1,4 +1,4 @@
-.PHONY: build build-pkg dev dev-api prepare install clean test format completions
+.PHONY: build build-pkg dev dev-api prepare install clean test format completions dev-ui build-ui install-ui clean-ui
 
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
@@ -55,3 +55,15 @@ completions: bin/jman
 	JMAN_TOKENSPINUP=placeholder bin/jman completion bash > completions/jman.bash
 	JMAN_TOKENSPINUP=placeholder bin/jman completion zsh > completions/jman.zsh
 	JMAN_TOKENSPINUP=placeholder bin/jman completion fish > completions/jman.fish
+
+dev-ui:
+	$(MAKE) -C web dev
+
+build-ui:
+	$(MAKE) -C web build
+
+install-ui:
+	$(MAKE) -C web install
+
+clean-ui:
+	$(MAKE) -C web clean
