@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"sort"
 	"strings"
 	"time"
 
@@ -204,8 +205,22 @@ func SyncVulnerabilities() error {
 			siteName = fmt.Sprintf("Site #%d", siteID)
 		}
 
-		description := "Automated vulnerability report.\n\n"
+		plugins := make([]*models.VulnPlugin, 0, len(pluginMap))
 		for _, p := range pluginMap {
+			plugins = append(plugins, p)
+		}
+		// Deterministic order (map iteration isn't) so the description text
+		// is stable across ticks when nothing actually changed — otherwise
+		// every re-run reshuffles the plugin list and looks like a change.
+		sort.Slice(plugins, func(i, j int) bool {
+			if *plugins[i].Cvss != *plugins[j].Cvss {
+				return *plugins[i].Cvss > *plugins[j].Cvss
+			}
+			return plugins[i].PluginName < plugins[j].PluginName
+		})
+
+		description := "Automated vulnerability report.\n\n"
+		for _, p := range plugins {
 			description += fmt.Sprintf("- %s (%s) Max CVSS: %.1f\n", p.PluginName, p.Version, *p.Cvss)
 		}
 
@@ -396,7 +411,16 @@ func formatTaskChangeMessage(task *models.Task, changes []taskFieldChange) strin
 		if newVal == "" {
 			newVal = "—"
 		}
-		fmt.Fprintf(&sb, "• %s: %s → %s\n", c.Label, oldVal, newVal)
+
+		inline := fmt.Sprintf("• %s: %s → %s", c.Label, oldVal, newVal)
+		if strings.Contains(oldVal, "\n") || strings.Contains(newVal, "\n") || len(inline) > 80 {
+			// Long or multiline values are unreadable crammed onto one line,
+			// so break them out into their own block instead.
+			fmt.Fprintf(&sb, "• %s:\n%s\n→\n%s\n", c.Label, oldVal, newVal)
+		} else {
+			sb.WriteString(inline)
+			sb.WriteString("\n")
+		}
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
