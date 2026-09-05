@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.45.0 (2026-09-04)
+### 5.45.1 (2026-09-05)
+
+#### Bug Fixes
+
+- tasks: stabilize vuln report ordering and improve diff formatting (7ff0d95)
+
+## v5.45.0 (2026-09-04)
 
 #### Features
 
