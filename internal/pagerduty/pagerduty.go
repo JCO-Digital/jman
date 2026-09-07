@@ -14,8 +14,31 @@ import (
 	"github.com/JCO-Digital/jman/internal/utils"
 )
 
-// eventsURL is a var, not a const, so tests can point it at an httptest server.
-var eventsURL = "https://events.pagerduty.com/v2/enqueue"
+// PagerDuty runs two separate data-center regions (US and EU), each with its
+// own Events API v2 endpoint. An EU account's integration key is only
+// recognized directly by the EU endpoint; PagerDuty will forward requests
+// sent to the US endpoint for an EU key, but recommends against relying on
+// that forwarding for latency/reliability reasons.
+const (
+	usEventsURL = "https://events.pagerduty.com/v2/enqueue"
+	euEventsURL = "https://events.eu.pagerduty.com/v2/enqueue"
+)
+
+// eventsURLOverride, when non-empty, replaces the region-derived events URL.
+// Tests use this to point at an httptest server.
+var eventsURLOverride string
+
+// eventsURL returns the Events API v2 endpoint to use, honoring
+// config.Cfg.PagerDutyEURegion unless a test override is set.
+func eventsURL() string {
+	if eventsURLOverride != "" {
+		return eventsURLOverride
+	}
+	if config.Cfg.PagerDutyEURegion {
+		return euEventsURL
+	}
+	return usEventsURL
+}
 
 // Severity values accepted by the Events API v2 payload.
 const (
@@ -88,7 +111,7 @@ func sendEvent(e event) error {
 		return fmt.Errorf("failed to encode PagerDuty event: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, eventsURL, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, eventsURL(), bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to build PagerDuty request: %w", err)
 	}

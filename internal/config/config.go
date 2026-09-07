@@ -42,10 +42,15 @@ type AppConfig struct {
 	TokenPagerDuty string `toml:"pagerdutyRoutingKey" mapstructure:"pagerdutyRoutingKey"`
 	// PagerDutyEscalationMinutes is how long a site must stay down before its
 	// PagerDuty alert is escalated from warning to critical severity.
-	PagerDutyEscalationMinutes int  `toml:"pagerdutyEscalationMinutes" mapstructure:"pagerdutyEscalationMinutes"`
-	MonitorThreshold           int  `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
-	MonitorTimeout             int  `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
-	MonitorCacheBypass         bool `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
+	PagerDutyEscalationMinutes int `toml:"pagerdutyEscalationMinutes" mapstructure:"pagerdutyEscalationMinutes"`
+	// PagerDutyEURegion selects PagerDuty's EU Events API v2 endpoint
+	// (events.eu.pagerduty.com) instead of the default US endpoint. Set this
+	// to true if your PagerDuty account's URL contains "eu" (e.g.
+	// yourcompany.eu.pagerduty.com).
+	PagerDutyEURegion  bool `toml:"pagerdutyEuRegion" mapstructure:"pagerdutyEuRegion"`
+	MonitorThreshold   int  `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
+	MonitorTimeout     int  `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
+	MonitorCacheBypass bool `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
 	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
 	// Set this to true if a standalone jman-monitor process is still running
 	// against the same database during a migration window — never run both
@@ -104,6 +109,7 @@ func loadConfig() error {
 	viper.SetDefault("slackChannel", "#testing")
 	viper.SetDefault("slackTasksChannel", "")
 	viper.SetDefault("pagerdutyEscalationMinutes", 10)
+	viper.SetDefault("pagerdutyEuRegion", false)
 	viper.SetDefault("monitorThreshold", 3)
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("monitorCacheBypass", false)
@@ -141,6 +147,7 @@ func loadConfig() error {
 		"slackTasksChannel":          "SLACKTASKSCHANNEL",
 		"pagerdutyRoutingKey":        "PAGERDUTYROUTINGKEY",
 		"pagerdutyEscalationMinutes": "PAGERDUTYESCALATIONMINUTES",
+		"pagerdutyEuRegion":          "PAGERDUTYEUREGION",
 		"monitorThreshold":           "MONITORTHRESHOLD",
 		"monitorTimeout":             "MONITORTIMEOUT",
 		"monitorCacheBypass":         "MONITORCACHEBYPASS",

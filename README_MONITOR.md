@@ -72,6 +72,7 @@ You can run a single check of all sites manually (useful for testing or legacy c
 | `slackMonitorChannel`        | `slackChannel` | The Slack channel to send monitoring alerts to.                      |
 | `pagerdutyRoutingKey`        | -              | Your PagerDuty Events API v2 routing (integration) key. Leave unset to disable PagerDuty alerting entirely. |
 | `pagerdutyEscalationMinutes` | `10`           | Minutes a site must stay down before its PagerDuty alert escalates from warning to critical severity. |
+| `pagerdutyEuRegion`          | `false`        | Set to `true` if your PagerDuty account is in the EU region (its URL contains `eu.pagerduty.com`), so events are sent to `events.eu.pagerduty.com` instead of the default US endpoint. |
 | `monitorThreshold`           | `3`            | Number of consecutive failures before sending an alert.              |
 | `monitorTimeout`             | `10`           | Timeout in seconds for each HTTP check.                              |
 | `monitorCacheBypass`         | `false`        | Enable frontend cache bypass (adds a random query parameter).        |

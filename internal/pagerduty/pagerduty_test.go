@@ -14,12 +14,12 @@ func withTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
-	originalURL := eventsURL
+	originalURL := eventsURLOverride
 	originalKey := config.Cfg.TokenPagerDuty
-	eventsURL = server.URL
+	eventsURLOverride = server.URL
 	config.Cfg.TokenPagerDuty = "test-routing-key"
 	t.Cleanup(func() {
-		eventsURL = originalURL
+		eventsURLOverride = originalURL
 		config.Cfg.TokenPagerDuty = originalKey
 	})
 
@@ -112,12 +112,12 @@ func TestSendEventErrorsWhenNotConfigured(t *testing.T) {
 	}))
 	defer server.Close()
 
-	originalURL := eventsURL
+	originalURL := eventsURLOverride
 	originalKey := config.Cfg.TokenPagerDuty
-	eventsURL = server.URL
+	eventsURLOverride = server.URL
 	config.Cfg.TokenPagerDuty = ""
 	defer func() {
-		eventsURL = originalURL
+		eventsURLOverride = originalURL
 		config.Cfg.TokenPagerDuty = originalKey
 	}()
 
@@ -126,6 +126,26 @@ func TestSendEventErrorsWhenNotConfigured(t *testing.T) {
 	}
 	if called {
 		t.Error("expected no HTTP call to be made when not configured")
+	}
+}
+
+func TestEventsURLSelectsRegion(t *testing.T) {
+	originalOverride := eventsURLOverride
+	originalRegion := config.Cfg.PagerDutyEURegion
+	eventsURLOverride = ""
+	defer func() {
+		eventsURLOverride = originalOverride
+		config.Cfg.PagerDutyEURegion = originalRegion
+	}()
+
+	config.Cfg.PagerDutyEURegion = false
+	if got := eventsURL(); got != usEventsURL {
+		t.Errorf("eventsURL() = %q, want US endpoint %q", got, usEventsURL)
+	}
+
+	config.Cfg.PagerDutyEURegion = true
+	if got := eventsURL(); got != euEventsURL {
+		t.Errorf("eventsURL() = %q, want EU endpoint %q", got, euEventsURL)
 	}
 }
 
