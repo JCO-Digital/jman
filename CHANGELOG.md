@@ -1,6 +1,13 @@
 # Changelog
 
-### 5.45.1 (2026-09-05)
+## 5.46.0 (2026-09-07)
+
+#### Features
+
+- monitor: add support for PagerDuty EU region endpoint (01e347b)
+- monitor: add PagerDuty integration for uptime alerts (6c36efc)
+
+### v5.45.1 (2026-09-05)
 
 #### Bug Fixes
 
