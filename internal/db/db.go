@@ -329,6 +329,9 @@ func initAPISchema() error {
 				"last_alert_time":       "DATETIME",
 				"last_checked":          "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"next_check_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"down_since":            "DATETIME",
+				"pd_triggered":          "BOOLEAN DEFAULT 0",
+				"pd_escalated":          "BOOLEAN DEFAULT 0",
 			},
 		},
 		{

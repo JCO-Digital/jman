@@ -37,9 +37,15 @@ type AppConfig struct {
 	SlackChannel        string `toml:"slackChannel" mapstructure:"slackChannel"`
 	SlackMonitorChannel string `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
 	SlackTasksChannel   string `toml:"slackTasksChannel" mapstructure:"slackTasksChannel"`
-	MonitorThreshold    int    `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
-	MonitorTimeout      int    `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
-	MonitorCacheBypass  bool   `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
+	// TokenPagerDuty is the PagerDuty Events API v2 routing (integration) key.
+	// Leave unset to disable PagerDuty alerting entirely.
+	TokenPagerDuty string `toml:"pagerdutyRoutingKey" mapstructure:"pagerdutyRoutingKey"`
+	// PagerDutyEscalationMinutes is how long a site must stay down before its
+	// PagerDuty alert is escalated from warning to critical severity.
+	PagerDutyEscalationMinutes int  `toml:"pagerdutyEscalationMinutes" mapstructure:"pagerdutyEscalationMinutes"`
+	MonitorThreshold           int  `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
+	MonitorTimeout             int  `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
+	MonitorCacheBypass         bool `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
 	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
 	// Set this to true if a standalone jman-monitor process is still running
 	// against the same database during a migration window — never run both
@@ -97,6 +103,7 @@ func loadConfig() error {
 	// Set defaults
 	viper.SetDefault("slackChannel", "#testing")
 	viper.SetDefault("slackTasksChannel", "")
+	viper.SetDefault("pagerdutyEscalationMinutes", 10)
 	viper.SetDefault("monitorThreshold", 3)
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("monitorCacheBypass", false)
@@ -127,23 +134,25 @@ func loadConfig() error {
 	// Explicitly bind environment variables for better control and clarity.
 	// This ensures that environment variables like JMAN_SLACKTOKEN correctly map to the slackToken key.
 	envBindings := map[string]string{
-		"tokenSpinup":         "TOKENSPINUP",
-		"slackToken":          "SLACKTOKEN",
-		"slackChannel":        "SLACKCHANNEL",
-		"slackMonitorChannel": "SLACKMONITORCHANNEL",
-		"slackTasksChannel":   "SLACKTASKSCHANNEL",
-		"monitorThreshold":    "MONITORTHRESHOLD",
-		"monitorTimeout":      "MONITORTIMEOUT",
-		"monitorCacheBypass":  "MONITORCACHEBYPASS",
-		"monitorDisabled":     "MONITORDISABLED",
-		"refreshDisabled":     "REFRESHDISABLED",
-		"refreshFastInterval": "REFRESHFASTINTERVAL",
-		"refreshSlowInterval": "REFRESHSLOWINTERVAL",
-		"cvssThreshold":       "CVSSTHRESHOLD",
-		"vulnThreshold":       "VULNTHRESHOLD",
-		"allowedOrigins":      "ALLOWEDORIGINS",
-		"trustedProxies":      "TRUSTEDPROXIES",
-		"ignoreSites":         "IGNORESITES",
+		"tokenSpinup":                "TOKENSPINUP",
+		"slackToken":                 "SLACKTOKEN",
+		"slackChannel":               "SLACKCHANNEL",
+		"slackMonitorChannel":        "SLACKMONITORCHANNEL",
+		"slackTasksChannel":          "SLACKTASKSCHANNEL",
+		"pagerdutyRoutingKey":        "PAGERDUTYROUTINGKEY",
+		"pagerdutyEscalationMinutes": "PAGERDUTYESCALATIONMINUTES",
+		"monitorThreshold":           "MONITORTHRESHOLD",
+		"monitorTimeout":             "MONITORTIMEOUT",
+		"monitorCacheBypass":         "MONITORCACHEBYPASS",
+		"monitorDisabled":            "MONITORDISABLED",
+		"refreshDisabled":            "REFRESHDISABLED",
+		"refreshFastInterval":        "REFRESHFASTINTERVAL",
+		"refreshSlowInterval":        "REFRESHSLOWINTERVAL",
+		"cvssThreshold":              "CVSSTHRESHOLD",
+		"vulnThreshold":              "VULNTHRESHOLD",
+		"allowedOrigins":             "ALLOWEDORIGINS",
+		"trustedProxies":             "TRUSTEDPROXIES",
+		"ignoreSites":                "IGNORESITES",
 	}
 
 	for key, envVar := range envBindings {

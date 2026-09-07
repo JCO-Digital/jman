@@ -43,6 +43,13 @@ type SiteStatus struct {
 	LastAlertTime        time.Time `json:"last_alert_time"`
 	LastChecked          time.Time `json:"last_checked"`
 	NextCheckAt          time.Time `json:"next_check_at"`
+
+	// DownSince, PDTriggered and PDEscalated track the PagerDuty escalation
+	// timer for the current outage. DownSince is set once, when the site
+	// transitions into ModeAlert, and cleared on recovery.
+	DownSince   time.Time `json:"down_since"`
+	PDTriggered bool      `json:"pd_triggered"`
+	PDEscalated bool      `json:"pd_escalated"`
 }
 
 // State represents the overall monitoring state for all sites.
@@ -62,7 +69,7 @@ func LoadState() (*State, error) {
 		Sites: make(map[string]*SiteStatus),
 	}
 
-	rows, err := database.Query("SELECT domain, is_down, failure_count, consecutive_successes, current_mode, last_alert_time, last_checked, next_check_at FROM monitor_status")
+	rows, err := database.Query("SELECT domain, is_down, failure_count, consecutive_successes, current_mode, last_alert_time, last_checked, next_check_at, down_since, pd_triggered, pd_escalated FROM monitor_status")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load monitor status: %w", err)
 	}
@@ -77,7 +84,7 @@ func LoadState() (*State, error) {
 
 	for rows.Next() {
 		var domain string
-		var lastAlertTime, lastChecked, nextCheckAt sql.NullTime
+		var lastAlertTime, lastChecked, nextCheckAt, downSince sql.NullTime
 		status := &SiteStatus{}
 		err := rows.Scan(
 			&domain,
@@ -88,6 +95,9 @@ func LoadState() (*State, error) {
 			&lastAlertTime,
 			&lastChecked,
 			&nextCheckAt,
+			&downSince,
+			&status.PDTriggered,
+			&status.PDEscalated,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
@@ -113,6 +123,9 @@ func LoadState() (*State, error) {
 		}
 		if nextCheckAt.Valid {
 			status.NextCheckAt = nextCheckAt.Time
+		}
+		if downSince.Valid {
+			status.DownSince = downSince.Time
 		}
 		state.Sites[domain] = status
 	}
@@ -151,6 +164,9 @@ func SaveSiteStatus(status *SiteStatus) error {
 	lastAlertTimeVal := status.LastAlertTime
 	lastChecked := status.LastChecked
 	nextCheckAt := status.NextCheckAt
+	downSinceVal := status.DownSince
+	pdTriggered := status.PDTriggered
+	pdEscalated := status.PDEscalated
 	status.Mu.Unlock()
 
 	var lastAlertTime interface{}
@@ -158,11 +174,17 @@ func SaveSiteStatus(status *SiteStatus) error {
 		lastAlertTime = lastAlertTimeVal
 	}
 
+	var downSince interface{}
+	if !downSinceVal.IsZero() {
+		downSince = downSinceVal
+	}
+
 	query := `
 		INSERT INTO monitor_status (
 			domain, is_down, failure_count, consecutive_successes,
-			current_mode, last_alert_time, last_checked, next_check_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			current_mode, last_alert_time, last_checked, next_check_at,
+			down_since, pd_triggered, pd_escalated
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(domain) DO UPDATE SET
 			is_down = excluded.is_down,
 			failure_count = excluded.failure_count,
@@ -170,7 +192,10 @@ func SaveSiteStatus(status *SiteStatus) error {
 			current_mode = excluded.current_mode,
 			last_alert_time = excluded.last_alert_time,
 			last_checked = excluded.last_checked,
-			next_check_at = excluded.next_check_at
+			next_check_at = excluded.next_check_at,
+			down_since = excluded.down_since,
+			pd_triggered = excluded.pd_triggered,
+			pd_escalated = excluded.pd_escalated
 	`
 
 	// Ensure serialized writes to the database
@@ -186,6 +211,9 @@ func SaveSiteStatus(status *SiteStatus) error {
 		lastAlertTime,
 		lastChecked,
 		nextCheckAt,
+		downSince,
+		pdTriggered,
+		pdEscalated,
 	)
 
 	return err

@@ -66,20 +66,24 @@ You can run a single check of all sites manually (useful for testing or legacy c
 
 `jman-monitor` shares the configuration file with `jman` (typically `~/.config/jman/config.toml`).
 
-| Key                   | Default        | Description                                                   |
-| :-------------------- | :------------- | :------------------------------------------------------------ |
-| `slackToken`          | -              | Your Slack Bot User OAuth Token.                              |
-| `slackMonitorChannel` | `slackChannel` | The Slack channel to send monitoring alerts to.               |
-| `monitorThreshold`    | `3`            | Number of consecutive failures before sending an alert.       |
-| `monitorTimeout`      | `10`           | Timeout in seconds for each HTTP check.                       |
-| `monitorCacheBypass`  | `false`        | Enable frontend cache bypass (adds a random query parameter). |
-| `ignoreSites`         | `[]`           | (Deprecated) List of domains to skip. Migrated to DB.         |
+| Key                          | Default        | Description                                                          |
+| :--------------------------- | :------------- | :-------------------------------------------------------------------- |
+| `slackToken`                 | -              | Your Slack Bot User OAuth Token.                                     |
+| `slackMonitorChannel`        | `slackChannel` | The Slack channel to send monitoring alerts to.                      |
+| `pagerdutyRoutingKey`        | -              | Your PagerDuty Events API v2 routing (integration) key. Leave unset to disable PagerDuty alerting entirely. |
+| `pagerdutyEscalationMinutes` | `10`           | Minutes a site must stay down before its PagerDuty alert escalates from warning to critical severity. |
+| `monitorThreshold`           | `3`            | Number of consecutive failures before sending an alert.              |
+| `monitorTimeout`             | `10`           | Timeout in seconds for each HTTP check.                              |
+| `monitorCacheBypass`         | `false`        | Enable frontend cache bypass (adds a random query parameter).        |
+| `ignoreSites`                | `[]`           | (Deprecated) List of domains to skip. Migrated to DB.                |
 
 Example `config.toml` snippet:
 
 ```toml
 slackToken = "xoxb-your-token"
 slackMonitorChannel = "#ops-alerts"
+pagerdutyRoutingKey = "your-pagerduty-integration-key"
+pagerdutyEscalationMinutes = 10
 monitorThreshold = 5
 monitorTimeout = 15
 monitorCacheBypass = true
@@ -95,6 +99,18 @@ monitorCacheBypass = true
   - **Other Errors**: Every 120 minutes.
 - **Recovery Alert**: Sent as soon as a site in Alert Mode returns a successful 2xx status code. The site then transitions back to **Normal Mode**.
 - **Concurrency**: The monitor uses a worker pool of up to 24 concurrent goroutines to process checks.
+
+## PagerDuty Integration
+
+If `pagerdutyRoutingKey` is configured, PagerDuty alerts run alongside the existing Slack alerts:
+
+1. **Site goes DOWN** (site enters Alert Mode): a PagerDuty `trigger` event is sent with **warning** severity, in addition to the Slack DOWN message.
+2. **Still down after `pagerdutyEscalationMinutes`** (default 10 minutes): a second `trigger` event is sent for the same incident, this time with **critical** severity.
+3. **Site recovers**: a `resolve` event is sent, closing the PagerDuty incident, alongside the existing Slack recovery message.
+
+**Required one-time setup in PagerDuty**: jman only sets the alert's *severity* — whether that severity actually pages anyone is controlled by the PagerDuty service's notification settings. On the PagerDuty service that receives `pagerdutyRoutingKey`'s events, go to **Service → Settings → Assign and Notify** and set "How should responders be notified?" to **"Dynamic notifications based on alert severity"**. With that enabled, `warning` severity creates a quiet, non-paging incident, and escalating to `critical` raises it to high urgency, which pages and escalates per your escalation policy. Without this setting, PagerDuty ignores severity for notification purposes and the warning-severity trigger may page immediately instead of staying quiet.
+
+**Known limitation**: if you configure `pagerdutyRoutingKey` while a site is already in Alert Mode from before, that outage won't get PagerDuty coverage — only the *next* time the site goes down will trigger PagerDuty alerts.
 
 ## Running as a Service (systemd)
 

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/pagerduty"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -13,8 +14,10 @@ import (
 
 // Engine handles the execution of health checks for sites.
 type Engine struct {
-	client       *http.Client
-	slackChannel string
+	client                *http.Client
+	slackChannel          string
+	pagerDutyEnabled      bool
+	pdEscalationThreshold time.Duration
 }
 
 // NewEngine creates a new monitoring engine with configured timeout and slack channel.
@@ -29,9 +32,16 @@ func NewEngine() *Engine {
 		slackChannel = config.Cfg.SlackChannel
 	}
 
+	pdEscalationMinutes := 10
+	if config.Cfg.PagerDutyEscalationMinutes > 0 {
+		pdEscalationMinutes = config.Cfg.PagerDutyEscalationMinutes
+	}
+
 	return &Engine{
-		client:       utils.NewHTTPClient(time.Duration(timeout) * time.Second),
-		slackChannel: slackChannel,
+		client:                utils.NewHTTPClient(time.Duration(timeout) * time.Second),
+		slackChannel:          slackChannel,
+		pagerDutyEnabled:      pagerduty.Enabled(),
+		pdEscalationThreshold: time.Duration(pdEscalationMinutes) * time.Minute,
 	}
 }
 
@@ -90,6 +100,8 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 
 	var msgToSend string
 	var nextInterval time.Duration
+	var pdSeverity string // "" = no PagerDuty trigger this tick
+	var pdResolve bool
 
 	switch status.CurrentMode {
 	case ModeNormal:
@@ -112,7 +124,11 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 			if status.FailureCount >= 3 {
 				status.CurrentMode = ModeAlert
 				status.IsDown = true
+				status.DownSince = time.Now()
 				msgToSend = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", domain, statusMsg)
+				if e.pagerDutyEnabled {
+					pdSeverity = pagerduty.SeverityWarning
+				}
 				nextInterval = 1 * time.Minute
 			} else {
 				nextInterval = 1 * time.Minute
@@ -124,12 +140,25 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 			status.CurrentMode = ModeNormal
 			status.IsDown = false
 			msgToSend = fmt.Sprintf("✅ Site %s is back up.", domain)
+			if e.pagerDutyEnabled {
+				pdResolve = true
+			}
+			status.DownSince = time.Time{}
+			status.PDTriggered = false
+			status.PDEscalated = false
 			nextInterval = 5 * time.Minute
 		} else {
 			nextInterval = 1 * time.Minute
 			// Repeat alert based on error type intervals
 			if e.shouldRepeatAlert(status, errorCode) {
 				msgToSend = fmt.Sprintf("🚨 Site %s is STILL DOWN (Status: %s)", domain, statusMsg)
+			}
+			// Escalate the PagerDuty alert to critical severity once the site
+			// has been down longer than the configured threshold. Independent
+			// of shouldRepeatAlert's Slack-repeat throttle above.
+			if e.pagerDutyEnabled && !status.PDEscalated && !status.DownSince.IsZero() &&
+				time.Since(status.DownSince) >= e.pdEscalationThreshold {
+				pdSeverity = pagerduty.SeverityCritical
 			}
 		}
 
@@ -153,6 +182,26 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 			status.Mu.Lock()
 			status.LastAlertTime = time.Now()
 			status.Mu.Unlock()
+		}
+	}
+
+	if pdSeverity != "" {
+		summary := fmt.Sprintf("Site %s is down (Status: %s)", domain, statusMsg)
+		if err := pagerduty.TriggerEvent(domain, summary, pdSeverity); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to send PagerDuty trigger for %s: %v\n", domain, err)
+		} else {
+			status.Mu.Lock()
+			status.PDTriggered = true
+			if pdSeverity == pagerduty.SeverityCritical {
+				status.PDEscalated = true
+			}
+			status.Mu.Unlock()
+		}
+	}
+
+	if pdResolve {
+		if err := pagerduty.ResolveEvent(domain); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to send PagerDuty resolve for %s: %v\n", domain, err)
 		}
 	}
 
