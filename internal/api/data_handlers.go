@@ -540,9 +540,25 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		response.Error = "Core update did not complete successfully"
 	}
 
+	// Refresh the cached version/update-availability regardless of outcome,
+	// so the UI reflects the post-update state (or confirms nothing changed
+	// if the update failed) without a separate round-trip.
+	ledgerVersion := response.Version
+	if core, err := cache.RefreshSiteCore(*site); err != nil {
+		verb.PrintErrorf(verb.Normal, "Failed to refresh core version cache for site %s after update: %v\n", site.Name, err)
+	} else {
+		response.Core = core
+		// UpdateCore reports "unknown" when wp-cli says WordPress was
+		// already at the latest version — use the freshly-checked actual
+		// version for the ledger instead of that placeholder.
+		if ledgerVersion == "unknown" {
+			ledgerVersion = core.Version
+		}
+	}
+
 	ledgerData := map[string]interface{}{
 		"target":      body.Target,
-		"new_version": response.Version,
+		"new_version": ledgerVersion,
 	}
 	if response.Error != "" {
 		ledgerData["error"] = response.Error
@@ -559,15 +575,6 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		DataJSON:   string(ledgerJSON),
 		UpdatedBy:  username,
 	})
-
-	// Refresh the cached version/update-availability regardless of outcome,
-	// so the UI reflects the post-update state (or confirms nothing changed
-	// if the update failed) without a separate round-trip.
-	if core, err := cache.RefreshSiteCore(*site); err != nil {
-		verb.PrintErrorf(verb.Normal, "Failed to refresh core version cache for site %s after update: %v\n", site.Name, err)
-	} else {
-		response.Core = core
-	}
 
 	if status == "failed" {
 		WriteJSON(w, http.StatusInternalServerError, response)

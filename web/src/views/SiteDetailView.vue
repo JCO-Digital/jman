@@ -134,6 +134,15 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 			}
 			return txt;
 		}
+		if (data.target) {
+			let txt = `WordPress Core (${data.target}): `;
+			if (data.error) {
+				txt += `Failed [Error: ${data.error}]`;
+			} else {
+				txt += `Updated to ${data.new_version}`;
+			}
+			return txt;
+		}
 		if (data.note) {
 			return data.note;
 		}
