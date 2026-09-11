@@ -125,7 +125,6 @@ function openEdit(task: Task) {
 
 function handleSaved(task: Task) {
 	showFormModal.value = false;
-	taskStore.fetchTasks();
 	if (editingTask.value) {
 		selectedTask.value = task;
 		showInfoModal.value = true;
@@ -134,13 +133,10 @@ function handleSaved(task: Task) {
 
 function handleTaskUpdated(task: Task) {
 	selectedTask.value = task;
-	const idx = taskStore.tasks.findIndex((t) => t.id === task.id);
-	if (idx !== -1) taskStore.tasks[idx] = task;
 }
 
 function handleTaskDeleted() {
 	showInfoModal.value = false;
-	taskStore.fetchTasks();
 }
 
 const priorityClass: Record<TaskPriority, string> = {

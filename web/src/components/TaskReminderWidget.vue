@@ -33,25 +33,31 @@ const showTaskModal = ref(false);
 const showFormModal = ref(false);
 const editingTask = ref<Task | null>(null);
 
+// Recomputes the widget's list from the task store's already-current data —
+// no network call — so it can be re-run after a store mutation (create/edit)
+// without re-introducing a fetch round-trip before the UI updates.
+function computeReminderTasks() {
+	const now = new Date();
+	const currentUsername = authStore.user?.username;
+	reminderTasks.value = taskStore.tasks.filter((t) => {
+		if (!t.reminder_date) return false;
+		if (t.status === "completed" || t.status === "skipped") return false;
+
+		// Filter: only show unassigned or assigned to current user
+		const isUnassigned = !t.assigned_to;
+		const isAssignedToMe =
+			currentUsername && t.assigned_to === currentUsername;
+		if (!isUnassigned && !isAssignedToMe) return false;
+
+		return new Date(t.reminder_date) <= now;
+	});
+}
+
 const loadReminderTasks = async () => {
 	isTasksLoading.value = true;
 	try {
 		await taskStore.fetchTasks();
-		const now = new Date();
-		const currentUsername = authStore.user?.username;
-		reminderTasks.value = taskStore.tasks.filter((t) => {
-			if (!t.reminder_date) return false;
-			if (t.status === "completed" || t.status === "skipped")
-				return false;
-
-			// Filter: only show unassigned or assigned to current user
-			const isUnassigned = !t.assigned_to;
-			const isAssignedToMe =
-				currentUsername && t.assigned_to === currentUsername;
-			if (!isUnassigned && !isAssignedToMe) return false;
-
-			return new Date(t.reminder_date) <= now;
-		});
+		computeReminderTasks();
 	} catch (e) {
 		console.error("Failed to load reminder tasks", e);
 	} finally {
@@ -72,7 +78,7 @@ function openEdit(task: Task) {
 
 function handleSaved(task: Task) {
 	showFormModal.value = false;
-	loadReminderTasks();
+	computeReminderTasks();
 	if (editingTask.value) {
 		selectedTask.value = task;
 		showTaskModal.value = true;

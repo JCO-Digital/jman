@@ -55,6 +55,18 @@ export const useTaskStore = defineStore("tasks", () => {
 		}
 	}
 
+	// Patches the in-memory list so list views (Tasks page, dashboard widget)
+	// reflect a change the instant the request resolves, instead of waiting
+	// for a caller to trigger a separate full fetchTasks().
+	function upsertTask(task: Task) {
+		const idx = tasks.value.findIndex((t) => t.id === task.id);
+		if (idx !== -1) {
+			tasks.value[idx] = task;
+		} else {
+			tasks.value.push(task);
+		}
+	}
+
 	async function createTask(payload: CreateTaskPayload): Promise<Task> {
 		const res = await fetch(`${BASE_URL}/tasks`, {
 			method: "POST",
@@ -65,7 +77,9 @@ export const useTaskStore = defineStore("tasks", () => {
 			body: JSON.stringify(payload),
 		});
 		if (!res.ok) await handleErrorResponse(res);
-		return await res.json();
+		const task = await res.json();
+		upsertTask(task);
+		return task;
 	}
 
 	async function updateTask(
@@ -81,7 +95,9 @@ export const useTaskStore = defineStore("tasks", () => {
 			body: JSON.stringify(payload),
 		});
 		if (!res.ok) await handleErrorResponse(res);
-		return await res.json();
+		const task = await res.json();
+		upsertTask(task);
+		return task;
 	}
 
 	async function setStatus(id: number, status: TaskStatus): Promise<Task> {
@@ -94,7 +110,15 @@ export const useTaskStore = defineStore("tasks", () => {
 			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
-		return await res.json();
+		const task = await res.json();
+		upsertTask(task);
+		// Completing a repeating/dynamic task spawns its next occurrence
+		// server-side, which this response doesn't include — refresh in the
+		// background so it appears without blocking the visible status change.
+		if (task.type !== "one-time") {
+			void fetchTasks();
+		}
+		return task;
 	}
 
 	async function deleteTask(id: number): Promise<void> {
@@ -103,6 +127,7 @@ export const useTaskStore = defineStore("tasks", () => {
 			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
+		tasks.value = tasks.value.filter((t) => t.id !== id);
 	}
 
 	return {
