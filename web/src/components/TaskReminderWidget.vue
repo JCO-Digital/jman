@@ -3,12 +3,28 @@ import { ref, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
-import type { Task } from "../types";
+import { useDataStore } from "../stores/data";
+import type { Task, TaskStatus } from "../types";
 import TaskInfoModal from "./TaskInfoModal.vue";
 import TaskFormModal from "./TaskFormModal.vue";
+import AppIcon from "./AppIcon.vue";
+import { getVulnerabilityStatus } from "../utils/taskVulnerability";
 
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
+const dataStore = useDataStore();
+
+const statusClass: Record<TaskStatus, string> = {
+	pending: "default",
+	in_progress: "active",
+	completed: "success",
+	skipped: "default",
+	overdue: "error",
+};
+
+function vulnStatus(task: Task) {
+	return getVulnerabilityStatus(task, dataStore.enrichedSites);
+}
 
 const reminderTasks = ref<Task[]>([]);
 const isTasksLoading = ref(false);
@@ -117,6 +133,7 @@ onMounted(loadReminderTasks);
 				<thead>
 					<tr>
 						<th>Task</th>
+						<th>Status</th>
 						<th>Priority</th>
 						<th class="hide-mobile">Due Date</th>
 						<th></th>
@@ -129,7 +146,52 @@ onMounted(loadReminderTasks);
 						class="clickable-row"
 						@click="openTask(task)"
 					>
-						<td class="task-title-cell">{{ task.title }}</td>
+						<td class="task-title-cell">
+							<div class="flex-row items-center gap-2">
+								<span class="truncate">{{ task.title }}</span>
+								<span
+									v-if="vulnStatus(task).isVuln"
+									:class="[
+										'status-badge',
+										'badge-sm',
+										vulnStatus(task).remaining === 0
+											? 'success'
+											: 'warning',
+									]"
+									style="font-size: 10px; padding: 1px 6px"
+									:title="
+										vulnStatus(task).remaining === 0
+											? 'All vulnerabilities resolved!'
+											: `${vulnStatus(task).remaining} remaining vulnerabilities`
+									"
+								>
+									<AppIcon
+										:name="
+											vulnStatus(task).remaining === 0
+												? 'check'
+												: 'vulnerability'
+										"
+										size="12"
+										style="margin-right: 4px"
+									/>
+									{{
+										vulnStatus(task).remaining === 0
+											? "Resolved"
+											: `${vulnStatus(task).remaining} left`
+									}}
+								</span>
+							</div>
+						</td>
+						<td>
+							<span
+								:class="[
+									'status-badge',
+									statusClass[task.status],
+								]"
+							>
+								{{ task.status.replace("_", " ") }}
+							</span>
+						</td>
 						<td>
 							<span
 								:class="[

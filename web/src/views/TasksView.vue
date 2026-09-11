@@ -9,6 +9,7 @@ import type { Task, TaskStatus, TaskPriority, TaskType } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import TaskInfoModal from "../components/TaskInfoModal.vue";
 import TaskFormModal from "../components/TaskFormModal.vue";
+import { getVulnerabilityStatus } from "../utils/taskVulnerability";
 
 const taskStore = useTaskStore();
 const authStore = useAuthStore();
@@ -161,57 +162,8 @@ function formatDate(d: string | null) {
 	return new Date(d).toLocaleDateString("de-DE");
 }
 
-function getVulnerabilityStatus(task: Task) {
-	const fallback = {
-		isVuln: false,
-		remaining: 0,
-		total: 0,
-		totalActiveOnSite: 0,
-		type: "none",
-	};
-
-	if (task.site_id === null) return fallback;
-	const isVuln =
-		task.title.toLowerCase().startsWith("security vulnerabilities") ||
-		(task.metadata && task.metadata.includes("vuln_uuids"));
-	if (!isVuln) return fallback;
-
-	const site = dataStore.enrichedSites.find((s) => s.id === task.site_id);
-	if (!site) return fallback;
-
-	// Parse metadata to get original UUIDs if any
-	let originalUuids: string[] = [];
-	if (task.metadata) {
-		try {
-			const meta = JSON.parse(task.metadata);
-			originalUuids = meta.vuln_uuids || [];
-		} catch {
-			// Ignore JSON parsing errors
-		}
-	}
-
-	const activeVulns = site.vulnerabilities.filter((v) => !v.suppressed);
-
-	if (originalUuids.length > 0) {
-		const remainingCount = activeVulns.filter((v) =>
-			originalUuids.includes(v.uuid),
-		).length;
-		return {
-			isVuln: true,
-			remaining: remainingCount,
-			total: originalUuids.length,
-			totalActiveOnSite: activeVulns.length,
-			type: "specific",
-		};
-	} else {
-		return {
-			isVuln: true,
-			remaining: activeVulns.length,
-			total: activeVulns.length,
-			totalActiveOnSite: activeVulns.length,
-			type: "general",
-		};
-	}
+function vulnStatus(task: Task) {
+	return getVulnerabilityStatus(task, dataStore.enrichedSites);
 }
 </script>
 
@@ -316,27 +268,24 @@ function getVulnerabilityStatus(task: Task) {
 							<div class="flex-row items-center gap-2">
 								<span class="truncate">{{ task.title }}</span>
 								<span
-									v-if="getVulnerabilityStatus(task).isVuln"
+									v-if="vulnStatus(task).isVuln"
 									:class="[
 										'status-badge',
 										'badge-sm',
-										getVulnerabilityStatus(task)
-											.remaining === 0
+										vulnStatus(task).remaining === 0
 											? 'success'
 											: 'warning',
 									]"
 									style="font-size: 10px; padding: 1px 6px"
 									:title="
-										getVulnerabilityStatus(task)
-											.remaining === 0
+										vulnStatus(task).remaining === 0
 											? 'All vulnerabilities resolved!'
-											: `${getVulnerabilityStatus(task).remaining} remaining vulnerabilities`
+											: `${vulnStatus(task).remaining} remaining vulnerabilities`
 									"
 								>
 									<AppIcon
 										:name="
-											getVulnerabilityStatus(task)
-												.remaining === 0
+											vulnStatus(task).remaining === 0
 												? 'check'
 												: 'vulnerability'
 										"
@@ -344,10 +293,9 @@ function getVulnerabilityStatus(task: Task) {
 										style="margin-right: 4px"
 									/>
 									{{
-										getVulnerabilityStatus(task)
-											.remaining === 0
+										vulnStatus(task).remaining === 0
 											? "Resolved"
-											: `${getVulnerabilityStatus(task).remaining} left`
+											: `${vulnStatus(task).remaining} left`
 									}}
 								</span>
 							</div>
