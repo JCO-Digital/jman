@@ -10,6 +10,7 @@ import type {
 	EnrichedVulnerability,
 	EnrichedSite,
 	EnrichedPlugin,
+	SiteCore,
 } from "../types";
 import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
@@ -431,6 +432,19 @@ export const useDataStore = defineStore("data", () => {
 		}
 	}
 
+	function applyCoreUpdate(siteId: number, core: SiteCore) {
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.wp_core = core;
+
+			// Persist to session storage so it survives reloads
+			sessionStorage.setItem(
+				CACHE_KEY_SITES,
+				JSON.stringify(sites.value),
+			);
+		}
+	}
+
 	async function setSiteEnvironment(
 		siteId: number,
 		environment: SiteEnvironment | "",
@@ -502,6 +516,7 @@ export const useDataStore = defineStore("data", () => {
 		setSiteOrganizationLink,
 		setSiteEnvironment,
 		applyPluginUpdate,
+		applyCoreUpdate,
 		// Actions
 		initData,
 		refreshData,

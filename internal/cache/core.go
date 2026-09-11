@@ -70,7 +70,9 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 			}
 			verb.Printf(verb.Verbose, "Fetched core version %s for site %s\n", version, verb.Blue(site.Name))
 
-			if err := db.SaveSiteCore(site.ID, version); err != nil {
+			minorUpdate, majorUpdate := checkCoreUpdates(site)
+
+			if err := db.SaveSiteCore(site.ID, version, minorUpdate, majorUpdate); err != nil {
 				verb.PrintErrorf(verb.Normal, "Warning: failed to save core version for site %s: %v\n", verb.Blue(site.Name), err)
 				return
 			}
@@ -87,6 +89,60 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 		return db.GetAllSiteCore()
 	}
 	return existing, nil
+}
+
+// checkCoreUpdates looks up the latest available minor/major WordPress core
+// update for a site, returning empty strings for either (or both) if none is
+// available. A check-update failure is logged and treated as "no update
+// available" rather than failing the caller, since the installed version is
+// still worth caching even if the update check itself couldn't run.
+func checkCoreUpdates(site models.CliSite) (minorUpdate, majorUpdate string) {
+	updates, err := wpcli.CheckCore(site)
+	if err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: failed to check core updates for site %s: %v\n", verb.Blue(site.Name), err)
+		return "", ""
+	}
+
+	for _, u := range updates {
+		switch u.UpdateType {
+		case "minor":
+			if minorUpdate == "" {
+				minorUpdate = u.Version
+			}
+		case "major":
+			if majorUpdate == "" {
+				majorUpdate = u.Version
+			}
+		}
+	}
+
+	return minorUpdate, majorUpdate
+}
+
+// RefreshSiteCore fetches the live installed WordPress core version and any
+// available minor/major update for a single site, persists them to the
+// site_core cache, and returns the resulting record. Used by the API to
+// answer an explicit "check for updates" request or to refresh the cache
+// right after a core update, where the result must reflect the current
+// state rather than a possibly-stale cached one.
+func RefreshSiteCore(site models.CliSite) (*models.SiteCore, error) {
+	version, err := wpcli.CoreVersion(site)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get core version: %w", err)
+	}
+
+	minorUpdate, majorUpdate := checkCoreUpdates(site)
+
+	if err := db.SaveSiteCore(site.ID, version, minorUpdate, majorUpdate); err != nil {
+		return nil, fmt.Errorf("failed to save core version: %w", err)
+	}
+
+	return &models.SiteCore{
+		SiteID:      site.ID,
+		Version:     version,
+		MinorUpdate: minorUpdate,
+		MajorUpdate: majorUpdate,
+	}, nil
 }
 
 // GetCachedCoreVersionData groups all known sites by their installed WordPress core version.

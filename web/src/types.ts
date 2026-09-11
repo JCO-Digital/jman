@@ -122,6 +122,22 @@ export interface Site {
 	disk_usage?: SiteDiskUsage;
 	wp_flags?: SiteWpFlags;
 	last_update?: SiteUpdateLedgerEntry;
+	wp_core?: SiteCore;
+}
+
+export interface SiteCore {
+	site_id: number;
+	version: string;
+	minor_update?: string;
+	major_update?: string;
+}
+
+export interface CoreUpdateResult {
+	success: boolean;
+	version: string;
+	language?: string;
+	error?: string;
+	core?: SiteCore;
 }
 
 export interface Plugin {

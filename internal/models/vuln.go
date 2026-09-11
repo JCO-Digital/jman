@@ -108,10 +108,13 @@ type CoreVulnReport struct {
 	Suppressed      bool            `json:"suppressed"`
 }
 
-// SiteCore represents the WordPress core version installed on a specific site.
+// SiteCore represents the WordPress core version installed on a specific site,
+// and any newer minor/major version available for it.
 type SiteCore struct {
-	SiteID  int    `json:"site_id"`
-	Version string `json:"version"`
+	SiteID      int    `json:"site_id"`
+	Version     string `json:"version"`
+	MinorUpdate string `json:"minor_update,omitempty"`
+	MajorUpdate string `json:"major_update,omitempty"`
 }
 
 // CoreVersionData groups sites by installed WordPress core version.

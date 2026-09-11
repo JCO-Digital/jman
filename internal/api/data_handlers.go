@@ -109,6 +109,16 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	coreVersions, err := db.GetAllSiteCore()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		return
+	}
+	coreBySiteID := make(map[int]models.SiteCore, len(coreVersions))
+	for _, c := range coreVersions {
+		coreBySiteID[c.SiteID] = c
+	}
+
 	for i, site := range sites {
 		sites[i].Environment = models.SiteEnvironmentType(environments[site.ID])
 		if usage, ok := diskUsage[site.ID]; ok {
@@ -119,6 +129,9 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		if lastUp, ok := latestUpdates[site.ID]; ok {
 			sites[i].LastUpdate = &lastUp
+		}
+		if core, ok := coreBySiteID[site.ID]; ok {
+			sites[i].WPCore = &core
 		}
 	}
 
@@ -434,6 +447,132 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
+	WriteJSON(w, http.StatusOK, response)
+}
+
+// SiteCoreCheckHandler returns the installed WordPress core version and any
+// available minor/major update for a site. It calls WP-CLI live so the
+// result reflects the current state of the site.
+func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	site, err := getSiteByID(siteID)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		return
+	}
+
+	core, err := cache.RefreshSiteCore(*site)
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to check core version: %v", err))
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, core)
+}
+
+// coreUpdateTargetRegex restricts the update target to the two supported values.
+var coreUpdateTargetRegex = regexp.MustCompile(`^(minor|major)$`)
+
+// SiteCoreUpdateResponse is the result of a WordPress core update attempt.
+type SiteCoreUpdateResponse struct {
+	Success  bool             `json:"success"`
+	Version  string           `json:"version"`
+	Language string           `json:"language,omitempty"`
+	Error    string           `json:"error,omitempty"`
+	Core     *models.SiteCore `json:"core,omitempty"`
+}
+
+// SiteCoreUpdateHandler updates WordPress core on a site to the latest minor
+// or major version and refreshes the core version cache.
+func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		return
+	}
+
+	var body struct {
+		Target string `json:"target"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if !coreUpdateTargetRegex.MatchString(body.Target) {
+		WriteError(w, http.StatusBadRequest, `Target must be "minor" or "major"`)
+		return
+	}
+
+	site, err := getSiteByID(siteID)
+	if err != nil {
+		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		return
+	}
+
+	result, updateErr := wpcli.UpdateCore(*site, body.Target == "major")
+
+	response := SiteCoreUpdateResponse{
+		Success:  result.Success,
+		Version:  result.Version,
+		Language: result.Language,
+	}
+	var status string
+	switch {
+	case updateErr != nil:
+		status = "failed"
+		response.Error = updateErr.Error()
+	case result.Success:
+		status = "full"
+	case result.Version == "unknown":
+		// UpdateCore returns (zero-value result, nil error) when wp-cli
+		// reports WordPress is already at the latest version for this
+		// target (e.g. a concurrent update already applied it) — not a
+		// failure, just nothing to do.
+		status = "partial"
+		response.Success = true
+	default:
+		status = "failed"
+		response.Error = "Core update did not complete successfully"
+	}
+
+	ledgerData := map[string]interface{}{
+		"target":      body.Target,
+		"new_version": response.Version,
+	}
+	if response.Error != "" {
+		ledgerData["error"] = response.Error
+	}
+	ledgerJSON, _ := json.Marshal(ledgerData)
+	username := "system"
+	if claims := GetAuthClaims(r.Context()); claims != nil {
+		username = claims.Username
+	}
+	_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
+		SiteID:     siteID,
+		UpdateType: "core",
+		Status:     status,
+		DataJSON:   string(ledgerJSON),
+		UpdatedBy:  username,
+	})
+
+	// Refresh the cached version/update-availability regardless of outcome,
+	// so the UI reflects the post-update state (or confirms nothing changed
+	// if the update failed) without a separate round-trip.
+	if core, err := cache.RefreshSiteCore(*site); err != nil {
+		verb.PrintErrorf(verb.Normal, "Failed to refresh core version cache for site %s after update: %v\n", site.Name, err)
+	} else {
+		response.Core = core
+	}
+
+	if status == "failed" {
+		WriteJSON(w, http.StatusInternalServerError, response)
+		return
+	}
 	WriteJSON(w, http.StatusOK, response)
 }
 

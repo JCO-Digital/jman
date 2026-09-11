@@ -74,6 +74,7 @@ type Site struct {
 	DiskUsage         *SiteDiskUsage         `json:"disk_usage,omitempty"`
 	WpFlags           *SiteWpFlags           `json:"wp_flags,omitempty"`
 	LastUpdate        *SiteUpdateLedgerEntry `json:"last_update,omitempty"`
+	WPCore            *SiteCore              `json:"wp_core,omitempty"`
 }
 
 type CliSite struct {

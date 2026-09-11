@@ -259,9 +259,11 @@ func initInventorySchema() error {
 		{
 			Name: "site_core",
 			Columns: map[string]string{
-				"site_id":    "INTEGER PRIMARY KEY",
-				"version":    "TEXT NOT NULL",
-				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"site_id":      "INTEGER PRIMARY KEY",
+				"version":      "TEXT NOT NULL",
+				"minor_update": "TEXT",
+				"major_update": "TEXT",
+				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
 		{

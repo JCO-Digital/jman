@@ -14,6 +14,7 @@ import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import SiteTrafficCard from "../components/SiteTrafficCard.vue";
 import PluginUpdateModal from "../components/PluginUpdateModal.vue";
+import { useCoreUpdateStore } from "../stores/coreUpdate";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
 import { formatBytes } from "../utils/format";
@@ -29,6 +30,7 @@ const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
 const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
+const coreUpdateStore = useCoreUpdateStore();
 const ignoreStore = useIgnoreStore();
 const toast = useToastStore();
 const { confirm } = useConfirm();
@@ -369,6 +371,40 @@ const goToOrganization = () => {
 
 const showPluginUpdateModal = ref(false);
 
+// WordPress Core update card state
+const isCheckingCoreUpdate = ref(false);
+const isUpdatingCore = ref<Record<"minor" | "major", boolean>>({
+	minor: false,
+	major: false,
+});
+
+async function checkCoreUpdate() {
+	if (!site.value) return;
+	isCheckingCoreUpdate.value = true;
+	try {
+		await coreUpdateStore.checkCoreUpdate(site.value.id);
+	} catch (e: any) {
+		toast.addToast(
+			`Failed to check WordPress core updates: ${e.message}`,
+			"error",
+		);
+	} finally {
+		isCheckingCoreUpdate.value = false;
+	}
+}
+
+async function runCoreUpdate(target: "minor" | "major") {
+	if (!site.value) return;
+	isUpdatingCore.value[target] = true;
+	try {
+		await coreUpdateStore.updateCore(site.value.id, target);
+	} catch {
+		// The store already surfaces a toast with the error detail.
+	} finally {
+		isUpdatingCore.value[target] = false;
+	}
+}
+
 const showLinkModal = ref(false);
 const organizationSearchQuery = ref("");
 const searchResults = ref<Organization[]>([]);
@@ -582,6 +618,91 @@ const unlinkOrganization = async () => {
 			</div>
 
 			<SiteTrafficCard :site-id="site.id" />
+
+			<section class="card mt-4">
+				<div class="card-header">
+					<h2>WordPress Core</h2>
+					<button
+						v-if="authStore.canExecute"
+						class="btn btn-outline btn-sm"
+						:disabled="isCheckingCoreUpdate"
+						@click="checkCoreUpdate"
+					>
+						{{
+							isCheckingCoreUpdate
+								? "Checking..."
+								: "Check for Updates"
+						}}
+					</button>
+				</div>
+
+				<div class="info-grid">
+					<div class="info-item">
+						<span class="label">Installed Version</span>
+						<span class="value flex-row items-center gap-2">
+							{{
+								site.wp_core ? site.wp_core.version : "Unknown"
+							}}
+							<span
+								v-if="
+									site.wp_core &&
+									!site.wp_core.minor_update &&
+									!site.wp_core.major_update
+								"
+								class="status-badge badge-sm active"
+							>
+								Up to date
+							</span>
+							<span
+								v-if="site.wp_core?.minor_update"
+								class="status-badge badge-sm warning"
+							>
+								Minor update available
+							</span>
+							<span
+								v-if="site.wp_core?.major_update"
+								class="status-badge badge-sm error"
+							>
+								Major update available
+							</span>
+						</span>
+					</div>
+				</div>
+
+				<div
+					v-if="
+						authStore.canExecute &&
+						(site.wp_core?.minor_update ||
+							site.wp_core?.major_update)
+					"
+					class="flex-row gap-3 mt-4"
+				>
+					<button
+						v-if="site.wp_core?.minor_update"
+						class="btn btn-primary btn-sm"
+						:disabled="isUpdatingCore.minor"
+						@click="runCoreUpdate('minor')"
+					>
+						{{
+							isUpdatingCore.minor
+								? "Updating..."
+								: `Update to ${site.wp_core.minor_update}`
+						}}
+					</button>
+					<button
+						v-if="site.wp_core?.major_update"
+						class="btn btn-outline btn-sm"
+						:disabled="isUpdatingCore.major"
+						@click="runCoreUpdate('major')"
+					>
+						{{
+							isUpdatingCore.major
+								? "Updating..."
+								: `Update to ${site.wp_core.major_update}`
+						}}
+					</button>
+				</div>
+			</section>
 
 			<section class="card mt-4">
 				<div class="card-header">
