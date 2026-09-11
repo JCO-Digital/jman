@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.46.0 (2026-09-07)
+## 5.47.0 (2026-09-11)
+
+#### Features
+
+- wpcli: cache and pass admin user ID to WP-CLI commands (4391dcc)
+
+## v5.46.0 (2026-09-07)
 
 #### Features
 
