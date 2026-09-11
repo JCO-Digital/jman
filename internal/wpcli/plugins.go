@@ -12,7 +12,7 @@ import (
 
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error) {
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: !skipPlugins}, "plugin", "list", "--format=json")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: !skipPlugins}, "plugin", "list", "--format=json")
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +118,7 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 	args = append(args, plugins...)
 	args = append(args, "--format=json")
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true}, args...)
 	if err != nil {
 		// If the error message from RunWP is a specific WP-CLI error, return it
 		// without the full stderr blob to avoid noise from PHP warnings/notices.

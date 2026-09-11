@@ -15,6 +15,7 @@ type CliOptions struct {
 	SiteID         int
 	SSH            string
 	Path           string
+	User           int
 	IncludePlugins bool
 	IncludeThemes  bool
 	Timeout        time.Duration
@@ -38,6 +39,9 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 	}
 	if opts.Path != "" {
 		fullArgs = append(fullArgs, fmt.Sprintf("--path=%s", opts.Path))
+	}
+	if opts.User != 0 {
+		fullArgs = append(fullArgs, fmt.Sprintf("--user=%d", opts.User))
 	}
 
 	if !opts.IncludePlugins {

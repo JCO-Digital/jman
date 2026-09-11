@@ -265,6 +265,14 @@ func initInventorySchema() error {
 			},
 		},
 		{
+			Name: "site_admin_user",
+			Columns: map[string]string{
+				"site_id":    "INTEGER PRIMARY KEY",
+				"user_id":    "INTEGER NOT NULL",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "site_environment",
 			Columns: map[string]string{
 				"site_id":     "INTEGER PRIMARY KEY",

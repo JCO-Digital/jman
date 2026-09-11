@@ -1,7 +1,10 @@
 package monitor
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -11,6 +14,36 @@ import (
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
+
+// htmlSniffSize is how much of a response body we read to sanity-check that
+// a 2xx response actually contains HTML, rather than an empty or blank page.
+const htmlSniffSize = 4096
+
+// htmlMarkers are byte sequences we expect to find somewhere near the start
+// of a genuine HTML document.
+var htmlMarkers = [][]byte{
+	[]byte("<!doctype html"),
+	[]byte("<html"),
+	[]byte("<head"),
+	[]byte("<body"),
+}
+
+// looksLikeHTML performs a lightweight sanity check on the start of a
+// response body, so a 200 response with an empty or blank page isn't
+// mistaken for a healthy site.
+func looksLikeHTML(body []byte) bool {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return false
+	}
+	lower := bytes.ToLower(trimmed)
+	for _, marker := range htmlMarkers {
+		if bytes.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
 
 // Engine handles the execution of health checks for sites.
 type Engine struct {
@@ -70,7 +103,15 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 		if errDo == nil {
 			errorCode = resp.StatusCode
 			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				isUp = true
+				buf := make([]byte, htmlSniffSize)
+				n, readErr := io.ReadFull(resp.Body, buf)
+				if readErr != nil && !errors.Is(readErr, io.ErrUnexpectedEOF) && !errors.Is(readErr, io.EOF) {
+					statusMsg = fmt.Sprintf("Body read error: %v", readErr)
+				} else if !looksLikeHTML(buf[:n]) {
+					statusMsg = "Empty or non-HTML response body"
+				} else {
+					isUp = true
+				}
 			} else {
 				statusMsg = fmt.Sprintf("HTTP %d", resp.StatusCode)
 			}
