@@ -1,6 +1,17 @@
 # Changelog
 
-## 5.49.0 (2026-09-11)
+### 5.49.1 (2026-09-11)
+
+#### Bug Fixes
+
+- ui: format WordPress core entries in the update ledger (7e56d7c)
+- ui: keep WordPress Core pills on one line (84eba4e)
+
+#### Refactor
+
+- web: replace inline SVG traffic chart with Chart.js (01edefd)
+
+## v5.49.0 (2026-09-11)
 
 #### Features
 
