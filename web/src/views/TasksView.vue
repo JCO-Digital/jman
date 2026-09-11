@@ -265,7 +265,7 @@ function vulnStatus(task: Task) {
 						@click="openTask(task)"
 					>
 						<td class="max-w-320 truncate font-medium">
-							<div class="flex-row items-center gap-2">
+							<div class="flex-between gap-2">
 								<span class="truncate">{{ task.title }}</span>
 								<span
 									v-if="vulnStatus(task).isVuln"
