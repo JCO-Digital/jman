@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.48.1 (2026-09-11)
+## 5.49.0 (2026-09-11)
+
+#### Features
+
+- sites: add WordPress Core update card to site detail page (66839ca)
+
+### v5.48.1 (2026-09-11)
 
 #### Bug Fixes
 
