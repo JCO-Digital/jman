@@ -1,6 +1,13 @@
 # Changelog
 
-## 5.47.0 (2026-09-11)
+### 5.47.1 (2026-09-11)
+
+#### Bug Fixes
+
+- ui: close task modal on any quick action (711fddd)
+- vuln: prune orphaned plugin cache rows for deleted sites (945bf34)
+
+## v5.47.0 (2026-09-11)
 
 #### Features
 
