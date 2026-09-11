@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.49.1 (2026-09-11)
+## 5.50.0 (2026-09-11)
+
+#### Features
+
+- agent: support non-WordPress sites in agent collection and manifest (4cff13f)
+
+### v5.49.1 (2026-09-11)
 
 #### Bug Fixes
 
