@@ -46,9 +46,31 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 		return existingPlugins, fmt.Errorf("failed to get site list: %w", err)
 	}
 
+	// Prune plugin rows for sites that no longer exist (e.g. deleted in
+	// SpinupWP). Without this, a deleted site's plugins linger in
+	// site_plugins forever since the per-site fetch loop below only ever
+	// runs for sites that are still present, so its DeleteSitePlugins call
+	// never fires for a site that's gone. Left uncleaned, these stale rows
+	// keep flowing into vulnerability reports for a site that no longer
+	// exists, producing recreated "Security Vulnerabilities - Site #N" tasks
+	// even after cleanupOrphanedTasks marks them skipped.
+	updated := false
+	currentSiteIDs := make(map[int]bool, len(sites))
+	for _, site := range sites {
+		currentSiteIDs[site.ID] = true
+	}
+	for siteID := range sitesWithData {
+		if !currentSiteIDs[siteID] {
+			if err := db.DeleteSitePlugins(siteID); err != nil {
+				verb.PrintErrorf(verb.Normal, "Warning: failed to prune plugins for deleted site %d: %v\n", siteID, err)
+			} else {
+				updated = true
+			}
+		}
+	}
+
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 12)
-	updated := false
 	var mu sync.Mutex
 
 	for _, site := range sites {
