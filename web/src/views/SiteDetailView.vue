@@ -636,37 +636,33 @@ const unlinkOrganization = async () => {
 					</button>
 				</div>
 
-				<div class="info-grid">
-					<div class="info-item">
-						<span class="label">Installed Version</span>
-						<span class="value flex-row items-center gap-2">
-							{{
-								site.wp_core ? site.wp_core.version : "Unknown"
-							}}
-							<span
-								v-if="
-									site.wp_core &&
-									!site.wp_core.minor_update &&
-									!site.wp_core.major_update
-								"
-								class="status-badge badge-sm active"
-							>
-								Up to date
-							</span>
-							<span
-								v-if="site.wp_core?.minor_update"
-								class="status-badge badge-sm warning"
-							>
-								Minor update available
-							</span>
-							<span
-								v-if="site.wp_core?.major_update"
-								class="status-badge badge-sm error"
-							>
-								Major update available
-							</span>
+				<div class="info-item">
+					<span class="label">Installed Version</span>
+					<span class="value flex-row items-center gap-2">
+						{{ site.wp_core ? site.wp_core.version : "Unknown" }}
+						<span
+							v-if="
+								site.wp_core &&
+								!site.wp_core.minor_update &&
+								!site.wp_core.major_update
+							"
+							class="status-badge badge-sm active"
+						>
+							Up to date
 						</span>
-					</div>
+						<span
+							v-if="site.wp_core?.minor_update"
+							class="status-badge badge-sm warning"
+						>
+							Minor update available
+						</span>
+						<span
+							v-if="site.wp_core?.major_update"
+							class="status-badge badge-sm error"
+						>
+							Major update available
+						</span>
+					</span>
 				</div>
 
 				<div
