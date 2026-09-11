@@ -158,7 +158,7 @@ func GetSiteList() ([]models.CliSite, error) {
 	return cliSites, nil
 }
 
-// GetSitesForServer returns every WordPress site hosted on the given server,
+// GetSitesForServer returns every site hosted on the given server,
 // using cached data without checking expiry (agent manifest requests should
 // be fast and cheap; freshness comes from the periodic `jman fetch` refresh).
 func GetSitesForServer(serverID int) ([]models.Site, error) {
@@ -169,7 +169,7 @@ func GetSitesForServer(serverID int) ([]models.Site, error) {
 
 	result := []models.Site{}
 	for _, site := range sites {
-		if site.IsWordpress && site.ServerID == serverID {
+		if site.ServerID == serverID {
 			result = append(result, site)
 		}
 	}

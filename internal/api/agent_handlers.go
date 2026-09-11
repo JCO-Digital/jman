@@ -53,9 +53,10 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		manifest.Sites = append(manifest.Sites, models.AgentManifestSite{
-			SiteID:   site.ID,
-			Domain:   site.Domain,
-			SiteUser: site.SiteUser,
+			SiteID:      site.ID,
+			Domain:      site.Domain,
+			SiteUser:    site.SiteUser,
+			IsWordpress: site.IsWordpress,
 		})
 	}
 

@@ -200,7 +200,11 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		siteReport := models.AgentReportSite{SiteID: site.SiteID}
 
 		if sitePath, err := ResolveSitePath(site.Domain, site.SiteUser); err != nil {
-			verb.LogPrintf(verb.Normal, "Skipping disk usage/wp-flags for %s: %v", site.Domain, err)
+			skipTarget := "disk usage"
+			if site.IsWordpress {
+				skipTarget = "disk usage/wp-flags"
+			}
+			verb.LogPrintf(verb.Normal, "Skipping %s for %s: %v", skipTarget, site.Domain, err)
 		} else {
 			if bytesUsed, err := CollectDiskUsage(sitePath); err != nil {
 				verb.LogPrintf(verb.Normal, "Failed to measure disk usage for %s at %s: %v", site.Domain, sitePath, err)
@@ -208,11 +212,13 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 				siteReport.DiskUsageBytes = &bytesUsed
 			}
 
-			if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
-			} else {
-				siteReport.IsMultisite = &isMultisite
-				siteReport.DisallowFileMods = &disallowFileMods
+			if site.IsWordpress {
+				if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
+					verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
+				} else {
+					siteReport.IsMultisite = &isMultisite
+					siteReport.DisallowFileMods = &disallowFileMods
+				}
 			}
 		}
 

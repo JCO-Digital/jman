@@ -49,9 +49,10 @@ type SiteWpFlags struct {
 // docroot, which can differ from the WordPress install location, so it's
 // deliberately not used here.)
 type AgentManifestSite struct {
-	SiteID   int    `json:"site_id"`
-	Domain   string `json:"domain"`
-	SiteUser string `json:"site_user"`
+	SiteID      int    `json:"site_id"`
+	Domain      string `json:"domain"`
+	SiteUser    string `json:"site_user"`
+	IsWordpress bool   `json:"is_wordpress"`
 }
 
 // AgentManifest is the response body for GET /api/agent/manifest.
