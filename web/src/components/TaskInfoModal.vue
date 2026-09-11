@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed } from "vue";
 import { RouterLink } from "vue-router";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
 import { useUserStore } from "../stores/user";
 import { useDataStore } from "../stores/data";
+import { useToastStore } from "../stores/toast";
 import AppIcon from "./AppIcon.vue";
 import type { Task, TaskStatus } from "../types";
 import { useConfirm } from "../composables/useConfirm";
@@ -24,6 +25,7 @@ const taskStore = useTaskStore();
 const authStore = useAuthStore();
 const userStore = useUserStore();
 const dataStore = useDataStore();
+const toast = useToastStore();
 const { confirm } = useConfirm();
 
 // Get the enriched site corresponding to this task's site_id
@@ -92,50 +94,42 @@ const isVulnerabilityReadyToClose = computed(() => {
 	}
 });
 
-const isActioning = ref(false);
-const actionError = ref<string | null>(null);
-
+// Every quick action closes the modal immediately on click, rather than
+// after the async call resolves. Delete relies on this: useConfirm's dialog
+// is a single global instance teleported to <body> (see App.vue), so if this
+// modal (also teleported to <body>) were still open when confirm() opens it,
+// the confirm dialog would render behind it instead of on top.
 async function complete() {
-	isActioning.value = true;
-	actionError.value = null;
+	emit("close");
 	try {
 		const updated = await taskStore.completeTask(props.task.id);
 		emit("updated", updated);
 	} catch (e: any) {
-		actionError.value = e.message;
-	} finally {
-		isActioning.value = false;
+		toast.addToast(`Failed to complete task: ${e.message}`, "error");
 	}
 }
 
 async function changeStatus(status: TaskStatus) {
-	isActioning.value = true;
-	actionError.value = null;
+	emit("close");
 	try {
 		const updated = await taskStore.setStatus(props.task.id, status);
 		emit("updated", updated);
 	} catch (e: any) {
-		actionError.value = e.message;
-	} finally {
-		isActioning.value = false;
+		toast.addToast(`Failed to update task: ${e.message}`, "error");
 	}
 }
 
-const isDeleting = ref(false);
-
 async function handleDelete() {
+	emit("close");
 	if (
 		!(await confirm(`Delete task "${props.task.title}"?`, { danger: true }))
 	)
 		return;
-	isDeleting.value = true;
 	try {
 		await taskStore.deleteTask(props.task.id);
 		emit("deleted");
 	} catch (e: any) {
-		actionError.value = e.message;
-	} finally {
-		isDeleting.value = false;
+		toast.addToast(`Failed to delete task: ${e.message}`, "error");
 	}
 }
 
@@ -395,7 +389,6 @@ const canComplete = (s: string) =>
 							<button
 								v-if="canComplete(task.status)"
 								class="btn btn-primary"
-								:disabled="isActioning"
 								@click="complete"
 							>
 								Complete Task
@@ -403,7 +396,6 @@ const canComplete = (s: string) =>
 							<button
 								v-if="task.status === 'pending'"
 								class="btn btn-outline"
-								:disabled="isActioning"
 								@click="changeStatus('in_progress')"
 							>
 								Start Task
@@ -415,27 +407,21 @@ const canComplete = (s: string) =>
 									task.status === 'overdue'
 								"
 								class="btn btn-outline"
-								:disabled="isActioning"
 								@click="changeStatus('skipped')"
 							>
 								Skip Task
 							</button>
 						</div>
 					</div>
-
-					<p v-if="actionError" class="error-banner">
-						{{ actionError }}
-					</p>
 				</div>
 
 				<footer class="form-actions flex-between mt-4">
 					<button
 						v-if="authStore.canEdit"
 						class="btn btn-text danger"
-						:disabled="isDeleting"
 						@click="handleDelete"
 					>
-						{{ isDeleting ? "Deleting…" : "Delete Task" }}
+						Delete Task
 					</button>
 					<div class="flex-row gap-3">
 						<button class="btn btn-outline" @click="emit('close')">
