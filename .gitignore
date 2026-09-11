@@ -10,3 +10,4 @@ users.toml
 jman.db
 jman.db-wal
 jman.db-shm
+web/package-lock.json
