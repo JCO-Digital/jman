@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.48.0 (2026-09-11)
+### 5.48.1 (2026-09-11)
+
+#### Bug Fixes
+
+- ui: handle undefined task.metadata in vulnerability status check (2e786eb)
+
+## v5.48.0 (2026-09-11)
 
 #### Features
 
