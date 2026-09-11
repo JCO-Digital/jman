@@ -1,6 +1,21 @@
 # Changelog
 
-### 5.47.1 (2026-09-11)
+## 5.48.0 (2026-09-11)
+
+#### Features
+
+- ui: show vulnerability pill and status on dashboard task list (cf3e652)
+
+#### Bug Fixes
+
+- ui: reflect task changes immediately without a full refetch (46b2fe1)
+- ui: right-align vulnerability pill in task title column (fd30f0f)
+
+#### Maintenance
+
+- git: ignore web package-lock.json (d9615c9)
+
+### v5.47.1 (2026-09-11)
 
 #### Bug Fixes
 
