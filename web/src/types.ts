@@ -481,6 +481,8 @@ export type TaskStatus =
 	| "in_progress"
 	| "completed"
 	| "skipped"
+	| "on_hold"
+	| "blocked"
 	| "overdue";
 export type TaskPriority = "low" | "medium" | "high";
 

@@ -104,7 +104,9 @@ const filteredTasks = computed(() => {
 		}
 	}
 
-	return result;
+	return [...result].sort(
+		(a, b) => Number(isPaused(a.status)) - Number(isPaused(b.status)),
+	);
 });
 
 function openTask(task: Task) {
@@ -150,8 +152,12 @@ const statusClass: Record<TaskStatus, string> = {
 	in_progress: "active",
 	completed: "success",
 	skipped: "default",
+	on_hold: "warning",
+	blocked: "error",
 	overdue: "error",
 };
+
+const isPaused = (s: TaskStatus) => s === "on_hold" || s === "blocked";
 
 function formatDate(d: string | null) {
 	if (!d) return "—";
@@ -193,6 +199,8 @@ function vulnStatus(task: Task) {
 				<option value="overdue">Overdue</option>
 				<option value="completed">Completed</option>
 				<option value="skipped">Skipped</option>
+				<option value="on_hold">On Hold</option>
+				<option value="blocked">Blocked</option>
 			</select>
 
 			<select v-model="filterPriority">
@@ -327,7 +335,8 @@ function vulnStatus(task: Task) {
 									task.due_date &&
 									new Date(task.due_date) < new Date() &&
 									task.status !== 'completed' &&
-									task.status !== 'skipped',
+									task.status !== 'skipped' &&
+									!isPaused(task.status),
 							}"
 						>
 							{{ formatDate(task.due_date) }}

@@ -153,12 +153,14 @@ const statusClass: Record<string, string> = {
 	in_progress: "active",
 	completed: "success",
 	skipped: "default",
+	on_hold: "warning",
+	blocked: "error",
 	overdue: "error",
 };
 
 const isTerminal = (s: string) => s === "completed" || s === "skipped";
-const canComplete = (s: string) =>
-	s === "pending" || s === "in_progress" || s === "overdue";
+const isPaused = (s: string) => s === "on_hold" || s === "blocked";
+const canComplete = (s: string) => !isTerminal(s);
 </script>
 
 <template>
@@ -217,7 +219,8 @@ const canComplete = (s: string) =>
 									overdue:
 										task.due_date &&
 										new Date(task.due_date) < new Date() &&
-										!isTerminal(task.status),
+										!isTerminal(task.status) &&
+										!isPaused(task.status),
 								}"
 							>
 								{{ formatDate(task.due_date) }}
@@ -401,11 +404,27 @@ const canComplete = (s: string) =>
 								Start Task
 							</button>
 							<button
-								v-if="
-									task.status === 'pending' ||
-									task.status === 'in_progress' ||
-									task.status === 'overdue'
-								"
+								v-if="isPaused(task.status)"
+								class="btn btn-outline"
+								@click="changeStatus('pending')"
+							>
+								Resume
+							</button>
+							<button
+								v-if="task.status !== 'on_hold'"
+								class="btn btn-outline"
+								@click="changeStatus('on_hold')"
+							>
+								Put On Hold
+							</button>
+							<button
+								v-if="task.status !== 'blocked'"
+								class="btn btn-outline"
+								@click="changeStatus('blocked')"
+							>
+								Mark Blocked
+							</button>
+							<button
 								class="btn btn-outline"
 								@click="changeStatus('skipped')"
 							>

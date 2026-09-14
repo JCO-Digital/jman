@@ -19,6 +19,8 @@ const (
 	TaskStatusInProgress TaskStatus = "in_progress"
 	TaskStatusCompleted  TaskStatus = "completed"
 	TaskStatusSkipped    TaskStatus = "skipped"
+	TaskStatusOnHold     TaskStatus = "on_hold"
+	TaskStatusBlocked    TaskStatus = "blocked"
 	TaskStatusOverdue    TaskStatus = "overdue"
 )
 

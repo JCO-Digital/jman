@@ -19,8 +19,17 @@ const statusClass: Record<TaskStatus, string> = {
 	in_progress: "active",
 	completed: "success",
 	skipped: "default",
+	on_hold: "warning",
+	blocked: "error",
 	overdue: "error",
 };
+
+const EXCLUDED_STATUSES = new Set<TaskStatus>([
+	"completed",
+	"skipped",
+	"on_hold",
+	"blocked",
+]);
 
 function vulnStatus(task: Task) {
 	return getVulnerabilityStatus(task, dataStore.enrichedSites);
@@ -41,7 +50,7 @@ function computeReminderTasks() {
 	const currentUsername = authStore.user?.username;
 	reminderTasks.value = taskStore.tasks.filter((t) => {
 		if (!t.reminder_date) return false;
-		if (t.status === "completed" || t.status === "skipped") return false;
+		if (EXCLUDED_STATUSES.has(t.status)) return false;
 
 		// Filter: only show unassigned or assigned to current user
 		const isUnassigned = !t.assigned_to;
@@ -98,7 +107,7 @@ async function completeTask(task: Task) {
 
 function handleTaskUpdated(updated: Task) {
 	selectedTask.value = updated;
-	if (updated.status === "completed" || updated.status === "skipped") {
+	if (EXCLUDED_STATUSES.has(updated.status)) {
 		reminderTasks.value = reminderTasks.value.filter(
 			(t) => t.id !== updated.id,
 		);
