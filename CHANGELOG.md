@@ -1,6 +1,16 @@
 # Changelog
 
-## 5.50.0 (2026-09-11)
+## 5.51.0 (2026-09-14)
+
+#### Features
+
+- web: add site filtering options for multisite and file mods (fdcc863)
+
+#### Refactor
+
+- api: upgrade agent tokens to sha256 and enhance validation (f90187f)
+
+## v5.50.0 (2026-09-11)
 
 #### Features
 
