@@ -22,6 +22,8 @@ const organizationStore = useOrganizationStore();
 
 const searchQuery = ref("");
 const filterEnvironment = ref<SiteEnvironment | "unclassified" | "">("");
+const filterMultisite = ref(false);
+const filterFileMods = ref<"" | "enabled" | "disabled">("");
 const sortKey = ref<keyof EnrichedSite>("domain");
 const sortOrder = ref<"asc" | "desc">("asc");
 const currentPage = ref(props.page || 1);
@@ -83,6 +85,28 @@ const handleSort = (key: keyof EnrichedSite) => {
 	}
 };
 
+const toggleFilterMultisite = () => {
+	filterMultisite.value = !filterMultisite.value;
+	updateRoute(1, rowsPerPage.value);
+};
+
+const toggleFilterFileMods = (status: "enabled" | "disabled") => {
+	if (filterFileMods.value === status) {
+		filterFileMods.value = "";
+	} else {
+		filterFileMods.value = status;
+	}
+	updateRoute(1, rowsPerPage.value);
+};
+
+const hasActiveFilters = computed(
+	() =>
+		Boolean(searchQuery.value) ||
+		Boolean(filterEnvironment.value) ||
+		filterMultisite.value ||
+		Boolean(filterFileMods.value),
+);
+
 const filteredAndSortedSites = computed(() => {
 	let result = dataStore.enrichedSites;
 
@@ -98,6 +122,22 @@ const filteredAndSortedSites = computed(() => {
 			filterEnvironment.value === "unclassified"
 				? !site.environment
 				: site.environment === filterEnvironment.value,
+		);
+	}
+
+	if (filterMultisite.value) {
+		result = result.filter(
+			(site) => site.is_wordpress && site.wp_flags?.is_multisite,
+		);
+	}
+
+	if (filterFileMods.value === "enabled") {
+		result = result.filter(
+			(site) => site.is_wordpress && !site.wp_flags?.disallow_file_mods,
+		);
+	} else if (filterFileMods.value === "disabled") {
+		result = result.filter(
+			(site) => site.is_wordpress && !!site.wp_flags?.disallow_file_mods,
 		);
 	}
 
@@ -289,6 +329,37 @@ function timeSince(dateString: string) {
 				<option value="unclassified">Unclassified</option>
 			</select>
 
+			<div class="btn-group">
+				<button
+					type="button"
+					class="btn btn-outline"
+					:class="{ 'btn-primary': filterMultisite }"
+					@click="toggleFilterMultisite"
+				>
+					Multisite
+				</button>
+				<button
+					type="button"
+					class="btn btn-outline"
+					:class="{
+						'btn-primary': filterFileMods === 'enabled',
+					}"
+					@click="toggleFilterFileMods('enabled')"
+				>
+					File Mods Enabled
+				</button>
+				<button
+					type="button"
+					class="btn btn-outline"
+					:class="{
+						'btn-primary': filterFileMods === 'disabled',
+					}"
+					@click="toggleFilterFileMods('disabled')"
+				>
+					File Mods Disabled
+				</button>
+			</div>
+
 			<button
 				class="btn btn-outline"
 				:class="{ 'btn-primary': batchMode }"
@@ -402,6 +473,10 @@ function timeSince(dateString: string) {
 									searchQuery
 								}}".</span
 							>
+							<span v-else-if="hasActiveFilters"
+								>No sites found matching the selected
+								filters.</span
+							>
 							<span v-else>No sites available.</span>
 						</td>
 						<td colspan="4" class="empty-state show-mobile">
@@ -409,6 +484,10 @@ function timeSince(dateString: string) {
 								>No sites found matching "{{
 									searchQuery
 								}}".</span
+							>
+							<span v-else-if="hasActiveFilters"
+								>No sites found matching the selected
+								filters.</span
 							>
 							<span v-else>No sites available.</span>
 						</td>
@@ -559,6 +638,10 @@ function timeSince(dateString: string) {
 </template>
 
 <style scoped>
+.controls {
+	flex-wrap: wrap;
+}
+
 .batch-action-bar {
 	display: flex;
 	align-items: center;
