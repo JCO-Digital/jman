@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.51.0 (2026-09-14)
+### 5.51.1 (2026-09-14)
+
+#### Refactor
+
+- web: simplify site filters and button styling in SitesView (c5fd8b9)
+
+## v5.51.0 (2026-09-14)
 
 #### Features
 
