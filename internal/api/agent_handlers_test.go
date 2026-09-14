@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func setupAgentTest(t *testing.T) {
@@ -140,5 +143,70 @@ func TestAgentReportHandler_AcceptsNonWPSiteData(t *testing.T) {
 	}
 	if usage, ok := diskUsageMap[201]; !ok || usage.BytesUsed != 12345678 {
 		t.Errorf("expected disk usage 12345678 for site 201, got %+v", usage)
+	}
+}
+
+func TestAgentToken_VerificationAndUpgrade(t *testing.T) {
+	setupAgentTest(t)
+
+	// 1. Create a new token (should be sha256)
+	token, plaintext, err := db.CreateAgentToken(10, "test-server", "test desc", "admin")
+	if err != nil {
+		t.Fatalf("failed to create agent token: %v", err)
+	}
+
+	claims, err := db.VerifyAgentToken(plaintext)
+	if err != nil {
+		t.Fatalf("failed to verify sha256 token: %v", err)
+	}
+	if claims.ServerID != 10 || claims.TokenID != token.ID {
+		t.Errorf("unexpected claims: %+v", claims)
+	}
+
+	// 2. Insert a legacy bcrypt token
+	legacySecret := "legacySecretValue1234567890123456"
+	legacyBcryptHash, err := bcrypt.GenerateFromPassword([]byte(legacySecret), 10)
+	if err != nil {
+		t.Fatalf("failed to generate bcrypt hash: %v", err)
+	}
+
+	dbConn := db.GetAPIDB()
+	res, err := dbConn.Exec(
+		`INSERT INTO agent_tokens (server_id, server_name, token_hash, token_prefix, description, created_by)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		20, "legacy-server", string(legacyBcryptHash), legacySecret[:8], "legacy", "admin",
+	)
+	if err != nil {
+		t.Fatalf("failed to insert legacy token: %v", err)
+	}
+	legacyID, _ := res.LastInsertId()
+	legacyPlaintext := fmt.Sprintf("%d.%s", legacyID, legacySecret)
+
+	// Verify legacy token
+	legacyClaims, err := db.VerifyAgentToken(legacyPlaintext)
+	if err != nil {
+		t.Fatalf("failed to verify legacy token: %v", err)
+	}
+	if legacyClaims.ServerID != 20 || legacyClaims.TokenID != int(legacyID) {
+		t.Errorf("unexpected claims for legacy token: %+v", legacyClaims)
+	}
+
+	// Check that the hash in the database was transparently migrated to sha256
+	var updatedHash string
+	err = dbConn.QueryRow("SELECT token_hash FROM agent_tokens WHERE id = ?", legacyID).Scan(&updatedHash)
+	if err != nil {
+		t.Fatalf("failed to query updated token hash: %v", err)
+	}
+	if !strings.HasPrefix(updatedHash, "sha256:") {
+		t.Errorf("expected hash to be upgraded to sha256 prefix, got %s", updatedHash)
+	}
+
+	// Verify again using the newly upgraded sha256 hash
+	secondVerifyClaims, err := db.VerifyAgentToken(legacyPlaintext)
+	if err != nil {
+		t.Fatalf("failed to verify upgraded token: %v", err)
+	}
+	if secondVerifyClaims.ServerID != 20 {
+		t.Errorf("unexpected claims on second verify: %+v", secondVerifyClaims)
 	}
 }

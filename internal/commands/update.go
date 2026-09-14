@@ -128,9 +128,6 @@ var updateCmd = &cobra.Command{
 		}
 
 		verb.Printf(verb.Verbose, "Successfully updated %s to %s\n", verb.Blue(component), verb.Green(latestVersion))
-		if component == "jman" {
-			os.Exit(0)
-		}
 		return nil
 	},
 }

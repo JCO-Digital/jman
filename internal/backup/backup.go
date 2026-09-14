@@ -2,6 +2,7 @@ package backup
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -58,10 +59,7 @@ func PerformBackup() error {
 	errInventory := backupOne("inventory", db.BackupInventory)
 	errAPI := backupOne("api", db.BackupAPI)
 
-	if errInventory != nil {
-		return errInventory
-	}
-	return errAPI
+	return errors.Join(errInventory, errAPI)
 }
 
 // backupOne performs a VACUUM INTO backup for a single database, identified

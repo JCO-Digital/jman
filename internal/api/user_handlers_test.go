@@ -159,6 +159,23 @@ func TestCreateUserHandler(t *testing.T) {
 		}
 	})
 
+	t.Run("Reserved Username", func(t *testing.T) {
+		reqBody := createUserRequest{
+			Username:    "system",
+			Password:    "strong-password-12345",
+			DisplayName: "System User",
+		}
+		body, _ := json.Marshal(reqBody)
+		req := httptest.NewRequest("POST", "/api/users", bytes.NewBuffer(body))
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Expected status 400 for reserved username, got %d", w.Code)
+		}
+	})
+
 	t.Run("Duplicate User", func(t *testing.T) {
 		reqBody := createUserRequest{
 			Username:    "admin",
@@ -483,6 +500,9 @@ func TestTOTPFlow(t *testing.T) {
 	claims := &AuthClaims{Username: "user", Level: config.LevelBasic}
 	ctx := contextWithClaims(context.Background(), claims)
 
+	limiter := NewLoginRateLimiter(false)
+	defer limiter.Stop()
+
 	// 1. Setup
 	setupReq := httptest.NewRequest("POST", "/api/user/2fa/setup", nil)
 	setupReq = setupReq.WithContext(ctx)
@@ -509,7 +529,7 @@ func TestTOTPFlow(t *testing.T) {
 	activateReq := httptest.NewRequest("POST", "/api/user/2fa/activate", bytes.NewBuffer(activateBody))
 	activateReq = activateReq.WithContext(ctx)
 	activateW := httptest.NewRecorder()
-	Activate2FAHandler(cfg)(activateW, activateReq)
+	Activate2FAHandler(cfg, limiter)(activateW, activateReq)
 
 	if activateW.Code != http.StatusOK {
 		t.Errorf("Activate failed with %d: %s", activateW.Code, activateW.Body.String())
@@ -528,7 +548,7 @@ func TestTOTPFlow(t *testing.T) {
 	deactivateReq := httptest.NewRequest("POST", "/api/user/2fa/deactivate", bytes.NewBuffer(deactivateBody))
 	deactivateReq = deactivateReq.WithContext(ctx)
 	deactivateW := httptest.NewRecorder()
-	Deactivate2FAHandler(cfg)(deactivateW, deactivateReq)
+	Deactivate2FAHandler(cfg, limiter)(deactivateW, deactivateReq)
 
 	if deactivateW.Code != http.StatusOK {
 		t.Errorf("Deactivate failed with %d", deactivateW.Code)

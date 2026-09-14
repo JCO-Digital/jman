@@ -14,6 +14,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/update"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
@@ -121,6 +122,9 @@ var setupCompatCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		slug := args[0]
+		if !utils.IsValidSlug(slug) {
+			return fmt.Errorf("invalid plugin slug %q: must contain only lowercase alphanumeric characters and hyphens", slug)
+		}
 
 		// 1. Look in the https://github.com/JCO-Digital/bojaco-compat repo for a file called "compat-[slug].php"
 		compatURL := fmt.Sprintf("https://raw.githubusercontent.com/JCO-Digital/bojaco-compat/main/compat-%s.php", slug)

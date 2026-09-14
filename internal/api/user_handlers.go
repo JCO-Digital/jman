@@ -471,12 +471,21 @@ type activate2FARequest struct {
 
 // Activate2FAHandler verifies a setup code and persists the TOTP secret.
 // It uses the pending secret stored during setup rather than accepting a client-supplied secret.
-func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+func Activate2FAHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
 		if claims == nil {
 			WriteError(w, http.StatusUnauthorized, "Authentication required")
 			return
+		}
+
+		clientIP := ""
+		if limiter != nil {
+			clientIP = limiter.ClientIP(r)
+			if !limiter.Allow(clientIP) {
+				WriteError(w, http.StatusTooManyRequests, "Too many attempts, please try again later")
+				return
+			}
 		}
 
 		var req activate2FARequest
@@ -506,6 +515,9 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 
 		if !totp.Validate(req.Code, user.PendingTOTPSecret) {
 			usersCfg.UnlockWrite()
+			if limiter != nil {
+				limiter.RecordFailure(clientIP)
+			}
 			WriteError(w, http.StatusBadRequest, "Invalid verification code")
 			return
 		}
@@ -521,6 +533,9 @@ func Activate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		if limiter != nil {
+			limiter.Reset(clientIP)
+		}
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "2FA enabled"})
 	}
 }
@@ -531,12 +546,21 @@ type deactivate2FARequest struct {
 
 // Deactivate2FAHandler removes the TOTP secret for the logged-in user.
 // It requires a valid TOTP code to confirm the deactivation.
-func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
+func Deactivate2FAHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		claims := GetAuthClaims(r.Context())
 		if claims == nil {
 			WriteError(w, http.StatusUnauthorized, "Authentication required")
 			return
+		}
+
+		clientIP := ""
+		if limiter != nil {
+			clientIP = limiter.ClientIP(r)
+			if !limiter.Allow(clientIP) {
+				WriteError(w, http.StatusTooManyRequests, "Too many attempts, please try again later")
+				return
+			}
 		}
 
 		// Decode body before acquiring lock to avoid holding the lock during I/O.
@@ -558,6 +582,9 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		if user.TOTPSecret != "" {
 			if !totp.Validate(req.Code, user.TOTPSecret) {
 				usersCfg.UnlockWrite()
+				if limiter != nil {
+					limiter.RecordFailure(clientIP)
+				}
 				WriteError(w, http.StatusBadRequest, "Invalid verification code")
 				return
 			}
@@ -573,6 +600,9 @@ func Deactivate2FAHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		if limiter != nil {
+			limiter.Reset(clientIP)
+		}
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "2FA disabled"})
 	}
 }

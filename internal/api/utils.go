@@ -102,13 +102,25 @@ func ValidateUserLevel(l config.UserLevel) error {
 
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9._-]+$`)
 
+var reservedUsernames = map[string]bool{
+	"system":  true,
+	"default": true,
+	"cli":     true,
+	"root":    true,
+	"api":     true,
+}
+
 // ValidateUsername ensures the username follows safety rules.
 func ValidateUsername(username string) error {
-	if len(username) < 3 || len(username) > 32 {
+	norm := NormalizeUsername(username)
+	if len(norm) < 3 || len(norm) > 32 {
 		return fmt.Errorf("username must be between 3 and 32 characters")
 	}
-	if !usernameRegex.MatchString(username) {
+	if !usernameRegex.MatchString(norm) {
 		return fmt.Errorf("username can only contain alphanumeric characters, dots, underscores, and hyphens")
+	}
+	if reservedUsernames[norm] {
+		return fmt.Errorf("username %q is reserved and cannot be used", username)
 	}
 	return nil
 }

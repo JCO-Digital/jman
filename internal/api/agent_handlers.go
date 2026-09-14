@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -30,7 +29,8 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 
 	sites, err := cache.GetSitesForServer(claims.ServerID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to load sites: %v", err))
+		verb.LogPrintf(verb.Normal, "Failed to load sites for server %d: %v", claims.ServerID, err)
+		WriteError(w, http.StatusInternalServerError, "Failed to load sites")
 		return
 	}
 
@@ -76,7 +76,7 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 
 	var report models.AgentReport
 	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
-		WriteError(w, http.StatusBadRequest, fmt.Sprintf("Invalid request body: %v", err))
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
 
@@ -91,7 +91,8 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 	// for sites on other servers.
 	serverSites, err := cache.GetSitesForServer(claims.ServerID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to validate sites: %v", err))
+		verb.LogPrintf(verb.Normal, "Failed to validate sites for server %d: %v", claims.ServerID, err)
+		WriteError(w, http.StatusInternalServerError, "Failed to validate sites")
 		return
 	}
 	allowedSiteIDs := make(map[int]bool, len(serverSites))
@@ -168,7 +169,8 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 func ListAgentTokensHandler(w http.ResponseWriter, r *http.Request) {
 	tokens, err := db.ListAgentTokens()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "ListAgentTokens error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, tokens)
@@ -206,7 +208,8 @@ func CreateAgentTokenHandler(w http.ResponseWriter, r *http.Request) {
 
 	token, plaintext, err := db.CreateAgentToken(req.ServerID, req.ServerName, req.Description, createdBy)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to create agent token: %v", err))
+		verb.LogPrintf(verb.Normal, "Failed to create agent token: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to create agent token")
 		return
 	}
 	token.CreatedAt = time.Now().UTC().Format(time.RFC3339)
@@ -223,7 +226,8 @@ func RevokeAgentTokenHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.RevokeAgentToken(id); err != nil {
-		WriteError(w, http.StatusNotFound, err.Error())
+		verb.LogPrintf(verb.Normal, "Failed to revoke agent token %d: %v", id, err)
+		WriteError(w, http.StatusNotFound, "Agent token not found")
 		return
 	}
 

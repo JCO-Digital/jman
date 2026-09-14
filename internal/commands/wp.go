@@ -21,8 +21,9 @@ type wpCommand struct {
 }
 
 var (
-	wpCache   *wpCommand
-	wpCacheMu sync.Mutex
+	wpCache      *wpCommand
+	wpCacheTried bool
+	wpCacheMu    sync.Mutex
 )
 
 var wpCmd = &cobra.Command{
@@ -38,7 +39,8 @@ var wpCmd = &cobra.Command{
 
 		// WP-CLI completion using local wp-cli with cache and timeout
 		wpCacheMu.Lock()
-		if wpCache == nil {
+		if !wpCacheTried {
+			wpCacheTried = true
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
 

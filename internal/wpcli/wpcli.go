@@ -196,9 +196,12 @@ func UploadFile(ssh, localPath, remotePath string) error {
 		return fmt.Errorf("ssh connection string is required for upload")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
 	// Format scp destination: user@host:path
 	destination := fmt.Sprintf("%s:%s", ssh, remotePath)
-	cmd := exec.Command("scp", localPath, destination)
+	cmd := exec.CommandContext(ctx, "scp", "--", localPath, destination)
 
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf

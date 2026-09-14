@@ -2,8 +2,11 @@ package db
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -12,10 +15,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// agentTokenBcryptCost mirrors the cost used for human user passwords
-// (internal/api.BcryptCost) without introducing an api->db dependency.
-const agentTokenBcryptCost = 12
-
 // AgentClaims identifies the server an agent token belongs to, returned by
 // VerifyAgentToken on success.
 type AgentClaims struct {
@@ -23,8 +22,30 @@ type AgentClaims struct {
 	ServerID int
 }
 
+const sha256TokenPrefix = "sha256:"
+
+func hashAgentTokenSecret(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return sha256TokenPrefix + hex.EncodeToString(sum[:])
+}
+
+func verifyAgentTokenSecret(secret, storedHash string) (bool, bool) {
+	if strings.HasPrefix(storedHash, sha256TokenPrefix) {
+		expected := hashAgentTokenSecret(secret)
+		matched := subtle.ConstantTimeCompare([]byte(storedHash), []byte(expected)) == 1
+		return matched, false
+	}
+
+	// Legacy bcrypt token check
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(secret)); err == nil {
+		return true, true // valid, upgrade to sha256 on successful verify
+	}
+
+	return false, false
+}
+
 // CreateAgentToken generates a new random secret for the given server,
-// stores its bcrypt hash, and returns the one-time plaintext token in the
+// stores its SHA-256 hash, and returns the one-time plaintext token in the
 // form "<id>.<secret>". The plaintext value cannot be recovered later — only
 // TokenPrefix (its first 8 characters) is retained for display purposes.
 func CreateAgentToken(serverID int, serverName, description, createdBy string) (models.AgentToken, string, error) {
@@ -39,11 +60,7 @@ func CreateAgentToken(serverID int, serverName, description, createdBy string) (
 	}
 	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(secret), agentTokenBcryptCost)
-	if err != nil {
-		return models.AgentToken{}, "", fmt.Errorf("failed to hash token secret: %w", err)
-	}
-
+	hash := hashAgentTokenSecret(secret)
 	prefix := secret[:8]
 
 	var descPtr *string
@@ -54,7 +71,7 @@ func CreateAgentToken(serverID int, serverName, description, createdBy string) (
 	result, err := dbConn.Exec(
 		`INSERT INTO agent_tokens (server_id, server_name, token_hash, token_prefix, description, created_by)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		serverID, serverName, string(hash), prefix, descPtr, createdBy,
+		serverID, serverName, hash, prefix, descPtr, createdBy,
 	)
 	if err != nil {
 		return models.AgentToken{}, "", fmt.Errorf("failed to create agent token: %w", err)
@@ -80,9 +97,9 @@ func CreateAgentToken(serverID int, serverName, description, createdBy string) (
 }
 
 // VerifyAgentToken parses a raw "<id>.<secret>" token, looks up the
-// corresponding row by id (avoiding a full-table bcrypt-compare scan), and
-// verifies the secret against its stored hash. It fails for unknown,
-// malformed, revoked, or mismatched tokens.
+// corresponding row by id (avoiding a full-table scan), and verifies the
+// secret against its stored hash. It transparently upgrades legacy bcrypt
+// hashes to sha256 upon successful verification.
 func VerifyAgentToken(raw string) (*AgentClaims, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
@@ -111,8 +128,16 @@ func VerifyAgentToken(raw string) (*AgentClaims, error) {
 	if revoked {
 		return nil, fmt.Errorf("token revoked")
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(tokenHash), []byte(secret)); err != nil {
+
+	valid, needsUpgrade := verifyAgentTokenSecret(secret, tokenHash)
+	if !valid {
 		return nil, fmt.Errorf("invalid token")
+	}
+
+	if needsUpgrade {
+		// Transparently migrate from bcrypt to SHA-256
+		newHash := hashAgentTokenSecret(secret)
+		_, _ = dbConn.Exec(`UPDATE agent_tokens SET token_hash = ? WHERE id = ?`, newHash, id)
 	}
 
 	return &AgentClaims{TokenID: id, ServerID: serverID}, nil

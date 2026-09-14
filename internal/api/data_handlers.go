@@ -25,7 +25,8 @@ var pluginSlugRegex = regexp.MustCompile(`^[a-z0-9][a-z0-9_\-/]*$`)
 func PluginsHandler(w http.ResponseWriter, r *http.Request) {
 	plugins, err := db.GetAllSitePlugins()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "PluginsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -44,7 +45,8 @@ func PluginsHandler(w http.ResponseWriter, r *http.Request) {
 func PluginInfoHandler(w http.ResponseWriter, r *http.Request) {
 	plugins, err := db.GetAllPluginInfo()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "PluginInfoHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -65,7 +67,8 @@ func PluginInfoHandler(w http.ResponseWriter, r *http.Request) {
 func ServersHandler(w http.ResponseWriter, r *http.Request) {
 	servers := []models.Server{}
 	if err := cache.ReadJSONCache("servers", &servers, -1); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
+		verb.LogPrintf(verb.Normal, "ServersHandler cache missing: %v", err)
+		WriteError(w, http.StatusNotFound, "Servers cache missing")
 		return
 	}
 
@@ -81,37 +84,43 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 func SitesHandler(w http.ResponseWriter, r *http.Request) {
 	sites := []models.Site{}
 	if err := cache.ReadJSONCache("sites", &sites, -1); err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Cache missing: %v", err))
+		verb.LogPrintf(verb.Normal, "SitesHandler cache missing: %v", err)
+		WriteError(w, http.StatusNotFound, "Sites cache missing")
 		return
 	}
 
 	environments, err := db.GetAllSiteEnvironments()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "SitesHandler environments error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	diskUsage, err := db.GetLatestSiteDiskUsage()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "SitesHandler disk usage error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	wpFlags, err := db.GetAllSiteWpFlags()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "SitesHandler wpFlags error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	latestUpdates, err := db.GetLatestSiteUpdateLedgerEntries()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "SitesHandler updates error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	coreVersions, err := db.GetAllSiteCore()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "SitesHandler core versions error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	coreBySiteID := make(map[int]models.SiteCore, len(coreVersions))
@@ -156,7 +165,8 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 	if pluginName == "" {
 		reports, err := vuln.ProcessVulnerabilities(matcher)
 		if err != nil {
-			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to process vulnerabilities: %v", err))
+			verb.LogPrintf(verb.Normal, "VulnsHandler process error: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Failed to process vulnerabilities")
 			return
 		}
 
@@ -180,7 +190,8 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 
 	pluginData, err := cache.GetCachedPluginData()
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get plugin data: %v", err))
+		verb.LogPrintf(verb.Normal, "VulnsHandler plugin data error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to get plugin data")
 		return
 	}
 
@@ -217,13 +228,14 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 
 	site, err := getSiteByID(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		WriteError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
 	plugins, err := wpcli.GetPlugins(*site, false)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to get plugins: %v", err))
+		verb.LogPrintf(verb.Normal, "SitePluginUpdatesHandler error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to get plugins from site")
 		return
 	}
 
@@ -284,7 +296,7 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	site, err := getSiteByID(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		WriteError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
@@ -462,13 +474,14 @@ func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
 
 	site, err := getSiteByID(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		WriteError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
 	core, err := cache.RefreshSiteCore(*site)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to check core version: %v", err))
+		verb.LogPrintf(verb.Normal, "SiteCoreCheckHandler error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to check core version")
 		return
 	}
 
@@ -510,7 +523,7 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	site, err := getSiteByID(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, fmt.Sprintf("Site not found: %v", err))
+		WriteError(w, http.StatusNotFound, "Site not found")
 		return
 	}
 
@@ -606,7 +619,8 @@ func SiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
 
 	entries, err := db.GetSiteUpdateLedger(siteID)
 	if err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Database error: %v", err))
+		verb.LogPrintf(verb.Normal, "SiteUpdateLedgerHandler error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
@@ -652,7 +666,8 @@ func CreateSiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.SaveSiteUpdateLedgerEntry(&entry); err != nil {
-		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to save entry: %v", err))
+		verb.LogPrintf(verb.Normal, "CreateSiteUpdateLedgerHandler error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to save entry")
 		return
 	}
 
