@@ -1,6 +1,12 @@
 # Changelog
 
-### 5.51.1 (2026-09-14)
+## 5.52.0 (2026-09-14)
+
+#### Features
+
+- task: add on_hold and blocked task statuses (1ac49cd)
+
+### v5.51.1 (2026-09-14)
 
 #### Refactor
 
