@@ -126,18 +126,14 @@ const filteredAndSortedSites = computed(() => {
 	}
 
 	if (filterMultisite.value) {
-		result = result.filter(
-			(site) => site.is_wordpress && site.wp_flags?.is_multisite,
-		);
+		result = result.filter((site) => site.wp_flags?.is_multisite);
 	}
 
 	if (filterFileMods.value === "enabled") {
-		result = result.filter(
-			(site) => site.is_wordpress && !site.wp_flags?.disallow_file_mods,
-		);
+		result = result.filter((site) => !site.wp_flags?.disallow_file_mods);
 	} else if (filterFileMods.value === "disabled") {
-		result = result.filter(
-			(site) => site.is_wordpress && !!site.wp_flags?.disallow_file_mods,
+		result = result.filter((site) =>
+			Boolean(site.wp_flags?.disallow_file_mods),
 		);
 	}
 
@@ -332,28 +328,32 @@ function timeSince(dateString: string) {
 			<div class="btn-group">
 				<button
 					type="button"
-					class="btn btn-outline"
-					:class="{ 'btn-primary': filterMultisite }"
+					class="btn"
+					:class="filterMultisite ? 'btn-primary' : 'btn-outline'"
 					@click="toggleFilterMultisite"
 				>
 					Multisite
 				</button>
 				<button
 					type="button"
-					class="btn btn-outline"
-					:class="{
-						'btn-primary': filterFileMods === 'enabled',
-					}"
+					class="btn"
+					:class="
+						filterFileMods === 'enabled'
+							? 'btn-primary'
+							: 'btn-outline'
+					"
 					@click="toggleFilterFileMods('enabled')"
 				>
 					File Mods Enabled
 				</button>
 				<button
 					type="button"
-					class="btn btn-outline"
-					:class="{
-						'btn-primary': filterFileMods === 'disabled',
-					}"
+					class="btn"
+					:class="
+						filterFileMods === 'disabled'
+							? 'btn-primary'
+							: 'btn-outline'
+					"
 					@click="toggleFilterFileMods('disabled')"
 				>
 					File Mods Disabled
@@ -361,8 +361,9 @@ function timeSince(dateString: string) {
 			</div>
 
 			<button
-				class="btn btn-outline"
-				:class="{ 'btn-primary': batchMode }"
+				type="button"
+				class="btn"
+				:class="batchMode ? 'btn-primary' : 'btn-outline'"
 				@click="toggleBatchMode"
 			>
 				{{ batchMode ? "Cancel Batch Edit" : "Batch Edit" }}
