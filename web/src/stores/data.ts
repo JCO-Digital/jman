@@ -7,7 +7,9 @@ import type {
 	Plugin,
 	PluginInfo,
 	PluginVulnerability,
+	CoreVulnReport,
 	EnrichedVulnerability,
+	EnrichedCoreVulnerability,
 	EnrichedSite,
 	EnrichedPlugin,
 	SiteCore,
@@ -21,6 +23,7 @@ const CACHE_KEY_SITES = "jman_sites";
 const CACHE_KEY_PLUGINS = "jman_plugins";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
 const CACHE_KEY_VULNS = "jman_vulns_v2";
+const CACHE_KEY_CORE_VULNS = "jman_core_vulns";
 
 export const useDataStore = defineStore("data", () => {
 	// State
@@ -30,6 +33,7 @@ export const useDataStore = defineStore("data", () => {
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<PluginVulnerability[]>([]);
+	const coreVulnerabilities = ref<CoreVulnReport[]>([]);
 
 	const isLoaded = ref(false);
 	const isLoading = ref(false);
@@ -65,6 +69,30 @@ export const useDataStore = defineStore("data", () => {
 						slug: pv.slug,
 						plugin_name: pv.plugin_name,
 						plugin_suppressed: pv.suppressed,
+					});
+				}
+			}
+		}
+		return map;
+	});
+
+	// Core vulnerabilities are reported per core version rather than per plugin,
+	// so they are keyed back to the sites running that version.
+	const coreVulnerabilitiesBySiteId = computed(() => {
+		const map = new Map<number, EnrichedCoreVulnerability[]>();
+		for (const report of coreVulnerabilities.value) {
+			if (report.suppressed) continue;
+
+			for (const v of report.vulnerabilities) {
+				for (const s of v.sites) {
+					if (!map.has(s.site_id)) map.set(s.site_id, []);
+					map.get(s.site_id)!.push({
+						...v,
+						core_version: report.version,
+						// A core vulnerability is effectively suppressed for a
+						// site if the vulnerability itself is ignored or the
+						// site/server is ignored.
+						suppressed: v.suppressed || s.suppressed,
 					});
 				}
 			}
@@ -215,6 +243,8 @@ export const useDataStore = defineStore("data", () => {
 					"Unknown Server",
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
 				vulnerabilities: vulns,
+				coreVulnerabilities:
+					coreVulnerabilitiesBySiteId.value.get(site.id) || [],
 				monitorHistory:
 					monitorStore.historyByDomain.get(site.domain) || [],
 			};
@@ -231,6 +261,8 @@ export const useDataStore = defineStore("data", () => {
 				CACHE_KEY_PLUGIN_INFO,
 			);
 			const cachedVulns = sessionStorage.getItem(CACHE_KEY_VULNS);
+			const cachedCoreVulns =
+				sessionStorage.getItem(CACHE_KEY_CORE_VULNS);
 
 			const cachedLinks = sessionStorage.getItem(
 				"jman_site_organization_links",
@@ -252,6 +284,9 @@ export const useDataStore = defineStore("data", () => {
 				if (cachedVulns) {
 					vulnerabilities.value = JSON.parse(cachedVulns);
 				}
+				if (cachedCoreVulns) {
+					coreVulnerabilities.value = JSON.parse(cachedCoreVulns);
+				}
 				isLoaded.value = true;
 				return true;
 			}
@@ -268,12 +303,14 @@ export const useDataStore = defineStore("data", () => {
 		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGIN_INFO);
 		sessionStorage.removeItem(CACHE_KEY_VULNS);
+		sessionStorage.removeItem(CACHE_KEY_CORE_VULNS);
 		servers.value = [];
 		sites.value = [];
 		siteOrganizationLinks.value = {};
 		plugins.value = [];
 		pluginInfo.value = [];
 		vulnerabilities.value = [];
+		coreVulnerabilities.value = [];
 		isLoaded.value = false;
 	}
 
@@ -301,6 +338,26 @@ export const useDataStore = defineStore("data", () => {
 			// Fetch vulnerabilities separately to not block primary data
 			isVulnsLoading.value = true;
 			vulnsError.value = null;
+			fetch(`${BASE_URL}/vulns/core`, { headers })
+				.then(async (res) => {
+					if (res.ok) {
+						const data = await res.json();
+						coreVulnerabilities.value = data;
+						sessionStorage.setItem(
+							CACHE_KEY_CORE_VULNS,
+							JSON.stringify(data),
+						);
+					} else if (res.status !== 401) {
+						console.error(
+							"Failed to fetch core vulnerabilities:",
+							res.statusText,
+						);
+					}
+				})
+				.catch((err) => {
+					console.error("Failed to fetch core vulnerabilities:", err);
+				});
+
 			fetch(`${BASE_URL}/vulns`, { headers })
 				.then(async (res) => {
 					if (res.ok) {
@@ -493,6 +550,7 @@ export const useDataStore = defineStore("data", () => {
 		plugins,
 		pluginInfo,
 		vulnerabilities,
+		coreVulnerabilities,
 		activeVulnerabilities,
 		isLoaded,
 		isLoading,
@@ -504,6 +562,7 @@ export const useDataStore = defineStore("data", () => {
 		enrichedSites,
 		vulnerabilitiesBySlug,
 		vulnerabilitiesBySiteId,
+		coreVulnerabilitiesBySiteId,
 		pluginsBySiteIdMap,
 		pluginsBySlugMap,
 		pluginNameMap,

@@ -217,6 +217,24 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, report)
 }
 
+// CoreVulnsHandler returns the vulnerability data for the WordPress core versions
+// installed across the managed sites, grouped by core version.
+func CoreVulnsHandler(w http.ResponseWriter, r *http.Request) {
+	matcher, err := db.NewVulnIgnoreMatcher()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
+	}
+
+	reports, err := vuln.ProcessCoreVulnerabilities(matcher)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "CoreVulnsHandler process error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to process core vulnerabilities")
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, reports)
+}
+
 // SitePluginUpdatesHandler returns the list of plugins with available updates for a site.
 // It calls WP-CLI live so the result reflects the current state of the site.
 func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {

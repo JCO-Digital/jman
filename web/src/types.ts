@@ -221,6 +221,19 @@ export interface EnrichedVulnerability extends Vulnerability {
 	plugin_suppressed: boolean;
 }
 
+// Vulnerabilities affecting a WordPress core version, as reported by
+// GET /api/vulns/core. The wpvulnerability.net core endpoint already scopes
+// results to the requested version, so every entry applies to every listed site.
+export interface CoreVulnReport {
+	version: string;
+	vulnerabilities: Vulnerability[];
+	suppressed: boolean;
+}
+
+export interface EnrichedCoreVulnerability extends Vulnerability {
+	core_version: string;
+}
+
 export interface MonitorHistory {
 	id: number;
 	domain: string;
@@ -280,6 +293,7 @@ export interface EnrichedSite extends Site {
 	server: string;
 	plugins: Plugin[];
 	vulnerabilities: EnrichedVulnerability[];
+	coreVulnerabilities: EnrichedCoreVulnerability[];
 	monitorHistory?: MonitorHistory[];
 	monitorStatus?: MonitorStatus;
 }
