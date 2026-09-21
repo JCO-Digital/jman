@@ -67,6 +67,8 @@ type AppConfig struct {
 	RefreshSlowInterval int               `toml:"refreshSlowInterval" mapstructure:"refreshSlowInterval"`
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	KnockdPorts         string            `toml:"knockdPorts" mapstructure:"knockdPorts"`
+	KnockdTimeout       int               `toml:"knockdTimeout" mapstructure:"knockdTimeout"`
 	BehindProxy         bool              `toml:"behindProxy" mapstructure:"behindProxy"`
 	TrustedProxies      []string          `toml:"trustedProxies" mapstructure:"trustedProxies"`
 	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
@@ -119,6 +121,8 @@ func loadConfig() error {
 	viper.SetDefault("refreshSlowInterval", 30)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
+	viper.SetDefault("knockdPorts", "")
+	viper.SetDefault("knockdTimeout", 60)
 	// Default to trusting proxy headers only from loopback, the common case
 	// of a reverse proxy (e.g. nginx) running on the same host as jman-api.
 	// Deployments with a proxy elsewhere on the network must set this explicitly.
@@ -157,6 +161,8 @@ func loadConfig() error {
 		"refreshSlowInterval":        "REFRESHSLOWINTERVAL",
 		"cvssThreshold":              "CVSSTHRESHOLD",
 		"vulnThreshold":              "VULNTHRESHOLD",
+		"knockdPorts":                "KNOCKDPORTS",
+		"knockdTimeout":              "KNOCKDTIMEOUT",
 		"allowedOrigins":             "ALLOWEDORIGINS",
 		"trustedProxies":             "TRUSTEDPROXIES",
 		"ignoreSites":                "IGNORESITES",

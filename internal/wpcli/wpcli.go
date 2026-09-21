@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/knock"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -35,6 +36,7 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 
 	var fullArgs []string
 	if opts.SSH != "" {
+		knock.KnockIfNeeded(opts.SSH)
 		fullArgs = append(fullArgs, fmt.Sprintf("--ssh=%s", opts.SSH))
 	}
 	if opts.Path != "" {
@@ -164,6 +166,8 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 		return RunResult{}, fmt.Errorf("ssh connection string is required")
 	}
 
+	knock.KnockIfNeeded(ssh)
+
 	quotedArgs := make([]string, len(args))
 	for i, arg := range args {
 		quotedArgs[i] = shellQuoteArg(arg)
@@ -195,6 +199,8 @@ func UploadFile(ssh, localPath, remotePath string) error {
 	if ssh == "" {
 		return fmt.Errorf("ssh connection string is required for upload")
 	}
+
+	knock.KnockIfNeeded(ssh)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()

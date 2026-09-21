@@ -87,6 +87,10 @@ slackChannel = "#alerts" # (optional, defaults to #testing)
 cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
 vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
 
+# Port knocking for SSH connections (optional)
+# knockdPorts = "7000,8000:udp,9000" # Port sequence before SSH/remote connections
+# knockdTimeout = 60 # Timeout in seconds to assume knocked port remains open (defaults to 60)
+
 # Required only for `jman agent token` (create/list/revoke) — these talk to
 # jman-api over HTTP, since agent tokens live in jman-api's own database.
 # You'll be prompted for your jman-api password (and TOTP, if configured);
