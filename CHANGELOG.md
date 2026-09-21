@@ -1,6 +1,16 @@
 # Changelog
 
-## 5.53.0 (2026-09-21)
+## 5.54.0 (2026-09-21)
+
+#### Features
+
+- api: add WordPress core vulnerability endpoint and UI support (2871d69)
+
+#### Bug Fixes
+
+- vuln: sanitize HTML in vulnerability data and format feeds (8d6dc63)
+
+## v5.53.0 (2026-09-21)
 
 #### Features
 
