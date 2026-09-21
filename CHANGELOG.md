@@ -1,5 +1,17 @@
 # Changelog
 
+## 5.53.0 (2026-09-21)
+
+#### Features
+
+- knock: add port knocking support for SSH and WP-CLI connections (e15dd88)
+
+#### Refactor
+
+- web: group vulnerabilities by issue instead of site (5167437)
+
+### v5.52.1 (2026-09-15)
+
 ## v5.52.0 (2026-09-14)
 
 #### Features
