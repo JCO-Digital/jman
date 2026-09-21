@@ -1,6 +1,10 @@
 package models
 
-import "encoding/json"
+import (
+	"encoding/json"
+
+	"github.com/JCO-Digital/jman/internal/utils"
+)
 
 type Cwe struct {
 	Cwe         string `json:"cwe"`
@@ -143,4 +147,40 @@ type IgnoredVuln struct {
 	UUID      string `json:"uuid"`
 	Reason    string `json:"reason"`
 	CreatedAt string `json:"created_at"`
+}
+
+// SanitizeVulnerabilities normalizes the free-text fields of vulnerabilities
+// coming from the wpvulnerability.net feed, which serves names and descriptions
+// containing HTML tags and entities. Mirrors SanitizePluginInfo, so consumers
+// (CLI, Slack, API) all receive display-ready text.
+func SanitizeVulnerabilities(vulns []Vulnerability) {
+	for i := range vulns {
+		v := &vulns[i]
+		v.Name = utils.CleanHTML(v.Name)
+		sanitizeStringPtr(&v.Description)
+		for j := range v.Source {
+			v.Source[j].Name = utils.CleanHTML(v.Source[j].Name)
+			sanitizeStringPtr(&v.Source[j].Description)
+		}
+	}
+}
+
+// SanitizeVulnData normalizes a plugin vulnerability payload, including the
+// plugin display name the feed reports alongside the vulnerabilities.
+func SanitizeVulnData(data *VulnData) {
+	if data == nil {
+		return
+	}
+
+	sanitizeStringPtr(&data.Name)
+	SanitizeVulnerabilities(data.Vulnerability)
+}
+
+// sanitizeStringPtr applies CleanHTML in place to an optional string field.
+func sanitizeStringPtr(s **string) {
+	if *s == nil {
+		return
+	}
+	cleaned := utils.CleanHTML(**s)
+	*s = &cleaned
 }

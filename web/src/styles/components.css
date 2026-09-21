@@ -723,10 +723,6 @@
 	font-size: 0.8rem;
 	color: var(--text-muted);
 	margin-top: 0.2rem;
-	max-width: 250px;
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .label-info {

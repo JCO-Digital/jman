@@ -260,6 +260,7 @@ func GetCachedVulnerabilities(plugin string, ttl ...time.Duration) (*models.Vuln
 	if t > 0 {
 		err := ReadJSONCache(filename, &vulnData, t)
 		if err == nil && vulnData.Error == 0 {
+			models.SanitizeVulnData(vulnData.Data)
 			return &vulnData, nil
 		}
 	}
@@ -281,6 +282,12 @@ func GetCachedVulnerabilities(plugin string, ttl ...time.Duration) (*models.Vuln
 
 	if err := WriteJSONCache(filename, newVulnData); err != nil {
 		verb.PrintErrorf(verb.Normal, "Warning: failed to write vulnerability cache for %s: %v\n", plugin, err)
+	}
+
+	// Sanitize after writing so the cache keeps the raw feed payload and every
+	// read — fresh or cached — is cleaned exactly once.
+	if newVulnData != nil {
+		models.SanitizeVulnData(newVulnData.Data)
 	}
 
 	return newVulnData, nil
