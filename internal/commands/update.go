@@ -128,6 +128,19 @@ var updateCmd = &cobra.Command{
 		}
 
 		verb.Printf(verb.Verbose, "Successfully updated %s to %s\n", verb.Blue(component), verb.Green(latestVersion))
+
+		if component == "jman" {
+			installed, err := InstallShellCompletions(targetPath)
+			if err != nil {
+				verb.Printf(verb.Normal, "Warning: failed to install shell completions: %v\n", err)
+			} else if len(installed) > 0 {
+				verb.Printf(verb.Normal, "Installed shell completions (%s)\n", verb.Green("bash, zsh, fish"))
+				for _, p := range installed {
+					verb.Printf(verb.Verbose, "  Installed: %s\n", p)
+				}
+			}
+		}
+
 		return nil
 	},
 }

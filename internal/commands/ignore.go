@@ -214,7 +214,7 @@ var ignoreRemoveCmd = &cobra.Command{
 
 func init() {
 	ignoreAddCmd.Flags().BoolVarP(&ignoreMonitor, "monitor", "m", false, "Apply to uptime monitoring")
-	ignoreAddCmd.Flags().BoolVarP(&ignoreVuln, "vuln", "v", false, "Apply to vulnerability scanning")
+	ignoreAddCmd.Flags().BoolVar(&ignoreVuln, "vuln", false, "Apply to vulnerability scanning")
 	ignoreAddCmd.Flags().StringSliceVarP(&ignoreNegate, "negate", "n", []string{}, "Sites to negate (for server type)")
 
 	ignoreCmd.AddCommand(ignoreListCmd)
