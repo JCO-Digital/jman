@@ -12,22 +12,40 @@
 
 ## Installation
 
-### Option A: Download a prebuilt binary (recommended)
+### Option A: Automated install script (recommended)
+
+For Linux and WSL, you can install the latest release directly via:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JCO-Digital/jman/main/install.sh | sh
+```
+
+Or using `wget`:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/JCO-Digital/jman/main/install.sh | sh
+```
+
+The script:
+
+1. Installs the latest `jman` binary to `~/.local/bin/jman`.
+2. Checks for older `jman` installations elsewhere in your `PATH`, automatically removing them if user-writable or providing instructions if administrative permissions are required.
+3. Automatically generates and installs shell completions for **Bash**, **Zsh**, and **Fish**.
+4. Alerts you if `~/.local/bin` is not currently in your `PATH` and displays instructions for adding it.
+
+### Option B: Manual binary download
 
 1. Open the latest release page:
    https://github.com/JCO-Digital/jman/releases/latest
-2. Download the executable for your OS/architecture.
-3. Extract it.
-4. Move the `jman` binary to a directory in your `PATH` (for example `~/.local/bin` or `/usr/local/bin` if you want it system wide).
-
-Example (Linux/macOS):
+2. Download the `jman` executable for your architecture.
+3. Move the binary into your `PATH` (e.g., `~/.local/bin/jman` or `/usr/local/bin/jman`):
 
 ```bash
 chmod +x jman
 mv jman ~/.local/bin/jman
 ```
 
-### Option B: Build from source
+### Option C: Build from source
 
 If you prefer building locally, clone the repository and build with the project’s standard build process, then place the resulting `jman` binary in your `PATH`.
 
