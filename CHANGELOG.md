@@ -1,6 +1,15 @@
 # Changelog
 
-## 5.54.0 (2026-09-21)
+## 5.55.0 (2026-09-24)
+
+#### Features
+
+- build: add automated install script and documentation (094c57f)
+- commands: add automated shell completion installation on update (ccfa75d)
+- db: implement legacy database split migration (c892ab0)
+- monitor: add incident management system and deprecate standalone daemon (7cfb0bb)
+
+## v5.54.0 (2026-09-21)
 
 #### Features
 
