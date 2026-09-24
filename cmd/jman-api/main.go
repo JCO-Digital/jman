@@ -75,7 +75,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start the data refresh scheduler (replaces the external `jman fetch` cron job)
 	refresh.StartScheduler(cmd.Context())
 
-	// Start the site-monitoring scheduler (replaces the standalone jman-monitor daemon)
+	// Start the site-monitoring scheduler
 	if !config.Cfg.MonitorDisabled {
 		if err := monitor.StartScheduler(cmd.Context()); err != nil {
 			return err

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/pagerduty"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
@@ -167,8 +169,8 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 				status.IsDown = true
 				status.DownSince = time.Now()
 				msgToSend = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", domain, statusMsg)
-				if e.pagerDutyEnabled {
-					pdSeverity = pagerduty.SeverityWarning
+				if _, err := db.CreateIncident(domain, statusMsg, errorCode, status.DownSince); err != nil {
+					verb.LogPrintf(verb.Normal, "Failed to create incident for %s: %v\n", domain, err)
 				}
 				nextInterval = 1 * time.Minute
 			} else {
@@ -181,7 +183,10 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 			status.CurrentMode = ModeNormal
 			status.IsDown = false
 			msgToSend = fmt.Sprintf("✅ Site %s is back up.", domain)
-			if e.pagerDutyEnabled {
+			if _, err := db.ResolveActiveIncidentByDomain(domain, ""); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to auto-resolve incident for %s: %v\n", domain, err)
+			}
+			if e.pagerDutyEnabled && status.PDTriggered {
 				pdResolve = true
 			}
 			status.DownSince = time.Time{}
@@ -190,14 +195,18 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 			nextInterval = 5 * time.Minute
 		} else {
 			nextInterval = 1 * time.Minute
-			// Repeat alert based on error type intervals
-			if e.shouldRepeatAlert(status, errorCode) {
+			activeInc, _ := db.GetActiveIncidentByDomain(domain)
+			isAcked := activeInc != nil && activeInc.Status == models.IncidentStatusAcknowledged
+
+			// Repeat alert based on error type intervals if not acknowledged
+			if !isAcked && e.shouldRepeatAlert(status, errorCode) {
 				msgToSend = fmt.Sprintf("🚨 Site %s is STILL DOWN (Status: %s)", domain, statusMsg)
 			}
-			// Escalate the PagerDuty alert to critical severity once the site
-			// has been down longer than the configured threshold. Independent
-			// of shouldRepeatAlert's Slack-repeat throttle above.
-			if e.pagerDutyEnabled && !status.PDEscalated && !status.DownSince.IsZero() &&
+			// Trigger the PagerDuty incident with critical severity once the site
+			// has been down longer than the configured threshold, provided the incident
+			// has NOT been acknowledged or resolved in jman.
+			if e.pagerDutyEnabled && activeInc != nil && activeInc.Status == models.IncidentStatusOpen &&
+				!status.PDTriggered && !status.DownSince.IsZero() &&
 				time.Since(status.DownSince) >= e.pdEscalationThreshold {
 				pdSeverity = pagerduty.SeverityCritical
 			}
@@ -237,6 +246,9 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 				status.PDEscalated = true
 			}
 			status.Mu.Unlock()
+			if activeInc, err := db.GetActiveIncidentByDomain(domain); err == nil && activeInc != nil {
+				_ = db.SetIncidentPDTriggered(activeInc.ID, true)
+			}
 		}
 	}
 

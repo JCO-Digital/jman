@@ -236,10 +236,14 @@ Authorization: Bearer <token>
 - `PATCH /api/ignore/{id}` — Updates an existing ignore entry.
 - `DELETE /api/ignore/{id}` — Removes an ignore entry.
 
-### Monitoring Endpoints
+### Monitoring & Incident Endpoints
 
 - `GET /api/monitor/history?hours=48` — Returns aggregated status history for all sites.
 - `GET /api/monitor/status?domain=...` — Returns current status for a specific site (or all sites if domain is omitted).
+- `GET /api/incidents?filter=active` — Returns open and acknowledged incidents with total count and active count (filters: `active`, `resolved`, `closed`, `history`, `all`).
+- `POST /api/incidents/{id}/acknowledge` — Acknowledges an active incident, notifies Slack, and cancels any pending/active PagerDuty alert.
+- `POST /api/incidents/{id}/close` — Closes an incident manually and resets monitoring state for that domain.
+- `POST /api/incidents/{id}/ignore` — Adds the site to the monitor ignore list, closes the incident, and cancels PagerDuty.
 
 **Authentication error responses:**
 
@@ -304,25 +308,25 @@ cross-run dedup `jman-api` gets from having `api.db` open).
 
 Configuration (in `config.toml` or as `JMAN_*` environment variables):
 
-| Key | Env var | Default | Description |
-| --- | --- | --- | --- |
-| `refreshDisabled` | `JMAN_REFRESHDISABLED` | `false` | Disable both refresh schedulers. |
-| `refreshFastInterval` | `JMAN_REFRESHFASTINTERVAL` | `5` | Fast-tick interval, in minutes. |
-| `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30` | Slow-tick interval, in minutes. |
+| Key                   | Env var                    | Default | Description                      |
+| --------------------- | -------------------------- | ------- | -------------------------------- |
+| `refreshDisabled`     | `JMAN_REFRESHDISABLED`     | `false` | Disable both refresh schedulers. |
+| `refreshFastInterval` | `JMAN_REFRESHFASTINTERVAL` | `5`     | Fast-tick interval, in minutes.  |
+| `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30`    | Slow-tick interval, in minutes.  |
 
 The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
 only the automatic external-cron dependency has been removed.
 
-## Site Monitoring
+## Site Monitoring & Incident Management
 
-`jman-api` also runs the uptime-monitoring scheduler in-process (the same scheduler
-previously only available via the standalone `jman-monitor` daemon — see `README_MONITOR.md`).
-Set `monitorDisabled = true` (or `JMAN_MONITORDISABLED=true`) to turn this off, for example if
-you are still running a separate `jman-monitor` process against the same database during a
-migration window. **Never run both jman-api's in-process monitor and a standalone
-`jman-monitor` process against the same database at the same time** — each can independently
-decide a site is down and send its own Slack alert, so running both risks duplicate/flapping
-notifications and unnecessary database write contention.
+`jman-api` runs the automated uptime-monitoring scheduler in-process.
+
+- **Downtime Detection**: Performs HTTP health checks against cached WordPress sites. When a site fails multiple consecutive checks, it transitions to Alert Mode.
+- **Incident Creation**: Creates an incident record in the database and sends an immediate Slack alert.
+- **Acknowledgment**: Any authenticated user can acknowledge the incident via the web UI. Acknowledging posts an audit note to Slack and cancels/suppresses PagerDuty alerting.
+- **PagerDuty Escalation**: If an outage remains unacknowledged and open after 10 minutes (configurable via `pagerdutyEscalationMinutes`), a critical incident is sent to PagerDuty to page the on-call person.
+- **Recovery**: When the site comes back up, `jman-api` automatically marks the incident resolved, notifies Slack, and resolves PagerDuty.
+- **Disabling**: Set `monitorDisabled = true` (or `JMAN_MONITORDISABLED=true`) in config if you wish to disable uptime checks.
 
 ## Security Notes
 

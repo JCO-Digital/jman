@@ -15,7 +15,7 @@ Ignore rules are stored in the `ignore_entries` table.
   - `vulnerability`: Vulnerability UUID.
 - **`reason`** (TEXT): A free-text description of why the item is ignored.
 - **`negated_site_ids`** (TEXT): A JSON array of SpinupWP Site IDs. Used for `server` ignores to keep specific sites active while the rest of the server is ignored.
-- **`use_for_monitor`** (BOOLEAN): If true, this rule applies to uptime monitoring (`jman-monitor`).
+- **`use_for_monitor`** (BOOLEAN): If true, this rule applies to uptime monitoring (`jman-api`).
 - **`use_for_vuln`** (BOOLEAN): If true, this rule applies to vulnerability scanning (`jman vuln`).
 - **`created_at` / `updated_at`** (DATETIME): Audit timestamps.
 - **`created_by` / `updated_by`** (TEXT): The user who created or last modified the entry.

@@ -642,3 +642,27 @@ export interface ReportResult {
 	columns: ReportColumn[];
 	rows: Record<string, string | number | null>[];
 }
+
+export type IncidentStatus = "open" | "acknowledged" | "resolved" | "closed";
+
+export interface Incident {
+	id: number;
+	domain: string;
+	status: IncidentStatus;
+	error_message: string;
+	error_code: number;
+	down_since: string;
+	acknowledged_by?: string | null;
+	acknowledged_at?: string | null;
+	resolved_by?: string | null;
+	resolved_at?: string | null;
+	pd_triggered: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface IncidentsResponse {
+	incidents: Incident[];
+	total: number;
+	active_count: number;
+}

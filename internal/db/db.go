@@ -20,7 +20,7 @@ import (
 //     and write.
 //   - api.db holds jman-api's own business data (organizations, billing,
 //     tasks, monitor state, agent tokens, traffic, ...) that only jman-api
-//     (and, transitionally, a standalone jman-monitor) ever touches.
+//     ever touches.
 //
 // GetInventoryDB/GetAPIDB are deliberately not aliased to each other, so
 // every call site must be explicit about which database it means.
@@ -38,7 +38,7 @@ type TableDefinition struct {
 }
 
 // CheckSplitState returns an error if the legacy pre-split jman.db file
-// still exists. Every binary (jman, jman-api, jman-monitor) should call
+// still exists. Every binary (jman, jman-api, jman-agent) should call
 // this before InitInventory/InitAPI, so:
 //
 //   - An un-migrated install (only jman.db exists) is never allowed to
@@ -135,8 +135,7 @@ func InitInventory() error {
 }
 
 // InitAPI initializes jman-api's own SQLite database in the data directory,
-// creating it if it doesn't exist. Only jman-api (and, transitionally, a
-// standalone jman-monitor) needs to call this.
+// creating it if it doesn't exist. Only jman-api needs to call this.
 func InitAPI() error {
 	dbMutex.Lock()
 	defer dbMutex.Unlock()
@@ -316,8 +315,7 @@ func initInventorySchema() error {
 }
 
 // initAPISchema creates/migrates the tables that live in api.db: jman-api's
-// own business data, exclusively owned by jman-api (and, transitionally, a
-// standalone jman-monitor for the monitor_status/monitor_history tables).
+// own business data, exclusively owned by jman-api.
 func initAPISchema() error {
 	tables := []TableDefinition{
 		{
@@ -620,6 +618,24 @@ func initAPISchema() error {
 				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
+		{
+			Name: "incidents",
+			Columns: map[string]string{
+				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"domain":          "TEXT NOT NULL COLLATE NOCASE",
+				"status":          "TEXT NOT NULL DEFAULT 'open'",
+				"error_message":   "TEXT",
+				"error_code":      "INTEGER DEFAULT 0",
+				"down_since":      "DATETIME NOT NULL",
+				"acknowledged_by": "TEXT",
+				"acknowledged_at": "DATETIME",
+				"resolved_by":     "TEXT",
+				"resolved_at":     "DATETIME",
+				"pd_triggered":    "BOOLEAN DEFAULT 0",
+				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
 	}
 
 	for _, table := range tables {
@@ -691,6 +707,14 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_id ON site_update_ledger(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_incidents_domain ON incidents(domain);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
 	return err
 }
 

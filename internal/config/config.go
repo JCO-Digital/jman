@@ -52,10 +52,6 @@ type AppConfig struct {
 	MonitorTimeout     int  `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
 	MonitorCacheBypass bool `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
 	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
-	// Set this to true if a standalone jman-monitor process is still running
-	// against the same database during a migration window — never run both
-	// against the same database at once (see internal/monitor/state.go's
-	// globalWriteMu doc comment for why).
 	MonitorDisabled bool `toml:"monitorDisabled" mapstructure:"monitorDisabled"`
 	// RefreshDisabled turns off jman-api's in-process data-refresh scheduler
 	// (the in-process replacement for the external `jman fetch` cron job).

@@ -169,3 +169,65 @@ func TestLooksLikeHTML(t *testing.T) {
 		})
 	}
 }
+
+func TestIncidentCreationAndResolution(t *testing.T) {
+	setupEngineTest(t)
+
+	// Healthy response engine
+	upEngine := newTestEngine(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("<!DOCTYPE html><html><body>OK</body></html>"))
+	})
+
+	// Down response engine
+	downEngine := newTestEngine(t, func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("500 Internal Server Error"))
+	})
+
+	status := &SiteStatus{Domain: "incident-test.com", CurrentMode: ModeNormal}
+
+	// 1st failure -> ModeInvestigation
+	_ = downEngine.CheckSite(status)
+	if status.CurrentMode != ModeInvestigation {
+		t.Fatalf("expected Investigation, got %s", status.CurrentMode)
+	}
+
+	// 2nd failure
+	_ = downEngine.CheckSite(status)
+	// 3rd failure -> ModeAlert & incident creation
+	_ = downEngine.CheckSite(status)
+	if status.CurrentMode != ModeAlert {
+		t.Fatalf("expected Alert, got %s", status.CurrentMode)
+	}
+
+	inc, err := db.GetActiveIncidentByDomain("incident-test.com")
+	if err != nil || inc == nil {
+		t.Fatalf("expected active incident in DB, got %v (err: %v)", inc, err)
+	}
+	if inc.Status != "open" {
+		t.Errorf("expected open incident, got %s", inc.Status)
+	}
+
+	// Recovery -> ModeNormal & incident auto-resolve
+	_ = upEngine.CheckSite(status)
+	if status.CurrentMode != ModeNormal {
+		t.Fatalf("expected Normal after recovery, got %s", status.CurrentMode)
+	}
+
+	activeAfter, err := db.GetActiveIncidentByDomain("incident-test.com")
+	if err != nil {
+		t.Fatalf("error checking active incident: %v", err)
+	}
+	if activeAfter != nil {
+		t.Errorf("expected no active incident after recovery, found: %+v", activeAfter)
+	}
+
+	resolvedInc, err := db.GetIncidentByID(inc.ID)
+	if err != nil || resolvedInc == nil {
+		t.Fatalf("failed to get resolved incident: %v", err)
+	}
+	if resolvedInc.Status != "resolved" {
+		t.Errorf("expected status 'resolved', got %s", resolvedInc.Status)
+	}
+}

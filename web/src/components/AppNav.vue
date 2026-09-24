@@ -2,12 +2,14 @@
 import { RouterLink, useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
+import { useIncidentStore } from "../stores/incidents";
 import LoadingSpinner from "./LoadingSpinner.vue";
 import AppIcon from "./AppIcon.vue";
 
 const route = useRoute();
 const authStore = useAuthStore();
 const dataStore = useDataStore();
+const incidentStore = useIncidentStore();
 
 const emit = defineEmits<{
 	(e: "logout"): void;
@@ -34,6 +36,21 @@ const handleRefresh = () => {
 					}"
 				>
 					Dashboard
+				</RouterLink>
+				<RouterLink
+					to="/incidents"
+					class="nav-item nav-item-with-badge"
+					:class="{
+						active: route.name === 'incidents',
+					}"
+				>
+					Incidents
+					<span
+						v-if="incidentStore.activeCount > 0"
+						class="nav-badge"
+					>
+						{{ incidentStore.activeCount }}
+					</span>
 				</RouterLink>
 				<RouterLink
 					to="/sites"

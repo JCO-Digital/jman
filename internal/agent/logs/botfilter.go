@@ -25,9 +25,9 @@ func IsBotUserAgent(ua string) bool {
 }
 
 // IsInternalTraffic reports whether an entry is jman's own synthetic
-// traffic (jman-monitor's uptime checks) rather than a real visitor or a
+// traffic (jman-api's uptime checks) rather than a real visitor or a
 // third-party bot — these would otherwise inflate every site's traffic
-// counts by however often jman-monitor pings it. Excluded entirely from
+// counts by however often jman pings it. Excluded entirely from
 // both human and bot counts.
 func IsInternalTraffic(e Entry) bool {
 	if strings.HasPrefix(strings.ToLower(e.UserAgent), "jman/") {

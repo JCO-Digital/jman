@@ -34,19 +34,19 @@ func confirmPrompt() (bool, error) {
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update [api|monitor]",
+	Use:   "update [api|agent]",
 	Short: "Check for a new version of jman or its components",
-	Long:  `Checks the GitHub repository for a newer version of the jman CLI tool or its sidecar binaries (api, monitor).`,
+	Long:  `Checks the GitHub repository for a newer version of the jman CLI tool or its sidecar binaries (api, agent).`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		component := "jman"
 		if len(args) > 0 {
 			switch args[0] {
 			case "api":
 				component = "jman-api"
-			case "monitor":
-				component = "jman-monitor"
+			case "agent":
+				component = "jman-agent"
 			default:
-				return fmt.Errorf("unknown update target: %s (expected 'api' or 'monitor')", args[0])
+				return fmt.Errorf("unknown update target: %s (expected 'api' or 'agent')", args[0])
 			}
 		}
 

@@ -5,6 +5,7 @@ import { useDataStore } from "./stores/data";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
+import { useIncidentStore } from "./stores/incidents";
 import { useUserStore } from "./stores/user";
 import AppNav from "./components/AppNav.vue";
 import ToastContainer from "./components/ToastContainer.vue";
@@ -19,6 +20,7 @@ const userStore = useUserStore();
 authStore.initialize();
 
 const monitorStore = useMonitorStore();
+const incidentStore = useIncidentStore();
 
 let monitorIntervalId: ReturnType<typeof setInterval> | null = null;
 let dataIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -27,9 +29,13 @@ const startIntervals = () => {
 	stopIntervals();
 	if (!authStore.isAuthenticated) return;
 
-	// Monitor history refresh
+	// Initial active incidents fetch
+	incidentStore.fetchActiveCount();
+
+	// Monitor history & incidents refresh
 	monitorIntervalId = setInterval(() => {
 		monitorStore.fetchHistory();
+		incidentStore.fetchActiveCount();
 	}, settingsStore.monitorRefreshInterval * 1000);
 
 	// General data refresh (sites, servers, plugins, etc.)

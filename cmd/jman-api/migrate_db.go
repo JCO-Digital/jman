@@ -23,6 +23,7 @@ var (
 		"payment_methods", "assets", "organization_assets", "asset_payments",
 		"notes", "settings", "agent_tokens", "site_disk_usage", "site_wp_flags",
 		"site_traffic_hourly", "site_traffic_daily", "tasks", "site_update_ledger",
+		"incidents",
 	}
 )
 

@@ -12,7 +12,7 @@ import (
 
 // CheckAndSelfUpdate checks GitHub Releases for a newer jman-agent build,
 // and if one is available, downloads it (verifying the same Ed25519
-// signature scheme jman/jman-api/jman-monitor use), atomically replaces the
+// signature scheme jman/jman-api use), atomically replaces the
 // running executable, and re-execs in place via syscall.Exec — hot-swapping
 // the process image with no dependency on systemd or any other supervisor
 // noticing the file changed. On success this function does not return.

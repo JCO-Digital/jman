@@ -198,10 +198,9 @@ When using the `--slack` flag, the command tracks sent messages to avoid duplica
 
 In addition to the main `jman` CLI, this repository includes sidecar utilities:
 
-- **[jman-api](README_API.md)**: A lightweight REST API to serve cached data.
-- **[jman-monitor](README_MONITOR.md)**: An automated uptime monitoring and Slack alerting tool.
+- **[jman-api](README_API.md)**: A lightweight REST API to serve cached data, run in-process uptime monitoring, and track incidents.
 - **[jman-agent](README_AGENT.md)**: A self-updating agent that runs on managed servers to report per-site disk usage and WordPress config flags.
-- **[jman-ui](web/README.md)**: A Vue 3 + Vite web frontend that consumes `jman-api` for dashboards, site/asset management, and monitoring views.
+- **[jman-ui](web/README.md)**: A Vue 3 + Vite web frontend that consumes `jman-api` for dashboards, site/asset management, incidents, and monitoring views.
 
 ## Development
 

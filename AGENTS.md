@@ -6,8 +6,8 @@
 
 - `cmd/`: Entry points for various binaries.
   - `jman/`: The main CLI tool.
-  - `jman-api/`: A REST API server for accessing cached data.
-  - `jman-monitor/`: A service for uptime monitoring and alerting.
+  - `jman-api/`: A REST API server for accessing cached data, in-process uptime monitoring, and incident management.
+  - `jman-agent/`: An agent running on managed servers for disk and config reporting.
   - `gen-keys/` & `sign-binaries/`: Internal tools for release signing and security.
 - `internal/`: Core logic organized by domain.
   - `commands/`: Cobra command definitions for the CLI.
@@ -38,7 +38,7 @@
 
 ### 2. Monitoring & Vulnerability Tracking
 
-- `jman-monitor` checks site availability and sends Slack alerts.
+- `jman-api` checks site availability, manages incidents, and sends Slack/PagerDuty alerts.
 - `jman vuln` scans cached plugin data against vulnerability databases.
 - Supports CVSS threshold filtering and Slack reporting.
 
