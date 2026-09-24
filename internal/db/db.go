@@ -38,7 +38,7 @@ type TableDefinition struct {
 }
 
 // CheckSplitState returns an error if the legacy pre-split jman.db file
-// still exists. Every binary (jman, jman-api, jman-agent) should call
+// still exists. Binaries that do not auto-migrate (such as jman-api) call
 // this before InitInventory/InitAPI, so:
 //
 //   - An un-migrated install (only jman.db exists) is never allowed to
@@ -50,14 +50,14 @@ type TableDefinition struct {
 //     from an interrupted `migrate-db` run) is also caught, rather than
 //     starting up against incomplete data.
 //
-// In both cases the fix is the same: run `jman-api migrate-db`, which has
-// its own (separate) detection logic for exactly these states.
+// In both cases the fix is the same: run `jman` or `jman migrate-db` (or
+// `jman-api migrate-db`).
 func CheckSplitState() error {
 	legacyPath := filepath.Join(config.RunData.DataDir, "jman.db")
 
 	if fileExists(legacyPath) {
 		return fmt.Errorf(
-			"legacy database %s still exists — run `jman-api migrate-db` to split it "+
+			"legacy database %s still exists — run `jman migrate-db` or `jman-api migrate-db` to split it "+
 				"into inventory.db and api.db before starting any jman binary",
 			legacyPath,
 		)

@@ -1,10 +1,13 @@
-package main
+package commands
 
 import (
-	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/spf13/cobra"
 )
+
+// MigratedJustNow is set to true by the CLI entrypoint if an automatic migration
+// was performed on startup before command execution.
+var MigratedJustNow bool
 
 var migrateDbCmd = &cobra.Command{
 	Use:   "migrate-db",
@@ -16,13 +19,10 @@ then renames jman.db to jman.db.pre-split-backup.
 
 Safe to re-run if interrupted partway through: it skips any split database
 that already exists and only renames the legacy file once both are complete.`,
-	// Overrides rootCmd's PersistentPreRunE: this command must run before
-	// the normal split-database initialization, since its job is to create
-	// those files in the first place.
-	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		return config.Init()
-	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if MigratedJustNow {
+			return nil
+		}
 		return db.MigrateSplitDB()
 	},
 }

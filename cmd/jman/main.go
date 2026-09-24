@@ -22,6 +22,14 @@ func run() int {
 		return 1
 	}
 
+	if db.HasLegacyDB() {
+		if err := db.MigrateSplitDB(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error migrating database: %v\n", err)
+			return 1
+		}
+		commands.MigratedJustNow = true
+	}
+
 	if err := db.CheckSplitState(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
