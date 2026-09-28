@@ -25,7 +25,7 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 		throw new Error(message);
 	}
 
-	async function fetchPluginUpdates(siteId: number): Promise<Plugin[]> {
+	async function fetchPluginUpdates(siteId: string): Promise<Plugin[]> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
 			headers: authStore.authHeader,
 		});
@@ -34,7 +34,7 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	}
 
 	async function updatePlugin(
-		siteId: number,
+		siteId: string,
 		pluginName: string,
 		skipLedger?: boolean,
 	): Promise<PluginUpdateResult | null> {

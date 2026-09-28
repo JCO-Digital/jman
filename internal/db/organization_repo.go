@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -209,7 +208,8 @@ func DeleteContact(id int) error {
 
 // --- Site-Organization Mapping Repository ---
 
-func LinkSiteToOrganization(siteID any, organizationID int, username string) error {
+// LinkSiteToOrganization links a site (by UUID) to an organization.
+func LinkSiteToOrganization(siteID string, organizationID int, username string) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -224,7 +224,8 @@ func LinkSiteToOrganization(siteID any, organizationID int, username string) err
 	return err
 }
 
-func UnlinkSiteFromOrganization(siteID any, organizationID int) error {
+// UnlinkSiteFromOrganization removes a site (by UUID) from an organization.
+func UnlinkSiteFromOrganization(siteID string, organizationID int) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -235,7 +236,8 @@ func UnlinkSiteFromOrganization(siteID any, organizationID int) error {
 	return err
 }
 
-func GetOrganizationBySite(siteID any) (*models.Organization, error) {
+// GetOrganizationBySite returns the organization a site (by UUID) is linked to, if any.
+func GetOrganizationBySite(siteID string) (*models.Organization, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -260,7 +262,8 @@ func GetOrganizationBySite(siteID any) (*models.Organization, error) {
 	return &o, nil
 }
 
-func GetSitesByOrganization(organizationID int) ([]int, error) {
+// GetSitesByOrganization returns the UUIDs of every site linked to an organization.
+func GetSitesByOrganization(organizationID int) ([]string, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -273,15 +276,13 @@ func GetSitesByOrganization(organizationID int) ([]int, error) {
 	}
 	defer rows.Close()
 
-	var siteIDs []int
+	var siteIDs []string
 	for rows.Next() {
-		var rawID string
-		if err := rows.Scan(&rawID); err != nil {
+		var siteID string
+		if err := rows.Scan(&siteID); err != nil {
 			return nil, err
 		}
-		if id, err := strconv.Atoi(rawID); err == nil {
-			siteIDs = append(siteIDs, id)
-		}
+		siteIDs = append(siteIDs, siteID)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

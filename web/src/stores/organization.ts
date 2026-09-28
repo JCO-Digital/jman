@@ -166,7 +166,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function getOrganizationForSite(
-		siteId: number,
+		siteId: string,
 	): Promise<Organization | null> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/organization`, {
 			headers: authStore.authHeader,
@@ -177,7 +177,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function linkSiteToOrganization(
-		siteId: number,
+		siteId: string,
 		organizationId: number,
 	) {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/link`, {
@@ -191,7 +191,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 		if (!res.ok) await handleErrorResponse(res);
 	}
 
-	async function unlinkSite(siteId: number) {
+	async function unlinkSite(siteId: string) {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/link`, {
 			method: "DELETE",
 			headers: authStore.authHeader,

@@ -133,9 +133,9 @@ func GetFastServerMap() (map[int]string, error) {
 	return serverMap, nil
 }
 
-// GetSiteList retrieves all sites and maps them to CLI-friendly Site models
+// GetSiteList retrieves all WP-CLI-reachable WordPress sites (SpinupWP sites
+// refreshed through the cache, plus external sites from inventory.db).
 func GetSiteList() ([]models.CliSite, error) {
-	cliSites := []models.CliSite{}
 	serverMap, err := GetServerMap()
 	if err != nil {
 		return nil, err
@@ -146,66 +146,11 @@ func GetSiteList() ([]models.CliSite, error) {
 		return nil, err
 	}
 
-	for _, site := range sites {
-		if !site.IsWordpress {
-			continue
-		}
-
-		if serverNameFull, ok := serverMap[site.ServerID]; ok {
-			serverNameParts := strings.Split(serverNameFull, ".")
-			serverName := serverNameParts[0]
-
-			cliSite := models.CliSite{
-				ID:         site.ID,
-				UUID:       utils.SpinupWPSiteUUID(site.ID),
-				Name:       site.Domain,
-				ServerID:   site.ServerID,
-				ServerName: serverName,
-				SSH:        fmt.Sprintf("%s@%s", site.SiteUser, serverNameFull),
-				Path:       "files",
-			}
-
-			cliSites = append(cliSites, cliSite)
-		}
-	}
-
-	// Also merge external managed sites from inventory.db
-	if managedSites, err := db.ListManagedSites(); err == nil {
-		knownDomains := make(map[string]bool, len(cliSites))
-		for _, s := range cliSites {
-			knownDomains[strings.ToLower(s.Name)] = true
-		}
-		for _, ms := range managedSites {
-			if !knownDomains[strings.ToLower(ms.Domain)] && ms.IsWordpress && ms.CanWPCLI {
-				cliSites = append(cliSites, ms.ToCliSite())
-			}
-		}
-	}
-
-	return cliSites, nil
-}
-
-// GetSitesForServer returns every site hosted on the given server,
-// using cached data without checking expiry (agent manifest requests should
-// be fast and cheap; freshness comes from the periodic `jman fetch` refresh).
-func GetSitesForServer(serverID int) ([]models.Site, error) {
-	sites, err := GetFastCachedSites()
-	if err != nil {
-		return nil, err
-	}
-
-	result := []models.Site{}
-	for _, site := range sites {
-		if site.ServerID == serverID {
-			result = append(result, site)
-		}
-	}
-	return result, nil
+	return buildCliSites(sites, serverMap), nil
 }
 
 // GetFastSiteList retrieves sites from cache without checking expiry.
 func GetFastSiteList() ([]models.CliSite, error) {
-	cliSites := []models.CliSite{}
 	serverMap, err := GetFastServerMap()
 	if err != nil {
 		return nil, err
@@ -216,41 +161,115 @@ func GetFastSiteList() ([]models.CliSite, error) {
 		return nil, err
 	}
 
+	return buildCliSites(sites, serverMap), nil
+}
+
+// buildCliSites maps SpinupWP sites to CliSites and appends the external
+// (non-SpinupWP) managed sites from inventory.db.
+func buildCliSites(sites []models.Site, serverMap map[int]string) []models.CliSite {
+	cliSites := []models.CliSite{}
+	known := make(map[string]bool, len(sites))
+
 	for _, site := range sites {
 		if !site.IsWordpress {
 			continue
 		}
 
-		if serverNameFull, ok := serverMap[site.ServerID]; ok {
-			serverNameParts := strings.Split(serverNameFull, ".")
-			serverName := serverNameParts[0]
-
-			cliSite := models.CliSite{
-				ID:         site.ID,
-				UUID:       utils.SpinupWPSiteUUID(site.ID),
-				Name:       site.Domain,
-				ServerID:   site.ServerID,
-				ServerName: serverName,
-				SSH:        fmt.Sprintf("%s@%s", site.SiteUser, serverNameFull),
-				Path:       "files",
-			}
-
-			cliSites = append(cliSites, cliSite)
+		serverNameFull, ok := serverMap[site.ServerID]
+		if !ok {
+			continue
 		}
+
+		siteUUID := utils.SpinupWPSiteUUID(site.ID)
+		known[siteUUID] = true
+		cliSites = append(cliSites, models.CliSite{
+			ID:             siteUUID,
+			ProviderSiteID: site.ID,
+			Provider:       "spinupwp",
+			Name:           site.Domain,
+			ServerID:       utils.SpinupWPServerUUID(site.ServerID),
+			ServerName:     strings.Split(serverNameFull, ".")[0],
+			SSH:            fmt.Sprintf("%s@%s", site.SiteUser, serverNameFull),
+			Path:           "files",
+		})
 	}
 
-	// Also merge external managed sites from inventory.db
-	if managedSites, err := db.ListManagedSites(); err == nil {
-		knownDomains := make(map[string]bool, len(cliSites))
-		for _, s := range cliSites {
-			knownDomains[strings.ToLower(s.Name)] = true
+	managedSites, err := db.ListManagedSites()
+	if err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to load managed sites: %v\n", err)
+		return cliSites
+	}
+	for _, ms := range managedSites {
+		if known[ms.ID] || ms.Provider == "spinupwp" || !ms.IsWordpress || !ms.CanWPCLI {
+			continue
 		}
-		for _, ms := range managedSites {
-			if !knownDomains[strings.ToLower(ms.Domain)] && ms.IsWordpress && ms.CanWPCLI {
-				cliSites = append(cliSites, ms.ToCliSite())
-			}
-		}
+		cliSites = append(cliSites, ms.ToCliSite())
 	}
 
-	return cliSites, nil
+	return cliSites
+}
+
+// GetSitesForServer returns every managed site assigned to the given server
+// (by UUID), for the agent manifest.
+func GetSitesForServer(serverID string) ([]models.ManagedSite, error) {
+	sites, err := db.ListManagedSites()
+	if err != nil {
+		return nil, err
+	}
+
+	result := []models.ManagedSite{}
+	for _, site := range sites {
+		if site.ServerID != nil && *site.ServerID == serverID {
+			result = append(result, site)
+		}
+	}
+	return result, nil
+}
+
+// MonitorTarget is a site the uptime monitor checks, with the site and server
+// UUIDs used to evaluate ignore rules.
+type MonitorTarget struct {
+	SiteID   string
+	ServerID string
+	Domain   string
+}
+
+// GetMonitorTargets returns every site the uptime monitor should check: all
+// SpinupWP sites (refreshed through the cache), plus active external sites
+// from inventory.db that have monitoring enabled.
+func GetMonitorTargets() ([]MonitorTarget, error) {
+	sites, err := GetCachedSites()
+	if err != nil {
+		return nil, err
+	}
+
+	targets := make([]MonitorTarget, 0, len(sites))
+	known := make(map[string]bool, len(sites))
+	for _, site := range sites {
+		siteUUID := utils.SpinupWPSiteUUID(site.ID)
+		known[siteUUID] = true
+		targets = append(targets, MonitorTarget{
+			SiteID:   siteUUID,
+			ServerID: utils.SpinupWPServerUUID(site.ServerID),
+			Domain:   site.Domain,
+		})
+	}
+
+	managedSites, err := db.ListManagedSites()
+	if err != nil {
+		verb.PrintErrorf(verb.Verbose, "Warning: failed to load managed sites for monitoring: %v\n", err)
+		return targets, nil
+	}
+	for _, ms := range managedSites {
+		if known[ms.ID] || ms.Provider == "spinupwp" || !ms.HasMonitoring || ms.Status != "active" {
+			continue
+		}
+		serverID := ""
+		if ms.ServerID != nil {
+			serverID = *ms.ServerID
+		}
+		targets = append(targets, MonitorTarget{SiteID: ms.ID, ServerID: serverID, Domain: ms.Domain})
+	}
+
+	return targets, nil
 }

@@ -17,7 +17,7 @@ export const useIgnoreStore = defineStore("ignore", () => {
 	const ignoreLookups = computed(() => {
 		const monitor = {
 			sites: new Set<string>(),
-			servers: new Map<string, Set<number>>(),
+			servers: new Map<string, Set<string>>(),
 		};
 
 		for (const entry of ignoreEntries.value) {
@@ -141,18 +141,20 @@ export const useIgnoreStore = defineStore("ignore", () => {
 	/**
 	 * Returns true if monitoring is ignored for a site.
 	 */
-	function isMonitoringIgnored(siteId?: number, serverId?: number): boolean {
+	function isMonitoringIgnored(
+		siteId?: string | null,
+		serverId?: string | null,
+	): boolean {
 		const lookups = ignoreLookups.value.monitor;
 
-		if (siteId !== undefined && lookups.sites.has(siteId.toString())) {
+		if (siteId != null && lookups.sites.has(siteId)) {
 			return true;
 		}
 
-		if (serverId !== undefined) {
-			const serverIdStr = serverId.toString();
-			const negatedSites = lookups.servers.get(serverIdStr);
+		if (serverId != null) {
+			const negatedSites = lookups.servers.get(serverId);
 			if (negatedSites) {
-				if (siteId !== undefined && negatedSites.has(siteId)) {
+				if (siteId != null && negatedSites.has(siteId)) {
 					return false;
 				}
 				return true;

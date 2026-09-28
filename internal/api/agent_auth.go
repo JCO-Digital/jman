@@ -15,7 +15,7 @@ const agentClaimsKey agentContextKey = "agentClaims"
 // AgentClaims identifies the server a validated agent token belongs to.
 type AgentClaims struct {
 	TokenID  int
-	ServerID int
+	ServerID string // server UUID
 }
 
 // GetAgentClaims retrieves the AgentClaims from the request context.

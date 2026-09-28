@@ -83,6 +83,14 @@ const sitesWithPlugin = computed(() => {
 
 const showUpdateModal = ref(false);
 
+// Plugin updates run over WP-CLI, so only offer them if at least one site
+// with this plugin supports it.
+const hasUpdatableSite = computed(() =>
+	(dataStore.pluginsBySlugMap.get(props.name) || []).some(
+		(p) => dataStore.getSiteById(p.site_id)?.can_wp_cli,
+	),
+);
+
 const sitesWithUpdates = computed(() =>
 	(dataStore.pluginsBySlugMap.get(props.name) || []).some(
 		(p) => p.update !== "",
@@ -93,8 +101,8 @@ const goBack = () => {
 	router.push({ name: "plugins" });
 };
 
-const goToSite = (siteId: number) => {
-	router.push({ name: "site-detail", params: { id: siteId.toString() } });
+const goToSite = (siteId: string) => {
+	router.push({ name: "site-detail", params: { id: siteId } });
 };
 
 const manageAssetTemplate = () => {
@@ -158,7 +166,7 @@ const manageAssetTemplate = () => {
 				<div class="card-header">
 					<h2>Installed on Sites</h2>
 					<button
-						v-if="authStore.canExecute"
+						v-if="authStore.canExecute && hasUpdatableSite"
 						class="btn btn-primary btn-sm"
 						@click="showUpdateModal = true"
 					>

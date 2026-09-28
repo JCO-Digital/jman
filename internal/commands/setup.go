@@ -168,7 +168,7 @@ var setupCompatCmd = &cobra.Command{
 			return nil
 		}
 
-		siteIDMap := make(map[int]bool)
+		siteIDMap := make(map[string]bool)
 		for _, id := range siteIDs {
 			siteIDMap[id] = true
 		}

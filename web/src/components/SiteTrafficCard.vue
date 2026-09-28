@@ -8,7 +8,7 @@ import LoadingSpinner from "./LoadingSpinner.vue";
 import TrafficChart from "./TrafficChart.vue";
 
 const props = defineProps<{
-	siteId: number;
+	siteId: string;
 }>();
 
 const trafficStore = useTrafficAnalyticsStore();

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 // maxTrackedKeysPerHour bounds how many distinct pages/referrers/IPs an
@@ -186,15 +187,49 @@ func topN(counts map[string]int, n int) []models.TrafficTopEntry {
 	return entries
 }
 
-// statePath returns the state file path for a given site.
-func statePath(stateDir string, siteID int) string {
-	return filepath.Join(stateDir, fmt.Sprintf("site-%d.json", siteID))
+// statePath returns the state file path for a given site UUID. The ID comes
+// from jman-api's manifest and ends up in a file name, so anything that isn't
+// a well-formed UUID is rejected rather than trusted.
+func statePath(stateDir, siteID string) (string, error) {
+	if !utils.IsValidUUID(siteID) {
+		return "", fmt.Errorf("invalid site ID %q", siteID)
+	}
+	return filepath.Join(stateDir, fmt.Sprintf("site-%s.json", siteID)), nil
+}
+
+// MigrateLegacyState renames a log-state file written by a pre-UUID agent
+// release (keyed by the SpinupWP integer site ID) to its UUID-keyed name, so
+// log tailing resumes where it left off instead of re-reading old logs. It is
+// a no-op when there is no legacy file or a UUID-keyed file already exists.
+func MigrateLegacyState(stateDir string, legacySiteID int, siteID string) error {
+	if legacySiteID <= 0 {
+		return nil
+	}
+	path, err := statePath(stateDir, siteID)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	legacyPath := filepath.Join(stateDir, fmt.Sprintf("site-%d.json", legacySiteID))
+	if _, err := os.Stat(legacyPath); err != nil {
+		return nil
+	}
+	if err := os.Rename(legacyPath, path); err != nil {
+		return fmt.Errorf("failed to migrate legacy log state %s: %w", legacyPath, err)
+	}
+	return nil
 }
 
 // LoadState reads a site's persisted log-tailing state, returning a fresh
 // zero-value state (not an error) if none exists yet.
-func LoadState(stateDir string, siteID int) (*FileState, error) {
-	data, err := os.ReadFile(statePath(stateDir, siteID))
+func LoadState(stateDir, siteID string) (*FileState, error) {
+	path, err := statePath(stateDir, siteID)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return &FileState{ProcessedRotated: map[string]bool{}}, nil
@@ -213,7 +248,11 @@ func LoadState(stateDir string, siteID int) (*FileState, error) {
 }
 
 // SaveState persists a site's log-tailing state.
-func SaveState(stateDir string, siteID int, state *FileState) error {
+func SaveState(stateDir, siteID string, state *FileState) error {
+	path, err := statePath(stateDir, siteID)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(stateDir, 0700); err != nil {
 		return fmt.Errorf("failed to create state directory: %w", err)
 	}
@@ -223,7 +262,6 @@ func SaveState(stateDir string, siteID int, state *FileState) error {
 		return fmt.Errorf("failed to encode log state: %w", err)
 	}
 
-	path := statePath(stateDir, siteID)
 	tmpPath := path + ".tmp"
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
 		return fmt.Errorf("failed to write log state: %w", err)

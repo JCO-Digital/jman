@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -34,23 +34,57 @@ func setupAgentTest(t *testing.T) {
 		os.RemoveAll(cacheDir)
 		config.RunData.CacheDir = oldCacheDir
 	})
+
+	if err := db.InitInventory(); err != nil {
+		t.Fatalf("failed to init inventory DB: %v", err)
+	}
+}
+
+// seedAgentSites stores SpinupWP-style inventory sites; each entry is
+// {legacy site ID, legacy server ID, domain, status, is WordPress}.
+func seedAgentSites(t *testing.T, sites ...agentSite) {
+	t.Helper()
+	for _, s := range sites {
+		serverUUID := utils.SpinupWPServerUUID(s.serverID)
+		if err := db.SaveManagedServer(models.ManagedServer{ID: serverUUID, Name: fmt.Sprintf("server-%d", s.serverID), Provider: "spinupwp", SSHPort: 22}); err != nil {
+			t.Fatalf("failed to seed server: %v", err)
+		}
+		if err := db.SaveManagedSite(models.ManagedSite{
+			ID:             utils.SpinupWPSiteUUID(s.id),
+			ServerID:       &serverUUID,
+			Provider:       "spinupwp",
+			ProviderSiteID: fmt.Sprint(s.id),
+			Domain:         s.domain,
+			Environment:    models.SiteEnvironmentProduction,
+			IsWordpress:    s.isWordpress,
+			SSHUser:        "user",
+			Status:         s.status,
+		}); err != nil {
+			t.Fatalf("failed to seed site: %v", err)
+		}
+	}
+}
+
+type agentSite = struct {
+	id, serverID int
+	domain       string
+	status       string
+	isWordpress  bool
 }
 
 func TestAgentManifestHandler_IncludesNonWPSites(t *testing.T) {
 	setupAgentTest(t)
 
-	sites := []models.Site{
-		{ID: 101, ServerID: 5, Domain: "wp-site.com", Status: "deployed", IsWordpress: true, SiteUser: "wpuser"},
-		{ID: 102, ServerID: 5, Domain: "app-site.com", Status: "deployed", IsWordpress: false, SiteUser: "appuser"},
-		{ID: 103, ServerID: 5, Domain: "pending-site.com", Status: "deploying", IsWordpress: true, SiteUser: "pendinguser"},
-		{ID: 104, ServerID: 9, Domain: "other-server.com", Status: "deployed", IsWordpress: true, SiteUser: "otheruser"},
-	}
-	if err := cache.WriteJSONCache("sites", sites); err != nil {
-		t.Fatalf("failed to seed sites cache: %v", err)
-	}
+	seedAgentSites(t,
+		agentSite{101, 5, "wp-site.com", "deployed", true},
+		agentSite{102, 5, "app-site.com", "deployed", false},
+		agentSite{103, 5, "pending-site.com", "deploying", true},
+		agentSite{104, 9, "other-server.com", "deployed", true},
+	)
+	server5 := utils.SpinupWPServerUUID(5)
 
 	req := httptest.NewRequest("GET", "/api/agent/manifest", nil)
-	ctx := contextWithAgentClaims(context.Background(), &AgentClaims{TokenID: 1, ServerID: 5})
+	ctx := contextWithAgentClaims(context.Background(), &AgentClaims{TokenID: 1, ServerID: server5})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -65,33 +99,33 @@ func TestAgentManifestHandler_IncludesNonWPSites(t *testing.T) {
 		t.Fatalf("failed to decode manifest response: %v", err)
 	}
 
-	if manifest.ServerID != 5 {
-		t.Errorf("ServerID = %d, want 5", manifest.ServerID)
+	if manifest.ServerID != server5 {
+		t.Errorf("ServerID = %s, want %s", manifest.ServerID, server5)
 	}
 	if len(manifest.Sites) != 2 {
 		t.Fatalf("expected 2 deployed sites in manifest, got %d", len(manifest.Sites))
 	}
 
-	site1 := manifest.Sites[0]
-	if site1.SiteID != 101 || site1.Domain != "wp-site.com" || !site1.IsWordpress {
-		t.Errorf("unexpected site 0: %+v", site1)
+	byDomain := map[string]models.AgentManifestSite{}
+	for _, s := range manifest.Sites {
+		byDomain[s.Domain] = s
 	}
-
-	site2 := manifest.Sites[1]
-	if site2.SiteID != 102 || site2.Domain != "app-site.com" || site2.IsWordpress {
-		t.Errorf("unexpected site 1: %+v", site2)
+	if s := byDomain["wp-site.com"]; s.SiteID != utils.SpinupWPSiteUUID(101) || s.LegacySiteID != 101 || !s.IsWordpress {
+		t.Errorf("unexpected wp-site.com entry: %+v", s)
+	}
+	if s := byDomain["app-site.com"]; s.SiteID != utils.SpinupWPSiteUUID(102) || s.LegacySiteID != 102 || s.IsWordpress {
+		t.Errorf("unexpected app-site.com entry: %+v", s)
 	}
 }
 
 func TestAgentReportHandler_AcceptsNonWPSiteData(t *testing.T) {
 	setupAgentTest(t)
 
-	sites := []models.Site{
-		{ID: 201, ServerID: 5, Domain: "app.example.com", Status: "deployed", IsWordpress: false},
-	}
-	if err := cache.WriteJSONCache("sites", sites); err != nil {
-		t.Fatalf("failed to seed sites cache: %v", err)
-	}
+	seedAgentSites(t,
+		agentSite{201, 5, "app.example.com", "deployed", false},
+		agentSite{202, 9, "elsewhere.example.com", "deployed", true},
+	)
+	site201 := utils.SpinupWPSiteUUID(201)
 
 	bytesUsed := int64(12345678)
 	report := models.AgentReport{
@@ -99,7 +133,7 @@ func TestAgentReportHandler_AcceptsNonWPSiteData(t *testing.T) {
 		AgentVersion: "1.2.3",
 		Sites: []models.AgentReportSite{
 			{
-				SiteID:         201,
+				SiteID:         site201,
 				DiskUsageBytes: &bytesUsed,
 				TrafficHourly: []models.TrafficHourlyEntry{
 					{
@@ -119,7 +153,7 @@ func TestAgentReportHandler_AcceptsNonWPSiteData(t *testing.T) {
 	}
 
 	req := httptest.NewRequest("POST", "/api/agent/report", bytes.NewBuffer(body))
-	ctx := contextWithAgentClaims(context.Background(), &AgentClaims{TokenID: 1, ServerID: 5})
+	ctx := contextWithAgentClaims(context.Background(), &AgentClaims{TokenID: 1, ServerID: utils.SpinupWPServerUUID(5)})
 	req = req.WithContext(ctx)
 	w := httptest.NewRecorder()
 
@@ -141,7 +175,7 @@ func TestAgentReportHandler_AcceptsNonWPSiteData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to query disk usage: %v", err)
 	}
-	if usage, ok := diskUsageMap[201]; !ok || usage.BytesUsed != 12345678 {
+	if usage, ok := diskUsageMap[site201]; !ok || usage.BytesUsed != 12345678 {
 		t.Errorf("expected disk usage 12345678 for site 201, got %+v", usage)
 	}
 }
@@ -150,7 +184,7 @@ func TestAgentToken_VerificationAndUpgrade(t *testing.T) {
 	setupAgentTest(t)
 
 	// 1. Create a new token (should be sha256)
-	token, plaintext, err := db.CreateAgentToken(10, "test-server", "test desc", "admin")
+	token, plaintext, err := db.CreateAgentToken(utils.SpinupWPServerUUID(10), "test-server", "test desc", "admin")
 	if err != nil {
 		t.Fatalf("failed to create agent token: %v", err)
 	}
@@ -159,7 +193,7 @@ func TestAgentToken_VerificationAndUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to verify sha256 token: %v", err)
 	}
-	if claims.ServerID != 10 || claims.TokenID != token.ID {
+	if claims.ServerID != utils.SpinupWPServerUUID(10) || claims.TokenID != token.ID {
 		t.Errorf("unexpected claims: %+v", claims)
 	}
 
@@ -174,7 +208,7 @@ func TestAgentToken_VerificationAndUpgrade(t *testing.T) {
 	res, err := dbConn.Exec(
 		`INSERT INTO agent_tokens (server_id, server_name, token_hash, token_prefix, description, created_by)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		20, "legacy-server", string(legacyBcryptHash), legacySecret[:8], "legacy", "admin",
+		utils.SpinupWPServerUUID(20), "legacy-server", string(legacyBcryptHash), legacySecret[:8], "legacy", "admin",
 	)
 	if err != nil {
 		t.Fatalf("failed to insert legacy token: %v", err)
@@ -187,7 +221,7 @@ func TestAgentToken_VerificationAndUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to verify legacy token: %v", err)
 	}
-	if legacyClaims.ServerID != 20 || legacyClaims.TokenID != int(legacyID) {
+	if legacyClaims.ServerID != utils.SpinupWPServerUUID(20) || legacyClaims.TokenID != int(legacyID) {
 		t.Errorf("unexpected claims for legacy token: %+v", legacyClaims)
 	}
 
@@ -206,7 +240,7 @@ func TestAgentToken_VerificationAndUpgrade(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to verify upgraded token: %v", err)
 	}
-	if secondVerifyClaims.ServerID != 20 {
+	if secondVerifyClaims.ServerID != utils.SpinupWPServerUUID(20) {
 		t.Errorf("unexpected claims on second verify: %+v", secondVerifyClaims)
 	}
 }

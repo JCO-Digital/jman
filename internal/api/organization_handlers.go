@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -178,17 +177,17 @@ func ListOrganizationSitesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Load all sites from cache to return full site objects
-	allSites := []models.Site{}
-	if err := cache.ReadJSONCache("sites", &allSites, -1); err != nil {
-		verb.LogPrintf(verb.Normal, "ListOrganizationSitesHandler: cache read failed: %v", err)
+	// Return full site objects, in the same shape as /api/sites
+	allSites, err := loadAPISites()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "ListOrganizationSitesHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
 	// Filter sites by the IDs we found in DB
-	orgSites := []models.Site{}
-	idMap := make(map[int]bool)
+	orgSites := []apiSite{}
+	idMap := make(map[string]bool)
 	for _, sid := range siteIDs {
 		idMap[sid] = true
 	}
@@ -306,10 +305,9 @@ func DeleteContactHandler(w http.ResponseWriter, r *http.Request) {
 
 // GetSiteOrganizationHandler returns the organization linked to a site.
 func GetSiteOrganizationHandler(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	id, err := strconv.Atoi(idStr)
+	id, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -328,10 +326,9 @@ func GetSiteOrganizationHandler(w http.ResponseWriter, r *http.Request) {
 
 // LinkSiteHandler links a site to an organization.
 func LinkSiteHandler(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	siteID, err := strconv.Atoi(idStr)
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -354,10 +351,9 @@ func LinkSiteHandler(w http.ResponseWriter, r *http.Request) {
 
 // UnlinkSiteHandler removes the link between a site and its organization.
 func UnlinkSiteHandler(w http.ResponseWriter, r *http.Request) {
-	siteIDStr := r.PathValue("id")
-	siteID, err := strconv.Atoi(siteIDStr)
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

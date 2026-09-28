@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { useAgentTokensStore } from "../../stores/agentTokens";
 import { useDataStore } from "../../stores/data";
 import AppIcon from "../AppIcon.vue";
 import type { CreatedAgentToken } from "../../types";
+import { providerLabel } from "../../utils/format";
 
 const props = defineProps<{
 	visible: boolean;
@@ -17,10 +18,16 @@ const emit = defineEmits<{
 const agentTokensStore = useAgentTokensStore();
 const dataStore = useDataStore();
 
-// Server IDs here are SpinupWP server IDs (the same ones used everywhere
-// else in jman, e.g. site.server_id) — selecting from the known server list
-// avoids the admin having to look one up manually.
-const selectedServerId = ref<number | "">("");
+// Server ids are UUIDs (the same ones used everywhere else in jman, e.g.
+// site.server_id). Any real server from /api/servers can run an agent, but
+// logical servers have no host to run it on, so they're excluded.
+const selectedServerId = ref("");
+
+const agentCapableServers = computed(() =>
+	dataStore.servers
+		.filter((s) => !s.is_logical)
+		.sort((a, b) => a.name.localeCompare(b.name)),
+);
 const description = ref("");
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
@@ -44,7 +51,7 @@ function handleOverlayClick(event: MouseEvent) {
 }
 
 async function handleSubmit() {
-	const server = dataStore.servers.find(
+	const server = agentCapableServers.value.find(
 		(s) => s.id === selectedServerId.value,
 	);
 	if (!server) return;
@@ -97,11 +104,13 @@ async function handleSubmit() {
 										Select a server
 									</option>
 									<option
-										v-for="server in dataStore.servers"
+										v-for="server in agentCapableServers"
 										:key="server.id"
 										:value="server.id"
 									>
-										{{ server.name }}
+										{{ server.name }} ({{
+											providerLabel(server.provider)
+										}})
 									</option>
 								</select>
 							</div>

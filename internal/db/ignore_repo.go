@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -75,7 +74,7 @@ func GetIgnoreEntry(id int) (*models.IgnoreEntry, error) {
 
 	if err := json.Unmarshal([]byte(negatedJSON), &e.NegatedSiteIDs); err != nil {
 		// If it's empty or invalid, just keep it empty
-		e.NegatedSiteIDs = []int{}
+		e.NegatedSiteIDs = []string{}
 	}
 
 	return &e, nil
@@ -110,7 +109,7 @@ func GetAllIgnoreEntries(entryType string) ([]models.IgnoreEntry, error) {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(negatedJSON), &e.NegatedSiteIDs); err != nil {
-			e.NegatedSiteIDs = []int{}
+			e.NegatedSiteIDs = []string{}
 		}
 		entries = append(entries, e)
 	}
@@ -127,10 +126,50 @@ func DeleteIgnoreEntry(id int) error {
 	return err
 }
 
+// siteServerIgnores holds site- and server-scoped ignore rules keyed by
+// site/server UUID, shared by the monitor and vulnerability matchers.
+type siteServerIgnores struct {
+	sites   map[string]bool
+	servers map[string][]string // server UUID -> negated site UUIDs
+}
+
+func newSiteServerIgnores() siteServerIgnores {
+	return siteServerIgnores{sites: make(map[string]bool), servers: make(map[string][]string)}
+}
+
+func (ig siteServerIgnores) add(e models.IgnoreEntry) {
+	switch e.Type {
+	case "site":
+		ig.sites[e.Target] = true
+	case "server":
+		ig.servers[e.Target] = e.NegatedSiteIDs
+	}
+}
+
+// isIgnored reports whether a site (or its server, unless the site is
+// negated from that server-wide rule) is ignored. Empty IDs never match.
+func (ig siteServerIgnores) isIgnored(siteID, serverID string) bool {
+	if siteID != "" && ig.sites[siteID] {
+		return true
+	}
+	if serverID == "" {
+		return false
+	}
+	negatedIDs, ok := ig.servers[serverID]
+	if !ok {
+		return false
+	}
+	for _, id := range negatedIDs {
+		if id == siteID {
+			return false
+		}
+	}
+	return true
+}
+
 // MonitorIgnoreMatcher provides efficient in-memory matching for monitor ignores.
 type MonitorIgnoreMatcher struct {
-	siteIgnores   map[int]bool
-	serverIgnores map[int][]int // serverID -> negated site IDs
+	siteServerIgnores
 }
 
 // NewMonitorIgnoreMatcher fetches all monitor ignore entries and returns a matcher.
@@ -140,58 +179,24 @@ func NewMonitorIgnoreMatcher() (*MonitorIgnoreMatcher, error) {
 		return nil, err
 	}
 
-	matcher := &MonitorIgnoreMatcher{
-		siteIgnores:   make(map[int]bool),
-		serverIgnores: make(map[int][]int),
-	}
-
+	matcher := &MonitorIgnoreMatcher{siteServerIgnores: newSiteServerIgnores()}
 	for _, e := range entries {
-		if !e.UseForMonitor {
-			continue
-		}
-
-		targetID, err := strconv.Atoi(e.Target)
-		if err != nil {
-			continue
-		}
-
-		switch e.Type {
-		case "site":
-			matcher.siteIgnores[targetID] = true
-		case "server":
-			matcher.serverIgnores[targetID] = e.NegatedSiteIDs
+		if e.UseForMonitor {
+			matcher.add(e)
 		}
 	}
 
 	return matcher, nil
 }
 
-// IsIgnored checks if a site is ignored according to the matcher's data.
-func (m *MonitorIgnoreMatcher) IsIgnored(siteID, serverID int) bool {
-	if m.siteIgnores[siteID] {
-		return true
-	}
-
-	if negatedIDs, ok := m.serverIgnores[serverID]; ok {
-		isNegated := false
-		for _, id := range negatedIDs {
-			if id == siteID {
-				isNegated = true
-				break
-			}
-		}
-		if !isNegated {
-			return true
-		}
-	}
-
-	return false
+// IsIgnored checks if a site (by site and server UUID) is ignored for monitoring.
+func (m *MonitorIgnoreMatcher) IsIgnored(siteID, serverID string) bool {
+	return m.isIgnored(siteID, serverID)
 }
 
 // VulnIgnoreMatcher provides efficient in-memory matching for vulnerability ignores.
 type VulnIgnoreMatcher struct {
-	siteIgnores          map[int]bool
-	serverIgnores        map[int][]int // serverID -> negated site IDs
+	siteServerIgnores
 	pluginIgnores        map[string]bool
 	vulnerabilityIgnores map[string]bool
 }
@@ -204,8 +209,7 @@ func NewVulnIgnoreMatcher() (*VulnIgnoreMatcher, error) {
 	}
 
 	matcher := &VulnIgnoreMatcher{
-		siteIgnores:          make(map[int]bool),
-		serverIgnores:        make(map[int][]int),
+		siteServerIgnores:    newSiteServerIgnores(),
 		pluginIgnores:        make(map[string]bool),
 		vulnerabilityIgnores: make(map[string]bool),
 	}
@@ -216,14 +220,8 @@ func NewVulnIgnoreMatcher() (*VulnIgnoreMatcher, error) {
 		}
 
 		switch e.Type {
-		case "site":
-			if id, err := strconv.Atoi(e.Target); err == nil {
-				matcher.siteIgnores[id] = true
-			}
-		case "server":
-			if id, err := strconv.Atoi(e.Target); err == nil {
-				matcher.serverIgnores[id] = e.NegatedSiteIDs
-			}
+		case "site", "server":
+			matcher.add(e)
 		case "plugin":
 			matcher.pluginIgnores[e.Target] = true
 		case "vulnerability":
@@ -234,26 +232,9 @@ func NewVulnIgnoreMatcher() (*VulnIgnoreMatcher, error) {
 	return matcher, nil
 }
 
-// IsSiteIgnored checks if a site should be ignored for vulnerabilities.
-func (m *VulnIgnoreMatcher) IsSiteIgnored(siteID, serverID int) bool {
-	if m.siteIgnores[siteID] {
-		return true
-	}
-
-	if negatedIDs, ok := m.serverIgnores[serverID]; ok {
-		isNegated := false
-		for _, id := range negatedIDs {
-			if id == siteID {
-				isNegated = true
-				break
-			}
-		}
-		if !isNegated {
-			return true
-		}
-	}
-
-	return false
+// IsSiteIgnored checks if a site (by site and server UUID) should be ignored for vulnerabilities.
+func (m *VulnIgnoreMatcher) IsSiteIgnored(siteID, serverID string) bool {
+	return m.isIgnored(siteID, serverID)
 }
 
 // IsVulnerabilityUUIDIgnored checks if a specific vulnerability UUID is ignored.

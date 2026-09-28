@@ -185,6 +185,21 @@ func DeleteManagedServer(id string) error {
 	return nil
 }
 
+// CountManagedSitesForServer returns how many sites reference the given server UUID.
+func CountManagedSitesForServer(serverID string) (int, error) {
+	dbConn := GetInventoryDB()
+	if dbConn == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+
+	var count int
+	if err := dbConn.QueryRow(`SELECT COUNT(*) FROM sites WHERE server_id = ?`, serverID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("failed to count sites for server: %w", err)
+	}
+
+	return count, nil
+}
+
 // SaveManagedSite inserts or updates a managed site record in inventory.db.
 func SaveManagedSite(site models.ManagedSite) error {
 	dbConn := GetInventoryDB()

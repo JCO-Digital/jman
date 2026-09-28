@@ -184,6 +184,14 @@ func ListOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, assets)
 }
 
+// orgAssetRequest is an organization-asset create/update body. site_id
+// shadows the embedded field so it can be given as a UUID or a legacy
+// SpinupWP integer; null or "" means no site link.
+type orgAssetRequest struct {
+	models.OrganizationAsset
+	SiteID *FlexID `json:"site_id"`
+}
+
 // CreateOrganizationAssetHandler links an asset to an organization.
 func CreateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
@@ -193,9 +201,14 @@ func CreateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var oa models.OrganizationAsset
-	if err := json.NewDecoder(r.Body).Decode(&oa); err != nil {
+	var req orgAssetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	oa := req.OrganizationAsset
+	if oa.SiteID, err = optionalSiteUUID(req.SiteID); err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	oa.OrganizationID = orgID
@@ -264,9 +277,14 @@ func UpdateOrganizationAssetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updates models.OrganizationAsset
-	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+	var req orgAssetRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	updates := req.OrganizationAsset
+	if updates.SiteID, err = optionalSiteUUID(req.SiteID); err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

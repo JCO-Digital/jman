@@ -24,9 +24,9 @@ const maxSiteTrafficMonthlyDays = 366
 // and ?days=N (default 7, capped at maxSiteTrafficDays for hourly/daily or
 // maxSiteTrafficMonthlyDays for monthly).
 func SiteTrafficHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

@@ -6,7 +6,7 @@ import { BASE_URL } from "../utils/api";
 
 export type TrafficPeriod = "hourly" | "daily" | "monthly";
 
-function cacheKey(siteId: number, period: TrafficPeriod, days: number) {
+function cacheKey(siteId: string, period: TrafficPeriod, days: number) {
 	return `${siteId}:${period}:${days}`;
 }
 
@@ -27,7 +27,7 @@ export const useTrafficAnalyticsStore = defineStore("trafficAnalytics", () => {
 	 * (siteId, period, days) combination.
 	 */
 	async function fetchTraffic(
-		siteId: number,
+		siteId: string,
 		period: TrafficPeriod = "hourly",
 		days: number = 7,
 	): Promise<SiteTrafficPeriod[] | undefined> {
@@ -66,7 +66,7 @@ export const useTrafficAnalyticsStore = defineStore("trafficAnalytics", () => {
 	}
 
 	function getTraffic(
-		siteId: number,
+		siteId: string,
 		period: TrafficPeriod,
 		days: number,
 	): SiteTrafficPeriod[] | undefined {
@@ -74,7 +74,7 @@ export const useTrafficAnalyticsStore = defineStore("trafficAnalytics", () => {
 	}
 
 	function isLoadingTraffic(
-		siteId: number,
+		siteId: string,
 		period: TrafficPeriod,
 		days: number,
 	): boolean {
@@ -82,7 +82,7 @@ export const useTrafficAnalyticsStore = defineStore("trafficAnalytics", () => {
 	}
 
 	function getError(
-		siteId: number,
+		siteId: string,
 		period: TrafficPeriod,
 		days: number,
 	): string | null {

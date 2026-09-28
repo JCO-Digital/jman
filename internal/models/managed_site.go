@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 // ManagedServer represents a host-agnostic server entity stored in inventory.db.
 // It can be a physical host with root access or a logical placeholder (e.g. "WPEngine").
@@ -61,11 +64,23 @@ func (s ManagedSite) ToCliSite() CliSite {
 		sshSpec = fmt.Sprintf("%s:%d", sshSpec, s.SSHPort)
 	}
 
+	providerSiteID := 0
+	if s.Provider == "spinupwp" {
+		providerSiteID, _ = strconv.Atoi(s.ProviderSiteID)
+	}
+	serverID := ""
+	if s.ServerID != nil {
+		serverID = *s.ServerID
+	}
+
 	return CliSite{
-		UUID:       s.ID,
-		Name:       s.Domain,
-		ServerName: s.ServerName,
-		SSH:        sshSpec,
-		Path:       s.SitePath,
+		ID:             s.ID,
+		ProviderSiteID: providerSiteID,
+		Provider:       s.Provider,
+		ServerID:       serverID,
+		Name:           s.Domain,
+		ServerName:     s.ServerName,
+		SSH:            sshSpec,
+		Path:           s.SitePath,
 	}
 }

@@ -47,7 +47,7 @@ export const useAgentTokensStore = defineStore("agentTokens", () => {
 	// ---------------------------------------------------------------------------
 
 	async function createToken(
-		serverId: number,
+		serverId: string,
 		serverName: string,
 		description?: string,
 	): Promise<CreatedAgentToken> {

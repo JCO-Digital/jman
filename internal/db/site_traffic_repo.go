@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -17,7 +16,7 @@ const topEntryLimit = 20
 // UpsertSiteTrafficHourly stores one fully-elapsed hour's traffic for a
 // site. jman-agent only ever sends a given hour once it's closed, so this
 // is a plain replace-style upsert — no incremental merging needed.
-func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error {
+func UpsertSiteTrafficHourly(siteID string, entry models.TrafficHourlyEntry) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -52,7 +51,7 @@ func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error 
 	`
 	_, err = dbConn.Exec(query, siteID, entry.Hour, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers), string(statusCodes))
 	if err != nil {
-		return fmt.Errorf("failed to upsert hourly traffic for site %d: %w", siteID, err)
+		return fmt.Errorf("failed to upsert hourly traffic for site %s: %w", siteID, err)
 	}
 	return nil
 }
@@ -64,7 +63,7 @@ func UpsertSiteTrafficHourly(siteID int, entry models.TrafficHourlyEntry) error 
 // NOT read from site_traffic_hourly; there is deliberately no hourly source
 // data behind these days, so callers must not also add them to whatever
 // day-recompute set they're tracking for hourly writes in the same report.
-func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
+func UpsertSiteTrafficDaily(siteID string, entry models.TrafficDailyEntry) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -99,7 +98,7 @@ func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
 	`
 	_, err = dbConn.Exec(query, siteID, entry.Day, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers), string(statusCodes))
 	if err != nil {
-		return fmt.Errorf("failed to upsert daily traffic for site %d: %w", siteID, err)
+		return fmt.Errorf("failed to upsert daily traffic for site %s: %w", siteID, err)
 	}
 	return nil
 }
@@ -114,7 +113,7 @@ func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
 // doesn't). top_pages/top_referrers are similarly derived by merging each
 // hour's already-truncated top-N lists, not the full day's raw counts — an
 // accepted approximation, not the exact daily top-N.
-func RecomputeSiteTrafficDaily(siteID any, day string) error {
+func RecomputeSiteTrafficDaily(siteID string, day string) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -126,7 +125,7 @@ func RecomputeSiteTrafficDaily(siteID any, day string) error {
 		siteID, day,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to load hourly traffic for site %d day %s: %w", siteID, day, err)
+		return fmt.Errorf("failed to load hourly traffic for site %s day %s: %w", siteID, day, err)
 	}
 	defer rows.Close()
 
@@ -181,7 +180,7 @@ func RecomputeSiteTrafficDaily(siteID any, day string) error {
 		updated_at = CURRENT_TIMESTAMP;
 	`
 	if _, err := dbConn.Exec(query, siteID, day, total, human, bot, unique, string(topPages), string(topReferrers), string(statusCodes)); err != nil {
-		return fmt.Errorf("failed to upsert daily traffic for site %d day %s: %w", siteID, day, err)
+		return fmt.Errorf("failed to upsert daily traffic for site %s day %s: %w", siteID, day, err)
 	}
 	return nil
 }
@@ -340,7 +339,7 @@ func topNFromCounts(counts map[string]int) []models.TrafficTopEntry {
 // RecomputeSiteTrafficDaily's own hourly-to-daily rollup). top_pages/
 // top_referrers are similarly derived by merging each day's already-
 // truncated top-N list, not the full month's raw counts.
-func GetSiteTrafficMonthly(siteID int, days int) ([]models.SiteTrafficPeriod, error) {
+func GetSiteTrafficMonthly(siteID string, days int) ([]models.SiteTrafficPeriod, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -433,17 +432,10 @@ func GetSiteTrafficDailyRange(start, end string) ([]models.SiteTrafficDailyRow, 
 
 	result := []models.SiteTrafficDailyRow{}
 	for rows.Next() {
-		var rawSiteID string
 		var row models.SiteTrafficDailyRow
-		if err := rows.Scan(&rawSiteID, &row.Day, &row.RequestsTotal, &row.RequestsHuman, &row.RequestsBot, &row.UniqueVisitors); err != nil {
+		if err := rows.Scan(&row.SiteID, &row.Day, &row.RequestsTotal, &row.RequestsHuman, &row.RequestsBot, &row.UniqueVisitors); err != nil {
 			return nil, fmt.Errorf("failed to scan site traffic report row: %w", err)
 		}
-		if id, err := strconv.Atoi(rawSiteID); err == nil {
-			row.SiteID = id
-		} else {
-			row.SiteID = rawSiteID
-		}
-		row.SiteUUID = rawSiteID
 		// The DATE column can round-trip as a bare date or a full
 		// midnight timestamp depending on the sqlite driver (see the
 		// PeriodStart caveat in GetSiteTraffic) — only the date portion is
@@ -461,7 +453,7 @@ func GetSiteTrafficDailyRange(start, end string) ([]models.SiteTrafficDailyRow, 
 
 // GetSiteTraffic returns a site's hourly or daily traffic for the last
 // `days` days, oldest first.
-func GetSiteTraffic(siteID int, period string, days int) ([]models.SiteTrafficPeriod, error) {
+func GetSiteTraffic(siteID string, period string, days int) ([]models.SiteTrafficPeriod, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")

@@ -8,12 +8,12 @@ import (
 var (
 	siteTrackerMu sync.RWMutex
 	// siteFailures maps site IDs to the number of consecutive connection failures.
-	siteFailures = make(map[int]int)
+	siteFailures = make(map[string]int)
 
 	updateRefreshMu sync.Mutex
 	// lastUpdateRefresh maps site IDs to the last time their WordPress
 	// plugin-update transient was forcibly refreshed.
-	lastUpdateRefresh = make(map[int]time.Time)
+	lastUpdateRefresh = make(map[string]time.Time)
 )
 
 // updateRefreshDebounce bounds how often we force a WordPress plugin-update
@@ -25,7 +25,7 @@ const updateRefreshDebounce = 60 * time.Second
 // shouldRefreshUpdateCache reports whether enough time has passed since the
 // last forced update-cache refresh for this site to warrant doing it again,
 // and if so, records that a refresh is about to happen.
-func shouldRefreshUpdateCache(siteID int) bool {
+func shouldRefreshUpdateCache(siteID string) bool {
 	updateRefreshMu.Lock()
 	defer updateRefreshMu.Unlock()
 	if last, ok := lastUpdateRefresh[siteID]; ok && time.Since(last) < updateRefreshDebounce {
@@ -36,27 +36,27 @@ func shouldRefreshUpdateCache(siteID int) bool {
 }
 
 // RecordFailure increments the failure count for a specific site.
-func RecordFailure(siteID int) {
+func RecordFailure(siteID string) {
 	siteTrackerMu.Lock()
 	defer siteTrackerMu.Unlock()
 	siteFailures[siteID]++
 }
 
 // RecordSuccess resets the failure count for a specific site.
-func RecordSuccess(siteID int) {
+func RecordSuccess(siteID string) {
 	siteTrackerMu.Lock()
 	defer siteTrackerMu.Unlock()
 	delete(siteFailures, siteID)
 }
 
 // GetFailureCount returns the number of recorded failures for a site.
-func GetFailureCount(siteID int) int {
+func GetFailureCount(siteID string) int {
 	siteTrackerMu.RLock()
 	defer siteTrackerMu.RUnlock()
 	return siteFailures[siteID]
 }
 
 // IsSiteHealthy returns true if a site has no recorded failures.
-func IsSiteHealthy(siteID int) bool {
+func IsSiteHealthy(siteID string) bool {
 	return GetFailureCount(siteID) == 0
 }

@@ -9,6 +9,7 @@ import IgnoreManager from "../components/settings/IgnoreManager.vue";
 import AccountSettings from "../components/settings/AccountSettings.vue";
 import UserManagement from "../components/settings/UserManagement.vue";
 import AgentTokenManagement from "../components/settings/AgentTokenManagement.vue";
+import SiteManagement from "../components/settings/SiteManagement.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -16,7 +17,7 @@ const authStore = useAuthStore();
 
 const validTabs = computed(() => {
 	const tabs = ["account", "general"];
-	if (authStore.canEdit) tabs.push("ignored");
+	if (authStore.canEdit) tabs.push("ignored", "sites");
 	if (authStore.canAdmin) tabs.push("users", "agent-tokens");
 	return tabs;
 });
@@ -54,12 +55,16 @@ watch(
 				v-model="activeTab"
 				:show-users-tab="authStore.canAdmin"
 				:show-ignored-tab="authStore.canEdit"
+				:show-sites-tab="authStore.canEdit"
 				:show-agent-tokens-tab="authStore.canAdmin"
 			/>
 
 			<div class="settings-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
 				<IgnoreManager v-else-if="activeTab === 'ignored'" />
+				<SiteManagement
+					v-else-if="activeTab === 'sites' && authStore.canEdit"
+				/>
 				<AccountSettings v-else-if="activeTab === 'account'" />
 				<UserManagement
 					v-else-if="activeTab === 'users' && authStore.canAdmin"

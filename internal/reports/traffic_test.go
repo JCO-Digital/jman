@@ -8,22 +8,28 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
+// Site UUIDs that sort in declaration order, since report rows are ordered by site ID.
+const (
+	reportSite1 = "00000000-0000-4000-8000-000000000001"
+	reportSite2 = "00000000-0000-4000-8000-000000000002"
+)
+
 func TestTrafficReport_Run(t *testing.T) {
 	setupReportsTest(t)
 
 	// Two days for site 1 (must be summed into one row) plus one day for
 	// site 2, to check both aggregation and grouping by site.
-	if err := db.UpsertSiteTrafficDaily(1, models.TrafficDailyEntry{
+	if err := db.UpsertSiteTrafficDaily(reportSite1, models.TrafficDailyEntry{
 		Day: "2026-01-05", RequestsTotal: 100, RequestsHuman: 80, RequestsBot: 20, UniqueVisitors: 15,
 	}); err != nil {
 		t.Fatalf("failed to seed daily traffic: %v", err)
 	}
-	if err := db.UpsertSiteTrafficDaily(1, models.TrafficDailyEntry{
+	if err := db.UpsertSiteTrafficDaily(reportSite1, models.TrafficDailyEntry{
 		Day: "2026-01-06", RequestsTotal: 50, RequestsHuman: 40, RequestsBot: 10, UniqueVisitors: 8,
 	}); err != nil {
 		t.Fatalf("failed to seed daily traffic: %v", err)
 	}
-	if err := db.UpsertSiteTrafficDaily(2, models.TrafficDailyEntry{
+	if err := db.UpsertSiteTrafficDaily(reportSite2, models.TrafficDailyEntry{
 		Day: "2026-01-05", RequestsTotal: 30, RequestsHuman: 25, RequestsBot: 5, UniqueVisitors: 6,
 	}); err != nil {
 		t.Fatalf("failed to seed daily traffic: %v", err)
@@ -42,14 +48,14 @@ func TestTrafficReport_Run(t *testing.T) {
 	// Ordered by site ID.
 	site1, site2 := result.Rows[0], result.Rows[1]
 	// No sites.json cache seeded, so the site falls back to a "Site N" label.
-	if site1["site"] != "Site 1" {
-		t.Errorf("rows[0][site] = %v, want fallback label \"Site 1\"", site1["site"])
+	if site1["site"] != "Site "+reportSite1 {
+		t.Errorf("rows[0][site] = %v, want fallback label \"Site %s\"", site1["site"], reportSite1)
 	}
 	if site1["requests_total"] != 150 || site1["requests_human"] != 120 || site1["requests_bot"] != 30 || site1["unique_visitors"] != 23 {
 		t.Errorf("site 1 totals = %+v, want total=150 human=120 bot=30 unique=23 (summed across both days)", site1)
 	}
-	if site2["site"] != "Site 2" {
-		t.Errorf("rows[1][site] = %v, want fallback label \"Site 2\"", site2["site"])
+	if site2["site"] != "Site "+reportSite2 {
+		t.Errorf("rows[1][site] = %v, want fallback label \"Site %s\"", site2["site"], reportSite2)
 	}
 	if site2["requests_total"] != 30 {
 		t.Errorf("site 2 requests_total = %v, want 30", site2["requests_total"])

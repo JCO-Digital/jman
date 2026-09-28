@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -50,6 +51,11 @@ func CreateIgnoreEntryHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Force creation of a new entry by ignoring any ID provided in the body.
 	entry.ID = 0
+
+	if err := normalizeIgnoreEntry(&entry); err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	claims := GetAuthClaims(r.Context())
 	username := "api"
@@ -109,13 +115,20 @@ func UpdateIgnoreEntryHandler(w http.ResponseWriter, r *http.Request) {
 		existing.UseForVuln = val
 	}
 	if val, ok := updates["negated_site_ids"].([]interface{}); ok {
-		ids := make([]int, 0, len(val))
+		ids := make([]string, 0, len(val))
 		for _, v := range val {
-			if fv, ok := v.(float64); ok {
-				ids = append(ids, int(fv))
+			switch id := v.(type) {
+			case string:
+				ids = append(ids, id)
+			case float64:
+				ids = append(ids, strconv.Itoa(int(id)))
 			}
 		}
 		existing.NegatedSiteIDs = ids
+	}
+	if err := normalizeIgnoreEntry(existing); err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	claims := GetAuthClaims(r.Context())
@@ -155,4 +168,30 @@ func DeleteIgnoreEntryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// normalizeIgnoreEntry canonicalises site/server targets and negated site IDs
+// to UUIDs (accepting legacy SpinupWP integers).
+func normalizeIgnoreEntry(entry *models.IgnoreEntry) error {
+	var err error
+	switch entry.Type {
+	case "site":
+		entry.Target, err = resolveSiteUUID(entry.Target)
+	case "server":
+		entry.Target, err = resolveServerUUID(entry.Target)
+	}
+	if err != nil {
+		return err
+	}
+
+	negated := make([]string, 0, len(entry.NegatedSiteIDs))
+	for _, id := range entry.NegatedSiteIDs {
+		siteID, err := resolveSiteUUID(id)
+		if err != nil {
+			return fmt.Errorf("negated_site_ids: %w", err)
+		}
+		negated = append(negated, siteID)
+	}
+	entry.NegatedSiteIDs = negated
+	return nil
 }

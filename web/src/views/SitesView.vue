@@ -30,7 +30,7 @@ const currentPage = ref(props.page || 1);
 const rowsPerPage = ref(props.rowsPerPage || 50);
 
 const batchMode = ref(false);
-const selectedSiteIds = ref<Set<number>>(new Set());
+const selectedSiteIds = ref<Set<string>>(new Set());
 const batchEnvironment = ref<SiteEnvironment | "">("");
 const isApplyingBatch = ref(false);
 
@@ -197,7 +197,7 @@ const toggleSelectAllOnPage = () => {
 	}
 };
 
-const toggleSiteSelected = (id: number) => {
+const toggleSiteSelected = (id: string) => {
 	if (selectedSiteIds.value.has(id)) {
 		selectedSiteIds.value.delete(id);
 	} else {
@@ -242,22 +242,23 @@ const handleRowsPerPageUpdate = (newRpp: number) => {
 	updateRoute(1, newRpp);
 };
 
-const goToSite = (id: number) => {
+const goToSite = (id: string) => {
 	if (batchMode.value) {
 		toggleSiteSelected(id);
 		return;
 	}
-	router.push({ name: "site-detail", params: { id: id.toString() } });
+	router.push({ name: "site-detail", params: { id } });
 };
 
-const getServerDiskSpace = (serverId: number) => {
+// Disk space is SpinupWP-only server detail; other servers return null here.
+const getServerDiskSpace = (serverId: string | null) => {
 	const server = dataStore.getServerById(serverId);
 	if (!server || !server.disk_space || server.disk_space.total === 0)
 		return null;
 	return server.disk_space;
 };
 
-const getServerDiskSpaceString = (serverId: number) => {
+const getServerDiskSpaceString = (serverId: string | null) => {
 	const diskSpace = getServerDiskSpace(serverId);
 	if (!diskSpace) return "";
 	const percent = Math.round((diskSpace.used / diskSpace.total) * 100);
@@ -545,7 +546,14 @@ function timeSince(dateString: string) {
 							<span v-else class="text-muted">—</span>
 						</td>
 						<td class="col-wide">
-							<div class="truncate font-medium">
+							<div
+								class="truncate"
+								:class="
+									site.server_id == null
+										? 'text-muted'
+										: 'font-medium'
+								"
+							>
 								{{ site.server }}
 							</div>
 							<div

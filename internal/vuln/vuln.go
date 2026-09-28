@@ -64,9 +64,9 @@ func scanSites(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 		return err
 	}
 
-	// Fetch cached sites to get ServerIDs and check ignores
-	cachedSites, err := cache.GetCachedSites()
-	siteMeta := make(map[int]models.Site)
+	// Fetch the site list to get server UUIDs and check ignores
+	cachedSites, err := cache.GetSiteList()
+	siteMeta := make(map[string]models.CliSite)
 	if err == nil {
 		for _, s := range cachedSites {
 			siteMeta[s.ID] = s
@@ -76,11 +76,11 @@ func scanSites(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 	}
 
 	// Sort site IDs for consistent output.
-	siteIDs := make([]int, 0, len(sitesMap))
+	siteIDs := make([]string, 0, len(sitesMap))
 	for siteID := range sitesMap {
 		siteIDs = append(siteIDs, siteID)
 	}
-	sort.Ints(siteIDs)
+	sort.Strings(siteIDs)
 
 	siteCount := 0
 	for _, siteID := range siteIDs {
@@ -90,7 +90,7 @@ func scanSites(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 		// Check if site is ignored for vulnerabilities
 		var ignored bool
 		if matcher != nil {
-			serverID := 0
+			serverID := ""
 			if ok {
 				serverID = s.ServerID
 			}
@@ -121,9 +121,9 @@ func scanSites(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 		}
 
 		siteCount++
-		displayName := fmt.Sprintf("Site ID: %d", siteID)
+		displayName := fmt.Sprintf("Site ID: %s", siteID)
 		if ok {
-			displayName = s.Domain
+			displayName = s.Name
 		}
 		message := formatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", displayName, totalVulns), plugins, false)
 		fmt.Println(message)
@@ -239,8 +239,8 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 //
 // Each VulnPlugin entry contains the plugin version found on that site,
 // the highest CVSS among matched vulnerabilities, and the vulnerability list.
-func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[int]map[string]*models.VulnPlugin, error) {
-	sitesMap := make(map[int]map[string]*models.VulnPlugin)
+func buildSiteList(matcher *db.VulnIgnoreMatcher) (map[string]map[string]*models.VulnPlugin, error) {
+	sitesMap := make(map[string]map[string]*models.VulnPlugin)
 
 	reports, err := ProcessVulnerabilities(matcher)
 	if err != nil {
@@ -339,7 +339,7 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 
 	// Load site metadata for server ID lookups
 	cliSites, err := cache.GetFastSiteList()
-	siteMeta := make(map[int]models.CliSite)
+	siteMeta := make(map[string]models.CliSite)
 	if err == nil {
 		for _, s := range cliSites {
 			siteMeta[s.ID] = s
@@ -373,7 +373,7 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 		allSitesSuppressed := true
 		for _, site := range sites {
 			if matcher != nil {
-				serverID := 0
+				serverID := ""
 				if s, ok := siteMeta[site.SiteID]; ok {
 					serverID = s.ServerID
 				}
@@ -537,8 +537,8 @@ func formatSiteReport(siteTitle string, plugins map[string]*models.VulnPlugin, d
 	return sb.String()
 }
 
-// getSiteName resolves a site ID to site name from cached site list data.
-func getSiteName(siteID int) (string, error) {
+// getSiteName resolves a site UUID to site name from cached site list data.
+func getSiteName(siteID string) (string, error) {
 	sites, err := cache.GetSiteList()
 	if err != nil {
 		return "", err

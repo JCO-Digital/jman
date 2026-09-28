@@ -19,7 +19,7 @@ import (
 // VerifyAgentToken on success.
 type AgentClaims struct {
 	TokenID  int
-	ServerID int
+	ServerID string // server UUID
 }
 
 const sha256TokenPrefix = "sha256:"
@@ -48,7 +48,7 @@ func verifyAgentTokenSecret(secret, storedHash string) (bool, bool) {
 // stores its SHA-256 hash, and returns the one-time plaintext token in the
 // form "<id>.<secret>". The plaintext value cannot be recovered later — only
 // TokenPrefix (its first 8 characters) is retained for display purposes.
-func CreateAgentToken(serverID any, serverName, description, createdBy string) (models.AgentToken, string, error) {
+func CreateAgentToken(serverID string, serverName, description, createdBy string) (models.AgentToken, string, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return models.AgentToken{}, "", fmt.Errorf("database not initialized")
@@ -125,7 +125,6 @@ func VerifyAgentToken(raw string) (*AgentClaims, error) {
 		}
 		return nil, fmt.Errorf("failed to look up token: %w", err)
 	}
-	serverID, _ := strconv.Atoi(rawServerID)
 	if revoked {
 		return nil, fmt.Errorf("token revoked")
 	}
@@ -141,7 +140,7 @@ func VerifyAgentToken(raw string) (*AgentClaims, error) {
 		_, _ = dbConn.Exec(`UPDATE agent_tokens SET token_hash = ? WHERE id = ?`, newHash, id)
 	}
 
-	return &AgentClaims{TokenID: id, ServerID: serverID}, nil
+	return &AgentClaims{TokenID: id, ServerID: rawServerID}, nil
 }
 
 // TouchAgentTokenLastSeen updates the last_seen_at timestamp for a token.
@@ -175,19 +174,13 @@ func ListAgentTokens() ([]models.AgentToken, error) {
 	tokens := []models.AgentToken{}
 	for rows.Next() {
 		var t models.AgentToken
-		var rawServerID string
 		var serverName sql.NullString
 		var lastSeen sql.NullString
 		var agentVersion sql.NullString
 		var createdBy sql.NullString
 		var staleAlertSentAt sql.NullString
-		if err := rows.Scan(&t.ID, &rawServerID, &serverName, &t.TokenPrefix, &t.Description, &t.Revoked, &lastSeen, &agentVersion, &t.CreatedAt, &createdBy, &staleAlertSentAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.ServerID, &serverName, &t.TokenPrefix, &t.Description, &t.Revoked, &lastSeen, &agentVersion, &t.CreatedAt, &createdBy, &staleAlertSentAt); err != nil {
 			return nil, fmt.Errorf("failed to scan agent token: %w", err)
-		}
-		if num, err := strconv.Atoi(rawServerID); err == nil {
-			t.ServerID = num
-		} else {
-			t.ServerID = rawServerID
 		}
 		t.ServerName = serverName.String
 		t.CreatedBy = createdBy.String

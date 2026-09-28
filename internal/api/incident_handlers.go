@@ -231,13 +231,13 @@ func IgnoreIncidentHandler(w http.ResponseWriter, r *http.Request) {
 		username = claims.Username
 	}
 
-	// Look up site ID in cache for site-level ignore
+	// Look up the site UUID among the monitored sites for a site-level ignore
 	target := existing.Domain
 	entryType := "site"
-	if cachedSites, err := cache.GetCachedSites(); err == nil {
-		for _, s := range cachedSites {
+	if monitored, err := cache.GetMonitorTargets(); err == nil {
+		for _, s := range monitored {
 			if strings.EqualFold(s.Domain, existing.Domain) {
-				target = strconv.Itoa(s.ID)
+				target = s.SiteID
 				break
 			}
 		}

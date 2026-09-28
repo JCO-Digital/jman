@@ -43,8 +43,8 @@ type Task struct {
 	Description *string      `json:"description,omitempty"`
 
 	// Linkage
-	SiteID         any     `json:"site_id,omitempty"`
-	ServerID       any     `json:"server_id,omitempty"`
+	SiteID         *string `json:"site_id,omitempty"`   // site UUID
+	ServerID       *string `json:"server_id,omitempty"` // server UUID
 	OrganizationID *int    `json:"organization_id,omitempty"`
 	PluginSlug     *string `json:"plugin_slug,omitempty"`
 

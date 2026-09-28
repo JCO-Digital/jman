@@ -8,6 +8,8 @@ import type { Plugin, PluginUpdateResult } from "../types";
 interface UpdateEntry extends Plugin {
 	site_domain: string;
 	isVulnerable: boolean;
+	/** Plugin updates run over WP-CLI; sites without it can't be updated here. */
+	canUpdate: boolean;
 }
 
 const props = defineProps<{
@@ -25,9 +27,9 @@ const pluginUpdatesStore = usePluginUpdatesStore();
 const updates = ref<UpdateEntry[]>([]);
 
 type UpdateStatus = "idle" | "updating" | "success" | "error";
-const siteStatus = ref<Record<number, UpdateStatus>>({});
-const siteError = ref<Record<number, string>>({});
-const siteResult = ref<Record<number, PluginUpdateResult | null>>({});
+const siteStatus = ref<Record<string, UpdateStatus>>({});
+const siteError = ref<Record<string, string>>({});
+const siteResult = ref<Record<string, PluginUpdateResult | null>>({});
 const isUpdatingAll = ref(false);
 const confirmMode = ref<"all" | "vulnerable" | null>(null);
 
@@ -36,6 +38,7 @@ const isAnyUpdating = computed(() =>
 );
 
 const isPending = (u: UpdateEntry) => {
+	if (!u.canUpdate) return false;
 	const s = siteStatus.value[u.site_id];
 	return s !== "success" && s !== "updating";
 };
@@ -57,12 +60,15 @@ function snapshot() {
 		) ?? [],
 	);
 	updates.value = instances
-		.map((p) => ({
-			...p,
-			site_domain:
-				dataStore.getSiteById(p.site_id)?.domain ?? "Unknown Site",
-			isVulnerable: vulnerableSiteIds.has(p.site_id),
-		}))
+		.map((p) => {
+			const site = dataStore.getSiteById(p.site_id);
+			return {
+				...p,
+				site_domain: site?.domain ?? "Unknown Site",
+				isVulnerable: vulnerableSiteIds.has(p.site_id),
+				canUpdate: !!site?.can_wp_cli,
+			};
+		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
 	siteStatus.value = {};
 	siteError.value = {};
@@ -228,6 +234,13 @@ watch(
 												"
 												class="spinner spinner-small"
 											/>
+											<span
+												v-else-if="!entry.canUpdate"
+												class="text-muted font-xs"
+												title="This site has no WP-CLI access"
+											>
+												No WP-CLI
+											</span>
 											<button
 												v-else
 												class="btn btn-primary btn-sm"

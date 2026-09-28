@@ -51,8 +51,6 @@ type BasicAuth struct {
 
 type Site struct {
 	ID                int                    `json:"id"`
-	UUID              string                 `json:"uuid,omitempty"`
-	Provider          string                 `json:"provider,omitempty"`
 	ServerID          int                    `json:"server_id"`
 	Domain            string                 `json:"domain"`
 	AdditionalDomains []AdditionalDomain     `json:"additional_domains"`
@@ -79,12 +77,16 @@ type Site struct {
 	WPCore            *SiteCore              `json:"wp_core,omitempty"`
 }
 
+// CliSite is the CLI/scheduler view of a WP-CLI-reachable site. ID and
+// ServerID are canonical UUIDs; ProviderSiteID keeps the SpinupWP integer ID
+// (0 for non-SpinupWP sites) for the few places that talk to SpinupWP itself.
 type CliSite struct {
-	ID         int    `json:"id"`
-	UUID       string `json:"uuid,omitempty"`
-	Name       string `json:"name"`
-	ServerID   int    `json:"serverId"`
-	ServerName string `json:"serverName"`
-	SSH        string `json:"ssh"`
-	Path       string `json:"path"`
+	ID             string `json:"id"`
+	ProviderSiteID int    `json:"providerSiteId,omitempty"`
+	Provider       string `json:"provider"`
+	Name           string `json:"name"`
+	ServerID       string `json:"serverId,omitempty"`
+	ServerName     string `json:"serverName"`
+	SSH            string `json:"ssh"`
+	Path           string `json:"path"`
 }

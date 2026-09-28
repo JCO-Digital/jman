@@ -10,7 +10,6 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
-	"github.com/JCO-Digital/jman/internal/models"
 )
 
 const (
@@ -33,8 +32,8 @@ type SiteStatus struct {
 	Mu       sync.Mutex `json:"-"`
 	InFlight bool       `json:"-"`
 
-	ID                   int       `json:"id"`
-	ServerID             int       `json:"server_id"`
+	ID                   string    `json:"id"`        // site UUID
+	ServerID             string    `json:"server_id"` // server UUID
 	Domain               string    `json:"domain"`
 	IsDown               bool      `json:"is_down"`
 	FailureCount         int       `json:"failure_count"`
@@ -75,11 +74,11 @@ func LoadState() (*State, error) {
 	}
 	defer rows.Close()
 
-	// Fetch sites from cache to populate IDs
-	cachedSites, _ := cache.GetCachedSites()
-	siteMap := make(map[string]models.Site)
-	for _, s := range cachedSites {
-		siteMap[strings.ToLower(s.Domain)] = s
+	// Fetch monitor targets to populate IDs
+	targets, _ := cache.GetMonitorTargets()
+	siteMap := make(map[string]cache.MonitorTarget)
+	for _, t := range targets {
+		siteMap[strings.ToLower(t.Domain)] = t
 	}
 
 	for rows.Next() {
@@ -104,9 +103,9 @@ func LoadState() (*State, error) {
 		}
 		status.Domain = domain
 
-		if s, ok := siteMap[strings.ToLower(domain)]; ok {
-			status.ID = s.ID
-			status.ServerID = s.ServerID
+		if t, ok := siteMap[strings.ToLower(domain)]; ok {
+			status.ID = t.SiteID
+			status.ServerID = t.ServerID
 		}
 
 		// Normalize mode based on is_down status to ensure continuity after migration.
@@ -235,12 +234,12 @@ func (s *State) GetStatus(domain string) *SiteStatus {
 		NextCheckAt: time.Now(),
 	}
 
-	// Try to populate IDs from cache
-	if cachedSites, err := cache.GetCachedSites(); err == nil {
-		for _, cs := range cachedSites {
-			if strings.ToLower(cs.Domain) == domain {
-				status.ID = cs.ID
-				status.ServerID = cs.ServerID
+	// Try to populate IDs from the monitor targets
+	if targets, err := cache.GetMonitorTargets(); err == nil {
+		for _, t := range targets {
+			if strings.ToLower(t.Domain) == domain {
+				status.ID = t.SiteID
+				status.ServerID = t.ServerID
 				break
 			}
 		}

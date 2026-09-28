@@ -10,8 +10,8 @@ import LoadingSpinner from "./LoadingSpinner.vue";
 const props = defineProps<{
 	history: MonitorHistory[];
 	domain?: string;
-	siteId?: number;
-	serverId?: number;
+	siteId?: string;
+	serverId?: string | null;
 }>();
 
 const monitorStore = useMonitorStore();
@@ -22,11 +22,11 @@ const TOTAL_MINUTES = 1440; // 24 hours
 const MS_PER_MINUTE = 60000;
 
 const effectiveIds = computed(() => {
-	let sId = props.siteId;
-	let srvId = props.serverId;
+	let sId: string | null | undefined = props.siteId;
+	let srvId: string | null | undefined = props.serverId;
 
 	// Fallback to domain-based lookup if IDs are missing
-	if ((sId === undefined || srvId === undefined) && props.domain) {
+	if ((sId == null || srvId === undefined) && props.domain) {
 		const site = dataStore.sites.find((s) => s.domain === props.domain);
 		if (site) {
 			sId = sId ?? site.id;

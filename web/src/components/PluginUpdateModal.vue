@@ -9,7 +9,7 @@ import type { Plugin, PluginUpdateResult } from "../types";
 
 const props = defineProps<{
 	visible: boolean;
-	siteId: number;
+	siteId: string;
 }>();
 
 const emit = defineEmits<{
@@ -160,7 +160,7 @@ async function runUpdates(entries: Plugin[]) {
 		const successes = attempted.filter((a) => a.success);
 		const failures = attempted.filter((a) => !a.success);
 
-		let status: "full" | "partial" | "failed" = "failed";
+		let status: "full" | "partial" | "failed";
 		if (failures.length > 0) {
 			status = "failed";
 		} else if (successes.length === totalAvailableBefore) {

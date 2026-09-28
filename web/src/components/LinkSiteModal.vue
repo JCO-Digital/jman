@@ -31,7 +31,7 @@ const availableSites = computed(() => {
 	});
 });
 
-const handleLinkSite = async (siteId: number) => {
+const handleLinkSite = async (siteId: string) => {
 	try {
 		await organizationStore.linkSiteToOrganization(
 			siteId,

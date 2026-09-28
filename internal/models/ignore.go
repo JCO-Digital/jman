@@ -6,9 +6,9 @@ import "time"
 type IgnoreEntry struct {
 	ID             int       `json:"id"`
 	Type           string    `json:"type"`             // site, server, plugin, vulnerability
-	Target         string    `json:"target"`           // SpinupWP ID, slug, or UUID
+	Target         string    `json:"target"`           // site/server UUID, plugin slug, or vulnerability UUID
 	Reason         string    `json:"reason"`           // Freetext explanation
-	NegatedSiteIDs []int     `json:"negated_site_ids"` // Site IDs to exclude from a server-wide ignore
+	NegatedSiteIDs []string  `json:"negated_site_ids"` // Site UUIDs to exclude from a server-wide ignore
 	UseForMonitor  bool      `json:"use_for_monitor"`  // Applies to uptime monitoring
 	UseForVuln     bool      `json:"use_for_vuln"`     // Applies to vulnerability scanning
 	CreatedAt      time.Time `json:"created_at"`

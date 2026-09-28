@@ -13,7 +13,7 @@ import (
 )
 
 type CliOptions struct {
-	SiteID         int
+	SiteID         string // site UUID, for failure tracking
 	SSH            string
 	Path           string
 	User           int
@@ -76,7 +76,7 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 
 	verb.Printf(verb.Debug, "Command output:\n%s\n\nError output:\n%s", res.Output, res.Error)
 
-	if opts.SiteID != 0 {
+	if opts.SiteID != "" {
 		if err != nil {
 			RecordFailure(opts.SiteID)
 		} else {

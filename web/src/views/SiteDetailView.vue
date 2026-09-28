@@ -17,7 +17,7 @@ import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 import { useCoreUpdateStore } from "../stores/coreUpdate";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
-import { formatBytes } from "../utils/format";
+import { formatBytes, providerLabel } from "../utils/format";
 import type { SiteUpdateLedgerEntry } from "../types";
 import { BASE_URL } from "../utils/api";
 
@@ -35,11 +35,45 @@ const ignoreStore = useIgnoreStore();
 const toast = useToastStore();
 const { confirm } = useConfirm();
 
-const siteId = parseInt(props.id, 10);
-if (isNaN(siteId)) router.replace({ name: "sites" });
 const organization = ref<Organization | null>(null);
 const contacts = ref<Contact[]>([]);
-const site = computed(() => dataStore.getSiteById(siteId));
+const site = computed(() => dataStore.getSiteById(props.id));
+// The canonical site UUID. Falls back to the route param (which the API also
+// accepts as a legacy SpinupWP id) until the site list is loaded.
+const siteId = computed(() => site.value?.id ?? props.id);
+
+const LEGACY_ID_RE = /^\d+$/;
+
+// Legacy links (/site/12345) carry a SpinupWP integer id: resolve them to the
+// site's UUID route. Unknown ids redirect to the site list once data is loaded
+// (after one refresh, in case the session cache predates the site).
+let refreshedForMissingSite = false;
+watch(
+	() => [props.id, dataStore.isLoaded, dataStore.isLoading] as const,
+	async ([id, isLoaded, isLoading]) => {
+		if (site.value || !isLoaded || isLoading) return;
+		if (LEGACY_ID_RE.test(id)) {
+			const match = dataStore.sites.find(
+				(s) => s.provider_site_id === id,
+			);
+			if (match) {
+				router.replace({
+					name: "site-detail",
+					params: { id: match.id },
+				});
+				return;
+			}
+		}
+		if (!refreshedForMissingSite) {
+			refreshedForMissingSite = true;
+			await dataStore.refreshData();
+			return; // the watcher re-runs once loading finishes
+		}
+		toast.addToast("Site not found.", "error");
+		router.replace({ name: "sites" });
+	},
+	{ immediate: true },
+);
 
 // Update Ledger state
 const ledgerEntries = ref<SiteUpdateLedgerEntry[]>([]);
@@ -51,9 +85,12 @@ const isSavingLedger = ref(false);
 
 const fetchLedger = async () => {
 	try {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/update-ledger`, {
-			headers: authStore.authHeader,
-		});
+		const res = await fetch(
+			`${BASE_URL}/sites/${siteId.value}/update-ledger`,
+			{
+				headers: authStore.authHeader,
+			},
+		);
 		if (res.ok) {
 			const data = await res.json();
 			ledgerEntries.value = data || [];
@@ -71,18 +108,21 @@ const saveManualLedgerEntry = async () => {
 			dataJSON = JSON.stringify({ note: newLedgerDetails.value.trim() });
 		}
 
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/update-ledger`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				...authStore.authHeader,
+		const res = await fetch(
+			`${BASE_URL}/sites/${siteId.value}/update-ledger`,
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					...authStore.authHeader,
+				},
+				body: JSON.stringify({
+					update_type: newLedgerType.value,
+					status: newLedgerStatus.value,
+					data_json: dataJSON,
+				}),
 			},
-			body: JSON.stringify({
-				update_type: newLedgerType.value,
-				status: newLedgerStatus.value,
-				data_json: dataJSON,
-			}),
-		});
+		);
 
 		if (res.ok) {
 			toast.addToast("Manual update logged successfully.", "success");
@@ -186,11 +226,7 @@ const hasMultipleLines = (entry: SiteUpdateLedgerEntry) => {
 
 // Fetch initial data
 onMounted(async () => {
-	await Promise.all([
-		dataStore.initData(),
-		ignoreStore.fetchIgnoreEntries(),
-		fetchLedger(),
-	]);
+	await Promise.all([dataStore.initData(), ignoreStore.fetchIgnoreEntries()]);
 });
 
 // Watch for domain changes to fetch monitor status
@@ -204,11 +240,15 @@ watch(
 	{ immediate: true },
 );
 
-// Watch for site ID to fetch linked organization
+// Watch for the resolved site UUID to fetch its ledger and linked organization
 watch(
 	() => site.value?.id,
 	async (id) => {
-		if (id) {
+		organization.value = null;
+		contacts.value = [];
+		ledgerEntries.value = [];
+		if (id != null) {
+			fetchLedger();
 			try {
 				organization.value =
 					await organizationStore.getOrganizationForSite(id);
@@ -228,7 +268,11 @@ watch(
 );
 
 const server = computed(() =>
-	site.value ? dataStore.getServerById(site.value.server_id) : null,
+	site.value ? dataStore.getServerById(site.value.server_id) : undefined,
+);
+
+const serverName = computed(
+	() => site.value?.server_name || server.value?.name || "",
 );
 
 const environmentDraft = ref<SiteEnvironment | "">("");
@@ -260,7 +304,9 @@ const history = computed(() =>
 );
 
 const sitePlugins = computed(() => {
-	const enrichedSite = dataStore.enrichedSites.find((s) => s.id === siteId);
+	const enrichedSite = dataStore.enrichedSites.find(
+		(s) => s.id === siteId.value,
+	);
 	if (!enrichedSite) return [];
 
 	return enrichedSite.plugins.map((plugin) => {
@@ -280,7 +326,17 @@ const sitePlugins = computed(() => {
 const siteInfoItems = computed(() => {
 	if (!site.value) return [];
 	const items: InfoItem[] = [
-		{ label: "Site ID", value: site.value.id },
+		{ label: "Site ID", value: site.value.id, copyable: true },
+		{ label: "Provider", value: providerLabel(site.value.provider) },
+	];
+	if (site.value.provider_site_id) {
+		items.push({
+			label: `${providerLabel(site.value.provider)} ID`,
+			value: site.value.provider_site_id,
+			copyable: true,
+		});
+	}
+	items.push(
 		{
 			label: "Domain",
 			value: site.value.domain,
@@ -290,19 +346,26 @@ const siteInfoItems = computed(() => {
 				? site.value.domain
 				: `https://${site.value.domain}`,
 		},
-		{ label: "PHP Version", value: site.value.php_version },
+		{ label: "PHP Version", value: site.value.php_version || "—" },
 		{ label: "WordPress", value: site.value.is_wordpress ? "Yes" : "No" },
-	];
+		{ label: "Server", value: serverName.value || "No server" },
+		{
+			label: "Connection",
+			value: connectionLabel(site.value.connection_type),
+		},
+	);
 
 	if (site.value.site_user) {
 		items.push({
 			label: "System User",
 			value: site.value.site_user,
 			copyable: true,
-			secondaryCopyValue: server.value
-				? `${site.value.site_user}@${server.value.name}`
+			secondaryCopyValue: sshHost.value
+				? `${site.value.site_user}@${sshHost.value}`
 				: undefined,
-			secondaryCopyTitle: `Copy connection string: ${site.value.site_user}@${server.value?.name || "server"}`,
+			secondaryCopyTitle: sshHost.value
+				? `Copy connection string: ${site.value.site_user}@${sshHost.value}`
+				: undefined,
 		});
 	}
 
@@ -336,14 +399,47 @@ const siteInfoItems = computed(() => {
 	return items;
 });
 
+// Host for the "user@host" copy shortcut: prefer the server's IP (what SSH
+// actually needs), then its name.
+const sshHost = computed(
+	() => server.value?.ip_address || serverName.value || "",
+);
+
+function connectionLabel(type: string | undefined): string {
+	switch (type) {
+		case "agent":
+			return "jman-agent";
+		case "ssh":
+			return "SSH";
+		case "none":
+			return "None";
+		default:
+			return "—";
+	}
+}
+
 const serverInfoItems = computed(() => {
 	if (!server.value) return [];
-	const items = [
+	const items: InfoItem[] = [
 		{ label: "Server Name", value: server.value.name, copyable: true },
-		{ label: "IP Address", value: server.value.ip_address, copyable: true },
-		{ label: "Ubuntu", value: server.value.ubuntu_version },
-		{ label: "Provider", value: server.value.provider_name },
+		{ label: "Provider", value: providerLabel(server.value.provider) },
 	];
+	if (server.value.is_logical) {
+		items.push({ label: "Type", value: "Logical (no host)" });
+	}
+	if (server.value.ip_address) {
+		items.push({
+			label: "IP Address",
+			value: server.value.ip_address,
+			copyable: true,
+		});
+	}
+	if (server.value.ubuntu_version) {
+		items.push({ label: "Ubuntu", value: server.value.ubuntu_version });
+	}
+	if (server.value.provider_name) {
+		items.push({ label: "Hosting", value: server.value.provider_name });
+	}
 
 	if (server.value.disk_space && server.value.disk_space.total > 0) {
 		const used = server.value.disk_space.used;
@@ -463,11 +559,15 @@ const handleSearch = () => {
 
 const linkOrganization = async (organizationId: number) => {
 	try {
-		await organizationStore.linkSiteToOrganization(siteId, organizationId);
-		dataStore.setSiteOrganizationLink(siteId, organizationId);
+		await organizationStore.linkSiteToOrganization(
+			siteId.value,
+			organizationId,
+		);
+		dataStore.setSiteOrganizationLink(siteId.value, organizationId);
 		await dataStore.refreshData();
-		organization.value =
-			await organizationStore.getOrganizationForSite(siteId);
+		organization.value = await organizationStore.getOrganizationForSite(
+			siteId.value,
+		);
 		if (organization.value) {
 			contacts.value = await organizationStore.fetchOrganizationContacts(
 				organization.value.id,
@@ -483,8 +583,8 @@ const unlinkOrganization = async () => {
 	if (!(await confirm("Are you sure you want to unlink this organization?")))
 		return;
 	try {
-		await organizationStore.unlinkSite(siteId);
-		dataStore.setSiteOrganizationLink(siteId, undefined);
+		await organizationStore.unlinkSite(siteId.value);
+		dataStore.setSiteOrganizationLink(siteId.value, undefined);
 		await dataStore.refreshData();
 		organization.value = null;
 		contacts.value = [];
@@ -529,7 +629,7 @@ const unlinkOrganization = async () => {
 				/>
 			</div>
 
-			<NotesWidget parent-type="Site" :parent-id="siteId" />
+			<NotesWidget parent-type="Site" :parent-id="site.id" />
 
 			<section class="card mt-4">
 				<div class="card-header">
@@ -626,13 +726,21 @@ const unlinkOrganization = async () => {
 				/>
 			</div>
 
-			<SiteTrafficCard :site-id="site.id" />
+			<SiteTrafficCard v-if="site.has_agent" :site-id="site.id" />
+			<section v-else class="card mt-4">
+				<div class="card-header">
+					<h2>Traffic</h2>
+				</div>
+				<p class="text-muted">
+					Traffic analytics require jman-agent on this site's server.
+				</p>
+			</section>
 
 			<section class="card mt-4">
 				<div class="card-header">
 					<h2>WordPress Core</h2>
 					<button
-						v-if="authStore.canExecute"
+						v-if="authStore.canExecute && site.can_wp_cli"
 						class="btn btn-outline btn-sm"
 						:disabled="isCheckingCoreUpdate"
 						@click="checkCoreUpdate"
@@ -644,6 +752,10 @@ const unlinkOrganization = async () => {
 						}}
 					</button>
 				</div>
+
+				<p v-if="!site.can_wp_cli" class="text-muted">
+					Core and plugin updates require WP-CLI access to this site.
+				</p>
 
 				<div class="info-item">
 					<span class="label">Installed Version</span>
@@ -677,6 +789,7 @@ const unlinkOrganization = async () => {
 				<div
 					v-if="
 						authStore.canExecute &&
+						site.can_wp_cli &&
 						(site.wp_core?.minor_update ||
 							site.wp_core?.major_update)
 					"
@@ -713,7 +826,7 @@ const unlinkOrganization = async () => {
 				<div class="card-header">
 					<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
 					<button
-						v-if="authStore.canExecute"
+						v-if="authStore.canExecute && site.can_wp_cli"
 						class="btn btn-primary btn-sm"
 						@click="showPluginUpdateModal = true"
 					>
@@ -909,8 +1022,9 @@ const unlinkOrganization = async () => {
 
 		<!-- Plugin Update Modal -->
 		<PluginUpdateModal
+			v-if="site"
 			:visible="showPluginUpdateModal"
-			:site-id="siteId"
+			:site-id="site.id"
 			@close="
 				() => {
 					showPluginUpdateModal = false;

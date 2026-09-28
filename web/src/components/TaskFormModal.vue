@@ -31,8 +31,9 @@ const form = reactive({
 	type: "one-time" as TaskType,
 	priority: "medium" as TaskPriority,
 	assigned_to: "",
-	site_id: "" as number | "",
-	server_id: "" as number | "",
+	// Site/server ids are UUID strings; "" means none.
+	site_id: "",
+	server_id: "",
 	organization_id: "" as number | "",
 	plugin_slug: "",
 	interval: "",
@@ -129,8 +130,8 @@ async function save() {
 		type: form.type,
 		priority: form.priority,
 		assigned_to: form.assigned_to.trim() || null,
-		site_id: form.site_id !== "" ? Number(form.site_id) : null,
-		server_id: form.server_id !== "" ? Number(form.server_id) : null,
+		site_id: form.site_id || null,
+		server_id: form.server_id || null,
 		organization_id:
 			form.organization_id !== "" ? Number(form.organization_id) : null,
 		plugin_slug: form.plugin_slug.trim() || null,

@@ -184,7 +184,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	// Log-tailing state is only persisted after a successful send (below),
 	// so a failed report simply re-reads the same log range next cycle
 	// instead of losing or duplicating traffic data.
-	pendingLogStates := map[int]*logs.FileState{}
+	pendingLogStates := map[string]*logs.FileState{}
 
 	// Shared across all sites in this cycle so a server with many
 	// simultaneously-backlogged sites still produces one bounded report,
@@ -226,6 +226,9 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 		// content directory, independent of how (or whether) that resolved
 		// above, so a site with unresolvable content can still report traffic.
 		logsDir := filepath.Join("/sites", site.Domain, "logs")
+		if err := logs.MigrateLegacyState(cfg.StateDir, site.LegacySiteID, site.SiteID); err != nil {
+			verb.LogPrintf(verb.Normal, "%s: %v", site.Domain, err)
+		}
 		logState, err := logs.LoadState(cfg.StateDir, site.SiteID)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to load log state for %s: %v", site.Domain, err)
@@ -257,7 +260,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 
 	for siteID, state := range pendingLogStates {
 		if err := logs.SaveState(cfg.StateDir, siteID, state); err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to save log state for site %d: %v", siteID, err)
+			verb.LogPrintf(verb.Normal, "Failed to save log state for site %s: %v", siteID, err)
 		}
 	}
 

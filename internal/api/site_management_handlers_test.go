@@ -243,3 +243,157 @@ func TestSitesHandler_FormatManaged(t *testing.T) {
 		t.Fatalf("unexpected sites list: %+v", sites)
 	}
 }
+
+func TestServersHandler_FormatManaged(t *testing.T) {
+	setupSiteManagementTest(t)
+	claims := &AuthClaims{Username: "user", Level: config.LevelBasic}
+	ctx := contextWithClaims(context.Background(), claims)
+
+	// Empty inventory returns an empty array, not null
+	req := httptest.NewRequest("GET", "/api/servers?format=managed", nil).WithContext(ctx)
+	w := httptest.NewRecorder()
+	ServersHandler(w, req)
+	if w.Code != http.StatusOK || bytes.TrimSpace(w.Body.Bytes())[0] != '[' {
+		t.Fatalf("expected 200 with empty array, got %d: %s", w.Code, w.Body.String())
+	}
+
+	server := models.ManagedServer{ID: utils.NewV7UUID(), Name: "Kinsta", Provider: "kinsta", IsLogical: true, SSHPort: 22}
+	if err := db.SaveManagedServer(server); err != nil {
+		t.Fatalf("failed to seed server: %v", err)
+	}
+
+	req = httptest.NewRequest("GET", "/api/servers?format=managed", nil).WithContext(ctx)
+	w = httptest.NewRecorder()
+	ServersHandler(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var servers []models.ManagedServer
+	if err := json.Unmarshal(w.Body.Bytes(), &servers); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if len(servers) != 1 || servers[0].Name != "Kinsta" || !servers[0].IsLogical {
+		t.Fatalf("unexpected servers list: %+v", servers)
+	}
+}
+
+func TestSpinupWPEntitiesAreReadOnly(t *testing.T) {
+	setupSiteManagementTest(t)
+	claims := &AuthClaims{Username: "admin", Level: config.LevelEdit}
+	ctx := contextWithClaims(context.Background(), claims)
+
+	serverID := utils.SpinupWPServerUUID(10)
+	if err := db.SaveManagedServer(models.ManagedServer{ID: serverID, Name: "spinup1", Provider: "spinupwp", SSHPort: 22}); err != nil {
+		t.Fatalf("failed to seed server: %v", err)
+	}
+	siteID := utils.SpinupWPSiteUUID(20)
+	if err := db.SaveManagedSite(models.ManagedSite{
+		ID:             siteID,
+		ServerID:       &serverID,
+		Provider:       "spinupwp",
+		Domain:         "spinup-site.com",
+		Environment:    models.SiteEnvironmentProduction,
+		SSHHost:        "spinup1",
+		SSHUser:        "u",
+		SitePath:       "files",
+		ConnectionType: "agent",
+	}); err != nil {
+		t.Fatalf("failed to seed site: %v", err)
+	}
+
+	body := []byte(`{"ssh_port": 2222}`)
+	req := httptest.NewRequest("PUT", "/api/sites/"+siteID, bytes.NewReader(body)).WithContext(ctx)
+	req.SetPathValue("id", siteID)
+	w := httptest.NewRecorder()
+	UpdateSiteHandler(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 on update, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest("DELETE", "/api/sites/"+siteID, nil).WithContext(ctx)
+	req.SetPathValue("id", siteID)
+	w = httptest.NewRecorder()
+	DeleteSiteHandler(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 on site delete, got %d: %s", w.Code, w.Body.String())
+	}
+
+	req = httptest.NewRequest("DELETE", "/api/servers/"+serverID, nil).WithContext(ctx)
+	req.SetPathValue("id", serverID)
+	w = httptest.NewRecorder()
+	DeleteServerHandler(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 on server delete, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSiteServerAssignment(t *testing.T) {
+	setupSiteManagementTest(t)
+	claims := &AuthClaims{Username: "admin", Level: config.LevelEdit}
+	ctx := contextWithClaims(context.Background(), claims)
+
+	serverID := utils.NewV7UUID()
+	if err := db.SaveManagedServer(models.ManagedServer{ID: serverID, Name: "WPEngine", Provider: "wpengine", IsLogical: true, SSHPort: 22}); err != nil {
+		t.Fatalf("failed to seed server: %v", err)
+	}
+
+	// Empty server_id on create is treated as unassigned
+	body := []byte(`{"domain": "unassigned.com", "server_id": ""}`)
+	req := httptest.NewRequest("POST", "/api/sites", bytes.NewReader(body)).WithContext(ctx)
+	w := httptest.NewRecorder()
+	CreateSiteHandler(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	body, _ = json.Marshal(CreateSiteRequest{Domain: "assigned.com", ServerID: &serverID})
+	req = httptest.NewRequest("POST", "/api/sites", bytes.NewReader(body)).WithContext(ctx)
+	w = httptest.NewRecorder()
+	CreateSiteHandler(w, req)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+	var created models.ManagedSite
+	if err := json.Unmarshal(w.Body.Bytes(), &created); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if created.ServerID == nil || *created.ServerID != serverID {
+		t.Fatalf("expected server assignment, got %+v", created.ServerID)
+	}
+
+	// Server with assigned sites cannot be deleted
+	req = httptest.NewRequest("DELETE", "/api/servers/"+serverID, nil).WithContext(ctx)
+	req.SetPathValue("id", serverID)
+	w = httptest.NewRecorder()
+	DeleteServerHandler(w, req)
+	if w.Code != http.StatusConflict {
+		t.Fatalf("expected 409 deleting server with sites, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// Empty server_id on update unassigns the site
+	body = []byte(`{"server_id": ""}`)
+	req = httptest.NewRequest("PUT", "/api/sites/"+created.ID, bytes.NewReader(body)).WithContext(ctx)
+	req.SetPathValue("id", created.ID)
+	w = httptest.NewRecorder()
+	UpdateSiteHandler(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var updated models.ManagedSite
+	if err := json.Unmarshal(w.Body.Bytes(), &updated); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if updated.ServerID != nil {
+		t.Fatalf("expected server to be unassigned, got %v", *updated.ServerID)
+	}
+
+	// Now the server can be deleted
+	req = httptest.NewRequest("DELETE", "/api/servers/"+serverID, nil).WithContext(ctx)
+	req.SetPathValue("id", serverID)
+	w = httptest.NewRecorder()
+	DeleteServerHandler(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}

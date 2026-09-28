@@ -8,6 +8,7 @@ const props = defineProps<{
 	modelValue: string;
 	showUsersTab: boolean;
 	showIgnoredTab: boolean;
+	showSitesTab: boolean;
 	showAgentTokensTab: boolean;
 }>();
 
@@ -19,6 +20,7 @@ const tabs: Tab[] = [
 	{ id: "account", label: "My Account" },
 	{ id: "general", label: "General" },
 	{ id: "ignored", label: "Ignore List" },
+	{ id: "sites", label: "Sites" },
 	{ id: "users", label: "Users" },
 	{ id: "agent-tokens", label: "Agent Tokens" },
 ];
@@ -27,6 +29,7 @@ function visibleTabs(): Tab[] {
 	return tabs.filter((tab) => {
 		if (tab.id === "users") return props.showUsersTab;
 		if (tab.id === "ignored") return props.showIgnoredTab;
+		if (tab.id === "sites") return props.showSitesTab;
 		if (tab.id === "agent-tokens") return props.showAgentTokensTab;
 		return true;
 	});

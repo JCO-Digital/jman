@@ -9,8 +9,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-func siteIDs(sites []models.AgentManifestSite) []int {
-	ids := make([]int, len(sites))
+func siteIDs(sites []models.AgentManifestSite) []string {
+	ids := make([]string, len(sites))
 	for i, s := range sites {
 		ids[i] = s.SiteID
 	}
@@ -19,18 +19,18 @@ func siteIDs(sites []models.AgentManifestSite) []int {
 
 func TestRotateSites(t *testing.T) {
 	sites := []models.AgentManifestSite{
-		{SiteID: 1}, {SiteID: 2}, {SiteID: 3}, {SiteID: 4},
+		{SiteID: "1"}, {SiteID: "2"}, {SiteID: "3"}, {SiteID: "4"},
 	}
 
 	cases := []struct {
 		counter int
-		want    []int
+		want    []string
 	}{
-		{counter: 0, want: []int{1, 2, 3, 4}},
-		{counter: 1, want: []int{2, 3, 4, 1}},
-		{counter: 2, want: []int{3, 4, 1, 2}},
-		{counter: 4, want: []int{1, 2, 3, 4}}, // wraps around
-		{counter: 5, want: []int{2, 3, 4, 1}},
+		{counter: 0, want: []string{"1", "2", "3", "4"}},
+		{counter: 1, want: []string{"2", "3", "4", "1"}},
+		{counter: 2, want: []string{"3", "4", "1", "2"}},
+		{counter: 4, want: []string{"1", "2", "3", "4"}}, // wraps around
+		{counter: 5, want: []string{"2", "3", "4", "1"}},
 	}
 
 	for _, c := range cases {
@@ -45,10 +45,10 @@ func TestRotateSites_NoStarvation(t *testing.T) {
 	// Every site must eventually reach the front of the queue, so a
 	// perpetually-backlogged site can never permanently starve another.
 	sites := []models.AgentManifestSite{
-		{SiteID: 10}, {SiteID: 20}, {SiteID: 30},
+		{SiteID: "10"}, {SiteID: "20"}, {SiteID: "30"},
 	}
 
-	seenFirst := map[int]bool{}
+	seenFirst := map[string]bool{}
 	for counter := 0; counter < len(sites); counter++ {
 		rotated := rotateSites(sites, counter)
 		seenFirst[rotated[0].SiteID] = true
@@ -56,7 +56,7 @@ func TestRotateSites_NoStarvation(t *testing.T) {
 
 	for _, s := range sites {
 		if !seenFirst[s.SiteID] {
-			t.Errorf("site %d never reached the front of the queue across a full rotation", s.SiteID)
+			t.Errorf("site %s never reached the front of the queue across a full rotation", s.SiteID)
 		}
 	}
 }

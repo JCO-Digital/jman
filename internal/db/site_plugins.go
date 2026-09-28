@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -13,11 +12,6 @@ func SaveSitePlugin(plugin models.WPPlugin) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
-	}
-
-	siteIdentifier := any(plugin.SiteID)
-	if plugin.SiteUUID != "" {
-		siteIdentifier = plugin.SiteUUID
 	}
 
 	query := `
@@ -33,7 +27,7 @@ func SaveSitePlugin(plugin models.WPPlugin) error {
 	`
 
 	_, err := db.Exec(query,
-		siteIdentifier,
+		plugin.SiteID,
 		plugin.Name, // WPPlugin.Name is used as the slug
 		plugin.Status,
 		plugin.Version,
@@ -42,15 +36,14 @@ func SaveSitePlugin(plugin models.WPPlugin) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to save site plugin %s for site %v: %w", plugin.Name, siteIdentifier, err)
+		return fmt.Errorf("failed to save site plugin %s for site %s: %w", plugin.Name, plugin.SiteID, err)
 	}
 
 	return nil
 }
 
-// GetSitePlugins retrieves all plugins installed on a specific site.
-// siteID can be an int or a string (UUID).
-func GetSitePlugins(siteID any) ([]models.WPPlugin, error) {
+// GetSitePlugins retrieves all plugins installed on a specific site (by UUID).
+func GetSitePlugins(siteID string) ([]models.WPPlugin, error) {
 	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -64,16 +57,15 @@ func GetSitePlugins(siteID any) ([]models.WPPlugin, error) {
 
 	rows, err := db.Query(query, siteID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query plugins for site %v: %w", siteID, err)
+		return nil, fmt.Errorf("failed to query plugins for site %s: %w", siteID, err)
 	}
 	defer rows.Close()
 
 	var plugins []models.WPPlugin
 	for rows.Next() {
-		var rawSiteID string
 		var p models.WPPlugin
 		err := rows.Scan(
-			&rawSiteID,
+			&p.SiteID,
 			&p.Name,
 			&p.Status,
 			&p.Version,
@@ -83,10 +75,6 @@ func GetSitePlugins(siteID any) ([]models.WPPlugin, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan site plugin: %w", err)
 		}
-		if id, err := strconv.Atoi(rawSiteID); err == nil {
-			p.SiteID = id
-		}
-		p.SiteUUID = rawSiteID
 		plugins = append(plugins, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -96,9 +84,8 @@ func GetSitePlugins(siteID any) ([]models.WPPlugin, error) {
 	return plugins, nil
 }
 
-// DeleteSitePlugins removes all plugin records for a specific site.
-// siteID can be an int or a string (UUID).
-func DeleteSitePlugins(siteID any) error {
+// DeleteSitePlugins removes all plugin records for a specific site (by UUID).
+func DeleteSitePlugins(siteID string) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -107,7 +94,7 @@ func DeleteSitePlugins(siteID any) error {
 	query := `DELETE FROM site_plugins WHERE site_id = ?`
 	_, err := db.Exec(query, siteID)
 	if err != nil {
-		return fmt.Errorf("failed to delete plugins for site %v: %w", siteID, err)
+		return fmt.Errorf("failed to delete plugins for site %s: %w", siteID, err)
 	}
 
 	return nil
@@ -129,10 +116,9 @@ func GetAllSitePlugins() ([]models.WPPlugin, error) {
 
 	var plugins []models.WPPlugin
 	for rows.Next() {
-		var rawSiteID string
 		var p models.WPPlugin
 		err := rows.Scan(
-			&rawSiteID,
+			&p.SiteID,
 			&p.Name,
 			&p.Status,
 			&p.Version,
@@ -142,10 +128,6 @@ func GetAllSitePlugins() ([]models.WPPlugin, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan site plugin: %w", err)
 		}
-		if id, err := strconv.Atoi(rawSiteID); err == nil {
-			p.SiteID = id
-		}
-		p.SiteUUID = rawSiteID
 		plugins = append(plugins, p)
 	}
 	if err := rows.Err(); err != nil {
@@ -155,8 +137,8 @@ func GetAllSitePlugins() ([]models.WPPlugin, error) {
 	return plugins, nil
 }
 
-// GetSitesWithPlugin returns a list of site IDs where a specific plugin is installed.
-func GetSitesWithPlugin(slug string) ([]int, error) {
+// GetSitesWithPlugin returns the UUIDs of sites where a specific plugin is installed.
+func GetSitesWithPlugin(slug string) ([]string, error) {
 	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -169,9 +151,9 @@ func GetSitesWithPlugin(slug string) ([]int, error) {
 	}
 	defer rows.Close()
 
-	var siteIDs []int
+	var siteIDs []string
 	for rows.Next() {
-		var id int
+		var id string
 		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("failed to scan site id: %w", err)
 		}
@@ -181,8 +163,8 @@ func GetSitesWithPlugin(slug string) ([]int, error) {
 	return siteIDs, nil
 }
 
-// GetSitePluginLastUpdates returns a map of site IDs to their last plugin update timestamp.
-func GetSitePluginLastUpdates() (map[int]string, error) {
+// GetSitePluginLastUpdates returns a map of site UUIDs to their last plugin update timestamp.
+func GetSitePluginLastUpdates() (map[string]string, error) {
 	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -195,9 +177,9 @@ func GetSitePluginLastUpdates() (map[int]string, error) {
 	}
 	defer rows.Close()
 
-	updates := make(map[int]string)
+	updates := make(map[string]string)
 	for rows.Next() {
-		var siteID int
+		var siteID string
 		var updatedAt sql.NullString
 		if err := rows.Scan(&siteID, &updatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan plugin update: %w", err)

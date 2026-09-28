@@ -90,8 +90,8 @@ func TestManagedSiteToCliSite(t *testing.T) {
 	}
 
 	cliSite := site.ToCliSite()
-	if cliSite.UUID != "test-uuid-1234" {
-		t.Errorf("expected UUID 'test-uuid-1234', got %q", cliSite.UUID)
+	if cliSite.ID != "test-uuid-1234" {
+		t.Errorf("expected ID 'test-uuid-1234', got %q", cliSite.ID)
 	}
 	if cliSite.Name != "wpengine-test.com" {
 		t.Errorf("expected Name 'wpengine-test.com', got %q", cliSite.Name)

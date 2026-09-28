@@ -2,16 +2,13 @@ package db
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
 )
 
-// SetSiteEnvironment inserts or updates the environment classification for a site.
-// SetSiteEnvironment sets the environment classification for a site.
-// siteID can be an int or a string (UUID).
-func SetSiteEnvironment(siteID any, environment string, updatedBy string) error {
+// SetSiteEnvironment inserts or updates the environment classification for a site (by UUID).
+func SetSiteEnvironment(siteID string, environment string, updatedBy string) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -27,28 +24,28 @@ func SetSiteEnvironment(siteID any, environment string, updatedBy string) error 
 	`
 
 	if _, err := db.Exec(query, siteID, environment, updatedBy); err != nil {
-		return fmt.Errorf("failed to set environment for site %v: %w", siteID, err)
+		return fmt.Errorf("failed to set environment for site %s: %w", siteID, err)
 	}
 
 	return nil
 }
 
 // ClearSiteEnvironment removes the environment classification for a site,
-// making it unclassified again. siteID can be an int or a string (UUID).
-func ClearSiteEnvironment(siteID any) error {
+// making it unclassified again.
+func ClearSiteEnvironment(siteID string) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
 	if _, err := db.Exec(`DELETE FROM site_environment WHERE site_id = ?`, siteID); err != nil {
-		return fmt.Errorf("failed to clear environment for site %v: %w", siteID, err)
+		return fmt.Errorf("failed to clear environment for site %s: %w", siteID, err)
 	}
 
 	return nil
 }
 
-// GetAllSiteEnvironments returns a map of site ID/UUID string to environment for every classified site.
+// GetAllSiteEnvironments returns a map of site UUID to environment for every classified site.
 func GetAllSiteEnvironments() (map[string]string, error) {
 	db := GetInventoryDB()
 	if db == nil {
@@ -80,7 +77,7 @@ func GetAllSiteEnvironments() (map[string]string, error) {
 // AutoClassifySiteEnvironments infers and persists an environment for every site that
 // doesn't already have one, based on its domain. Sites that are already classified
 // (manually or by a previous auto-classification) are left untouched. It returns the
-// number of sites that were newly classified.
+// number of sites that were newly classified. sites are SpinupWP sites.
 func AutoClassifySiteEnvironments(sites []models.Site) (int, error) {
 	existing, err := GetAllSiteEnvironments()
 	if err != nil {
@@ -89,14 +86,8 @@ func AutoClassifySiteEnvironments(sites []models.Site) (int, error) {
 
 	classified := 0
 	for _, site := range sites {
-		siteUUID := site.UUID
-		if siteUUID == "" {
-			siteUUID = utils.SpinupWPSiteUUID(site.ID)
-		}
+		siteUUID := utils.SpinupWPSiteUUID(site.ID)
 		if _, ok := existing[siteUUID]; ok {
-			continue
-		}
-		if _, ok := existing[strconv.Itoa(site.ID)]; ok {
 			continue
 		}
 

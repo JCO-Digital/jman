@@ -191,7 +191,7 @@ const handleSiteLinked = async () => {
 		await organizationStore.fetchOrganizationSites(organizationId);
 };
 
-const handleUnlinkSite = async (siteId: number) => {
+const handleUnlinkSite = async (siteId: string) => {
 	if (!(await confirm("Are you sure you want to unlink this site?"))) return;
 	try {
 		await organizationStore.unlinkSite(siteId);
@@ -204,8 +204,8 @@ const handleUnlinkSite = async (siteId: number) => {
 	}
 };
 
-const goToSite = (id: number) => {
-	router.push({ name: "site-detail", params: { id: id.toString() } });
+const goToSite = (id: string) => {
+	router.push({ name: "site-detail", params: { id } });
 };
 
 // Asset Management
@@ -213,7 +213,7 @@ const showLinkAssetModal = ref(false);
 const showPaymentModal = ref(false);
 const editingOrgAsset = ref<EnrichedOrganizationAsset | null>(null);
 const selectedAssetForPayment = ref<EnrichedOrganizationAsset | null>(null);
-const assetPrefill = ref<{ template: Asset; siteId: number | null } | null>(
+const assetPrefill = ref<{ template: Asset; siteId: string | null } | null>(
 	null,
 );
 
@@ -262,7 +262,7 @@ const unlinkedPlugins = computed(() => {
 			// Check if already linked specifically to this site OR globally to the organization
 			const isLinked = orgAssets.value.some(
 				(oa) =>
-					(oa.site_id === site.id || oa.site_id === null) &&
+					(oa.site_id === site.id || oa.site_id == null) &&
 					(oa.asset_id === matchingTemplate.id ||
 						oa.identifier === plugin.name),
 			);
@@ -322,7 +322,7 @@ const formatDate = (dateString: string | null) => {
 	return new Date(dateString).toLocaleDateString("de-DE");
 };
 
-const formatAuditDate = (dateStr: string) => {
+const formatAuditDate = (dateStr: string | null | undefined) => {
 	if (!dateStr) return "";
 	return new Date(dateStr).toLocaleString(undefined, {
 		year: "numeric",
@@ -679,7 +679,10 @@ const sitesAudit = computed(() => {
 											oa.identifier ||
 											"Custom Asset"
 										}}</strong>
-										<div v-if="oa.site_id" class="sub-text">
+										<div
+											v-if="oa.site_id != null"
+											class="sub-text"
+										>
 											Linked to:
 											{{
 												linkedSites.find(

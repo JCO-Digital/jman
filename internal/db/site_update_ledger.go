@@ -3,19 +3,17 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-// scanUpdateLedgerRow safely scans a site_update_ledger row where site_id can be int or UUID string.
+// scanUpdateLedgerRow scans a site_update_ledger row.
 func scanUpdateLedgerRow(scanner interface{ Scan(dest ...any) error }) (*models.SiteUpdateLedgerEntry, error) {
 	var e models.SiteUpdateLedgerEntry
-	var rawSiteID string
 	var dataJSON sql.NullString
 	err := scanner.Scan(
 		&e.ID,
-		&rawSiteID,
+		&e.SiteID,
 		&e.UpdateType,
 		&e.Status,
 		&dataJSON,
@@ -25,12 +23,6 @@ func scanUpdateLedgerRow(scanner interface{ Scan(dest ...any) error }) (*models.
 	if err != nil {
 		return nil, err
 	}
-	if id, err := strconv.Atoi(rawSiteID); err == nil {
-		e.SiteID = id
-	} else {
-		e.SiteID = rawSiteID
-	}
-	e.SiteUUID = rawSiteID
 	if dataJSON.Valid {
 		e.DataJSON = dataJSON.String
 	}
@@ -50,13 +42,8 @@ func SaveSiteUpdateLedgerEntry(entry *models.SiteUpdateLedgerEntry) error {
 	) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	`
 
-	siteIdent := entry.SiteID
-	if entry.SiteUUID != "" {
-		siteIdent = entry.SiteUUID
-	}
-
 	_, err := db.Exec(query,
-		siteIdent,
+		entry.SiteID,
 		entry.UpdateType,
 		entry.Status,
 		entry.DataJSON,
@@ -64,15 +51,14 @@ func SaveSiteUpdateLedgerEntry(entry *models.SiteUpdateLedgerEntry) error {
 	)
 
 	if err != nil {
-		return fmt.Errorf("failed to save site update ledger entry for site %v: %w", siteIdent, err)
+		return fmt.Errorf("failed to save site update ledger entry for site %s: %w", entry.SiteID, err)
 	}
 
 	return nil
 }
 
 // GetSiteUpdateLedger retrieves all update ledger entries for a specific site, sorted by newest first.
-// siteID can be an int or a string (UUID).
-func GetSiteUpdateLedger(siteID any) ([]models.SiteUpdateLedgerEntry, error) {
+func GetSiteUpdateLedger(siteID string) ([]models.SiteUpdateLedgerEntry, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -87,7 +73,7 @@ func GetSiteUpdateLedger(siteID any) ([]models.SiteUpdateLedgerEntry, error) {
 
 	rows, err := db.Query(query, siteID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query update ledger for site %v: %w", siteID, err)
+		return nil, fmt.Errorf("failed to query update ledger for site %s: %w", siteID, err)
 	}
 	defer rows.Close()
 
@@ -104,8 +90,7 @@ func GetSiteUpdateLedger(siteID any) ([]models.SiteUpdateLedgerEntry, error) {
 }
 
 // GetLatestSiteUpdateLedgerEntry retrieves the most recent update ledger entry for a specific site.
-// siteID can be an int or a string (UUID).
-func GetLatestSiteUpdateLedgerEntry(siteID any) (*models.SiteUpdateLedgerEntry, error) {
+func GetLatestSiteUpdateLedgerEntry(siteID string) (*models.SiteUpdateLedgerEntry, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -131,7 +116,7 @@ func GetLatestSiteUpdateLedgerEntry(siteID any) (*models.SiteUpdateLedgerEntry, 
 }
 
 // GetLatestSiteUpdateLedgerEntries retrieves the most recent update ledger entry for all sites,
-// returned as a map of site_id (string UUID or numeric string) -> entry.
+// returned as a map of site UUID -> entry.
 func GetLatestSiteUpdateLedgerEntries() (map[string]models.SiteUpdateLedgerEntry, error) {
 	db := GetAPIDB()
 	if db == nil {
@@ -160,10 +145,7 @@ func GetLatestSiteUpdateLedgerEntries() (map[string]models.SiteUpdateLedgerEntry
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan site update ledger entry: %w", err)
 		}
-		entries[e.SiteUUID] = *e
-		if id, ok := e.SiteID.(int); ok {
-			entries[strconv.Itoa(id)] = *e
-		}
+		entries[e.SiteID] = *e
 	}
 
 	return entries, nil
