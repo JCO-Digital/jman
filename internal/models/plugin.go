@@ -5,6 +5,7 @@ import "github.com/JCO-Digital/jman/internal/utils"
 // WPPlugin represents a WordPress plugin installed on a specific site.
 type WPPlugin struct {
 	SiteID     int    `json:"site_id"`
+	SiteUUID   string `json:"site_uuid,omitempty"`
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Version    string `json:"version"`

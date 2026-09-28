@@ -51,6 +51,8 @@ type BasicAuth struct {
 
 type Site struct {
 	ID                int                    `json:"id"`
+	UUID              string                 `json:"uuid,omitempty"`
+	Provider          string                 `json:"provider,omitempty"`
 	ServerID          int                    `json:"server_id"`
 	Domain            string                 `json:"domain"`
 	AdditionalDomains []AdditionalDomain     `json:"additional_domains"`
@@ -79,6 +81,7 @@ type Site struct {
 
 type CliSite struct {
 	ID         int    `json:"id"`
+	UUID       string `json:"uuid,omitempty"`
 	Name       string `json:"name"`
 	ServerID   int    `json:"serverId"`
 	ServerName string `json:"serverName"`

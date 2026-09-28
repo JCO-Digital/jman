@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -113,7 +114,7 @@ func UpsertSiteTrafficDaily(siteID int, entry models.TrafficDailyEntry) error {
 // doesn't). top_pages/top_referrers are similarly derived by merging each
 // hour's already-truncated top-N lists, not the full day's raw counts — an
 // accepted approximation, not the exact daily top-N.
-func RecomputeSiteTrafficDaily(siteID int, day string) error {
+func RecomputeSiteTrafficDaily(siteID any, day string) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -225,7 +226,7 @@ func FinalizeCompletedDailyRollups() error {
 		return fmt.Errorf("failed to find completed days to finalize: %w", err)
 	}
 	type sitedDay struct {
-		siteID int
+		siteID string
 		day    string
 	}
 	var completed []sitedDay
@@ -245,13 +246,13 @@ func FinalizeCompletedDailyRollups() error {
 
 	for _, s := range completed {
 		if err := RecomputeSiteTrafficDaily(s.siteID, s.day); err != nil {
-			return fmt.Errorf("failed to finalize daily rollup for site %d day %s: %w", s.siteID, s.day, err)
+			return fmt.Errorf("failed to finalize daily rollup for site %s day %s: %w", s.siteID, s.day, err)
 		}
 		if _, err := dbConn.Exec(
 			`UPDATE site_traffic_daily SET finalized_at = CURRENT_TIMESTAMP WHERE site_id = ? AND day = date(?)`,
 			s.siteID, s.day,
 		); err != nil {
-			return fmt.Errorf("failed to mark daily rollup finalized for site %d day %s: %w", s.siteID, s.day, err)
+			return fmt.Errorf("failed to mark daily rollup finalized for site %s day %s: %w", s.siteID, s.day, err)
 		}
 	}
 	return nil
@@ -432,10 +433,17 @@ func GetSiteTrafficDailyRange(start, end string) ([]models.SiteTrafficDailyRow, 
 
 	result := []models.SiteTrafficDailyRow{}
 	for rows.Next() {
+		var rawSiteID string
 		var row models.SiteTrafficDailyRow
-		if err := rows.Scan(&row.SiteID, &row.Day, &row.RequestsTotal, &row.RequestsHuman, &row.RequestsBot, &row.UniqueVisitors); err != nil {
+		if err := rows.Scan(&rawSiteID, &row.Day, &row.RequestsTotal, &row.RequestsHuman, &row.RequestsBot, &row.UniqueVisitors); err != nil {
 			return nil, fmt.Errorf("failed to scan site traffic report row: %w", err)
 		}
+		if id, err := strconv.Atoi(rawSiteID); err == nil {
+			row.SiteID = id
+		} else {
+			row.SiteID = rawSiteID
+		}
+		row.SiteUUID = rawSiteID
 		// The DATE column can round-trip as a bare date or a full
 		// midnight timestamp depending on the sqlite driver (see the
 		// PeriodStart caveat in GetSiteTraffic) — only the date portion is

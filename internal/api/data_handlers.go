@@ -8,10 +8,12 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/JCO-Digital/jman/internal/wpcli"
@@ -80,13 +82,61 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, servers)
 }
 
-// SitesHandler returns the list of cached sites.
+// SitesHandler returns the list of cached and managed sites.
+// If ?format=managed is provided, returns host-agnostic ManagedSite models.
 func SitesHandler(w http.ResponseWriter, r *http.Request) {
-	sites := []models.Site{}
-	if err := cache.ReadJSONCache("sites", &sites, -1); err != nil {
-		verb.LogPrintf(verb.Normal, "SitesHandler cache missing: %v", err)
-		WriteError(w, http.StatusNotFound, "Sites cache missing")
+	if r.URL.Query().Get("format") == "managed" {
+		providerFilter := r.URL.Query().Get("provider")
+		var managedSites []models.ManagedSite
+		var err error
+		if providerFilter != "" {
+			managedSites, err = db.ListManagedSites(providerFilter)
+		} else {
+			managedSites, err = db.ListManagedSites()
+		}
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "SitesHandler managed sites error: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		if managedSites == nil {
+			managedSites = []models.ManagedSite{}
+		}
+		WriteJSON(w, http.StatusOK, managedSites)
 		return
+	}
+
+	sites := []models.Site{}
+	_ = cache.ReadJSONCache("sites", &sites, -1)
+
+	// Populate UUID and Provider for SpinupWP sites
+	for i := range sites {
+		sites[i].UUID = utils.SpinupWPSiteUUID(sites[i].ID)
+		sites[i].Provider = "spinupwp"
+	}
+
+	// Also load external/managed sites that are not in SpinupWP cache
+	managedSites, err := db.ListManagedSites()
+	if err == nil {
+		knownDomains := make(map[string]bool, len(sites))
+		for _, s := range sites {
+			knownDomains[strings.ToLower(s.Domain)] = true
+		}
+
+		for _, ms := range managedSites {
+			if !knownDomains[strings.ToLower(ms.Domain)] {
+				sites = append(sites, models.Site{
+					UUID:        ms.ID,
+					Provider:    ms.Provider,
+					Domain:      ms.Domain,
+					Environment: ms.Environment,
+					IsWordpress: ms.IsWordpress,
+					PHPVersion:  ms.PHPVersion,
+					SiteUser:    ms.SSHUser,
+					Status:      ms.Status,
+				})
+			}
+		}
 	}
 
 	environments, err := db.GetAllSiteEnvironments()
@@ -129,14 +179,20 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i, site := range sites {
-		sites[i].Environment = models.SiteEnvironmentType(environments[site.ID])
+		if env, ok := environments[site.UUID]; ok && site.Environment == "" {
+			sites[i].Environment = models.SiteEnvironmentType(env)
+		} else if env, ok := environments[strconv.Itoa(site.ID)]; ok && site.Environment == "" {
+			sites[i].Environment = models.SiteEnvironmentType(env)
+		}
 		if usage, ok := diskUsage[site.ID]; ok {
 			sites[i].DiskUsage = &usage
 		}
 		if flags, ok := wpFlags[site.ID]; ok {
 			sites[i].WpFlags = &flags
 		}
-		if lastUp, ok := latestUpdates[site.ID]; ok {
+		if lastUp, ok := latestUpdates[site.UUID]; ok {
+			sites[i].LastUpdate = &lastUp
+		} else if lastUp, ok := latestUpdates[strconv.Itoa(site.ID)]; ok {
 			sites[i].LastUpdate = &lastUp
 		}
 		if core, ok := coreBySiteID[site.ID]; ok {
@@ -146,7 +202,10 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Sort by ID for deterministic output.
 	sort.Slice(sites, func(i, j int) bool {
-		return sites[i].ID < sites[j].ID
+		if sites[i].ID != sites[j].ID {
+			return sites[i].ID < sites[j].ID
+		}
+		return sites[i].Domain < sites[j].Domain
 	})
 
 	WriteJSON(w, http.StatusOK, sites)
@@ -629,13 +688,13 @@ func getSiteByID(id int) (*models.CliSite, error) {
 
 // SiteUpdateLedgerHandler returns the update history ledger for a site.
 func SiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	rawID := r.PathValue("id")
+	siteUUID, err := resolveSiteUUID(rawID)
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
-		return
+		siteUUID = rawID
 	}
 
-	entries, err := db.GetSiteUpdateLedger(siteID)
+	entries, err := db.GetSiteUpdateLedger(siteUUID)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SiteUpdateLedgerHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
@@ -647,10 +706,10 @@ func SiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateSiteUpdateLedgerHandler manually adds an entry to the site update ledger.
 func CreateSiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	rawID := r.PathValue("id")
+	siteUUID, err := resolveSiteUUID(rawID)
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
-		return
+		siteUUID = rawID
 	}
 
 	var req struct {
@@ -676,7 +735,8 @@ func CreateSiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	entry := models.SiteUpdateLedgerEntry{
-		SiteID:     siteID,
+		SiteID:     siteUUID,
+		SiteUUID:   siteUUID,
 		UpdateType: req.UpdateType,
 		Status:     req.Status,
 		DataJSON:   req.DataJSON,

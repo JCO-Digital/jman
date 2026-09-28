@@ -7,6 +7,7 @@ import (
 	"html"
 	"log"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/slack"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/vuln"
 )
 
@@ -499,18 +501,29 @@ func cleanupOrphanedTasks() error {
 	if err != nil {
 		return fmt.Errorf("load site cache for orphaned task cleanup: %w", err)
 	}
-	siteExists := make(map[int]bool)
+	siteExists := make(map[string]bool)
 	for _, s := range sites {
-		siteExists[s.ID] = true
+		if s.ID > 0 {
+			siteExists[strconv.Itoa(s.ID)] = true
+		}
+		if s.UUID != "" {
+			siteExists[s.UUID] = true
+		}
 	}
 
 	servers, err := cache.GetFastCachedServers()
 	if err != nil {
 		return fmt.Errorf("load server cache for orphaned task cleanup: %w", err)
 	}
-	serverExists := make(map[int]bool)
+	serverExists := make(map[string]bool)
 	for _, s := range servers {
-		serverExists[s.ID] = true
+		serverExists[strconv.Itoa(s.ID)] = true
+		serverExists[utils.SpinupWPServerUUID(s.ID)] = true
+	}
+	if managedServers, err := db.ListManagedServers(); err == nil {
+		for _, s := range managedServers {
+			serverExists[s.ID] = true
+		}
 	}
 
 	for _, task := range tasks {
@@ -519,10 +532,16 @@ func cleanupOrphanedTasks() error {
 		}
 
 		orphaned := false
-		if task.SiteID != nil && !siteExists[*task.SiteID] {
-			orphaned = true
-		} else if task.ServerID != nil && !serverExists[*task.ServerID] {
-			orphaned = true
+		if task.SiteID != nil {
+			siteKey := fmt.Sprint(task.SiteID)
+			if siteKey != "" && siteKey != "0" && !siteExists[siteKey] {
+				orphaned = true
+			}
+		} else if task.ServerID != nil {
+			serverKey := fmt.Sprint(task.ServerID)
+			if serverKey != "" && serverKey != "0" && !serverExists[serverKey] {
+				orphaned = true
+			}
 		}
 
 		if orphaned {

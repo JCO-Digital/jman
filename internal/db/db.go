@@ -245,7 +245,7 @@ func initInventorySchema() error {
 		{
 			Name: "site_plugins",
 			Columns: map[string]string{
-				"site_id":          "INTEGER NOT NULL",
+				"site_id":          "TEXT NOT NULL",
 				"slug":             "TEXT NOT NULL",
 				"status":           "TEXT",
 				"version":          "TEXT",
@@ -258,7 +258,7 @@ func initInventorySchema() error {
 		{
 			Name: "site_core",
 			Columns: map[string]string{
-				"site_id":      "INTEGER PRIMARY KEY",
+				"site_id":      "TEXT PRIMARY KEY",
 				"version":      "TEXT NOT NULL",
 				"minor_update": "TEXT",
 				"major_update": "TEXT",
@@ -268,7 +268,7 @@ func initInventorySchema() error {
 		{
 			Name: "site_admin_user",
 			Columns: map[string]string{
-				"site_id":    "INTEGER PRIMARY KEY",
+				"site_id":    "TEXT PRIMARY KEY",
 				"user_id":    "INTEGER NOT NULL",
 				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
@@ -276,7 +276,7 @@ func initInventorySchema() error {
 		{
 			Name: "site_environment",
 			Columns: map[string]string{
-				"site_id":     "INTEGER PRIMARY KEY",
+				"site_id":     "TEXT PRIMARY KEY",
 				"environment": "TEXT NOT NULL",
 				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"updated_by":  "TEXT",
@@ -298,6 +298,44 @@ func initInventorySchema() error {
 				"updated_by":       "TEXT",
 			},
 		},
+		{
+			Name: "servers",
+			Columns: map[string]string{
+				"id":                 "TEXT PRIMARY KEY",
+				"provider":           "TEXT NOT NULL DEFAULT 'manual'",
+				"provider_server_id": "TEXT DEFAULT ''",
+				"name":               "TEXT NOT NULL",
+				"is_logical":         "BOOLEAN DEFAULT 0",
+				"ip_address":         "TEXT DEFAULT ''",
+				"ssh_port":           "INTEGER DEFAULT 22",
+				"created_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			Name: "sites",
+			Columns: map[string]string{
+				"id":               "TEXT PRIMARY KEY",
+				"server_id":        "TEXT",
+				"provider":         "TEXT NOT NULL DEFAULT 'manual'",
+				"provider_site_id": "TEXT DEFAULT ''",
+				"domain":           "TEXT NOT NULL",
+				"environment":      "TEXT NOT NULL DEFAULT 'production'",
+				"is_wordpress":     "BOOLEAN DEFAULT 1",
+				"php_version":      "TEXT DEFAULT ''",
+				"connection_type":  "TEXT DEFAULT 'ssh'",
+				"ssh_host":         "TEXT NOT NULL DEFAULT ''",
+				"ssh_port":         "INTEGER DEFAULT 22",
+				"ssh_user":         "TEXT NOT NULL DEFAULT ''",
+				"site_path":        "TEXT DEFAULT 'files'",
+				"can_wp_cli":       "BOOLEAN DEFAULT 1",
+				"has_agent":        "BOOLEAN DEFAULT 0",
+				"has_monitoring":   "BOOLEAN DEFAULT 1",
+				"status":           "TEXT DEFAULT 'active'",
+				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
 	}
 
 	// Drop old ignore tables if they exist (pre-dates the unified ignore_entries table).
@@ -309,6 +347,14 @@ func initInventorySchema() error {
 		if err := migrateTable(inventoryDB, table); err != nil {
 			return fmt.Errorf("failed to migrate table %s: %w", table.Name, err)
 		}
+	}
+
+	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_sites_domain ON sites(domain);")
+	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_sites_provider_site_id ON sites(provider, provider_site_id);")
+	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_servers_provider_server_id ON servers(provider, provider_server_id);")
+
+	if err := MigrateLegacyInventoryIDs(inventoryDB); err != nil {
+		return fmt.Errorf("failed to migrate legacy inventory IDs to UUIDs: %w", err)
 	}
 
 	return nil
@@ -385,7 +431,7 @@ func initAPISchema() error {
 		{
 			Name: "site_organization_map",
 			Columns: map[string]string{
-				"site_id":         "INTEGER NOT NULL",
+				"site_id":         "TEXT NOT NULL",
 				"organization_id": "INTEGER NOT NULL REFERENCES organizations(id) ON DELETE CASCADE",
 				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"created_by":      "TEXT",
@@ -434,7 +480,7 @@ func initAPISchema() error {
 			Columns: map[string]string{
 				"id":                "INTEGER PRIMARY KEY AUTOINCREMENT",
 				"organization_id":   "INTEGER REFERENCES organizations(id) ON DELETE CASCADE",
-				"site_id":           "INTEGER",
+				"site_id":           "TEXT",
 				"asset_id":          "INTEGER REFERENCES assets(id) ON DELETE SET NULL",
 				"identifier":        "TEXT",
 				"price":             "INTEGER",
@@ -490,7 +536,7 @@ func initAPISchema() error {
 			Name: "agent_tokens",
 			Columns: map[string]string{
 				"id":            "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"server_id":     "INTEGER NOT NULL",
+				"server_id":     "TEXT NOT NULL",
 				"server_name":   "TEXT",
 				"token_hash":    "TEXT NOT NULL",
 				"token_prefix":  "TEXT NOT NULL",
@@ -512,7 +558,7 @@ func initAPISchema() error {
 		{
 			Name: "site_disk_usage",
 			Columns: map[string]string{
-				"site_id":     "INTEGER NOT NULL",
+				"site_id":     "TEXT NOT NULL",
 				"bytes_used":  "INTEGER NOT NULL",
 				"measured_at": "DATETIME NOT NULL",
 				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
@@ -522,7 +568,7 @@ func initAPISchema() error {
 		{
 			Name: "site_wp_flags",
 			Columns: map[string]string{
-				"site_id":            "INTEGER PRIMARY KEY",
+				"site_id":            "TEXT PRIMARY KEY",
 				"is_multisite":       "BOOLEAN DEFAULT 0",
 				"disallow_file_mods": "BOOLEAN DEFAULT 0",
 				"updated_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
@@ -531,7 +577,7 @@ func initAPISchema() error {
 		{
 			Name: "site_traffic_hourly",
 			Columns: map[string]string{
-				"site_id":         "INTEGER NOT NULL",
+				"site_id":         "TEXT NOT NULL",
 				"hour":            "DATETIME NOT NULL",
 				"requests_total":  "INTEGER DEFAULT 0",
 				"requests_human":  "INTEGER DEFAULT 0",
@@ -554,7 +600,7 @@ func initAPISchema() error {
 		{
 			Name: "site_traffic_daily",
 			Columns: map[string]string{
-				"site_id":         "INTEGER NOT NULL",
+				"site_id":         "TEXT NOT NULL",
 				"day":             "DATE NOT NULL",
 				"requests_total":  "INTEGER DEFAULT 0",
 				"requests_human":  "INTEGER DEFAULT 0",
@@ -589,8 +635,8 @@ func initAPISchema() error {
 				"priority":         "TEXT NOT NULL DEFAULT 'medium'",
 				"title":            "TEXT NOT NULL",
 				"description":      "TEXT",
-				"site_id":          "INTEGER",
-				"server_id":        "INTEGER",
+				"site_id":          "TEXT",
+				"server_id":        "TEXT",
 				"organization_id":  "INTEGER",
 				"plugin_slug":      "TEXT",
 				"assigned_to":      "TEXT",
@@ -610,7 +656,7 @@ func initAPISchema() error {
 			Name: "site_update_ledger",
 			Columns: map[string]string{
 				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
-				"site_id":     "INTEGER NOT NULL",
+				"site_id":     "TEXT NOT NULL",
 				"update_type": "TEXT NOT NULL",
 				"status":      "TEXT NOT NULL",
 				"data_json":   "TEXT",
@@ -715,7 +761,15 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);")
-	return err
+	if err != nil {
+		return err
+	}
+
+	if err := MigrateLegacyAPIIDs(apiDB); err != nil {
+		return fmt.Errorf("failed to migrate legacy API IDs to UUIDs: %w", err)
+	}
+
+	return nil
 }
 
 // migrateTable compares the current database table schema with the desired definition.
@@ -783,8 +837,9 @@ func migrateTable(conn *sql.DB, def TableDefinition) error {
 	}
 	defer rows.Close()
 
-	currentCols := make(map[string]int) // name -> notnull
-	currentPK := make(map[string]int)   // name -> pk index
+	currentCols := make(map[string]int)        // name -> notnull
+	currentColTypes := make(map[string]string) // name -> type
+	currentPK := make(map[string]int)          // name -> pk index
 	for rows.Next() {
 		var cid int
 		var name, typeName string
@@ -794,6 +849,7 @@ func migrateTable(conn *sql.DB, def TableDefinition) error {
 			return err
 		}
 		currentCols[name] = notnull
+		currentColTypes[name] = strings.ToUpper(typeName)
 		if pk > 0 {
 			currentPK[name] = pk
 		}
@@ -826,6 +882,16 @@ func migrateTable(conn *sql.DB, def TableDefinition) error {
 			if (notnull == 1) != expectNotNull {
 				needsMigration = true
 				break
+			}
+			// Check for type change (e.g. INTEGER to TEXT)
+			parts := strings.Fields(strings.ToUpper(colDef))
+			if len(parts) > 0 {
+				expectedType := parts[0]
+				currType := currentColTypes[name]
+				if currType != "" && expectedType != "" && currType != expectedType {
+					needsMigration = true
+					break
+				}
 			}
 		}
 	}

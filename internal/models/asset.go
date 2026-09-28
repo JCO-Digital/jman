@@ -58,7 +58,7 @@ type Asset struct {
 type OrganizationAsset struct {
 	ID                int              `json:"id"`
 	OrganizationID    int              `json:"organization_id"`
-	SiteID            *int             `json:"site_id,omitempty"`  // Optional link to a site
+	SiteID            any              `json:"site_id,omitempty"`  // Optional link to a site (int or UUID string)
 	AssetID           *int             `json:"asset_id,omitempty"` // Reference to the template
 	Identifier        string           `json:"identifier"`         // Specific domain name, product name, etc.
 	Price             int              `json:"price"`              // stored in cents

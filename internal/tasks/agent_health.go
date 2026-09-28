@@ -105,7 +105,7 @@ func checkStaleAgents() error {
 
 		name := tok.ServerName
 		if name == "" {
-			name = fmt.Sprintf("server #%d", tok.ServerID)
+			name = fmt.Sprintf("server #%v", tok.ServerID)
 		}
 
 		switch decideStaleAgentAction(now, lastSeen, lastAlertedAt) {

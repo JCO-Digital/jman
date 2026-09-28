@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -47,9 +48,17 @@ func (r *trafficReport) Run(q url.Values) (*Result, error) {
 	// does, rather than a DB join — site metadata is cache-backed, not a table.
 	sites := []models.Site{}
 	_ = cache.ReadJSONCache("sites", &sites, -1)
-	domainByID := make(map[int]string, len(sites))
+	domainByID := make(map[string]string, len(sites))
 	for _, s := range sites {
-		domainByID[s.ID] = s.Domain
+		domainByID[strconv.Itoa(s.ID)] = s.Domain
+		if s.UUID != "" {
+			domainByID[s.UUID] = s.Domain
+		}
+	}
+	if managedSites, err := db.ListManagedSites(); err == nil {
+		for _, ms := range managedSites {
+			domainByID[ms.ID] = ms.Domain
+		}
 	}
 
 	// Sum each site's daily rows into a single total-for-the-range row.
@@ -60,29 +69,30 @@ func (r *trafficReport) Run(q url.Values) (*Result, error) {
 	type totals struct {
 		total, human, bot, unique int
 	}
-	totalsBySite := map[int]*totals{}
-	var siteOrder []int
+	totalsBySite := map[string]*totals{}
+	var siteOrder []string
 	for _, row := range dailyRows {
-		t, ok := totalsBySite[row.SiteID]
+		siteKey := fmt.Sprint(row.SiteID)
+		t, ok := totalsBySite[siteKey]
 		if !ok {
 			t = &totals{}
-			totalsBySite[row.SiteID] = t
-			siteOrder = append(siteOrder, row.SiteID)
+			totalsBySite[siteKey] = t
+			siteOrder = append(siteOrder, siteKey)
 		}
 		t.total += row.RequestsTotal
 		t.human += row.RequestsHuman
 		t.bot += row.RequestsBot
 		t.unique += row.UniqueVisitors
 	}
-	sort.Ints(siteOrder)
+	sort.Strings(siteOrder)
 
 	rows := make([]map[string]any, 0, len(siteOrder))
-	for _, siteID := range siteOrder {
-		site := domainByID[siteID]
+	for _, siteKey := range siteOrder {
+		site := domainByID[siteKey]
 		if site == "" {
-			site = fmt.Sprintf("Site %d", siteID)
+			site = fmt.Sprintf("Site %s", siteKey)
 		}
-		t := totalsBySite[siteID]
+		t := totalsBySite[siteKey]
 		rows = append(rows, map[string]any{
 			"site":            site,
 			"requests_total":  t.total,

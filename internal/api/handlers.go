@@ -33,7 +33,17 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
 	mux.Handle("GET /api/plugininfo", basic(PluginInfoHandler))
 	mux.Handle("GET /api/servers", basic(ServersHandler))
+	mux.Handle("POST /api/servers", edit(CreateServerHandler))
+	mux.Handle("DELETE /api/servers/{id}", edit(DeleteServerHandler))
+
 	mux.Handle("GET /api/sites", basic(SitesHandler))
+	mux.Handle("POST /api/sites", edit(CreateSiteHandler))
+	mux.Handle("GET /api/sites/{id}", basic(GetSiteHandler))
+	mux.Handle("PUT /api/sites/{id}", edit(UpdateSiteHandler))
+	mux.Handle("DELETE /api/sites/{id}", edit(DeleteSiteHandler))
+	mux.Handle("POST /api/sites/{id}/test-connection", execute(TestSiteConnectionHandler))
+	mux.Handle("POST /api/providers/spinupwp/sync", edit(SyncSpinupWPHandler))
+
 	mux.Handle("GET /api/vulns", basic(VulnsHandler))
 	mux.Handle("GET /api/vulns/core", basic(CoreVulnsHandler))
 

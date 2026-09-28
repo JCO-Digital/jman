@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -201,12 +202,13 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	WHERE oa.id = ?
 	`
 	var oa models.OrganizationAsset
+	var rawSiteID sql.NullString
 	var orgName, assetName, assetType, pmName sql.NullString
 	var assetPurchasePrice, assetQuantity sql.NullInt64
 	var assetNextPayment sql.NullTime
 	var assetManagementURL, assetManagementAccount, assetLicenseKey sql.NullString
 	err := db.QueryRow(query, id).Scan(
-		&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
+		&oa.ID, &oa.OrganizationID, &rawSiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
 		&oa.NextBilling, &oa.Status, &oa.Description, &oa.PaymentMethodID, &oa.LicenseKey, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
 		&orgName, &assetName, &assetType, &pmName,
 		&assetPurchasePrice, &assetQuantity, &assetNextPayment, &assetManagementURL, &assetManagementAccount, &assetLicenseKey,
@@ -216,6 +218,13 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get organization asset: %w", err)
+	}
+	if rawSiteID.Valid {
+		if id, err := strconv.Atoi(rawSiteID.String); err == nil {
+			oa.SiteID = id
+		} else {
+			oa.SiteID = rawSiteID.String
+		}
 	}
 	if orgName.Valid {
 		oa.OrganizationName = orgName.String
@@ -350,18 +359,26 @@ func GetOrganizationAssetsByOrganization(organizationID int) ([]models.Organizat
 // GetOrganizationAssetsByOrganization.
 func scanOrganizationAssetRow(rows *sql.Rows) (models.OrganizationAsset, error) {
 	var oa models.OrganizationAsset
+	var rawSiteID sql.NullString
 	var orgName, assetName, assetType, pmName sql.NullString
 	var assetPurchasePrice, assetQuantity sql.NullInt64
 	var assetNextPayment sql.NullTime
 	var assetManagementURL, assetManagementAccount, assetLicenseKey sql.NullString
 	err := rows.Scan(
-		&oa.ID, &oa.OrganizationID, &oa.SiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
+		&oa.ID, &oa.OrganizationID, &rawSiteID, &oa.AssetID, &oa.Identifier, &oa.Price, &oa.BillingFreq,
 		&oa.NextBilling, &oa.Status, &oa.Description, &oa.PaymentMethodID, &oa.LicenseKey, &oa.CreatedAt, &oa.CreatedBy, &oa.UpdatedAt, &oa.UpdatedBy,
 		&orgName, &assetName, &assetType, &pmName,
 		&assetPurchasePrice, &assetQuantity, &assetNextPayment, &assetManagementURL, &assetManagementAccount, &assetLicenseKey,
 	)
 	if err != nil {
 		return oa, err
+	}
+	if rawSiteID.Valid {
+		if id, err := strconv.Atoi(rawSiteID.String); err == nil {
+			oa.SiteID = id
+		} else {
+			oa.SiteID = rawSiteID.String
+		}
 	}
 	if orgName.Valid {
 		oa.OrganizationName = orgName.String

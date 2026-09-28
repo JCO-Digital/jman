@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 func TestSetAndGetSiteEnvironment(t *testing.T) {
@@ -17,8 +18,8 @@ func TestSetAndGetSiteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get environments: %v", err)
 	}
-	if environments[1] != "staging" {
-		t.Fatalf("expected staging, got %q", environments[1])
+	if environments["1"] != "staging" {
+		t.Fatalf("expected staging, got %q", environments["1"])
 	}
 
 	if err := SetSiteEnvironment(1, "production", "tester"); err != nil {
@@ -28,8 +29,8 @@ func TestSetAndGetSiteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get environments: %v", err)
 	}
-	if environments[1] != "production" {
-		t.Fatalf("expected production after update, got %q", environments[1])
+	if environments["1"] != "production" {
+		t.Fatalf("expected production after update, got %q", environments["1"])
 	}
 }
 
@@ -47,7 +48,7 @@ func TestClearSiteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get environments: %v", err)
 	}
-	if _, ok := environments[2]; ok {
+	if _, ok := environments["2"]; ok {
 		t.Fatalf("expected site 2 to be unclassified after clearing")
 	}
 }
@@ -81,22 +82,25 @@ func TestAutoClassifySiteEnvironments(t *testing.T) {
 		t.Fatalf("failed to get environments: %v", err)
 	}
 
-	if environments[1] != "production" {
-		t.Fatalf("expected site 1 to remain production, got %q", environments[1])
+	if environments[utils.SpinupWPSiteUUID(1)] != "production" && environments["1"] != "production" {
+		t.Fatalf("expected site 1 to remain production, got %q", environments[utils.SpinupWPSiteUUID(1)])
 	}
-	if environments[2] != "staging" {
-		t.Fatalf("expected site 2 to be staging, got %q", environments[2])
+	if environments[utils.SpinupWPSiteUUID(2)] != "staging" && environments["2"] != "staging" {
+		t.Fatalf("expected site 2 to be staging, got %q", environments[utils.SpinupWPSiteUUID(2)])
 	}
-	if environments[3] != "development" {
-		t.Fatalf("expected site 3 to be development, got %q", environments[3])
+	if environments[utils.SpinupWPSiteUUID(3)] != "development" && environments["3"] != "development" {
+		t.Fatalf("expected site 3 to be development, got %q", environments[utils.SpinupWPSiteUUID(3)])
 	}
-	if environments[4] != "development" {
-		t.Fatalf("expected site 4 to be development, got %q", environments[4])
+	if environments[utils.SpinupWPSiteUUID(4)] != "development" && environments["4"] != "development" {
+		t.Fatalf("expected site 4 to be development, got %q", environments[utils.SpinupWPSiteUUID(4)])
 	}
-	if environments[5] != "development" {
-		t.Fatalf("expected site 5 to be development, got %q", environments[5])
+	if environments[utils.SpinupWPSiteUUID(5)] != "development" && environments["5"] != "development" {
+		t.Fatalf("expected site 5 to be development, got %q", environments[utils.SpinupWPSiteUUID(5)])
 	}
-	if _, ok := environments[6]; ok {
+	if _, ok := environments[utils.SpinupWPSiteUUID(6)]; ok {
+		t.Fatalf("expected site 6 to remain unclassified")
+	}
+	if _, ok := environments["6"]; ok {
 		t.Fatalf("expected site 6 to remain unclassified")
 	}
 }

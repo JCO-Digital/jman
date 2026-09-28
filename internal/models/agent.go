@@ -6,7 +6,7 @@ package models
 // is used for API/CLI responses.
 type AgentToken struct {
 	ID           int     `json:"id"`
-	ServerID     int     `json:"server_id"`
+	ServerID     any     `json:"server_id"`
 	ServerName   string  `json:"server_name"`
 	TokenPrefix  string  `json:"token_prefix"`
 	Description  *string `json:"description"`
@@ -132,7 +132,8 @@ type SiteTrafficPeriod struct {
 // breakdown), this carries the site ID so report rows from multiple sites
 // can be enriched with a site label after the query.
 type SiteTrafficDailyRow struct {
-	SiteID         int    `json:"site_id"`
+	SiteID         any    `json:"site_id"`
+	SiteUUID       string `json:"site_uuid,omitempty"`
 	Day            string `json:"day"`
 	RequestsTotal  int    `json:"requests_total"`
 	RequestsHuman  int    `json:"requests_human"`

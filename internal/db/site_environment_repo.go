@@ -2,12 +2,16 @@ package db
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 // SetSiteEnvironment inserts or updates the environment classification for a site.
-func SetSiteEnvironment(siteID int, environment string, updatedBy string) error {
+// SetSiteEnvironment sets the environment classification for a site.
+// siteID can be an int or a string (UUID).
+func SetSiteEnvironment(siteID any, environment string, updatedBy string) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -23,29 +27,29 @@ func SetSiteEnvironment(siteID int, environment string, updatedBy string) error 
 	`
 
 	if _, err := db.Exec(query, siteID, environment, updatedBy); err != nil {
-		return fmt.Errorf("failed to set environment for site %d: %w", siteID, err)
+		return fmt.Errorf("failed to set environment for site %v: %w", siteID, err)
 	}
 
 	return nil
 }
 
 // ClearSiteEnvironment removes the environment classification for a site,
-// making it unclassified again.
-func ClearSiteEnvironment(siteID int) error {
+// making it unclassified again. siteID can be an int or a string (UUID).
+func ClearSiteEnvironment(siteID any) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
 	if _, err := db.Exec(`DELETE FROM site_environment WHERE site_id = ?`, siteID); err != nil {
-		return fmt.Errorf("failed to clear environment for site %d: %w", siteID, err)
+		return fmt.Errorf("failed to clear environment for site %v: %w", siteID, err)
 	}
 
 	return nil
 }
 
-// GetAllSiteEnvironments returns a map of site ID to environment for every classified site.
-func GetAllSiteEnvironments() (map[int]string, error) {
+// GetAllSiteEnvironments returns a map of site ID/UUID string to environment for every classified site.
+func GetAllSiteEnvironments() (map[string]string, error) {
 	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -57,9 +61,9 @@ func GetAllSiteEnvironments() (map[int]string, error) {
 	}
 	defer rows.Close()
 
-	environments := make(map[int]string)
+	environments := make(map[string]string)
 	for rows.Next() {
-		var siteID int
+		var siteID string
 		var environment string
 		if err := rows.Scan(&siteID, &environment); err != nil {
 			return nil, fmt.Errorf("failed to scan site environment: %w", err)
@@ -85,7 +89,14 @@ func AutoClassifySiteEnvironments(sites []models.Site) (int, error) {
 
 	classified := 0
 	for _, site := range sites {
-		if _, ok := existing[site.ID]; ok {
+		siteUUID := site.UUID
+		if siteUUID == "" {
+			siteUUID = utils.SpinupWPSiteUUID(site.ID)
+		}
+		if _, ok := existing[siteUUID]; ok {
+			continue
+		}
+		if _, ok := existing[strconv.Itoa(site.ID)]; ok {
 			continue
 		}
 
@@ -94,7 +105,7 @@ func AutoClassifySiteEnvironments(sites []models.Site) (int, error) {
 			continue
 		}
 
-		if err := SetSiteEnvironment(site.ID, string(env), "auto-classify"); err != nil {
+		if err := SetSiteEnvironment(siteUUID, string(env), "auto-classifier"); err != nil {
 			return classified, err
 		}
 		classified++

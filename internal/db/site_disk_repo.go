@@ -2,12 +2,14 @@ package db
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
 // RecordSiteDiskUsage inserts a new disk usage measurement for a site.
-func RecordSiteDiskUsage(siteID int, bytesUsed int64, measuredAt string) error {
+// siteID can be either an int or a string (UUID).
+func RecordSiteDiskUsage(siteID any, bytesUsed int64, measuredAt string) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -19,12 +21,12 @@ func RecordSiteDiskUsage(siteID int, bytesUsed int64, measuredAt string) error {
 		siteID, bytesUsed, measuredAt,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to record disk usage for site %d: %w", siteID, err)
+		return fmt.Errorf("failed to record disk usage for site %v: %w", siteID, err)
 	}
 	return nil
 }
 
-// GetLatestSiteDiskUsage returns a map of site ID to its most recent disk
+// GetLatestSiteDiskUsage returns a map of numeric site ID to its most recent disk
 // usage measurement, for every site that has ever reported one.
 func GetLatestSiteDiskUsage() (map[int]models.SiteDiskUsage, error) {
 	dbConn := GetAPIDB()
@@ -46,7 +48,44 @@ func GetLatestSiteDiskUsage() (map[int]models.SiteDiskUsage, error) {
 
 	result := make(map[int]models.SiteDiskUsage)
 	for rows.Next() {
-		var siteID int
+		var rawSiteID string
+		var usage models.SiteDiskUsage
+		if err := rows.Scan(&rawSiteID, &usage.BytesUsed, &usage.MeasuredAt); err != nil {
+			return nil, fmt.Errorf("failed to scan site disk usage: %w", err)
+		}
+		if id, err := strconv.Atoi(rawSiteID); err == nil {
+			result[id] = usage
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating site disk usage: %w", err)
+	}
+
+	return result, nil
+}
+
+// GetLatestSiteDiskUsageMap returns a map of site UUID/ID string to its most recent disk usage measurement.
+func GetLatestSiteDiskUsageMap() (map[string]models.SiteDiskUsage, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := dbConn.Query(`
+		SELECT s.site_id, s.bytes_used, s.measured_at
+		FROM site_disk_usage s
+		WHERE s.measured_at = (
+			SELECT MAX(s2.measured_at) FROM site_disk_usage s2 WHERE s2.site_id = s.site_id
+		)
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query latest site disk usage: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string]models.SiteDiskUsage)
+	for rows.Next() {
+		var siteID string
 		var usage models.SiteDiskUsage
 		if err := rows.Scan(&siteID, &usage.BytesUsed, &usage.MeasuredAt); err != nil {
 			return nil, fmt.Errorf("failed to scan site disk usage: %w", err)

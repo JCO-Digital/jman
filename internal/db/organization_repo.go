@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -208,7 +209,7 @@ func DeleteContact(id int) error {
 
 // --- Site-Organization Mapping Repository ---
 
-func LinkSiteToOrganization(siteID, organizationID int, username string) error {
+func LinkSiteToOrganization(siteID any, organizationID int, username string) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -223,7 +224,7 @@ func LinkSiteToOrganization(siteID, organizationID int, username string) error {
 	return err
 }
 
-func UnlinkSiteFromOrganization(siteID, organizationID int) error {
+func UnlinkSiteFromOrganization(siteID any, organizationID int) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -234,7 +235,7 @@ func UnlinkSiteFromOrganization(siteID, organizationID int) error {
 	return err
 }
 
-func GetOrganizationBySite(siteID int) (*models.Organization, error) {
+func GetOrganizationBySite(siteID any) (*models.Organization, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -274,11 +275,13 @@ func GetSitesByOrganization(organizationID int) ([]int, error) {
 
 	var siteIDs []int
 	for rows.Next() {
-		var id int
-		if err := rows.Scan(&id); err != nil {
+		var rawID string
+		if err := rows.Scan(&rawID); err != nil {
 			return nil, err
 		}
-		siteIDs = append(siteIDs, id)
+		if id, err := strconv.Atoi(rawID); err == nil {
+			siteIDs = append(siteIDs, id)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

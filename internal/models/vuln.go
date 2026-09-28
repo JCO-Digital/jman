@@ -116,6 +116,7 @@ type CoreVulnReport struct {
 // and any newer minor/major version available for it.
 type SiteCore struct {
 	SiteID      int    `json:"site_id"`
+	SiteUUID    string `json:"site_uuid,omitempty"`
 	Version     string `json:"version"`
 	MinorUpdate string `json:"minor_update,omitempty"`
 	MajorUpdate string `json:"major_update,omitempty"`

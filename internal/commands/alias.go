@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
@@ -117,6 +118,37 @@ func createAllAliases(registry map[string]any) error {
 		}
 
 		serverAliasLists[serverInfo.Alias] = append(serverAliasLists[serverInfo.Alias], siteAlias)
+	}
+
+	// Also include external managed sites from inventory.db
+	if managedSites, err := db.ListManagedSites(); err == nil {
+		for _, ms := range managedSites {
+			if !ms.IsWordpress || !ms.CanWPCLI {
+				continue
+			}
+			siteAlias := fmt.Sprintf("@%s", ms.Domain)
+			if _, exists := registry[siteAlias]; exists {
+				continue
+			}
+
+			sshSpec := ms.SSHHost
+			if ms.SSHUser != "" {
+				sshSpec = fmt.Sprintf("%s@%s", ms.SSHUser, ms.SSHHost)
+			}
+			if ms.SSHPort > 0 && ms.SSHPort != 22 {
+				sshSpec = fmt.Sprintf("%s:%d", sshSpec, ms.SSHPort)
+			}
+
+			registry[siteAlias] = SiteAlias{
+				SSH:  sshSpec,
+				Path: ms.SitePath,
+			}
+
+			if ms.ServerName != "" {
+				srvAlias := fmt.Sprintf("@%s", ms.ServerName)
+				serverAliasLists[srvAlias] = append(serverAliasLists[srvAlias], siteAlias)
+			}
+		}
 	}
 
 	for serverAlias, siteList := range serverAliasLists {

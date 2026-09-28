@@ -5,7 +5,8 @@ import "time"
 // SiteUpdateLedgerEntry represents an entry in the update ledger for a specific site.
 type SiteUpdateLedgerEntry struct {
 	ID         int       `json:"id"`
-	SiteID     int       `json:"site_id"`
+	SiteID     any       `json:"site_id"`
+	SiteUUID   string    `json:"site_uuid,omitempty"`
 	UpdateType string    `json:"update_type"` // "core", "plugin", "theme"
 	Status     string    `json:"status"`      // "full", "partial", "failed"
 	DataJSON   string    `json:"data_json,omitempty"`

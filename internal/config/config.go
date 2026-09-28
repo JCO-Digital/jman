@@ -170,16 +170,9 @@ func loadConfig() error {
 		}
 	}
 
-	// Read the config file
+	// Read the config file if present. If missing, defaults and environment variables apply.
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// If file is missing, check if required environment variables are set.
-			// At a minimum, TokenSpinup is usually required for the app to be useful.
-			if viper.GetString("tokenSpinup") == "" {
-				configPath := filepath.Join(RunData.ConfigDir, "config.toml")
-				return fmt.Errorf("config file not found at %s and JMAN_TOKENSPINUP environment variable is not set", configPath)
-			}
-		} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return fmt.Errorf("failed to read config file: %w", err)
 		}
 	} else {

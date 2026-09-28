@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -81,6 +82,36 @@ func SaveTask(task *models.Task, username string) error {
 	return nil
 }
 
+// scanTaskRow scans a task row safely handling site_id and server_id as either integer or UUID string.
+func scanTaskRow(scanner interface{ Scan(dest ...any) error }) (*models.Task, error) {
+	var t models.Task
+	var rawSiteID, rawServerID sql.NullString
+	err := scanner.Scan(
+		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
+		&rawSiteID, &rawServerID, &t.OrganizationID, &t.PluginSlug,
+		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
+		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	if rawSiteID.Valid {
+		if id, err := strconv.Atoi(rawSiteID.String); err == nil {
+			t.SiteID = id
+		} else {
+			t.SiteID = rawSiteID.String
+		}
+	}
+	if rawServerID.Valid {
+		if id, err := strconv.Atoi(rawServerID.String); err == nil {
+			t.ServerID = id
+		} else {
+			t.ServerID = rawServerID.String
+		}
+	}
+	return &t, nil
+}
+
 // GetTask retrieves a single task by ID.
 func GetTask(id int) (*models.Task, error) {
 	database := GetAPIDB()
@@ -96,20 +127,14 @@ func GetTask(id int) (*models.Task, error) {
 		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
 	FROM tasks WHERE id = ?`
 
-	var t models.Task
-	err := database.QueryRow(query, id).Scan(
-		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
-		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
-		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
-	)
+	t, err := scanTaskRow(database.QueryRow(query, id))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task: %w", err)
 	}
-	return &t, nil
+	return t, nil
 }
 
 // TaskFilter defines criteria for querying tasks.
@@ -185,17 +210,11 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 
 	var tasks []models.Task
 	for rows.Next() {
-		var t models.Task
-		err := rows.Scan(
-			&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
-			&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
-			&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-			&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
-		)
+		t, err := scanTaskRow(rows)
 		if err != nil {
 			return nil, err
 		}
-		tasks = append(tasks, t)
+		tasks = append(tasks, *t)
 	}
 	return tasks, nil
 }
@@ -346,7 +365,8 @@ func DeleteTask(id int) error {
 }
 
 // GetOpenVulnerabilityTask searches for an incomplete vulnerability task for a site.
-func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
+// GetOpenVulnerabilityTask finds an active (non-completed) vulnerability task for a site.
+func GetOpenVulnerabilityTask(siteID any) (*models.Task, error) {
 	database := GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -362,18 +382,12 @@ func GetOpenVulnerabilityTask(siteID int) (*models.Task, error) {
 	WHERE site_id = ? AND status != 'completed' AND status != 'skipped' AND title LIKE 'Security Vulnerabilities%'
 	LIMIT 1`
 
-	var t models.Task
-	err := database.QueryRow(query, siteID).Scan(
-		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
-		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
-		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
-		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
-	)
+	t, err := scanTaskRow(database.QueryRow(query, siteID))
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to find open vuln task: %w", err)
 	}
-	return &t, nil
+	return t, nil
 }

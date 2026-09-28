@@ -114,6 +114,11 @@ func runSlowTick() {
 		return
 	}
 
+	// Collect agentless external sites (WP flags, disk usage, plugins, core)
+	if err := CollectAgentlessSites(); err != nil {
+		log.Printf("Refresh scheduler: agentless collection error: %v", err)
+	}
+
 	if err := tasks.SyncVulnerabilities(); err != nil {
 		log.Printf("Refresh scheduler: vuln task sync failed: %v", err)
 	}

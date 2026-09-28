@@ -5,8 +5,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/fetch/spinupwp"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -27,6 +30,11 @@ func RefreshCachedServers(ttl ...time.Duration) ([]models.Server, error) {
 		if err := ReadJSONCache("servers", &servers, ttl[0]); err == nil && len(servers) > 0 {
 			return servers, nil
 		}
+	}
+
+	if config.Cfg.TokenSpinup == "" {
+		verb.Printf(verb.Verbose, "SpinupWP API token not configured; skipping SpinupWP server fetch\n")
+		return servers, nil
 	}
 
 	verb.PrintErrorln(verb.Normal, "Fetching servers from SpinupWP API...")
@@ -60,6 +68,11 @@ func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
 		if err := ReadJSONCache("sites", &sites, ttl[0]); err == nil && len(sites) > 0 {
 			return sites, nil
 		}
+	}
+
+	if config.Cfg.TokenSpinup == "" {
+		verb.Printf(verb.Verbose, "SpinupWP API token not configured; skipping SpinupWP site fetch\n")
+		return sites, nil
 	}
 
 	verb.PrintErrorln(verb.Normal, "Fetching sites from SpinupWP API...")
@@ -144,6 +157,7 @@ func GetSiteList() ([]models.CliSite, error) {
 
 			cliSite := models.CliSite{
 				ID:         site.ID,
+				UUID:       utils.SpinupWPSiteUUID(site.ID),
 				Name:       site.Domain,
 				ServerID:   site.ServerID,
 				ServerName: serverName,
@@ -152,6 +166,19 @@ func GetSiteList() ([]models.CliSite, error) {
 			}
 
 			cliSites = append(cliSites, cliSite)
+		}
+	}
+
+	// Also merge external managed sites from inventory.db
+	if managedSites, err := db.ListManagedSites(); err == nil {
+		knownDomains := make(map[string]bool, len(cliSites))
+		for _, s := range cliSites {
+			knownDomains[strings.ToLower(s.Name)] = true
+		}
+		for _, ms := range managedSites {
+			if !knownDomains[strings.ToLower(ms.Domain)] && ms.IsWordpress && ms.CanWPCLI {
+				cliSites = append(cliSites, ms.ToCliSite())
+			}
 		}
 	}
 
@@ -200,6 +227,7 @@ func GetFastSiteList() ([]models.CliSite, error) {
 
 			cliSite := models.CliSite{
 				ID:         site.ID,
+				UUID:       utils.SpinupWPSiteUUID(site.ID),
 				Name:       site.Domain,
 				ServerID:   site.ServerID,
 				ServerName: serverName,
@@ -208,6 +236,19 @@ func GetFastSiteList() ([]models.CliSite, error) {
 			}
 
 			cliSites = append(cliSites, cliSite)
+		}
+	}
+
+	// Also merge external managed sites from inventory.db
+	if managedSites, err := db.ListManagedSites(); err == nil {
+		knownDomains := make(map[string]bool, len(cliSites))
+		for _, s := range cliSites {
+			knownDomains[strings.ToLower(s.Name)] = true
+		}
+		for _, ms := range managedSites {
+			if !knownDomains[strings.ToLower(ms.Domain)] && ms.IsWordpress && ms.CanWPCLI {
+				cliSites = append(cliSites, ms.ToCliSite())
+			}
 		}
 	}
 

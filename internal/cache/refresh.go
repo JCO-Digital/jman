@@ -26,6 +26,10 @@ func RefreshServersAndSites(ttl time.Duration) ([]models.Server, []models.Site, 
 	}
 	verb.Printf(verb.Verbose, "Successfully fetched and cached %d sites.\n", len(sites))
 
+	if err := db.SyncSpinupWPIntoInventory(servers, sites); err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: failed to sync SpinupWP inventory into database: %v\n", err)
+	}
+
 	classified, err := db.AutoClassifySiteEnvironments(sites)
 	if err != nil {
 		verb.PrintErrorf(verb.Normal, "Warning: failed to auto-classify site environments: %v\n", err)
