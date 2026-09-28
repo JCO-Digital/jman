@@ -44,6 +44,8 @@
 	--badge-drop-in-text: #92400e;
 
 	/* Z-index */
+	--z-nav: 900;
+	--z-nav-drawer: 950;
 	--z-modal: 1000;
 	--z-toast: 1100;
 
@@ -57,6 +59,9 @@
 	--space-8: 2rem;
 	--space-10: 2.5rem;
 	--space-12: 3rem;
+
+	/* Font sizes */
+	--font-size-xs: 12px;
 
 	/* Radius */
 	--radius-sm: 4px;

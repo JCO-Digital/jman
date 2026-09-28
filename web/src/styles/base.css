@@ -18,6 +18,10 @@ body {
 	/* Apply base themes */
 	background-color: var(--bg-body);
 	color: var(--text-main);
+
+	@media (max-width: 640px) {
+		font-size: 14px;
+	}
 }
 
 #app {
@@ -43,6 +47,11 @@ textarea {
 	font-family: inherit;
 	font-size: 14px;
 	transition: border-color 0.2s;
+
+	/* Keep 16px on touch devices so iOS Safari does not zoom on focus */
+	@media (max-width: 640px) and (pointer: coarse) {
+		font-size: 16px;
+	}
 
 	&::placeholder {
 		color: var(--text-placeholder);

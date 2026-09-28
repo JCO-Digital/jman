@@ -9,6 +9,7 @@ import IconEdit from "./icons/IconEdit.vue";
 import IconExternalLink from "./icons/IconExternalLink.vue";
 import IconEye from "./icons/IconEye.vue";
 import IconEyeOff from "./icons/IconEyeOff.vue";
+import IconMenu from "./icons/IconMenu.vue";
 import IconNote from "./icons/IconNote.vue";
 import IconOrganization from "./icons/IconOrganization.vue";
 import IconPlugin from "./icons/IconPlugin.vue";
@@ -38,6 +39,7 @@ const iconMap: Record<string, Component> = {
 	eye: IconEye,
 	"eye-off": IconEyeOff,
 	"external-link": IconExternalLink,
+	menu: IconMenu,
 	note: IconNote,
 	organization: IconOrganization,
 	plugin: IconPlugin,
@@ -57,7 +59,8 @@ const icon = computed(() => iconMap[props.name]);
 
 const sizeStyle = computed(() => {
 	const s = props.size || "1em";
-	const value = typeof s === "number" ? `${s}px` : s;
+	const value =
+		typeof s === "number" || /^\d+(\.\d+)?$/.test(s) ? `${s}px` : s;
 	return {
 		display: "inline-flex",
 		width: value,

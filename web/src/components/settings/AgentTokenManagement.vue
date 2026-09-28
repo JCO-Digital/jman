@@ -135,9 +135,9 @@ function formatDate(d: string | null) {
 				<thead>
 					<tr>
 						<th>Server</th>
-						<th class="hide-mobile">Token</th>
-						<th class="hide-mobile">Description</th>
-						<th class="hide-mobile">Last Seen</th>
+						<th>Token</th>
+						<th>Description</th>
+						<th>Last Seen</th>
 						<th>Status</th>
 						<th class="text-right">Actions</th>
 					</tr>
@@ -150,15 +150,15 @@ function formatDate(d: string | null) {
 						<td class="font-medium text-main">
 							{{ token.server_name }}
 						</td>
-						<td class="hide-mobile">
+						<td>
 							<code class="secret-key"
 								>{{ token.token_prefix }}…</code
 							>
 						</td>
-						<td class="hide-mobile text-muted">
+						<td class="text-muted">
 							{{ token.description || "—" }}
 						</td>
-						<td class="hide-mobile text-muted">
+						<td class="text-muted">
 							{{ formatDate(token.last_seen_at) }}
 							<div v-if="token.agent_version" class="sub-text">
 								{{ token.agent_version }}

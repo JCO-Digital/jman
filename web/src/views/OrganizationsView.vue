@@ -110,7 +110,7 @@ const handleCreateOrganization = async () => {
 				<thead>
 					<tr>
 						<th>Name</th>
-						<th class="hide-mobile">Linked Sites</th>
+						<th>Linked Sites</th>
 						<th class="text-right"></th>
 					</tr>
 				</thead>
@@ -121,12 +121,7 @@ const handleCreateOrganization = async () => {
 							organizationStore.organizations.length === 0
 						"
 					>
-						<td colspan="3" class="hide-mobile">
-							<LoadingSpinner
-								message="Loading organizations..."
-							/>
-						</td>
-						<td colspan="2" class="show-mobile">
+						<td colspan="3">
 							<LoadingSpinner
 								message="Loading organizations..."
 							/>
@@ -135,15 +130,7 @@ const handleCreateOrganization = async () => {
 					<tr
 						v-else-if="organizationStore.organizations.length === 0"
 					>
-						<td colspan="3" class="empty-state hide-mobile">
-							<span v-if="searchQuery"
-								>No organizations found matching "{{
-									searchQuery
-								}}".</span
-							>
-							<span v-else>No organizations available.</span>
-						</td>
-						<td colspan="2" class="empty-state show-mobile">
+						<td colspan="3" class="empty-state">
 							<span v-if="searchQuery"
 								>No organizations found matching "{{
 									searchQuery
@@ -163,7 +150,7 @@ const handleCreateOrganization = async () => {
 								organization.name
 							}}</strong>
 						</td>
-						<td class="hide-mobile">
+						<td>
 							<div class="flex-row gap-1 font-sm">
 								<template
 									v-if="

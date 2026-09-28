@@ -408,7 +408,7 @@ function timeSince(dateString: string) {
 							}}</span>
 						</th>
 						<th
-							class="hide-mobile col-medium"
+							class="col-medium"
 							@click="handleSort('organization_id')"
 						>
 							Organization
@@ -416,10 +416,7 @@ function timeSince(dateString: string) {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th
-							class="hide-mobile col-wide"
-							@click="handleSort('server')"
-						>
+						<th class="col-wide" @click="handleSort('server')">
 							Server
 							<span v-if="sortKey === 'server'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -460,27 +457,12 @@ function timeSince(dateString: string) {
 							dataStore.isLoading && dataStore.sites.length === 0
 						"
 					>
-						<td colspan="6" class="hide-mobile">
-							<LoadingSpinner message="Loading data..." />
-						</td>
-						<td colspan="4" class="show-mobile">
+						<td colspan="6">
 							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="6" class="empty-state hide-mobile">
-							<span v-if="searchQuery"
-								>No sites found matching "{{
-									searchQuery
-								}}".</span
-							>
-							<span v-else-if="hasActiveFilters"
-								>No sites found matching the selected
-								filters.</span
-							>
-							<span v-else>No sites available.</span>
-						</td>
-						<td colspan="4" class="empty-state show-mobile">
+						<td colspan="6" class="empty-state">
 							<span v-if="searchQuery"
 								>No sites found matching "{{
 									searchQuery
@@ -550,7 +532,7 @@ function timeSince(dateString: string) {
 							</div>
 						</td>
 						<td
-							class="hide-mobile col-medium truncate"
+							class="col-medium truncate"
 							:title="
 								site.organization_id
 									? getOrganizationName(site.organization_id)
@@ -562,7 +544,7 @@ function timeSince(dateString: string) {
 							</span>
 							<span v-else class="text-muted">—</span>
 						</td>
-						<td class="hide-mobile col-wide">
+						<td class="col-wide">
 							<div class="truncate font-medium">
 								{{ site.server }}
 							</div>

@@ -11,6 +11,10 @@
 	justify-content: center;
 	z-index: var(--z-modal);
 	padding: 16px;
+
+	@media (max-width: 640px) {
+		padding: 8px;
+	}
 }
 
 .modal-content {
@@ -25,7 +29,12 @@
 
 	@media (max-width: 640px) {
 		width: 100%;
-		padding: 20px 16px;
+		max-height: 95dvh;
+		padding: 16px 12px;
+	}
+
+	&.modal-sm {
+		max-width: 450px;
 	}
 
 	& h2 {

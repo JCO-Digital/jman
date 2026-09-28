@@ -251,7 +251,7 @@ watch(
 								<tr>
 									<th>Plugin</th>
 									<th>Version</th>
-									<th class="hide-mobile">Vuln</th>
+									<th>Vuln</th>
 									<th class="text-right">Action</th>
 								</tr>
 							</thead>
@@ -276,7 +276,7 @@ watch(
 											}}</span>
 										</div>
 									</td>
-									<td class="hide-mobile">
+									<td>
 										<span
 											v-if="isVulnerable(plugin)"
 											class="status-badge error badge-sm"

@@ -174,8 +174,8 @@ const manageAssetTemplate = () => {
 						<thead>
 							<tr>
 								<th>Site Domain</th>
-								<th class="hide-mobile">Version</th>
-								<th class="hide-mobile">Status</th>
+								<th>Version</th>
+								<th>Status</th>
 								<th>Vuln</th>
 							</tr>
 						</thead>
@@ -189,8 +189,8 @@ const manageAssetTemplate = () => {
 								<td class="font-medium">
 									{{ item.site_domain }}
 								</td>
-								<td class="hide-mobile">{{ item.version }}</td>
-								<td class="hide-mobile">
+								<td>{{ item.version }}</td>
+								<td>
 									<span
 										:class="[
 											'status-badge',

@@ -244,9 +244,9 @@ function vulnStatus(task: Task) {
 						<th>Title</th>
 						<th>Status</th>
 						<th>Priority</th>
-						<th class="hide-mobile">Type</th>
-						<th class="hide-mobile">Assigned To</th>
-						<th class="hide-mobile">Due Date</th>
+						<th>Type</th>
+						<th>Assigned To</th>
+						<th>Due Date</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -324,12 +324,11 @@ function vulnStatus(task: Task) {
 								{{ task.priority }}
 							</span>
 						</td>
-						<td class="hide-mobile">{{ task.type }}</td>
-						<td class="hide-mobile">
+						<td>{{ task.type }}</td>
+						<td>
 							{{ userStore.resolveDisplayName(task.assigned_to) }}
 						</td>
 						<td
-							class="hide-mobile"
 							:class="{
 								overdue:
 									task.due_date &&

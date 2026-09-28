@@ -150,7 +150,7 @@ onMounted(loadReminderTasks);
 						<th>Task</th>
 						<th>Status</th>
 						<th>Priority</th>
-						<th class="hide-mobile">Due Date</th>
+						<th>Due Date</th>
 						<th></th>
 					</tr>
 				</thead>
@@ -222,7 +222,6 @@ onMounted(loadReminderTasks);
 							</span>
 						</td>
 						<td
-							class="hide-mobile"
 							:class="{
 								overdue:
 									task.due_date &&

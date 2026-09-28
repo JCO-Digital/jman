@@ -107,7 +107,7 @@ function levelClass(level: string): string {
 						<th>Username</th>
 						<th>Display Name</th>
 						<th>Level</th>
-						<th class="hide-mobile">2FA Status</th>
+						<th>2FA Status</th>
 						<th class="text-right">Actions</th>
 					</tr>
 				</thead>
@@ -128,7 +128,7 @@ function levelClass(level: string): string {
 								{{ user.level }}
 							</span>
 						</td>
-						<td class="hide-mobile">
+						<td>
 							<span
 								v-if="user.has2FA"
 								class="flex-row gap-1 text-success font-sm font-medium"

@@ -206,7 +206,7 @@ const canEdit = computed(() => authStore.canEdit);
 </script>
 
 <template>
-	<div class="incidents-view">
+	<div class="view-container incidents-view">
 		<ViewHeader title="Incidents">
 			<template #actions>
 				<button class="btn btn-outline btn-sm" @click="loadData">
@@ -247,7 +247,7 @@ const canEdit = computed(() => authStore.canEdit);
 				<p class="sub-text">No active downtime incidents reported.</p>
 			</div>
 
-			<div v-else class="table-responsive">
+			<div v-else class="table-container">
 				<table class="data-table">
 					<thead>
 						<tr>
@@ -377,7 +377,7 @@ const canEdit = computed(() => authStore.canEdit);
 			<div v-else-if="historyIncidents.length === 0" class="empty-state">
 				<p class="sub-text">No incident history recorded.</p>
 			</div>
-			<div v-else class="table-responsive">
+			<div v-else class="table-container">
 				<table class="data-table">
 					<thead>
 						<tr>
@@ -465,7 +465,7 @@ const canEdit = computed(() => authStore.canEdit);
 			class="modal-overlay"
 			@click.self="closeIgnoreModal"
 		>
-			<div class="modal-card">
+			<div class="modal-content card">
 				<div class="modal-header">
 					<h2>Ignore Site {{ selectedIncident?.domain }}</h2>
 					<button class="icon-btn" @click="closeIgnoreModal">
@@ -532,11 +532,11 @@ const canEdit = computed(() => authStore.canEdit);
 <style scoped>
 .incidents-view {
 	max-width: 1400px;
-	margin: 0 auto;
 }
 
 .incidents-tabs {
 	display: flex;
+	overflow-x: auto;
 	gap: 8px;
 	margin-bottom: 16px;
 	border-bottom: 1px solid var(--border-color);
@@ -597,32 +597,6 @@ const canEdit = computed(() => authStore.canEdit);
 .empty-state h3 {
 	margin: 0 0 8px;
 	color: var(--text-heading);
-}
-
-.table-responsive {
-	overflow-x: auto;
-}
-
-.data-table {
-	width: 100%;
-	border-collapse: collapse;
-	text-align: left;
-	font-size: 14px;
-}
-
-.data-table th {
-	padding: 12px 16px;
-	color: var(--text-muted);
-	font-weight: 600;
-	font-size: 13px;
-	border-bottom: 1px solid var(--border-color);
-	background: var(--bg-card);
-}
-
-.data-table td {
-	padding: 14px 16px;
-	border-bottom: 1px solid var(--border-color);
-	vertical-align: middle;
 }
 
 .row-acknowledged {
@@ -750,49 +724,10 @@ const canEdit = computed(() => authStore.canEdit);
 	gap: 6px;
 }
 
-.loading-container {
-	display: flex;
-	justify-content: center;
-	padding: 40px;
-}
-
 .pagination-wrapper {
 	margin-top: 16px;
 	display: flex;
 	justify-content: flex-end;
-}
-
-.modal-overlay {
-	position: fixed;
-	inset: 0;
-	background: rgba(0, 0, 0, 0.5);
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	z-index: 999;
-}
-
-.modal-card {
-	background: var(--bg-card);
-	border: 1px solid var(--border-color);
-	border-radius: 8px;
-	width: 100%;
-	max-width: 500px;
-	padding: 24px;
-	box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-}
-
-.modal-header {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	margin-bottom: 16px;
-}
-
-.modal-header h2 {
-	margin: 0;
-	font-size: 18px;
-	color: var(--text-heading);
 }
 
 .modal-body {
@@ -844,15 +779,7 @@ const canEdit = computed(() => authStore.canEdit);
 	gap: 12px;
 }
 
-.text-right {
-	text-align: right;
-}
-
 .text-xs {
 	font-size: 11px;
-}
-
-.font-medium {
-	font-weight: 500;
 }
 </style>

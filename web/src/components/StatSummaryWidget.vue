@@ -75,10 +75,25 @@ const stats = computed(() => [
 </template>
 
 <style scoped>
+/* Column counts are tied to viewport width rather than auto-fit so the five
+   cards never leave a lone orphan and labels like "VULNERABILITIES" (which
+   need ~200px per card) never overflow. */
 .stat-summary-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	grid-template-columns: minmax(0, 1fr);
 	gap: var(--space-4);
+
+	@media (min-width: 450px) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+
+	@media (min-width: 740px) {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	@media (min-width: 1220px) {
+		grid-template-columns: repeat(5, minmax(0, 1fr));
+	}
 }
 
 .stat-summary-item {
@@ -114,6 +129,7 @@ const stats = computed(() => [
 .stat-details {
 	display: flex;
 	flex-direction: column;
+	min-width: 0;
 }
 
 .stat-value {
@@ -127,11 +143,8 @@ const stats = computed(() => [
 	color: var(--text-muted);
 	text-transform: uppercase;
 	letter-spacing: 0.025em;
-}
-
-@media (max-width: 640px) {
-	.stat-summary-grid {
-		grid-template-columns: repeat(2, 1fr);
-	}
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 </style>

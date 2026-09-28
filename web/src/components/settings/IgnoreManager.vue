@@ -462,7 +462,7 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 						<th>Type</th>
 						<th>Target</th>
 						<th>Purpose</th>
-						<th class="hide-mobile">Reason</th>
+						<th>Reason</th>
 						<th v-if="authStore.canEdit" class="text-right">
 							Actions
 						</th>
@@ -518,7 +518,7 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 								>
 							</div>
 						</td>
-						<td class="hide-mobile text-muted font-sm">
+						<td class="text-muted font-sm">
 							{{ entry.reason || "—" }}
 						</td>
 						<td v-if="authStore.canEdit" class="text-right">

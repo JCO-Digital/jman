@@ -160,19 +160,13 @@ const goToPlugin = (name: string) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th
-							class="hide-mobile col-version"
-							@click="handleSort('version')"
-						>
+						<th class="col-version" @click="handleSort('version')">
 							Version
 							<span v-if="sortKey === 'version'">{{
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
-						<th
-							class="hide-mobile col-wide"
-							@click="handleSort('author')"
-						>
+						<th class="col-wide" @click="handleSort('author')">
 							Author
 							<span v-if="sortKey === 'author'">{{
 								sortOrder === "asc" ? "↑" : "↓"
@@ -205,23 +199,12 @@ const goToPlugin = (name: string) => {
 							dataStore.pluginInfo.length === 0
 						"
 					>
-						<td colspan="5" class="hide-mobile">
-							<LoadingSpinner message="Loading data..." />
-						</td>
-						<td colspan="3" class="show-mobile">
+						<td colspan="5">
 							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedPlugins.length === 0">
-						<td colspan="5" class="empty-state hide-mobile">
-							<span v-if="searchQuery"
-								>No plugins found matching "{{
-									searchQuery
-								}}".</span
-							>
-							<span v-else>No plugins available.</span>
-						</td>
-						<td colspan="3" class="empty-state show-mobile">
+						<td colspan="5" class="empty-state">
 							<span v-if="searchQuery"
 								>No plugins found matching "{{
 									searchQuery
@@ -244,10 +227,10 @@ const goToPlugin = (name: string) => {
 								{{ plugin.slug }}
 							</div>
 						</td>
-						<td class="hide-mobile col-version truncate">
+						<td class="col-version truncate">
 							{{ plugin.version }}
 						</td>
-						<td class="hide-mobile col-wide truncate">
+						<td class="col-wide truncate">
 							{{ plugin.author }}
 						</td>
 						<td class="col-narrow text-center">

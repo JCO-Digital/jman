@@ -581,7 +581,7 @@ const unlinkOrganization = async () => {
 									<tr>
 										<th>Name</th>
 										<th>Type</th>
-										<th class="hide-mobile">Email</th>
+										<th>Email</th>
 									</tr>
 								</thead>
 								<tbody>
@@ -603,7 +603,7 @@ const unlinkOrganization = async () => {
 												{{ contact.type }}
 											</span>
 										</td>
-										<td class="hide-mobile text-muted">
+										<td class="text-muted">
 											{{ contact.email || "—" }}
 										</td>
 									</tr>
@@ -725,8 +725,8 @@ const unlinkOrganization = async () => {
 						<thead>
 							<tr>
 								<th>Plugin Name</th>
-								<th class="hide-mobile">Version</th>
-								<th class="hide-mobile">Status</th>
+								<th>Version</th>
+								<th>Status</th>
 								<th>Vulns</th>
 							</tr>
 						</thead>
@@ -743,10 +743,10 @@ const unlinkOrganization = async () => {
 								@click="goToPlugin(plugin.name)"
 							>
 								<td class="font-medium">{{ plugin.name }}</td>
-								<td class="hide-mobile text-muted">
+								<td class="text-muted">
 									{{ plugin.version }}
 								</td>
-								<td class="hide-mobile">
+								<td>
 									<span
 										:class="[
 											'status-badge',
@@ -997,7 +997,7 @@ const unlinkOrganization = async () => {
 			class="modal-overlay"
 			@click.self="showAddLedgerModal = false"
 		>
-			<div class="modal-content card" style="max-width: 450px">
+			<div class="modal-content card modal-sm">
 				<h2>Log Manual Update</h2>
 				<div class="content mt-4">
 					<div class="form-group mb-4">
