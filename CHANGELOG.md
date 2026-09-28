@@ -1,6 +1,12 @@
 # Changelog
 
-## 5.55.0 (2026-09-24)
+## 5.56.0 (2026-09-28)
+
+#### Features
+
+- ui: improve responsive layout and mobile navigation (4d6c555)
+
+## v5.55.0 (2026-09-24)
 
 #### Features
 
