@@ -877,8 +877,12 @@ func migrateTable(conn *sql.DB, def TableDefinition) error {
 				needsMigration = true
 				break
 			}
-			// Check for NOT NULL change. PRIMARY KEY also implies NOT NULL in many SQLite versions.
-			expectNotNull := strings.Contains(strings.ToUpper(colDef), "NOT NULL") || strings.Contains(strings.ToUpper(colDef), "PRIMARY KEY")
+			// Check for NOT NULL change. Only an explicit NOT NULL counts:
+			// PRAGMA table_info reports notnull=0 for a column-level
+			// PRIMARY KEY without one, so treating PRIMARY KEY as NOT NULL
+			// here made every such table look changed and get rebuilt on
+			// every start (which also reset AUTOINCREMENT sequences).
+			expectNotNull := strings.Contains(strings.ToUpper(colDef), "NOT NULL")
 			if (notnull == 1) != expectNotNull {
 				needsMigration = true
 				break
