@@ -8,8 +8,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/verb"
 	_ "modernc.org/sqlite"
 )
 
@@ -775,7 +777,7 @@ func initAPISchema() error {
 // migrateTable compares the current database table schema with the desired definition.
 // SQLite has restrictions on ALTER TABLE (e.g., adding columns with non-constant defaults like CURRENT_TIMESTAMP).
 // To be robust, this implementation uses the "recreate and copy" pattern if changes are detected.
-func migrateTable(conn *sql.DB, def TableDefinition) error {
+func migrateTable(conn *sql.DB, def TableDefinition) (retErr error) {
 	// Disable foreign keys during migration to avoid broken references when renaming tables.
 	// PRAGMA foreign_keys must be set outside of a transaction.
 	if _, err := conn.Exec("PRAGMA foreign_keys=OFF"); err != nil {
@@ -917,6 +919,16 @@ func migrateTable(conn *sql.DB, def TableDefinition) error {
 	if !needsMigration {
 		return tx.Commit()
 	}
+
+	// Rebuilding a large table can take a while; say so, so startup doesn't
+	// look hung.
+	verb.LogPrintf(verb.Normal, "Upgrading schema of table %s...", def.Name)
+	started := time.Now()
+	defer func() {
+		if retErr == nil {
+			verb.LogPrintf(verb.Normal, "Upgraded table %s in %s", def.Name, time.Since(started).Round(time.Millisecond))
+		}
+	}()
 
 	// 4. Perform robust migration using a temporary table
 	// This handles non-constant defaults and dropped columns safely.

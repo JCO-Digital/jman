@@ -7,8 +7,10 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/utils"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // uuidMigrationName is the schema_migrations key recording that a database's
@@ -91,6 +93,11 @@ func runOnce(dbConn *sql.DB, name string, fn func(tx *sql.Tx) error) error {
 		return nil
 	}
 
+	// Log around the work: on large databases this can take tens of seconds,
+	// during which startup would otherwise look hung.
+	verb.LogPrintf(verb.Normal, "Running one-time database migration %s (may take a while on large databases)...", name)
+	started := time.Now()
+
 	tx, err := dbConn.Begin()
 	if err != nil {
 		return err
@@ -103,7 +110,11 @@ func runOnce(dbConn *sql.DB, name string, fn func(tx *sql.Tx) error) error {
 	if _, err := tx.Exec(`INSERT INTO schema_migrations (name) VALUES (?)`, name); err != nil {
 		return fmt.Errorf("failed to record migration %s: %w", name, err)
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	verb.LogPrintf(verb.Normal, "Database migration %s completed in %s", name, time.Since(started).Round(time.Millisecond))
+	return nil
 }
 
 // parseLegacyID interprets a stored identifier as a legacy SpinupWP integer
