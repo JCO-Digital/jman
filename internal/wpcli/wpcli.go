@@ -37,6 +37,9 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 	var fullArgs []string
 	if opts.SSH != "" {
 		knock.KnockIfNeeded(opts.SSH)
+		if err := EnsureHostKey(opts.SSH); err != nil {
+			return RunResult{}, err
+		}
 		fullArgs = append(fullArgs, fmt.Sprintf("--ssh=%s", opts.SSH))
 	}
 	if opts.Path != "" {
@@ -167,6 +170,9 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 	}
 
 	knock.KnockIfNeeded(ssh)
+	if err := EnsureHostKey(ssh); err != nil {
+		return RunResult{}, err
+	}
 
 	quotedArgs := make([]string, len(args))
 	for i, arg := range args {
@@ -204,6 +210,9 @@ func UploadFile(ssh, localPath, remotePath string) error {
 	}
 
 	knock.KnockIfNeeded(ssh)
+	if err := EnsureHostKey(ssh); err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
