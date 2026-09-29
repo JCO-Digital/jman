@@ -1,6 +1,29 @@
 # Changelog
 
-## 5.56.0 (2026-09-28)
+## 6.0.0 (2026-09-29)
+
+#### Features
+
+- use UUIDs for site and server identities (BREAKING CHANGE) (a0795eb)
+- db: log schema upgrades and the one-time ID migration at startup (36cc522)
+- use site/server UUIDs end to end and add sites settings UI (0842708)
+- api: add managed servers and sites management APIs (0875e91)
+
+#### Bug Fixes
+
+- dev: only watch Go source directories in air (0b566c8)
+- db: stop rebuilding tables with a column-level primary key on every start (78118fe)
+- tasks: parse RFC3339 agent token timestamps (acd7ed5)
+
+#### Continuous Integration
+
+- update foonver action to v1.0.0 (bcbf65f)
+
+#### Maintenance
+
+- deps: mark github.com/google/uuid as a direct dependency (145aead)
+
+## v5.56.0 (2026-09-28)
 
 #### Features
 
