@@ -177,7 +177,10 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "ssh", ssh, remoteCommand)
+	// ssh doesn't accept WP-CLI's "host:port" form, so pass the port as -p.
+	target := parseSSHSpec(ssh)
+	sshArgs := append(target.sshPortArgs("-p"), target.dest, remoteCommand)
+	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -205,9 +208,12 @@ func UploadFile(ssh, localPath, remotePath string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Format scp destination: user@host:path
-	destination := fmt.Sprintf("%s:%s", ssh, remotePath)
-	cmd := exec.CommandContext(ctx, "scp", "--", localPath, destination)
+	// Format scp destination: user@host:path, with the port passed as -P
+	// (scp doesn't accept WP-CLI's "host:port" form).
+	target := parseSSHSpec(ssh)
+	destination := fmt.Sprintf("%s:%s", target.dest, remotePath)
+	scpArgs := append(target.sshPortArgs("-P"), "--", localPath, destination)
+	cmd := exec.CommandContext(ctx, "scp", scpArgs...)
 
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf
