@@ -7,7 +7,6 @@ import (
 	"html"
 	"log"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -100,7 +99,7 @@ func SyncVulnerabilities() error {
 		Report models.VulnReport
 		Vuln   models.Vulnerability
 	}
-	siteVulns := make(map[int][]siteVulnLink)
+	siteVulns := make(map[string][]siteVulnLink)
 	for _, report := range reports {
 		if report.Suppressed {
 			continue
@@ -132,7 +131,7 @@ func SyncVulnerabilities() error {
 
 	// Load site names for titles
 	sites, _ := cache.GetFastSiteList()
-	siteNameMap := make(map[int]string)
+	siteNameMap := make(map[string]string)
 	for _, s := range sites {
 		siteNameMap[s.ID] = s.Name
 	}
@@ -204,7 +203,7 @@ func SyncVulnerabilities() error {
 		// Prepare description
 		siteName := siteNameMap[siteID]
 		if siteName == "" {
-			siteName = fmt.Sprintf("Site #%d", siteID)
+			siteName = fmt.Sprintf("Site %s", siteID)
 		}
 
 		plugins := make([]*models.VulnPlugin, 0, len(pluginMap))
@@ -236,7 +235,7 @@ func SyncVulnerabilities() error {
 			task.Description = &description
 			task.Metadata = &metadataStr
 			if err := db.SaveTask(task, "system"); err != nil {
-				log.Printf("Error updating vuln task for site %d: %v", siteID, err)
+				log.Printf("Error updating vuln task for site %s: %v", siteID, err)
 			} else {
 				NotifyTaskChange(&before, task, "system")
 			}
@@ -261,7 +260,7 @@ func SyncVulnerabilities() error {
 				newTask.AssignedTo = &assignee
 			}
 			if err := db.SaveTask(newTask, "system"); err != nil {
-				log.Printf("Error creating vuln task for site %d: %v", siteID, err)
+				log.Printf("Error creating vuln task for site %s: %v", siteID, err)
 			} else {
 				NotifyTaskChange(nil, newTask, "system")
 			}
@@ -497,33 +496,39 @@ func cleanupOrphanedTasks() error {
 		return err
 	}
 
-	sites, err := cache.GetFastSiteList()
+	// Existence is judged against the full inventory (every site/server,
+	// not just WP-CLI-reachable ones) plus the SpinupWP cache for entities
+	// not yet synced into it.
+	managedSites, err := db.ListManagedSites()
 	if err != nil {
-		return fmt.Errorf("load site cache for orphaned task cleanup: %w", err)
+		return fmt.Errorf("load sites for orphaned task cleanup: %w", err)
 	}
-	siteExists := make(map[string]bool)
-	for _, s := range sites {
-		if s.ID > 0 {
-			siteExists[strconv.Itoa(s.ID)] = true
-		}
-		if s.UUID != "" {
-			siteExists[s.UUID] = true
-		}
+	managedServers, err := db.ListManagedServers()
+	if err != nil {
+		return fmt.Errorf("load servers for orphaned task cleanup: %w", err)
 	}
+	cachedSites, _ := cache.GetFastCachedSites()
+	cachedServers, _ := cache.GetFastCachedServers()
 
-	servers, err := cache.GetFastCachedServers()
-	if err != nil {
-		return fmt.Errorf("load server cache for orphaned task cleanup: %w", err)
+	siteExists := make(map[string]bool, len(managedSites)+len(cachedSites))
+	for _, s := range managedSites {
+		siteExists[s.ID] = true
 	}
-	serverExists := make(map[string]bool)
-	for _, s := range servers {
-		serverExists[strconv.Itoa(s.ID)] = true
+	for _, s := range cachedSites {
+		siteExists[utils.SpinupWPSiteUUID(s.ID)] = true
+	}
+	serverExists := make(map[string]bool, len(managedServers)+len(cachedServers))
+	for _, s := range managedServers {
+		serverExists[s.ID] = true
+	}
+	for _, s := range cachedServers {
 		serverExists[utils.SpinupWPServerUUID(s.ID)] = true
 	}
-	if managedServers, err := db.ListManagedServers(); err == nil {
-		for _, s := range managedServers {
-			serverExists[s.ID] = true
-		}
+
+	// An empty inventory means it hasn't been populated yet (or failed to
+	// load), not that every linked entity was deleted — never mass-skip.
+	if len(siteExists) == 0 || len(serverExists) == 0 {
+		return nil
 	}
 
 	for _, task := range tasks {
@@ -532,16 +537,10 @@ func cleanupOrphanedTasks() error {
 		}
 
 		orphaned := false
-		if task.SiteID != nil {
-			siteKey := fmt.Sprint(task.SiteID)
-			if siteKey != "" && siteKey != "0" && !siteExists[siteKey] {
-				orphaned = true
-			}
-		} else if task.ServerID != nil {
-			serverKey := fmt.Sprint(task.ServerID)
-			if serverKey != "" && serverKey != "0" && !serverExists[serverKey] {
-				orphaned = true
-			}
+		if task.SiteID != nil && *task.SiteID != "" {
+			orphaned = !siteExists[*task.SiteID]
+		} else if task.ServerID != nil && *task.ServerID != "" {
+			orphaned = !serverExists[*task.ServerID]
 		}
 
 		if orphaned {

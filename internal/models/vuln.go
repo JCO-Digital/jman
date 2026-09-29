@@ -115,8 +115,7 @@ type CoreVulnReport struct {
 // SiteCore represents the WordPress core version installed on a specific site,
 // and any newer minor/major version available for it.
 type SiteCore struct {
-	SiteID      int    `json:"site_id"`
-	SiteUUID    string `json:"site_uuid,omitempty"`
+	SiteID      string `json:"site_id"` // site UUID
 	Version     string `json:"version"`
 	MinorUpdate string `json:"minor_update,omitempty"`
 	MajorUpdate string `json:"major_update,omitempty"`

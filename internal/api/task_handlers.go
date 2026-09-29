@@ -12,6 +12,35 @@ import (
 	"github.com/JCO-Digital/jman/internal/tasks"
 )
 
+// taskRequest is a task create/update body. site_id and server_id shadow the
+// embedded Task fields so they can be given as a UUID or a legacy SpinupWP
+// integer; null or "" clears the link.
+type taskRequest struct {
+	models.Task
+	SiteID   *FlexID `json:"site_id"`
+	ServerID *FlexID `json:"server_id"`
+}
+
+// applyLinks resolves the request's site/server links onto task, for the
+// fields that are set (present in the body).
+func (req taskRequest) applyLinks(task *models.Task, setSite, setServer bool) error {
+	if setSite {
+		siteID, err := optionalSiteUUID(req.SiteID)
+		if err != nil {
+			return err
+		}
+		task.SiteID = siteID
+	}
+	if setServer {
+		serverID, err := optionalServerUUID(req.ServerID)
+		if err != nil {
+			return err
+		}
+		task.ServerID = serverID
+	}
+	return nil
+}
+
 // ListTasksHandler handles GET /api/tasks
 func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 	filter := db.TaskFilter{
@@ -22,14 +51,21 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 		Search:      r.URL.Query().Get("search"),
 	}
 
+	var err error
 	if sid := r.URL.Query().Get("site_id"); sid != "" {
-		filter.SiteID, _ = strconv.Atoi(sid)
+		if filter.SiteID, err = resolveSiteUUID(sid); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 	if oid := r.URL.Query().Get("organization_id"); oid != "" {
 		filter.OrganizationID, _ = strconv.Atoi(oid)
 	}
 	if svid := r.URL.Query().Get("server_id"); svid != "" {
-		filter.ServerID, _ = strconv.Atoi(svid)
+		if filter.ServerID, err = resolveServerUUID(svid); err != nil {
+			WriteError(w, http.StatusBadRequest, err.Error())
+			return
+		}
 	}
 
 	tasks, err := db.GetTasks(filter)
@@ -66,9 +102,14 @@ func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 // CreateTaskHandler handles POST /api/tasks
 func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	claims := GetAuthClaims(r.Context())
-	var task models.Task
-	if err := json.NewDecoder(r.Body).Decode(&task); err != nil {
+	var req taskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	task := req.Task
+	if err := req.applyLinks(&task, true, true); err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -131,16 +172,25 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var updates models.Task
-	if err := json.Unmarshal(body, &updates); err != nil {
+	var req taskRequest
+	if err := json.Unmarshal(body, &req); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request format")
 		return
 	}
+	updates := req.Task
 
 	// Helper to check for key presence in JSON
 	has := func(key string) bool {
 		_, ok := raw[key]
 		return ok
+	}
+
+	if err := req.applyLinks(existing, has("site_id"), has("server_id")); err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if has("organization_id") {
+		existing.OrganizationID = updates.OrganizationID
 	}
 
 	if has("title") {

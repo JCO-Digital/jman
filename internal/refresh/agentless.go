@@ -103,7 +103,7 @@ func collectSingleSite(site models.ManagedSite) error {
 	if plugErr == nil {
 		_ = db.DeleteSitePlugins(site.ID)
 		for _, p := range plugins {
-			p.SiteUUID = site.ID
+			p.SiteID = site.ID
 			_ = db.SaveSitePlugin(p)
 		}
 	}

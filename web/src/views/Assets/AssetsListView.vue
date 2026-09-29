@@ -131,8 +131,8 @@ onMounted(async () => {
 	await dataStore.initData();
 });
 
-const getLinkedSite = (siteId: number | null) => {
-	if (!siteId) return null;
+const getLinkedSite = (siteId: string | null | undefined) => {
+	if (siteId == null) return null;
 	return dataStore.getSiteById(siteId) || null;
 };
 

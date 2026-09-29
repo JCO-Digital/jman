@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -29,7 +30,7 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 
 	sites, err := cache.GetSitesForServer(claims.ServerID)
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to load sites for server %d: %v", claims.ServerID, err)
+		verb.LogPrintf(verb.Normal, "Failed to load sites for server %s: %v", claims.ServerID, err)
 		WriteError(w, http.StatusInternalServerError, "Failed to load sites")
 		return
 	}
@@ -40,24 +41,29 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		APIVersion: config.AppVersion,
 	}
 	for _, site := range sites {
-		// SpinupWP sites go through deploying -> deployed (or failed); a
-		// site that isn't deployed yet (e.g. a staging site mid-clone) has
-		// nothing for the agent to collect, so leave it out of the manifest
+		// SpinupWP sites go through deploying -> deployed (or failed), and
+		// external sites are active/paused/archived; a site that isn't live
+		// yet (e.g. a staging site mid-clone) or has been paused has nothing
+		// for the agent to collect, so leave it out of the manifest
 		// entirely. site_user is passed through only as an optional
 		// fallback hint (see AgentManifestSite doc comment) — it's not
 		// required, since most servers use SpinupWP's shared /sites/<domain>
 		// layout rather than a dedicated Unix user per site.
-		if site.Status != "deployed" {
+		if site.Status != "deployed" && site.Status != "active" {
 			verb.LogPrintf(verb.Verbose, "Excluding %s from agent manifest: status=%q", site.Domain, site.Status)
 			continue
 		}
 
-		manifest.Sites = append(manifest.Sites, models.AgentManifestSite{
+		entry := models.AgentManifestSite{
 			SiteID:      site.ID,
 			Domain:      site.Domain,
-			SiteUser:    site.SiteUser,
+			SiteUser:    site.SSHUser,
 			IsWordpress: site.IsWordpress,
-		})
+		}
+		if site.Provider == "spinupwp" {
+			entry.LegacySiteID, _ = strconv.Atoi(site.ProviderSiteID)
+		}
+		manifest.Sites = append(manifest.Sites, entry)
 	}
 
 	WriteJSON(w, http.StatusOK, manifest)
@@ -91,11 +97,11 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 	// for sites on other servers.
 	serverSites, err := cache.GetSitesForServer(claims.ServerID)
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to validate sites for server %d: %v", claims.ServerID, err)
+		verb.LogPrintf(verb.Normal, "Failed to validate sites for server %s: %v", claims.ServerID, err)
 		WriteError(w, http.StatusInternalServerError, "Failed to validate sites")
 		return
 	}
-	allowedSiteIDs := make(map[int]bool, len(serverSites))
+	allowedSiteIDs := make(map[string]bool, len(serverSites))
 	for _, site := range serverSites {
 		allowedSiteIDs[site.ID] = true
 	}
@@ -106,7 +112,7 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type siteDay struct {
-		siteID int
+		siteID string
 		day    string
 	}
 	dailyRollupsNeeded := map[siteDay]bool{}
@@ -114,13 +120,13 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 	accepted := 0
 	for _, siteReport := range report.Sites {
 		if !allowedSiteIDs[siteReport.SiteID] {
-			verb.LogPrintf(verb.Normal, "Rejected agent report for site %d: does not belong to server %d", siteReport.SiteID, claims.ServerID)
+			verb.LogPrintf(verb.Normal, "Rejected agent report for site %s: does not belong to server %s", siteReport.SiteID, claims.ServerID)
 			continue
 		}
 
 		if siteReport.DiskUsageBytes != nil {
 			if err := db.RecordSiteDiskUsage(siteReport.SiteID, *siteReport.DiskUsageBytes, measuredAt); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to record disk usage for site %d: %v", siteReport.SiteID, err)
+				verb.LogPrintf(verb.Normal, "Failed to record disk usage for site %s: %v", siteReport.SiteID, err)
 			}
 		}
 
@@ -128,13 +134,13 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 			isMultisite := siteReport.IsMultisite != nil && *siteReport.IsMultisite
 			disallowFileMods := siteReport.DisallowFileMods != nil && *siteReport.DisallowFileMods
 			if err := db.SetSiteWpFlags(siteReport.SiteID, isMultisite, disallowFileMods); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to set wp flags for site %d: %v", siteReport.SiteID, err)
+				verb.LogPrintf(verb.Normal, "Failed to set wp flags for site %s: %v", siteReport.SiteID, err)
 			}
 		}
 
 		for _, hourly := range siteReport.TrafficHourly {
 			if err := db.UpsertSiteTrafficHourly(siteReport.SiteID, hourly); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %d hour %s: %v", siteReport.SiteID, hourly.Hour, err)
+				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %s hour %s: %v", siteReport.SiteID, hourly.Hour, err)
 				continue
 			}
 			if hourTime, err := time.Parse(time.RFC3339, hourly.Hour); err == nil {
@@ -149,7 +155,7 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 		// an empty rollup).
 		for _, daily := range siteReport.TrafficDaily {
 			if err := db.UpsertSiteTrafficDaily(siteReport.SiteID, daily); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %d day %s: %v", siteReport.SiteID, daily.Day, err)
+				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %s day %s: %v", siteReport.SiteID, daily.Day, err)
 			}
 		}
 
@@ -158,7 +164,7 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 
 	for sd := range dailyRollupsNeeded {
 		if err := db.RecomputeSiteTrafficDaily(sd.siteID, sd.day); err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to recompute daily traffic rollup for site %d day %s: %v", sd.siteID, sd.day, err)
+			verb.LogPrintf(verb.Normal, "Failed to recompute daily traffic rollup for site %s day %s: %v", sd.siteID, sd.day, err)
 		}
 	}
 
@@ -177,7 +183,7 @@ func ListAgentTokensHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type createAgentTokenRequest struct {
-	ServerID    int    `json:"server_id"`
+	ServerID    FlexID `json:"server_id"` // server UUID (legacy SpinupWP integer accepted)
 	ServerName  string `json:"server_name"`
 	Description string `json:"description"`
 }
@@ -195,9 +201,32 @@ func CreateAgentTokenHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.ServerID == 0 {
+	if req.ServerID == "" {
 		WriteError(w, http.StatusBadRequest, "server_id is required")
 		return
+	}
+	serverID, err := resolveServerUUID(string(req.ServerID))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	server, err := db.GetManagedServer(serverID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to look up server %s: %v", serverID, err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if server == nil {
+		WriteError(w, http.StatusNotFound, "Server not found")
+		return
+	}
+	if server.IsLogical {
+		WriteError(w, http.StatusBadRequest, "jman-agent cannot run on a logical server")
+		return
+	}
+	serverName := strings.TrimSpace(req.ServerName)
+	if serverName == "" {
+		serverName = server.Name
 	}
 
 	claims := GetAuthClaims(r.Context())
@@ -206,7 +235,7 @@ func CreateAgentTokenHandler(w http.ResponseWriter, r *http.Request) {
 		createdBy = claims.Username
 	}
 
-	token, plaintext, err := db.CreateAgentToken(req.ServerID, req.ServerName, req.Description, createdBy)
+	token, plaintext, err := db.CreateAgentToken(serverID, serverName, req.Description, createdBy)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "Failed to create agent token: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to create agent token")

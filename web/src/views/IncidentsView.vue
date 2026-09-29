@@ -87,7 +87,7 @@ function handleRowsPerPageChange(val: number) {
 	incidentStore.fetchHistoryIncidents(historyPage.value, historyLimit.value);
 }
 
-function getSiteIdForDomain(domain: string): number | null {
+function getSiteIdForDomain(domain: string): string | null {
 	const site = dataStore.sites.find(
 		(s) => s.domain.toLowerCase() === domain.toLowerCase(),
 	);

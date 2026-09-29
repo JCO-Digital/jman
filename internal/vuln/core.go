@@ -25,7 +25,7 @@ func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.Plu
 	}
 
 	cliSites, err := cache.GetFastSiteList()
-	siteMeta := make(map[int]models.CliSite)
+	siteMeta := make(map[string]models.CliSite)
 	if err == nil {
 		for _, s := range cliSites {
 			siteMeta[s.ID] = s
@@ -50,7 +50,7 @@ func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.Plu
 		allSitesSuppressed := true
 		for _, site := range sites {
 			if matcher != nil {
-				serverID := 0
+				serverID := ""
 				if s, ok := siteMeta[site.SiteID]; ok {
 					serverID = s.ServerID
 				}

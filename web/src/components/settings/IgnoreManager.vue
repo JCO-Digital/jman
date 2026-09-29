@@ -54,15 +54,15 @@ const sortedServers = computed(() => {
 
 const siteOptions = computed(() => {
 	return sortedSites.value.map((s) => ({
-		value: s.id.toString(),
+		value: s.id,
 		label: s.domain,
 	}));
 });
 
 const serverOptions = computed(() => {
 	return sortedServers.value.map((s) => ({
-		value: s.id.toString(),
-		label: s.name,
+		value: s.id,
+		label: s.is_logical ? `${s.name} (logical)` : s.name,
 	}));
 });
 
@@ -77,7 +77,7 @@ const pluginOptions = computed(() => {
 
 const sitesOnSelectedServer = computed(() => {
 	if (newEntry.value.type !== "server" || !newEntry.value.target) return [];
-	const serverId = parseInt(newEntry.value.target);
+	const serverId = newEntry.value.target;
 	return sortedSites.value.filter((s) => s.server_id === serverId);
 });
 
@@ -148,7 +148,7 @@ watch(
 	},
 );
 
-const toggleNegatedSite = (id: number) => {
+const toggleNegatedSite = (id: string) => {
 	if (!newEntry.value.negated_site_ids) {
 		newEntry.value.negated_site_ids = [id];
 		return;
@@ -218,11 +218,11 @@ const handleRemoveEntry = async (id: number) => {
 
 const resolveTargetName = (type: IgnoreType, target: string) => {
 	if (type === "site") {
-		const site = dataStore.getSiteById(parseInt(target));
+		const site = dataStore.getSiteById(target);
 		return site ? site.domain : `Site ${target}`;
 	}
 	if (type === "server") {
-		const server = dataStore.getServerById(parseInt(target));
+		const server = dataStore.getServerById(target);
 		return server ? server.name : `Server ${target}`;
 	}
 	if (type === "vulnerability" && target.length > 12) {

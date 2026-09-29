@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 func setupCacheTest(t *testing.T) {
@@ -75,29 +77,45 @@ func TestWriteJSONCacheAllowsCoreVersionNestedFilename(t *testing.T) {
 
 func TestGetSitesForServer_IncludesNonWPSites(t *testing.T) {
 	setupCacheTest(t)
+	if err := db.InitInventory(); err != nil {
+		t.Fatalf("failed to init inventory DB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
 
-	sites := []models.Site{
-		{ID: 1, ServerID: 10, Domain: "wp.example.com", IsWordpress: true, Status: "deployed"},
-		{ID: 2, ServerID: 10, Domain: "nonwp.example.com", IsWordpress: false, Status: "deployed"},
-		{ID: 3, ServerID: 20, Domain: "other.example.com", IsWordpress: true, Status: "deployed"},
+	server10 := utils.SpinupWPServerUUID(10)
+	server20 := utils.SpinupWPServerUUID(20)
+	for _, srv := range []string{server10, server20} {
+		if err := db.SaveManagedServer(models.ManagedServer{ID: srv, Name: srv, Provider: "spinupwp", SSHPort: 22}); err != nil {
+			t.Fatalf("failed to seed server: %v", err)
+		}
+	}
+	sites := []models.ManagedSite{
+		{ID: utils.SpinupWPSiteUUID(1), ServerID: &server10, Provider: "spinupwp", Domain: "wp.example.com", IsWordpress: true, Status: "deployed", Environment: models.SiteEnvironmentProduction},
+		{ID: utils.SpinupWPSiteUUID(2), ServerID: &server10, Provider: "spinupwp", Domain: "nonwp.example.com", IsWordpress: false, Status: "deployed", Environment: models.SiteEnvironmentProduction},
+		{ID: utils.SpinupWPSiteUUID(3), ServerID: &server20, Provider: "spinupwp", Domain: "other.example.com", IsWordpress: true, Status: "deployed", Environment: models.SiteEnvironmentProduction},
+	}
+	for _, site := range sites {
+		if err := db.SaveManagedSite(site); err != nil {
+			t.Fatalf("failed to seed site: %v", err)
+		}
 	}
 
-	if err := WriteJSONCache("sites", sites); err != nil {
-		t.Fatalf("failed to write sites cache: %v", err)
-	}
-
-	got, err := GetSitesForServer(10)
+	got, err := GetSitesForServer(server10)
 	if err != nil {
-		t.Fatalf("GetSitesForServer(10) error = %v", err)
+		t.Fatalf("GetSitesForServer error = %v", err)
 	}
 
 	if len(got) != 2 {
 		t.Fatalf("expected 2 sites for server 10, got %d", len(got))
 	}
-	if got[0].ID != 1 || !got[0].IsWordpress {
-		t.Errorf("unexpected site 0: %+v", got[0])
+	byDomain := map[string]models.ManagedSite{}
+	for _, s := range got {
+		byDomain[s.Domain] = s
 	}
-	if got[1].ID != 2 || got[1].IsWordpress {
-		t.Errorf("unexpected site 1: %+v", got[1])
+	if s, ok := byDomain["wp.example.com"]; !ok || !s.IsWordpress {
+		t.Errorf("missing or wrong WordPress site: %+v", got)
+	}
+	if s, ok := byDomain["nonwp.example.com"]; !ok || s.IsWordpress {
+		t.Errorf("missing or wrong non-WordPress site: %+v", got)
 	}
 }

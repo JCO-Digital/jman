@@ -30,11 +30,13 @@ const { confirm } = useConfirm();
 
 // Get the enriched site corresponding to this task's site_id
 const site = computed(() => {
-	if (!props.task.site_id) return null;
+	if (props.task.site_id == null) return null;
 	return (
 		dataStore.enrichedSites.find((s) => s.id === props.task.site_id) || null
 	);
 });
+
+const server = computed(() => dataStore.getServerById(props.task.server_id));
 
 // Parse task metadata to get original vulnerability UUIDs
 const metadata = computed(() => {
@@ -54,7 +56,7 @@ const originalVulnUuids = computed<string[]>(() => {
 // OR if the title starts with "Security Vulnerabilities".
 const isVulnerabilityTask = computed(() => {
 	return (
-		props.task.site_id !== null &&
+		props.task.site_id != null &&
 		(originalVulnUuids.value.length > 0 ||
 			props.task.title
 				.toLowerCase()
@@ -274,8 +276,8 @@ const canComplete = (s: string) => !isTerminal(s);
 					<!-- Linked entities -->
 					<div
 						v-if="
-							task.site_id ||
-							task.server_id ||
+							task.site_id != null ||
+							task.server_id != null ||
 							task.organization_id ||
 							task.plugin_slug
 						"
@@ -283,25 +285,27 @@ const canComplete = (s: string) => !isTerminal(s);
 					>
 						<h3 class="sub-text font-medium mb-4">Linked to</h3>
 						<div class="info-grid">
-							<div v-if="task.site_id" class="info-item">
+							<div v-if="task.site_id != null" class="info-item">
 								<span class="label">Site</span>
 								<RouterLink
-									:to="`/site/${task.site_id}`"
+									:to="{
+										name: 'site-detail',
+										params: { id: task.site_id! },
+									}"
 									class="font-sm font-medium"
 									@click="emit('close')"
 								>
-									{{
-										site
-											? site.domain
-											: `Site #${task.site_id}`
-									}}
+									{{ site ? site.domain : "Unknown site" }}
 								</RouterLink>
 							</div>
-							<div v-if="task.server_id" class="info-item">
+							<div
+								v-if="task.server_id != null"
+								class="info-item"
+							>
 								<span class="label">Server</span>
-								<span class="value"
-									>Server #{{ task.server_id }}</span
-								>
+								<span class="value">{{
+									server ? server.name : "Unknown server"
+								}}</span>
 							</div>
 							<div v-if="task.organization_id" class="info-item">
 								<span class="label">Organization</span>
@@ -371,7 +375,10 @@ const canComplete = (s: string) => !isTerminal(s);
 								</p>
 								<div class="site-vulnerability-link">
 									<RouterLink
-										:to="`/site/${task.site_id}`"
+										:to="{
+											name: 'site-detail',
+											params: { id: task.site_id! },
+										}"
 										class="btn btn-outline btn-sm font-xs"
 										@click="emit('close')"
 									>

@@ -6,7 +6,7 @@ package models
 // is used for API/CLI responses.
 type AgentToken struct {
 	ID           int     `json:"id"`
-	ServerID     any     `json:"server_id"`
+	ServerID     string  `json:"server_id"` // server UUID
 	ServerName   string  `json:"server_name"`
 	TokenPrefix  string  `json:"token_prefix"`
 	Description  *string `json:"description"`
@@ -49,15 +49,19 @@ type SiteWpFlags struct {
 // docroot, which can differ from the WordPress install location, so it's
 // deliberately not used here.)
 type AgentManifestSite struct {
-	SiteID      int    `json:"site_id"`
-	Domain      string `json:"domain"`
-	SiteUser    string `json:"site_user"`
-	IsWordpress bool   `json:"is_wordpress"`
+	SiteID string `json:"site_id"` // site UUID
+	// LegacySiteID is the SpinupWP integer ID (omitted for non-SpinupWP
+	// sites). jman-agent only uses it to rename log-state files written by
+	// pre-UUID agent releases, which keyed them by this integer.
+	LegacySiteID int    `json:"legacy_site_id,omitempty"`
+	Domain       string `json:"domain"`
+	SiteUser     string `json:"site_user"`
+	IsWordpress  bool   `json:"is_wordpress"`
 }
 
 // AgentManifest is the response body for GET /api/agent/manifest.
 type AgentManifest struct {
-	ServerID int                 `json:"server_id"`
+	ServerID string              `json:"server_id"` // server UUID
 	Sites    []AgentManifestSite `json:"sites"`
 	// APIVersion is jman-api's own running version. Every binary in this
 	// repo shares one version (one git tag per release), so if this is
@@ -132,8 +136,7 @@ type SiteTrafficPeriod struct {
 // breakdown), this carries the site ID so report rows from multiple sites
 // can be enriched with a site label after the query.
 type SiteTrafficDailyRow struct {
-	SiteID         any    `json:"site_id"`
-	SiteUUID       string `json:"site_uuid,omitempty"`
+	SiteID         string `json:"site_id"` // site UUID
 	Day            string `json:"day"`
 	RequestsTotal  int    `json:"requests_total"`
 	RequestsHuman  int    `json:"requests_human"`
@@ -144,7 +147,7 @@ type SiteTrafficDailyRow struct {
 // AgentReportSite is a single site's worth of freshly collected data in a
 // POST /api/agent/report request body.
 type AgentReportSite struct {
-	SiteID           int                  `json:"site_id"`
+	SiteID           string               `json:"site_id"` // site UUID
 	DiskUsageBytes   *int64               `json:"disk_usage_bytes"`
 	IsMultisite      *bool                `json:"is_multisite"`
 	DisallowFileMods *bool                `json:"disallow_file_mods"`

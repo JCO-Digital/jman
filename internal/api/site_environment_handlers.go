@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -21,9 +20,9 @@ var validSiteEnvironments = map[string]bool{
 // SetSiteEnvironmentHandler sets or clears the environment classification for a site.
 // An empty environment value clears the classification (unclassified).
 func SetSiteEnvironmentHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

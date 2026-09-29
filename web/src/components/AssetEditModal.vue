@@ -14,7 +14,7 @@ import { usePaymentMethodsStore } from "../stores/paymentMethods";
 const props = defineProps<{
 	modelValue: boolean;
 	asset: EnrichedOrganizationAsset | null;
-	prefill?: { template: Asset; siteId: number | null } | null;
+	prefill?: { template: Asset; siteId: string | null } | null;
 	sites: Site[];
 	organizations?: Organization[];
 	organizationId?: number | null;
@@ -33,7 +33,7 @@ const availableAssetTemplates = ref<Asset[]>([]);
 
 const assetForm = ref({
 	asset_id: null as number | null,
-	site_id: null as number | null,
+	site_id: null as string | null,
 	identifier: "",
 	billing_freq: "Yearly" as BillingFrequency,
 	next_billing: "",

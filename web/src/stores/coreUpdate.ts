@@ -10,7 +10,7 @@ export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 	const dataStore = useDataStore();
 	const toastStore = useToastStore();
 
-	async function checkCoreUpdate(siteId: number): Promise<SiteCore> {
+	async function checkCoreUpdate(siteId: string): Promise<SiteCore> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/core-update`, {
 			headers: authStore.authHeader,
 		});
@@ -35,7 +35,7 @@ export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 	}
 
 	async function updateCore(
-		siteId: number,
+		siteId: string,
 		target: "minor" | "major",
 	): Promise<CoreUpdateResult> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/core-update`, {

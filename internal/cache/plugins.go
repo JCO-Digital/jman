@@ -30,13 +30,13 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	lastUpdates, err := db.GetSitePluginLastUpdates()
 	if err != nil {
 		verb.PrintErrorf(verb.Verbose, "Warning: failed to get plugin last updates from database: %v\n", err)
-		lastUpdates = make(map[int]string)
+		lastUpdates = make(map[string]string)
 	}
 
 	// Build a presence set from existing rows so that a missing or failed
 	// lastUpdates lookup doesn't cause every site to be re-fetched when the
 	// caller requested no refresh (t == -1) or when data clearly exists.
-	sitesWithData := make(map[int]bool, len(existingPlugins))
+	sitesWithData := make(map[string]bool, len(existingPlugins))
 	for _, p := range existingPlugins {
 		sitesWithData[p.SiteID] = true
 	}
@@ -55,14 +55,14 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	// exists, producing recreated "Security Vulnerabilities - Site #N" tasks
 	// even after cleanupOrphanedTasks marks them skipped.
 	updated := false
-	currentSiteIDs := make(map[int]bool, len(sites))
+	currentSiteIDs := make(map[string]bool, len(sites))
 	for _, site := range sites {
 		currentSiteIDs[site.ID] = true
 	}
 	for siteID := range sitesWithData {
 		if !currentSiteIDs[siteID] {
 			if err := db.DeleteSitePlugins(siteID); err != nil {
-				verb.PrintErrorf(verb.Normal, "Warning: failed to prune plugins for deleted site %d: %v\n", siteID, err)
+				verb.PrintErrorf(verb.Normal, "Warning: failed to prune plugins for deleted site %s: %v\n", siteID, err)
 			} else {
 				updated = true
 			}
@@ -196,7 +196,7 @@ func groupPlugins(plugins []models.WPPlugin) ([]models.WPPluginData, error) {
 		return []models.WPPluginData{}, fmt.Errorf("failed to get site list for grouping: %w", err)
 	}
 
-	siteNames := make(map[int]string)
+	siteNames := make(map[string]string)
 	for _, s := range sites {
 		siteNames[s.ID] = s.Name
 	}

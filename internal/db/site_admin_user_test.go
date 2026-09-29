@@ -5,17 +5,17 @@ import "testing"
 func TestSaveAndGetSiteAdminUser(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	if _, _, found, err := GetSiteAdminUser(1); err != nil {
+	if _, _, found, err := GetSiteAdminUser(testSiteID(1)); err != nil {
 		t.Fatalf("failed to get admin user: %v", err)
 	} else if found {
 		t.Fatalf("expected no cached admin user before saving")
 	}
 
-	if err := SaveSiteAdminUser(1, 5); err != nil {
+	if err := SaveSiteAdminUser(testSiteID(1), 5); err != nil {
 		t.Fatalf("failed to save admin user: %v", err)
 	}
 
-	userID, updatedAt, found, err := GetSiteAdminUser(1)
+	userID, updatedAt, found, err := GetSiteAdminUser(testSiteID(1))
 	if err != nil {
 		t.Fatalf("failed to get admin user: %v", err)
 	}
@@ -29,10 +29,10 @@ func TestSaveAndGetSiteAdminUser(t *testing.T) {
 		t.Fatalf("expected a non-empty updated_at timestamp")
 	}
 
-	if err := SaveSiteAdminUser(1, 7); err != nil {
+	if err := SaveSiteAdminUser(testSiteID(1), 7); err != nil {
 		t.Fatalf("failed to update admin user: %v", err)
 	}
-	userID, _, found, err = GetSiteAdminUser(1)
+	userID, _, found, err = GetSiteAdminUser(testSiteID(1))
 	if err != nil {
 		t.Fatalf("failed to get admin user after update: %v", err)
 	}

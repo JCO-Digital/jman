@@ -60,3 +60,24 @@ func TestDecideStaleAgentAction(t *testing.T) {
 }
 
 func timePtr(t time.Time) *time.Time { return &t }
+
+func TestParseSQLiteTimestamp(t *testing.T) {
+	want := time.Date(2026, 9, 28, 13, 26, 28, 0, time.UTC)
+	for _, raw := range []string{
+		"2026-09-28 13:26:28",  // CURRENT_TIMESTAMP text as stored
+		"2026-09-28T13:26:28Z", // what the driver returns for DATETIME columns
+		"2026-09-28T16:26:28+03:00",
+	} {
+		got, err := parseSQLiteTimestamp(raw)
+		if err != nil {
+			t.Errorf("parseSQLiteTimestamp(%q) error = %v", raw, err)
+			continue
+		}
+		if !got.Equal(want) {
+			t.Errorf("parseSQLiteTimestamp(%q) = %v, want %v", raw, got, want)
+		}
+	}
+	if _, err := parseSQLiteTimestamp("not a time"); err == nil {
+		t.Error("parseSQLiteTimestamp should reject garbage")
+	}
+}

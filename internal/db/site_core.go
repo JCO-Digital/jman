@@ -3,16 +3,14 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
 // SaveSiteCore inserts or updates the installed WordPress core version for a
-// site, along with the latest available minor/major update version, if any
-// (empty string means no update of that kind is available).
-// siteID can be an int or a string (UUID).
-func SaveSiteCore(siteID any, version, minorUpdate, majorUpdate string) error {
+// site (by UUID), along with the latest available minor/major update version,
+// if any (empty string means no update of that kind is available).
+func SaveSiteCore(siteID, version, minorUpdate, majorUpdate string) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -29,7 +27,7 @@ func SaveSiteCore(siteID any, version, minorUpdate, majorUpdate string) error {
 	`
 
 	if _, err := db.Exec(query, siteID, version, minorUpdate, majorUpdate); err != nil {
-		return fmt.Errorf("failed to save core version for site %v: %w", siteID, err)
+		return fmt.Errorf("failed to save core version for site %s: %w", siteID, err)
 	}
 
 	return nil
@@ -51,26 +49,24 @@ func GetAllSiteCore() ([]models.SiteCore, error) {
 
 	var versions []models.SiteCore
 	for rows.Next() {
-		var rawSiteID string
 		var v models.SiteCore
 		var minorUpdate, majorUpdate sql.NullString
-		if err := rows.Scan(&rawSiteID, &v.Version, &minorUpdate, &majorUpdate); err != nil {
+		if err := rows.Scan(&v.SiteID, &v.Version, &minorUpdate, &majorUpdate); err != nil {
 			return nil, fmt.Errorf("failed to scan site core version: %w", err)
 		}
-		if id, err := strconv.Atoi(rawSiteID); err == nil {
-			v.SiteID = id
-		}
-		v.SiteUUID = rawSiteID
 		v.MinorUpdate = minorUpdate.String
 		v.MajorUpdate = majorUpdate.String
 		versions = append(versions, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating site core versions: %w", err)
 	}
 
 	return versions, nil
 }
 
-// GetSiteCoreLastUpdates returns a map of site IDs to their last core-version fetch timestamp.
-func GetSiteCoreLastUpdates() (map[int]string, error) {
+// GetSiteCoreLastUpdates returns a map of site UUIDs to their last core-version fetch timestamp.
+func GetSiteCoreLastUpdates() (map[string]string, error) {
 	db := GetInventoryDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -82,16 +78,17 @@ func GetSiteCoreLastUpdates() (map[int]string, error) {
 	}
 	defer rows.Close()
 
-	updates := make(map[int]string)
+	updates := make(map[string]string)
 	for rows.Next() {
-		var rawSiteID string
+		var siteID string
 		var updatedAt sql.NullString
-		if err := rows.Scan(&rawSiteID, &updatedAt); err != nil {
+		if err := rows.Scan(&siteID, &updatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan site core update: %w", err)
 		}
-		if id, err := strconv.Atoi(rawSiteID); err == nil {
-			updates[id] = updatedAt.String
-		}
+		updates[siteID] = updatedAt.String
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating site core updates: %w", err)
 	}
 
 	return updates, nil

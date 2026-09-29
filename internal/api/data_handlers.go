@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -65,25 +64,258 @@ func PluginInfoHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, plugins)
 }
 
-// ServersHandler returns the list of cached servers.
+// apiServer is the /api/servers representation of a server: the inventory
+// record, with the SpinupWP cache details embedded for SpinupWP servers. The
+// embedded pointer is nil for other servers, so those fields are omitted.
+type apiServer struct {
+	*models.Server
+	ID               string `json:"id"`
+	Provider         string `json:"provider"`
+	ProviderServerID string `json:"provider_server_id,omitempty"`
+	Name             string `json:"name"`
+	IsLogical        bool   `json:"is_logical"`
+	IPAddress        string `json:"ip_address"`
+	SSHPort          int    `json:"ssh_port"`
+}
+
+// ServersHandler returns every server in the inventory, enriched with the
+// SpinupWP cache details for SpinupWP servers. ?format=managed is accepted as
+// an alias for the same list.
 func ServersHandler(w http.ResponseWriter, r *http.Request) {
-	servers := []models.Server{}
-	if err := cache.ReadJSONCache("servers", &servers, -1); err != nil {
-		verb.LogPrintf(verb.Normal, "ServersHandler cache missing: %v", err)
-		WriteError(w, http.StatusNotFound, "Servers cache missing")
+	managedServers, err := db.ListManagedServers()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "ServersHandler managed servers error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	// Sort by ID for deterministic output.
+	if r.URL.Query().Get("format") == "managed" {
+		if managedServers == nil {
+			managedServers = []models.ManagedServer{}
+		}
+		WriteJSON(w, http.StatusOK, managedServers)
+		return
+	}
+
+	cached := []models.Server{}
+	_ = cache.ReadJSONCache("servers", &cached, -1)
+	cachedByUUID := make(map[string]*models.Server, len(cached))
+	for i := range cached {
+		cachedByUUID[utils.SpinupWPServerUUID(cached[i].ID)] = &cached[i]
+	}
+
+	servers := make([]apiServer, 0, len(managedServers)+len(cached))
+	known := make(map[string]bool, len(managedServers))
+	for _, ms := range managedServers {
+		known[ms.ID] = true
+		srv := apiServer{
+			ID:               ms.ID,
+			Provider:         ms.Provider,
+			ProviderServerID: ms.ProviderServerID,
+			Name:             ms.Name,
+			IsLogical:        ms.IsLogical,
+			IPAddress:        ms.IPAddress,
+			SSHPort:          ms.SSHPort,
+		}
+		if ms.Provider == "spinupwp" {
+			srv.Server = cachedByUUID[ms.ID]
+		}
+		servers = append(servers, srv)
+	}
+	// SpinupWP servers not yet synced into the inventory.
+	for uuid, c := range cachedByUUID {
+		if known[uuid] {
+			continue
+		}
+		servers = append(servers, apiServer{
+			Server:           c,
+			ID:               uuid,
+			Provider:         "spinupwp",
+			ProviderServerID: strconv.Itoa(c.ID),
+			Name:             c.Name,
+			IPAddress:        c.IPAddress,
+			SSHPort:          c.SSHPort,
+		})
+	}
+
 	sort.Slice(servers, func(i, j int) bool {
+		if servers[i].Name != servers[j].Name {
+			return servers[i].Name < servers[j].Name
+		}
 		return servers[i].ID < servers[j].ID
 	})
 
 	WriteJSON(w, http.StatusOK, servers)
 }
 
-// SitesHandler returns the list of cached and managed sites.
-// If ?format=managed is provided, returns host-agnostic ManagedSite models.
+// apiSite is the /api/sites representation of a site: the inventory record
+// (identity, connection and capabilities), with the SpinupWP cache details
+// embedded for SpinupWP sites. The embedded pointer is nil for other sites,
+// so SpinupWP-only fields are omitted for them.
+type apiSite struct {
+	*models.Site
+	ID             string                     `json:"id"`
+	Provider       string                     `json:"provider"`
+	ProviderSiteID string                     `json:"provider_site_id,omitempty"`
+	ServerID       *string                    `json:"server_id"`
+	ServerName     string                     `json:"server_name"`
+	Domain         string                     `json:"domain"`
+	Environment    models.SiteEnvironmentType `json:"environment,omitempty"`
+	Status         string                     `json:"status"`
+	IsWordpress    bool                       `json:"is_wordpress"`
+	PHPVersion     string                     `json:"php_version"`
+	SiteUser       string                     `json:"site_user"`
+	ConnectionType string                     `json:"connection_type"`
+	SSHHost        string                     `json:"ssh_host"`
+	SSHPort        int                        `json:"ssh_port"`
+	SitePath       string                     `json:"site_path"`
+	CanWPCLI       bool                       `json:"can_wp_cli"`
+	HasAgent       bool                       `json:"has_agent"`
+	HasMonitoring  bool                       `json:"has_monitoring"`
+
+	DiskUsage  *models.SiteDiskUsage         `json:"disk_usage,omitempty"`
+	WpFlags    *models.SiteWpFlags           `json:"wp_flags,omitempty"`
+	LastUpdate *models.SiteUpdateLedgerEntry `json:"last_update,omitempty"`
+	WPCore     *models.SiteCore              `json:"wp_core,omitempty"`
+}
+
+func newAPISite(ms models.ManagedSite) apiSite {
+	return apiSite{
+		ID:             ms.ID,
+		Provider:       ms.Provider,
+		ProviderSiteID: ms.ProviderSiteID,
+		ServerID:       ms.ServerID,
+		ServerName:     ms.ServerName,
+		Domain:         ms.Domain,
+		Environment:    ms.Environment,
+		Status:         ms.Status,
+		IsWordpress:    ms.IsWordpress,
+		PHPVersion:     ms.PHPVersion,
+		SiteUser:       ms.SSHUser,
+		ConnectionType: ms.ConnectionType,
+		SSHHost:        ms.SSHHost,
+		SSHPort:        ms.SSHPort,
+		SitePath:       ms.SitePath,
+		CanWPCLI:       ms.CanWPCLI,
+		HasAgent:       ms.HasAgent,
+		HasMonitoring:  ms.HasMonitoring,
+	}
+}
+
+// loadAPISites builds the /api/sites list: every inventory site (enriched
+// with SpinupWP cache details for SpinupWP sites), plus SpinupWP sites not
+// yet synced into the inventory, with environment, disk usage, WP flags,
+// latest update and core version attached.
+func loadAPISites() ([]apiSite, error) {
+	managedSites, err := db.ListManagedSites()
+	if err != nil {
+		return nil, fmt.Errorf("managed sites: %w", err)
+	}
+
+	cachedSites := []models.Site{}
+	_ = cache.ReadJSONCache("sites", &cachedSites, -1)
+	cachedByUUID := make(map[string]*models.Site, len(cachedSites))
+	for i := range cachedSites {
+		cachedByUUID[utils.SpinupWPSiteUUID(cachedSites[i].ID)] = &cachedSites[i]
+	}
+
+	sites := make([]apiSite, 0, len(managedSites)+len(cachedSites))
+	known := make(map[string]bool, len(managedSites))
+	for _, ms := range managedSites {
+		known[ms.ID] = true
+		site := newAPISite(ms)
+		if ms.Provider == "spinupwp" {
+			site.Site = cachedByUUID[ms.ID]
+		}
+		sites = append(sites, site)
+	}
+	if len(cachedByUUID) > len(known) {
+		serverNames, _ := cache.GetFastServerMap()
+		for uuid, c := range cachedByUUID {
+			if known[uuid] {
+				continue
+			}
+			serverID := utils.SpinupWPServerUUID(c.ServerID)
+			sites = append(sites, apiSite{
+				Site:           c,
+				ID:             uuid,
+				Provider:       "spinupwp",
+				ProviderSiteID: strconv.Itoa(c.ID),
+				ServerID:       &serverID,
+				ServerName:     serverNames[c.ServerID],
+				Domain:         c.Domain,
+				Status:         c.Status,
+				IsWordpress:    c.IsWordpress,
+				PHPVersion:     c.PHPVersion,
+				SiteUser:       c.SiteUser,
+				ConnectionType: "agent",
+				SitePath:       "files",
+				CanWPCLI:       true,
+				HasAgent:       true,
+				HasMonitoring:  true,
+			})
+		}
+	}
+
+	environments, err := db.GetAllSiteEnvironments()
+	if err != nil {
+		return nil, fmt.Errorf("environments: %w", err)
+	}
+	diskUsage, err := db.GetLatestSiteDiskUsage()
+	if err != nil {
+		return nil, fmt.Errorf("disk usage: %w", err)
+	}
+	wpFlags, err := db.GetAllSiteWpFlags()
+	if err != nil {
+		return nil, fmt.Errorf("wp flags: %w", err)
+	}
+	latestUpdates, err := db.GetLatestSiteUpdateLedgerEntries()
+	if err != nil {
+		return nil, fmt.Errorf("update ledger: %w", err)
+	}
+	coreVersions, err := db.GetAllSiteCore()
+	if err != nil {
+		return nil, fmt.Errorf("core versions: %w", err)
+	}
+	coreBySiteID := make(map[string]models.SiteCore, len(coreVersions))
+	for _, c := range coreVersions {
+		coreBySiteID[c.SiteID] = c
+	}
+
+	for i := range sites {
+		id := sites[i].ID
+		// An explicit classification (PATCH /environment, auto-classifier)
+		// takes precedence over the inventory default.
+		if env, ok := environments[id]; ok {
+			sites[i].Environment = models.SiteEnvironmentType(env)
+		}
+		if usage, ok := diskUsage[id]; ok {
+			sites[i].DiskUsage = &usage
+		}
+		if flags, ok := wpFlags[id]; ok {
+			sites[i].WpFlags = &flags
+		}
+		if lastUp, ok := latestUpdates[id]; ok {
+			sites[i].LastUpdate = &lastUp
+		}
+		if core, ok := coreBySiteID[id]; ok {
+			sites[i].WPCore = &core
+		}
+	}
+
+	sort.Slice(sites, func(i, j int) bool {
+		if sites[i].Domain != sites[j].Domain {
+			return sites[i].Domain < sites[j].Domain
+		}
+		return sites[i].ID < sites[j].ID
+	})
+
+	return sites, nil
+}
+
+// SitesHandler returns every site (see loadAPISites). If ?format=managed is
+// provided, it returns the raw host-agnostic ManagedSite records instead,
+// optionally filtered by ?provider=.
 func SitesHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Query().Get("format") == "managed" {
 		providerFilter := r.URL.Query().Get("provider")
@@ -106,107 +338,12 @@ func SitesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sites := []models.Site{}
-	_ = cache.ReadJSONCache("sites", &sites, -1)
-
-	// Populate UUID and Provider for SpinupWP sites
-	for i := range sites {
-		sites[i].UUID = utils.SpinupWPSiteUUID(sites[i].ID)
-		sites[i].Provider = "spinupwp"
-	}
-
-	// Also load external/managed sites that are not in SpinupWP cache
-	managedSites, err := db.ListManagedSites()
-	if err == nil {
-		knownDomains := make(map[string]bool, len(sites))
-		for _, s := range sites {
-			knownDomains[strings.ToLower(s.Domain)] = true
-		}
-
-		for _, ms := range managedSites {
-			if !knownDomains[strings.ToLower(ms.Domain)] {
-				sites = append(sites, models.Site{
-					UUID:        ms.ID,
-					Provider:    ms.Provider,
-					Domain:      ms.Domain,
-					Environment: ms.Environment,
-					IsWordpress: ms.IsWordpress,
-					PHPVersion:  ms.PHPVersion,
-					SiteUser:    ms.SSHUser,
-					Status:      ms.Status,
-				})
-			}
-		}
-	}
-
-	environments, err := db.GetAllSiteEnvironments()
+	sites, err := loadAPISites()
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "SitesHandler environments error: %v", err)
+		verb.LogPrintf(verb.Normal, "SitesHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-
-	diskUsage, err := db.GetLatestSiteDiskUsage()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "SitesHandler disk usage error: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	wpFlags, err := db.GetAllSiteWpFlags()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "SitesHandler wpFlags error: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	latestUpdates, err := db.GetLatestSiteUpdateLedgerEntries()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "SitesHandler updates error: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	coreVersions, err := db.GetAllSiteCore()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "SitesHandler core versions error: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-	coreBySiteID := make(map[int]models.SiteCore, len(coreVersions))
-	for _, c := range coreVersions {
-		coreBySiteID[c.SiteID] = c
-	}
-
-	for i, site := range sites {
-		if env, ok := environments[site.UUID]; ok && site.Environment == "" {
-			sites[i].Environment = models.SiteEnvironmentType(env)
-		} else if env, ok := environments[strconv.Itoa(site.ID)]; ok && site.Environment == "" {
-			sites[i].Environment = models.SiteEnvironmentType(env)
-		}
-		if usage, ok := diskUsage[site.ID]; ok {
-			sites[i].DiskUsage = &usage
-		}
-		if flags, ok := wpFlags[site.ID]; ok {
-			sites[i].WpFlags = &flags
-		}
-		if lastUp, ok := latestUpdates[site.UUID]; ok {
-			sites[i].LastUpdate = &lastUp
-		} else if lastUp, ok := latestUpdates[strconv.Itoa(site.ID)]; ok {
-			sites[i].LastUpdate = &lastUp
-		}
-		if core, ok := coreBySiteID[site.ID]; ok {
-			sites[i].WPCore = &core
-		}
-	}
-
-	// Sort by ID for deterministic output.
-	sort.Slice(sites, func(i, j int) bool {
-		if sites[i].ID != sites[j].ID {
-			return sites[i].ID < sites[j].ID
-		}
-		return sites[i].Domain < sites[j].Domain
-	})
 
 	WriteJSON(w, http.StatusOK, sites)
 }
@@ -297,15 +434,15 @@ func CoreVulnsHandler(w http.ResponseWriter, r *http.Request) {
 // SitePluginUpdatesHandler returns the list of plugins with available updates for a site.
 // It calls WP-CLI live so the result reflects the current state of the site.
 func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	site, err := getSiteByID(siteID)
+	site, err := getCliSite(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, "Site not found")
+		WriteError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -348,9 +485,9 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 
 // SitePluginUpdateHandler updates a single plugin on a site and refreshes the plugin cache.
 func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -371,9 +508,9 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	site, err := getSiteByID(siteID)
+	site, err := getCliSite(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, "Site not found")
+		WriteError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -543,15 +680,15 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 // available minor/major update for a site. It calls WP-CLI live so the
 // result reflects the current state of the site.
 func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	site, err := getSiteByID(siteID)
+	site, err := getCliSite(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, "Site not found")
+		WriteError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -580,9 +717,9 @@ type SiteCoreUpdateResponse struct {
 // SiteCoreUpdateHandler updates WordPress core on a site to the latest minor
 // or major version and refreshes the core version cache.
 func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := strconv.Atoi(r.PathValue("id"))
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid site ID")
+		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -598,9 +735,9 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	site, err := getSiteByID(siteID)
+	site, err := getCliSite(siteID)
 	if err != nil {
-		WriteError(w, http.StatusNotFound, "Site not found")
+		WriteError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
@@ -673,25 +810,26 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, response)
 }
 
-func getSiteByID(id int) (*models.CliSite, error) {
+// getCliSite returns the WP-CLI-reachable site with the given UUID.
+func getCliSite(siteID string) (*models.CliSite, error) {
 	sites, err := cache.GetFastSiteList()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get site list: %w", err)
 	}
 	for _, s := range sites {
-		if s.ID == id {
+		if s.ID == siteID {
 			return &s, nil
 		}
 	}
-	return nil, fmt.Errorf("site with ID %d not found", id)
+	return nil, fmt.Errorf("site %s not found or not reachable via WP-CLI", siteID)
 }
 
 // SiteUpdateLedgerHandler returns the update history ledger for a site.
 func SiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
-	rawID := r.PathValue("id")
-	siteUUID, err := resolveSiteUUID(rawID)
+	siteUUID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		siteUUID = rawID
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	entries, err := db.GetSiteUpdateLedger(siteUUID)
@@ -706,10 +844,10 @@ func SiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateSiteUpdateLedgerHandler manually adds an entry to the site update ledger.
 func CreateSiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
-	rawID := r.PathValue("id")
-	siteUUID, err := resolveSiteUUID(rawID)
+	siteUUID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
-		siteUUID = rawID
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	var req struct {
@@ -736,7 +874,6 @@ func CreateSiteUpdateLedgerHandler(w http.ResponseWriter, r *http.Request) {
 
 	entry := models.SiteUpdateLedgerEntry{
 		SiteID:     siteUUID,
-		SiteUUID:   siteUUID,
 		UpdateType: req.UpdateType,
 		Status:     req.Status,
 		DataJSON:   req.DataJSON,

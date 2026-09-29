@@ -25,13 +25,20 @@ const agentStaleThreshold = 3 * time.Hour
 // either silence or a message on every hourly tick.
 const agentStaleRepeatInterval = 24 * time.Hour
 
-// sqliteTimestampFormat matches what SQLite's CURRENT_TIMESTAMP produces
-// (used for last_seen_at and stale_alert_sent_at) — not RFC3339. Parsing it
-// with the wrong format is exactly the mismatch this codebase already hit
-// once, fixed in e4c8a90 for site_traffic_hourly's cutoff comparison.
+// sqliteTimestampFormat matches what SQLite's CURRENT_TIMESTAMP stores (used
+// for last_seen_at and stale_alert_sent_at). Parsing it with the wrong format
+// is exactly the mismatch this codebase already hit once, fixed in e4c8a90
+// for site_traffic_hourly's cutoff comparison.
 const sqliteTimestampFormat = "2006-01-02 15:04:05"
 
+// parseSQLiteTimestamp parses a DATETIME value as read back through the
+// driver. modernc.org/sqlite converts DATETIME columns to time.Time, so
+// scanning one into a string yields RFC3339 ("2006-01-02T15:04:05Z") rather
+// than the stored CURRENT_TIMESTAMP text; both forms are accepted.
 func parseSQLiteTimestamp(s string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.UTC(), nil
+	}
 	return time.ParseInLocation(sqliteTimestampFormat, s, time.UTC)
 }
 

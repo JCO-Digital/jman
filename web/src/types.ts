@@ -11,26 +11,38 @@ export interface ServerDatabase {
 	port: number;
 }
 
+/** Site/server provider. "spinupwp" entities carry extra SpinupWP-only detail fields. */
+export type Provider = "spinupwp" | "manual" | "wpengine" | (string & {});
+
+/**
+ * A server from GET /api/servers. `id` is always a UUID; the legacy SpinupWP
+ * integer id (if any) lives in `provider_server_id`. SpinupWP-only detail
+ * fields are present only when `provider === "spinupwp"`.
+ */
 export interface Server {
-	id: number;
+	id: string;
+	provider: Provider;
+	provider_server_id?: string;
 	name: string;
-	provider_name: string;
-	ubuntu_version: string;
-	ip_address: string;
-	ssh_port: number;
-	timezone: string;
-	region: string;
-	size: string;
-	disk_space: DiskSpace;
-	database: ServerDatabase;
-	ssh_publickey: string;
-	git_publickey: string;
-	connection_status: string;
-	reboot_required: boolean;
-	upgrade_required: boolean;
-	install_notes: string;
-	created_at: string;
-	status: string;
+	is_logical: boolean;
+	ip_address?: string;
+	ssh_port?: number;
+	// SpinupWP-only
+	provider_name?: string;
+	ubuntu_version?: string;
+	timezone?: string;
+	region?: string;
+	size?: string;
+	disk_space?: DiskSpace;
+	database?: ServerDatabase;
+	ssh_publickey?: string;
+	git_publickey?: string;
+	connection_status?: string;
+	reboot_required?: boolean;
+	upgrade_required?: boolean;
+	install_notes?: string;
+	created_at?: string;
+	status?: string;
 }
 
 export interface AdditionalDomain {
@@ -80,44 +92,59 @@ export interface SiteWpFlags {
 	updated_at: string;
 }
 
+/**
+ * A site from GET /api/sites. `id` and `server_id` are UUIDs; the legacy
+ * SpinupWP integer id (if any) lives in `provider_site_id`. SpinupWP-only
+ * detail fields are present only when `provider === "spinupwp"`.
+ */
 export interface Site {
-	id: number;
-	server_id: number;
+	id: string;
+	provider: Provider;
+	provider_site_id?: string;
+	server_id: string | null;
+	/** "" when the site has no server. */
+	server_name: string;
 	organization_id?: number;
 	domain: string;
-	additional_domains: AdditionalDomain[];
 	site_user: string;
-	user_auth: string;
 	php_version: string;
-	public_folder: string;
 	is_wordpress: boolean;
-	page_cache: {
+	status: string;
+	// Capabilities
+	connection_type: ManagedConnectionType;
+	can_wp_cli: boolean;
+	has_agent: boolean;
+	has_monitoring: boolean;
+	// SpinupWP-only
+	additional_domains?: AdditionalDomain[];
+	user_auth?: string;
+	public_folder?: string;
+	page_cache?: {
 		enabled: boolean;
 	};
-	https: {
+	https?: {
 		enabled: boolean;
 		certificate_expires: string | null;
 		certificate_renews: string | null;
 	};
-	nginx: {
+	nginx?: {
 		uploads_directory_protected: boolean;
 		xmlrpc_protected: boolean;
 		subdirectory_rewrite_in_place: boolean;
 	};
-	database: SiteDatabase;
-	backups: Backups;
-	wp_core_update: boolean | number;
-	wp_theme_updates: boolean | number;
-	wp_plugin_updates: boolean | number;
-	basic_auth: {
+	database?: SiteDatabase;
+	backups?: Backups;
+	wp_core_update?: boolean | number;
+	wp_theme_updates?: boolean | number;
+	wp_plugin_updates?: boolean | number;
+	basic_auth?: {
 		enabled: boolean;
 		username: string;
 	};
-	created_at: string;
-	created_by: string;
-	updated_at: string;
-	updated_by: string;
-	status: string;
+	created_at?: string;
+	created_by?: string;
+	updated_at?: string;
+	updated_by?: string;
 	environment?: SiteEnvironment;
 	disk_usage?: SiteDiskUsage;
 	wp_flags?: SiteWpFlags;
@@ -126,7 +153,7 @@ export interface Site {
 }
 
 export interface SiteCore {
-	site_id: number;
+	site_id: string;
 	version: string;
 	minor_update?: string;
 	major_update?: string;
@@ -141,7 +168,7 @@ export interface CoreUpdateResult {
 }
 
 export interface Plugin {
-	site_id: number;
+	site_id: string;
 	name: string;
 	slug?: string;
 	status: string;
@@ -185,7 +212,7 @@ export interface VulnerabilityImpact {
 }
 
 export interface VulnerabilitySite {
-	site_id: number;
+	site_id: string;
 	site_name: string;
 	version: string;
 	suppressed: boolean;
@@ -254,7 +281,7 @@ export interface MonitorStatus {
 
 export interface SiteUpdateLedgerEntry {
 	id: number;
-	site_id: number;
+	site_id: string;
 	update_type: "core" | "plugin" | "theme";
 	status: "full" | "partial" | "failed";
 	data_json?: string;
@@ -269,7 +296,7 @@ export interface IgnoreEntry {
 	type: IgnoreType;
 	target: string;
 	reason: string;
-	negated_site_ids: number[] | null;
+	negated_site_ids: string[] | null;
 	use_for_monitor: boolean;
 	use_for_vuln: boolean;
 	created_at: string;
@@ -282,7 +309,7 @@ export interface CreateIgnorePayload {
 	type: IgnoreType;
 	target: string;
 	reason?: string;
-	negated_site_ids?: number[];
+	negated_site_ids?: string[];
 	use_for_monitor?: boolean;
 	use_for_vuln?: boolean;
 }
@@ -391,7 +418,7 @@ export interface OrganizationAsset {
 	id: number;
 	organization_id: number;
 	organization_name?: string;
-	site_id: number | null;
+	site_id: string | null;
 	asset_id: number | null;
 	asset_name?: string;
 	asset_type?: string;
@@ -521,8 +548,10 @@ export interface Task {
 	priority: TaskPriority;
 	title: string;
 	description: string | null;
-	site_id: number | null;
-	server_id: number | null;
+	/** UUID; null or omitted when unset. */
+	site_id?: string | null;
+	/** UUID; null or omitted when unset. */
+	server_id?: string | null;
 	organization_id: number | null;
 	plugin_slug: string | null;
 	assigned_to: string | null;
@@ -543,8 +572,8 @@ export interface CreateTaskPayload {
 	priority?: TaskPriority;
 	title: string;
 	description?: string;
-	site_id?: number | null;
-	server_id?: number | null;
+	site_id?: string | null;
+	server_id?: string | null;
 	organization_id?: number | null;
 	plugin_slug?: string | null;
 	assigned_to?: string | null;
@@ -559,15 +588,15 @@ export interface TaskFilters {
 	status?: TaskStatus | "";
 	priority?: TaskPriority | "";
 	assigned_to?: string;
-	site_id?: number;
+	site_id?: string;
 	organization_id?: number;
-	server_id?: number;
+	server_id?: string;
 	search?: string;
 }
 
 export interface AgentToken {
 	id: number;
-	server_id: number;
+	server_id: string;
 	server_name: string;
 	token_prefix: string;
 	description: string | null;
@@ -579,7 +608,7 @@ export interface AgentToken {
 }
 
 export interface CreateAgentTokenPayload {
-	server_id: number;
+	server_id: string;
 	server_name: string;
 	description?: string;
 }
@@ -665,4 +694,89 @@ export interface IncidentsResponse {
 	incidents: Incident[];
 	total: number;
 	active_count: number;
+}
+
+// ---------------------------------------------------------------------------
+// Managed (host-agnostic) sites and servers from inventory.db
+// ---------------------------------------------------------------------------
+
+export type ManagedConnectionType = "ssh" | "agent" | "none";
+export type ManagedSiteStatus = "active" | "paused" | "archived";
+
+export interface ManagedServer {
+	id: string;
+	provider: string;
+	provider_server_id?: string;
+	name: string;
+	is_logical: boolean;
+	ip_address?: string;
+	ssh_port: number;
+	created_at?: string;
+	updated_at?: string;
+}
+
+export interface ManagedSite {
+	id: string;
+	server_id?: string | null;
+	server_name?: string;
+	provider: string;
+	provider_site_id?: string;
+	domain: string;
+	environment: SiteEnvironment;
+	is_wordpress: boolean;
+	php_version?: string;
+	connection_type: ManagedConnectionType;
+	ssh_host: string;
+	ssh_port: number;
+	ssh_user: string;
+	site_path: string;
+	can_wp_cli: boolean;
+	has_agent: boolean;
+	has_monitoring: boolean;
+	status: ManagedSiteStatus;
+	created_at?: string;
+	updated_at?: string;
+}
+
+export interface ManagedSitePayload {
+	domain?: string;
+	/** Empty string unassigns the site from its server. */
+	server_id?: string;
+	provider?: string;
+	environment?: SiteEnvironment;
+	is_wordpress?: boolean;
+	php_version?: string;
+	connection_type?: ManagedConnectionType;
+	ssh_host?: string;
+	ssh_port?: number;
+	ssh_user?: string;
+	site_path?: string;
+	can_wp_cli?: boolean;
+	has_agent?: boolean;
+	has_monitoring?: boolean;
+	status?: ManagedSiteStatus;
+}
+
+export interface ManagedServerPayload {
+	name: string;
+	provider?: string;
+	is_logical: boolean;
+	ip_address?: string;
+	ssh_port?: number;
+}
+
+export interface TestConnectionResult {
+	success: boolean;
+	wp_version?: string;
+	message?: string;
+	error?: string;
+	output?: string;
+	stderr?: string;
+}
+
+export interface SpinupWPSyncResult {
+	success: boolean;
+	servers: number;
+	sites: number;
+	message: string;
 }

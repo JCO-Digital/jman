@@ -9,12 +9,14 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 func TestSiteTrafficHandler_Monthly(t *testing.T) {
 	setupSettingsTest(t)
 
-	const siteID = 3
+	// Seeded under the UUID, requested below by the legacy SpinupWP ID.
+	siteID := utils.SpinupWPSiteUUID(3)
 	day := time.Now().UTC().AddDate(0, 0, -1).Format("2006-01-02")
 	if err := db.UpsertSiteTrafficDaily(siteID, models.TrafficDailyEntry{
 		Day: day, RequestsTotal: 42, RequestsHuman: 40, RequestsBot: 2, UniqueVisitors: 5,

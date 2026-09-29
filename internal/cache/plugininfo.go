@@ -133,7 +133,7 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 			verb.PrintErrorf(verb.Verbose, "Warning: failed to get site list for WP-CLI fallback: %v\n", err)
 			return existing
 		}
-		siteMap := make(map[int]models.CliSite)
+		siteMap := make(map[string]models.CliSite)
 		for _, s := range sites {
 			siteMap[s.ID] = s
 		}
@@ -168,14 +168,14 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 	if err != nil {
 		return fmt.Errorf("failed to get site list for refresh: %w", err)
 	}
-	siteMap := make(map[int]models.CliSite)
+	siteMap := make(map[string]models.CliSite)
 	for _, s := range sites {
 		siteMap[s.ID] = s
 	}
 
 	// Pre-fetch all site plugins to avoid thousands of DB queries.
 	allPlugins, _ := db.GetAllSitePlugins()
-	pluginToSites := make(map[string][]int)
+	pluginToSites := make(map[string][]string)
 	isSpecial := make(map[string]bool)
 	isRegular := make(map[string]bool)
 
@@ -286,8 +286,8 @@ func isSpecialPlugin(slug string, specialOnlyMap map[string]bool) (bool, error) 
 }
 
 // fetchPluginInfoFromSites attempts to get plugin metadata from a site where it is installed.
-func fetchPluginInfoFromSites(slug string, siteMap map[int]models.CliSite, pluginToSites map[string][]int) (*models.PluginInfo, error) {
-	var siteIDs []int
+func fetchPluginInfoFromSites(slug string, siteMap map[string]models.CliSite, pluginToSites map[string][]string) (*models.PluginInfo, error) {
+	var siteIDs []string
 	var err error
 
 	if pluginToSites != nil {

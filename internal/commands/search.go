@@ -50,7 +50,7 @@ var searchCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("error getting site list: %w", err)
 			}
-			siteMap := make(map[int]string)
+			siteMap := make(map[string]string)
 			for _, s := range allSites {
 				siteMap[s.ID] = s.Name
 			}
@@ -66,7 +66,7 @@ var searchCmd = &cobra.Command{
 				for _, site := range plugin.Sites {
 					siteName := siteMap[site.SiteID]
 					if siteName == "" {
-						siteName = fmt.Sprintf("Unknown Site (ID: %d)", site.SiteID)
+						siteName = fmt.Sprintf("Unknown Site (ID: %s)", site.SiteID)
 					}
 					verb.Printf(verb.Quiet, "  * %s (%s)\n", siteName, site.Version)
 				}

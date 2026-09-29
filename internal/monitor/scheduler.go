@@ -133,7 +133,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 // refreshSites syncs the internal state with the current site list from the cache.
 // If applyJitter is true, it staggers the next check times for all sites.
 func (s *Scheduler) refreshSites(applyJitter bool) error {
-	sites, err := cache.GetCachedSites()
+	sites, err := cache.GetMonitorTargets()
 	if err != nil {
 		return err
 	}

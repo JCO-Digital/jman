@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-// SaveSiteAdminUser inserts or updates the cached administrator user ID for a site.
-func SaveSiteAdminUser(siteID, userID int) error {
+// SaveSiteAdminUser inserts or updates the cached administrator user ID for a site (by UUID).
+func SaveSiteAdminUser(siteID string, userID int) error {
 	db := GetInventoryDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -21,7 +21,7 @@ func SaveSiteAdminUser(siteID, userID int) error {
 	`
 
 	if _, err := db.Exec(query, siteID, userID); err != nil {
-		return fmt.Errorf("failed to save admin user for site %d: %w", siteID, err)
+		return fmt.Errorf("failed to save admin user for site %s: %w", siteID, err)
 	}
 
 	return nil
@@ -29,7 +29,7 @@ func SaveSiteAdminUser(siteID, userID int) error {
 
 // GetSiteAdminUser returns the cached administrator user ID for a site, its last-fetched
 // timestamp, and whether a cached value exists at all.
-func GetSiteAdminUser(siteID int) (userID int, updatedAt string, found bool, err error) {
+func GetSiteAdminUser(siteID string) (userID int, updatedAt string, found bool, err error) {
 	db := GetInventoryDB()
 	if db == nil {
 		return 0, "", false, fmt.Errorf("database not initialized")
@@ -41,7 +41,7 @@ func GetSiteAdminUser(siteID int) (userID int, updatedAt string, found bool, err
 		if scanErr == sql.ErrNoRows {
 			return 0, "", false, nil
 		}
-		return 0, "", false, fmt.Errorf("failed to get admin user for site %d: %w", siteID, scanErr)
+		return 0, "", false, fmt.Errorf("failed to get admin user for site %s: %w", siteID, scanErr)
 	}
 
 	return userID, ua.String, true, nil

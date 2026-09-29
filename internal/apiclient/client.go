@@ -159,7 +159,7 @@ func (c *Client) ListAgentTokens() ([]models.AgentToken, error) {
 }
 
 type createAgentTokenRequest struct {
-	ServerID    int    `json:"server_id"`
+	ServerID    string `json:"server_id"` // server UUID
 	ServerName  string `json:"server_name"`
 	Description string `json:"description"`
 }
@@ -171,7 +171,7 @@ type createAgentTokenResponse struct {
 
 // CreateAgentToken calls POST /api/agent-tokens and returns the created
 // token record along with its one-time plaintext value.
-func (c *Client) CreateAgentToken(serverID int, serverName, description string) (models.AgentToken, string, error) {
+func (c *Client) CreateAgentToken(serverID string, serverName, description string) (models.AgentToken, string, error) {
 	reqBody := createAgentTokenRequest{ServerID: serverID, ServerName: serverName, Description: description}
 	var out createAgentTokenResponse
 	if err := c.doJSON(http.MethodPost, "/api/agent-tokens", reqBody, &out); err != nil {

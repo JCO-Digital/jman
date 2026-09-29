@@ -55,7 +55,7 @@ func RunOnce() error {
 	}
 
 	engine := NewEngine()
-	sites, err := cache.GetCachedSites()
+	sites, err := cache.GetMonitorTargets()
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func RunOnce() error {
 	for _, site := range sites {
 		activeDomains[site.Domain] = true
 
-		if ignoreMatcher != nil && ignoreMatcher.IsIgnored(site.ID, site.ServerID) {
+		if ignoreMatcher != nil && ignoreMatcher.IsIgnored(site.SiteID, site.ServerID) {
 			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
 			continue
 		}

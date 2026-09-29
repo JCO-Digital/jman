@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 // maxTrafficReportDays bounds the report's date range to avoid an unbounded
@@ -44,16 +44,15 @@ func (r *trafficReport) Run(q url.Values) (*Result, error) {
 		return nil, fmt.Errorf("failed to load traffic data: %w", err)
 	}
 
-	// Enrich site_id with its domain the same way SitesHandler/data_handlers.go
-	// does, rather than a DB join — site metadata is cache-backed, not a table.
+	// Enrich site_id (a UUID) with its domain. site_traffic_* live in api.db
+	// while sites live in inventory.db, so this is a lookup rather than a join.
+	// The SpinupWP cache is consulted too, for sites not yet synced into the
+	// inventory.
+	domainByID := make(map[string]string)
 	sites := []models.Site{}
 	_ = cache.ReadJSONCache("sites", &sites, -1)
-	domainByID := make(map[string]string, len(sites))
 	for _, s := range sites {
-		domainByID[strconv.Itoa(s.ID)] = s.Domain
-		if s.UUID != "" {
-			domainByID[s.UUID] = s.Domain
-		}
+		domainByID[utils.SpinupWPSiteUUID(s.ID)] = s.Domain
 	}
 	if managedSites, err := db.ListManagedSites(); err == nil {
 		for _, ms := range managedSites {
@@ -72,7 +71,7 @@ func (r *trafficReport) Run(q url.Values) (*Result, error) {
 	totalsBySite := map[string]*totals{}
 	var siteOrder []string
 	for _, row := range dailyRows {
-		siteKey := fmt.Sprint(row.SiteID)
+		siteKey := row.SiteID
 		t, ok := totalsBySite[siteKey]
 		if !ok {
 			t = &totals{}

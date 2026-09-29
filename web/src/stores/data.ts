@@ -18,18 +18,32 @@ import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
 import { BASE_URL, handleErrorResponse } from "../utils/api";
 
-const CACHE_KEY_SERVERS = "jman_servers";
-const CACHE_KEY_SITES = "jman_sites";
-const CACHE_KEY_PLUGINS = "jman_plugins";
+// Cache keys are versioned: anything holding site/server ids was bumped when
+// ids moved from SpinupWP integers to UUID strings, so stale caches are ignored.
+const CACHE_KEY_SERVERS = "jman_servers_v2";
+const CACHE_KEY_SITES = "jman_sites_v2";
+const CACHE_KEY_PLUGINS = "jman_plugins_v2";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
-const CACHE_KEY_VULNS = "jman_vulns_v2";
-const CACHE_KEY_CORE_VULNS = "jman_core_vulns";
+const CACHE_KEY_VULNS = "jman_vulns_v3";
+const CACHE_KEY_CORE_VULNS = "jman_core_vulns_v2";
+const CACHE_KEY_SITE_ORG_LINKS = "jman_site_organization_links_v2";
+const LEGACY_CACHE_KEYS = [
+	"jman_servers",
+	"jman_sites",
+	"jman_plugins",
+	"jman_vulns_v2",
+	"jman_core_vulns",
+	"jman_site_organization_links",
+];
+
+/** Display label for a site's server, e.g. for lists and detail views. */
+export const NO_SERVER_LABEL = "No server";
 
 export const useDataStore = defineStore("data", () => {
 	// State
 	const servers = ref<Server[]>([]);
 	const sites = ref<Site[]>([]);
-	const siteOrganizationLinks = ref<Record<number, number>>({});
+	const siteOrganizationLinks = ref<Record<string, number>>({});
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<PluginVulnerability[]>([]);
@@ -59,7 +73,7 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const vulnerabilitiesBySiteId = computed(() => {
-		const map = new Map<number, EnrichedVulnerability[]>();
+		const map = new Map<string, EnrichedVulnerability[]>();
 		for (const pv of vulnerabilities.value) {
 			for (const v of pv.vulnerabilities) {
 				for (const s of v.sites) {
@@ -79,7 +93,7 @@ export const useDataStore = defineStore("data", () => {
 	// Core vulnerabilities are reported per core version rather than per plugin,
 	// so they are keyed back to the sites running that version.
 	const coreVulnerabilitiesBySiteId = computed(() => {
-		const map = new Map<number, EnrichedCoreVulnerability[]>();
+		const map = new Map<string, EnrichedCoreVulnerability[]>();
 		for (const report of coreVulnerabilities.value) {
 			if (report.suppressed) continue;
 
@@ -101,7 +115,7 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const pluginsBySiteIdMap = computed(() => {
-		const map = new Map<number, Plugin[]>();
+		const map = new Map<string, Plugin[]>();
 		for (const p of plugins.value) {
 			if (!map.has(p.site_id)) map.set(p.site_id, []);
 			map.get(p.site_id)!.push(p);
@@ -127,7 +141,7 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const sitesByIdMap = computed(() => {
-		const map = new Map<number, Site>();
+		const map = new Map<string, Site>();
 		for (const s of sites.value) {
 			map.set(s.id, s);
 		}
@@ -135,7 +149,7 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const serversByIdMap = computed(() => {
-		const map = new Map<number, Server>();
+		const map = new Map<string, Server>();
 		for (const s of servers.value) {
 			map.set(s.id, s);
 		}
@@ -238,9 +252,7 @@ export const useDataStore = defineStore("data", () => {
 				organization_id:
 					site.organization_id ??
 					siteOrganizationLinks.value[site.id],
-				server:
-					serversByIdMap.value.get(site.server_id)?.name ??
-					"Unknown Server",
+				server: serverNameForSite(site),
 				plugins: pluginsBySiteIdMap.value.get(site.id) || [],
 				vulnerabilities: vulns,
 				coreVulnerabilities:
@@ -251,8 +263,19 @@ export const useDataStore = defineStore("data", () => {
 		});
 	});
 
+	function serverNameForSite(site: Site): string {
+		if (site.server_name) return site.server_name;
+		if (site.server_id == null) return NO_SERVER_LABEL;
+		return serversByIdMap.value.get(site.server_id)?.name ?? "—";
+	}
+
 	// Actions
 	function loadFromCache(): boolean {
+		try {
+			for (const key of LEGACY_CACHE_KEYS) sessionStorage.removeItem(key);
+		} catch {
+			// ignore storage access errors
+		}
 		try {
 			const cachedServers = sessionStorage.getItem(CACHE_KEY_SERVERS);
 			const cachedSites = sessionStorage.getItem(CACHE_KEY_SITES);
@@ -265,7 +288,7 @@ export const useDataStore = defineStore("data", () => {
 				sessionStorage.getItem(CACHE_KEY_CORE_VULNS);
 
 			const cachedLinks = sessionStorage.getItem(
-				"jman_site_organization_links",
+				CACHE_KEY_SITE_ORG_LINKS,
 			);
 
 			if (
@@ -299,7 +322,7 @@ export const useDataStore = defineStore("data", () => {
 	function clearCache() {
 		sessionStorage.removeItem(CACHE_KEY_SERVERS);
 		sessionStorage.removeItem(CACHE_KEY_SITES);
-		sessionStorage.removeItem("jman_site_organization_links");
+		sessionStorage.removeItem(CACHE_KEY_SITE_ORG_LINKS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGINS);
 		sessionStorage.removeItem(CACHE_KEY_PLUGIN_INFO);
 		sessionStorage.removeItem(CACHE_KEY_VULNS);
@@ -453,15 +476,17 @@ export const useDataStore = defineStore("data", () => {
 		await fetchFromApi();
 	}
 
-	function getSiteById(id: number) {
+	function getSiteById(id: string | null | undefined) {
+		if (id == null) return undefined;
 		return sitesByIdMap.value.get(id);
 	}
 
-	function getServerById(id: number) {
+	function getServerById(id: string | null | undefined) {
+		if (id == null) return undefined;
 		return serversByIdMap.value.get(id);
 	}
 
-	function getPluginsBySiteId(siteId: number) {
+	function getPluginsBySiteId(siteId: string) {
 		return pluginsBySiteIdMap.value.get(siteId) || [];
 	}
 
@@ -470,7 +495,7 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function applyPluginUpdate(
-		siteId: number,
+		siteId: string,
 		pluginName: string,
 		newVersion: string,
 	) {
@@ -489,7 +514,7 @@ export const useDataStore = defineStore("data", () => {
 		}
 	}
 
-	function applyCoreUpdate(siteId: number, core: SiteCore) {
+	function applyCoreUpdate(siteId: string, core: SiteCore) {
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.wp_core = core;
@@ -503,7 +528,7 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	async function setSiteEnvironment(
-		siteId: number,
+		siteId: string,
 		environment: SiteEnvironment | "",
 	) {
 		const authStore = useAuthStore();
@@ -529,7 +554,7 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function setSiteOrganizationLink(
-		siteId: number,
+		siteId: string,
 		organizationId: number | undefined,
 	) {
 		if (organizationId === undefined) {
@@ -538,7 +563,7 @@ export const useDataStore = defineStore("data", () => {
 			siteOrganizationLinks.value[siteId] = organizationId;
 		}
 		sessionStorage.setItem(
-			"jman_site_organization_links",
+			CACHE_KEY_SITE_ORG_LINKS,
 			JSON.stringify(siteOrganizationLinks.value),
 		);
 	}
@@ -570,6 +595,7 @@ export const useDataStore = defineStore("data", () => {
 		serversByIdMap,
 		getSiteById,
 		getServerById,
+		serverNameForSite,
 		getPluginsBySiteId,
 		getVulnerabilitiesBySlug,
 		setSiteOrganizationLink,

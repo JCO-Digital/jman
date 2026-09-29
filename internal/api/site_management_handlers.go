@@ -17,18 +17,9 @@ import (
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
-// resolveSiteUUID parses an ID path parameter that may be either a 36-character UUID
-// or a legacy SpinupWP integer ID, and returns the canonical UUID string.
-func resolveSiteUUID(rawID string) (string, error) {
-	rawID = strings.TrimSpace(rawID)
-	if utils.IsValidUUID(rawID) {
-		return rawID, nil
-	}
-	if num, err := strconv.Atoi(rawID); err == nil && num > 0 {
-		return utils.SpinupWPSiteUUID(num), nil
-	}
-	return "", fmt.Errorf("invalid site ID: %s", rawID)
-}
+// spinupwpReadOnlyMessage is returned when a client tries to modify an entity
+// owned by the SpinupWP sync, since the next sync would overwrite the change.
+const spinupwpReadOnlyMessage = "SpinupWP-managed %s is read-only; changes would be overwritten by sync"
 
 // CreateSiteRequest defines the JSON payload for creating an external/manual site.
 type CreateSiteRequest struct {
@@ -125,9 +116,14 @@ func CreateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		hasMonitoring = *req.HasMonitoring
 	}
 
+	serverID := req.ServerID
+	if serverID != nil && strings.TrimSpace(*serverID) == "" {
+		serverID = nil
+	}
+
 	site := models.ManagedSite{
 		ID:             utils.NewV7UUID(),
-		ServerID:       req.ServerID,
+		ServerID:       serverID,
 		Provider:       provider,
 		Domain:         req.Domain,
 		Environment:    env,
@@ -208,6 +204,10 @@ func UpdateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Site not found")
 		return
 	}
+	if site.Provider == "spinupwp" {
+		WriteError(w, http.StatusConflict, fmt.Sprintf(spinupwpReadOnlyMessage, "site"))
+		return
+	}
 
 	var req CreateSiteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -219,7 +219,12 @@ func UpdateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		site.Domain = strings.TrimSpace(req.Domain)
 	}
 	if req.ServerID != nil {
-		site.ServerID = req.ServerID
+		// An empty server_id unassigns the site from its server.
+		if strings.TrimSpace(*req.ServerID) == "" {
+			site.ServerID = nil
+		} else {
+			site.ServerID = req.ServerID
+		}
 	}
 	if req.Environment != "" {
 		site.Environment = req.Environment
@@ -263,6 +268,13 @@ func UpdateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Failed to update site")
 		return
 	}
+	// The site_environment classification overrides the inventory default in
+	// /api/sites, so keep it in step with an explicit edit here.
+	if req.Environment != "" {
+		if err := db.SetSiteEnvironment(site.ID, string(site.Environment), getUsername(r)); err != nil {
+			verb.LogPrintf(verb.Normal, "UpdateSiteHandler environment error: %v", err)
+		}
+	}
 
 	updated, err := db.GetManagedSite(site.ID)
 	if err != nil || updated == nil {
@@ -290,6 +302,10 @@ func DeleteSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if site == nil {
 		WriteError(w, http.StatusNotFound, "Site not found")
+		return
+	}
+	if site.Provider == "spinupwp" {
+		WriteError(w, http.StatusConflict, fmt.Sprintf(spinupwpReadOnlyMessage, "site"))
 		return
 	}
 
@@ -412,7 +428,11 @@ func CreateServerHandler(w http.ResponseWriter, r *http.Request) {
 
 // DeleteServerHandler deletes a server from inventory.db.
 func DeleteServerHandler(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
+	id, err := resolveServerUUID(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 	server, err := db.GetManagedServer(id)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "DeleteServerHandler error: %v", err)
@@ -421,6 +441,21 @@ func DeleteServerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if server == nil {
 		WriteError(w, http.StatusNotFound, "Server not found")
+		return
+	}
+	if server.Provider == "spinupwp" {
+		WriteError(w, http.StatusConflict, fmt.Sprintf(spinupwpReadOnlyMessage, "server"))
+		return
+	}
+
+	siteCount, err := db.CountManagedSitesForServer(id)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "DeleteServerHandler count error: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if siteCount > 0 {
+		WriteError(w, http.StatusConflict, fmt.Sprintf("Server %s still has %d site(s) assigned", server.Name, siteCount))
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -42,18 +43,8 @@ var ignoreListCmd = &cobra.Command{
 			return nil
 		}
 
-		// Pre-fetch sites and servers for name resolution
-		sites, _ := cache.GetCachedSites()
-		siteMap := make(map[string]string)
-		for _, s := range sites {
-			siteMap[strconv.Itoa(s.ID)] = s.Domain
-		}
-
-		servers, _ := cache.GetCachedServers()
-		serverMap := make(map[string]string)
-		for _, s := range servers {
-			serverMap[strconv.Itoa(s.ID)] = s.Name
-		}
+		// Pre-fetch sites and servers (by UUID) for name resolution
+		siteMap, serverMap := ignoreTargetNames()
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 		fmt.Fprintln(w, "ID\tTYPE\tTARGET\tMONITOR\tVULN\tREASON\tNEGATED")
@@ -73,10 +64,10 @@ var ignoreListCmd = &cobra.Command{
 			if len(e.NegatedSiteIDs) > 0 {
 				var names []string
 				for _, id := range e.NegatedSiteIDs {
-					if name, ok := siteMap[strconv.Itoa(id)]; ok {
+					if name, ok := siteMap[id]; ok {
 						names = append(names, name)
 					} else {
-						names = append(names, strconv.Itoa(id))
+						names = append(names, id)
 					}
 				}
 				negatedDisplay = strings.Join(names, ", ")
@@ -112,60 +103,29 @@ Identifier:
 		}
 
 		target := identifier
-		var negatedIDs []int
+		var negatedIDs []string
 
-		// Resolve names to IDs for sites and servers
+		// Resolve names to UUIDs for sites and servers
+		siteMap, serverMap := ignoreTargetNames()
 		if entryType == "site" {
-			sites, err := cache.GetCachedSites()
-			if err != nil {
-				return err
+			id, ok := findIDByName(siteMap, identifier)
+			if !ok {
+				return fmt.Errorf("site %q not found", identifier)
 			}
-			found := false
-			for _, s := range sites {
-				if strings.ToLower(s.Domain) == strings.ToLower(identifier) {
-					target = strconv.Itoa(s.ID)
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("site %q not found in cache", identifier)
-			}
+			target = id
 		} else if entryType == "server" {
-			servers, err := cache.GetCachedServers()
-			if err != nil {
-				return err
+			id, ok := findIDByName(serverMap, identifier)
+			if !ok {
+				return fmt.Errorf("server %q not found", identifier)
 			}
-			found := false
-			for _, s := range servers {
-				if strings.ToLower(s.Name) == strings.ToLower(identifier) {
-					target = strconv.Itoa(s.ID)
-					found = true
-					break
-				}
-			}
-			if !found {
-				return fmt.Errorf("server %q not found in cache", identifier)
-			}
+			target = id
 
 			// Handle negated sites
-			if len(ignoreNegate) > 0 {
-				sites, err := cache.GetCachedSites()
-				if err != nil {
-					return err
-				}
-				for _, neg := range ignoreNegate {
-					foundNeg := false
-					for _, s := range sites {
-						if strings.ToLower(s.Domain) == strings.ToLower(neg) {
-							negatedIDs = append(negatedIDs, s.ID)
-							foundNeg = true
-							break
-						}
-					}
-					if !foundNeg {
-						fmt.Printf("Warning: negated site %q not found in cache, skipping\n", neg)
-					}
+			for _, neg := range ignoreNegate {
+				if id, ok := findIDByName(siteMap, neg); ok {
+					negatedIDs = append(negatedIDs, id)
+				} else {
+					fmt.Printf("Warning: negated site %q not found, skipping\n", neg)
 				}
 			}
 		}
@@ -221,4 +181,43 @@ func init() {
 	ignoreCmd.AddCommand(ignoreAddCmd)
 	ignoreCmd.AddCommand(ignoreRemoveCmd)
 	rootCmd.AddCommand(ignoreCmd)
+}
+
+// ignoreTargetNames returns site UUID -> domain and server UUID -> name maps
+// from the inventory, plus the SpinupWP cache for entities not yet synced.
+func ignoreTargetNames() (sites, servers map[string]string) {
+	sites = make(map[string]string)
+	servers = make(map[string]string)
+
+	if cached, err := cache.GetCachedSites(); err == nil {
+		for _, s := range cached {
+			sites[utils.SpinupWPSiteUUID(s.ID)] = s.Domain
+		}
+	}
+	if cached, err := cache.GetCachedServers(); err == nil {
+		for _, s := range cached {
+			servers[utils.SpinupWPServerUUID(s.ID)] = s.Name
+		}
+	}
+	if managed, err := db.ListManagedSites(); err == nil {
+		for _, s := range managed {
+			sites[s.ID] = s.Domain
+		}
+	}
+	if managed, err := db.ListManagedServers(); err == nil {
+		for _, s := range managed {
+			servers[s.ID] = s.Name
+		}
+	}
+	return sites, servers
+}
+
+// findIDByName looks up the UUID whose name matches (case-insensitively).
+func findIDByName(names map[string]string, name string) (string, bool) {
+	for id, n := range names {
+		if strings.EqualFold(n, name) {
+			return id, true
+		}
+	}
+	return "", false
 }

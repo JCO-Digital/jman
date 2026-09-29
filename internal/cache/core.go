@@ -30,7 +30,7 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 	lastUpdates, err := db.GetSiteCoreLastUpdates()
 	if err != nil {
 		verb.PrintErrorf(verb.Verbose, "Warning: failed to get core version last updates from database: %v\n", err)
-		lastUpdates = make(map[int]string)
+		lastUpdates = make(map[string]string)
 	}
 
 	sites, err := GetSiteList()
@@ -162,7 +162,7 @@ func groupCoreVersions(versions []models.SiteCore) ([]models.CoreVersionData, er
 		return []models.CoreVersionData{}, fmt.Errorf("failed to get site list for grouping: %w", err)
 	}
 
-	siteNames := make(map[int]string)
+	siteNames := make(map[string]string)
 	for _, s := range sites {
 		siteNames[s.ID] = s.Name
 	}

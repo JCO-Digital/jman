@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -82,32 +81,17 @@ func SaveTask(task *models.Task, username string) error {
 	return nil
 }
 
-// scanTaskRow scans a task row safely handling site_id and server_id as either integer or UUID string.
+// scanTaskRow scans a task row.
 func scanTaskRow(scanner interface{ Scan(dest ...any) error }) (*models.Task, error) {
 	var t models.Task
-	var rawSiteID, rawServerID sql.NullString
 	err := scanner.Scan(
 		&t.ID, &t.Type, &t.Status, &t.Priority, &t.Title, &t.Description,
-		&rawSiteID, &rawServerID, &t.OrganizationID, &t.PluginSlug,
+		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
 		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
 	)
 	if err != nil {
 		return nil, err
-	}
-	if rawSiteID.Valid {
-		if id, err := strconv.Atoi(rawSiteID.String); err == nil {
-			t.SiteID = id
-		} else {
-			t.SiteID = rawSiteID.String
-		}
-	}
-	if rawServerID.Valid {
-		if id, err := strconv.Atoi(rawServerID.String); err == nil {
-			t.ServerID = id
-		} else {
-			t.ServerID = rawServerID.String
-		}
 	}
 	return &t, nil
 }
@@ -143,9 +127,9 @@ type TaskFilter struct {
 	Priority       models.TaskPriority
 	AssignedTo     string
 	CompletedBy    string
-	SiteID         int
+	SiteID         string // site UUID
 	OrganizationID int
-	ServerID       int
+	ServerID       string // server UUID
 	Search         string
 }
 
@@ -182,7 +166,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 		query += " AND completed_by = ?"
 		args = append(args, filter.CompletedBy)
 	}
-	if filter.SiteID != 0 {
+	if filter.SiteID != "" {
 		query += " AND site_id = ?"
 		args = append(args, filter.SiteID)
 	}
@@ -190,7 +174,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 		query += " AND organization_id = ?"
 		args = append(args, filter.OrganizationID)
 	}
-	if filter.ServerID != 0 {
+	if filter.ServerID != "" {
 		query += " AND server_id = ?"
 		args = append(args, filter.ServerID)
 	}
@@ -364,9 +348,8 @@ func DeleteTask(id int) error {
 	return err
 }
 
-// GetOpenVulnerabilityTask searches for an incomplete vulnerability task for a site.
-// GetOpenVulnerabilityTask finds an active (non-completed) vulnerability task for a site.
-func GetOpenVulnerabilityTask(siteID any) (*models.Task, error) {
+// GetOpenVulnerabilityTask finds an active (non-completed) vulnerability task for a site (by UUID).
+func GetOpenVulnerabilityTask(siteID string) (*models.Task, error) {
 	database := GetAPIDB()
 	if database == nil {
 		return nil, fmt.Errorf("database not initialized")

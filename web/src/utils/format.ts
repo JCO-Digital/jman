@@ -43,3 +43,21 @@ export function cvssSeverityLabel(severity: string | null | undefined): string {
 	const label = CVSS_SEVERITY_LABELS[severity.trim().toLowerCase()];
 	return label ?? severity;
 }
+
+/** Human-readable name for a site/server provider ("spinupwp" → "SpinupWP"). */
+export function providerLabel(provider: string | null | undefined): string {
+	switch (provider) {
+		case "spinupwp":
+			return "SpinupWP";
+		case "wpengine":
+			return "WP Engine";
+		case "manual":
+			return "Manual";
+		case null:
+		case undefined:
+		case "":
+			return "—";
+		default:
+			return provider;
+	}
+}

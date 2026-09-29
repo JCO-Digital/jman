@@ -12,7 +12,7 @@ import (
 func TestPruneOldSiteTrafficHourly(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 42
+	siteID := testSiteID(42)
 	now := time.Now().UTC()
 	oldHour := now.Add(-72 * time.Hour).Truncate(time.Hour)
 	recentHour := now.Add(-1 * time.Hour).Truncate(time.Hour)
@@ -99,7 +99,7 @@ func TestPruneOldSiteTrafficHourly(t *testing.T) {
 func TestUpsertSiteTrafficDaily(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 99
+	siteID := testSiteID(99)
 	entry := models.TrafficDailyEntry{
 		Day:            "2026-01-15",
 		RequestsTotal:  50,
@@ -149,18 +149,18 @@ func TestUpsertSiteTrafficDaily(t *testing.T) {
 func TestGetSiteTrafficDailyRange(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	seed := func(siteID int, day string, total int) {
+	seed := func(siteID string, day string, total int) {
 		t.Helper()
 		entry := models.TrafficDailyEntry{Day: day, RequestsTotal: total, RequestsHuman: total}
 		if err := UpsertSiteTrafficDaily(siteID, entry); err != nil {
-			t.Fatalf("failed to seed daily entry for site %d day %s: %v", siteID, day, err)
+			t.Fatalf("failed to seed daily entry for site %s day %s: %v", siteID, day, err)
 		}
 	}
 
-	seed(1, "2026-01-01", 10)
-	seed(1, "2026-01-02", 20)
-	seed(2, "2026-01-02", 30)
-	seed(1, "2025-12-31", 99) // out of range, must be excluded
+	seed(testSiteID(1), "2026-01-01", 10)
+	seed(testSiteID(1), "2026-01-02", 20)
+	seed(testSiteID(2), "2026-01-02", 30)
+	seed(testSiteID(1), "2025-12-31", 99) // out of range, must be excluded
 
 	rows, err := GetSiteTrafficDailyRange("2026-01-01", "2026-01-02")
 	if err != nil {
@@ -171,13 +171,13 @@ func TestGetSiteTrafficDailyRange(t *testing.T) {
 	}
 
 	// Ordered by site_id ASC, day ASC.
-	if rows[0].SiteID != 1 || rows[0].Day != "2026-01-01" || rows[0].RequestsTotal != 10 {
+	if rows[0].SiteID != testSiteID(1) || rows[0].Day != "2026-01-01" || rows[0].RequestsTotal != 10 {
 		t.Errorf("rows[0] = %+v, want site 1, day 2026-01-01, total 10", rows[0])
 	}
-	if rows[1].SiteID != 1 || rows[1].Day != "2026-01-02" || rows[1].RequestsTotal != 20 {
+	if rows[1].SiteID != testSiteID(1) || rows[1].Day != "2026-01-02" || rows[1].RequestsTotal != 20 {
 		t.Errorf("rows[1] = %+v, want site 1, day 2026-01-02, total 20", rows[1])
 	}
-	if rows[2].SiteID != 2 || rows[2].Day != "2026-01-02" || rows[2].RequestsTotal != 30 {
+	if rows[2].SiteID != testSiteID(2) || rows[2].Day != "2026-01-02" || rows[2].RequestsTotal != 30 {
 		t.Errorf("rows[2] = %+v, want site 2, day 2026-01-02, total 30", rows[2])
 	}
 }
@@ -185,7 +185,7 @@ func TestGetSiteTrafficDailyRange(t *testing.T) {
 func TestGetSiteTrafficMonthly(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 5
+	siteID := testSiteID(5)
 	now := time.Now().UTC()
 	// Anchor to whole-month boundaries (rather than n-days-ago offsets from
 	// `now`) so this test's month groupings are correct regardless of which
@@ -256,7 +256,7 @@ func TestGetSiteTrafficMonthly(t *testing.T) {
 func TestGetSiteTraffic_HandlesRowsWithoutStatusCodesColumn(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 11
+	siteID := testSiteID(11)
 	hour := time.Now().UTC().Add(-1 * time.Hour).Truncate(time.Hour).Format(time.RFC3339)
 	day := time.Now().UTC().Format("2006-01-02")
 
@@ -296,7 +296,7 @@ func TestGetSiteTraffic_HandlesRowsWithoutStatusCodesColumn(t *testing.T) {
 func TestPruneOldSiteTrafficHourly_KeepsRowsWithinRetention(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 7
+	siteID := testSiteID(7)
 	recentHour := time.Now().UTC().Add(-2 * time.Hour).Truncate(time.Hour)
 	entry := models.TrafficHourlyEntry{Hour: recentHour.Format(time.RFC3339), RequestsTotal: 1}
 
@@ -325,7 +325,7 @@ func TestPruneOldSiteTrafficHourly_KeepsRowsWithinRetention(t *testing.T) {
 func TestFinalizeCompletedDailyRollups(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 13
+	siteID := testSiteID(13)
 	now := time.Now().UTC()
 	nowMidnight := now.Truncate(24 * time.Hour)
 	yesterday := nowMidnight.AddDate(0, 0, -1)
@@ -418,7 +418,7 @@ func TestFinalizeCompletedDailyRollups(t *testing.T) {
 func TestPruneOldSiteTrafficHourly_MultiTickDoesNotCorruptDailyTotal(t *testing.T) {
 	setupTaskRepoTest(t)
 
-	const siteID = 21
+	siteID := testSiteID(21)
 	day := time.Now().UTC().AddDate(0, 0, -3).Truncate(24 * time.Hour)
 
 	hours := []time.Time{

@@ -2,14 +2,12 @@ package db
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-// SetSiteWpFlags inserts or updates the current WordPress config flags for a site.
-// siteID can be an int or a string (UUID).
-func SetSiteWpFlags(siteID any, isMultisite, disallowFileMods bool) error {
+// SetSiteWpFlags inserts or updates the current WordPress config flags for a site (by UUID).
+func SetSiteWpFlags(siteID string, isMultisite, disallowFileMods bool) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -25,44 +23,13 @@ func SetSiteWpFlags(siteID any, isMultisite, disallowFileMods bool) error {
 	`
 
 	if _, err := dbConn.Exec(query, siteID, isMultisite, disallowFileMods); err != nil {
-		return fmt.Errorf("failed to set wp flags for site %v: %w", siteID, err)
+		return fmt.Errorf("failed to set wp flags for site %s: %w", siteID, err)
 	}
 	return nil
 }
 
-// GetAllSiteWpFlags returns a map of numeric site ID to its current WordPress config flags.
-func GetAllSiteWpFlags() (map[int]models.SiteWpFlags, error) {
-	dbConn := GetAPIDB()
-	if dbConn == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-
-	rows, err := dbConn.Query(`SELECT site_id, is_multisite, disallow_file_mods, updated_at FROM site_wp_flags`)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query site wp flags: %w", err)
-	}
-	defer rows.Close()
-
-	result := make(map[int]models.SiteWpFlags)
-	for rows.Next() {
-		var rawSiteID string
-		var flags models.SiteWpFlags
-		if err := rows.Scan(&rawSiteID, &flags.IsMultisite, &flags.DisallowFileMods, &flags.UpdatedAt); err != nil {
-			return nil, fmt.Errorf("failed to scan site wp flags: %w", err)
-		}
-		if id, err := strconv.Atoi(rawSiteID); err == nil {
-			result[id] = flags
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("error iterating site wp flags: %w", err)
-	}
-
-	return result, nil
-}
-
-// GetAllSiteWpFlagsMap returns a map of site UUID/ID string to its current WordPress config flags.
-func GetAllSiteWpFlagsMap() (map[string]models.SiteWpFlags, error) {
+// GetAllSiteWpFlags returns a map of site UUID to its current WordPress config flags.
+func GetAllSiteWpFlags() (map[string]models.SiteWpFlags, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")

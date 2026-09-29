@@ -9,6 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -41,19 +42,20 @@ var agentTokenCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+		serverID := utils.SpinupWPServerUUID(server.ID)
 
 		client, err := newAPIClient()
 		if err != nil {
 			return err
 		}
 
-		token, plaintext, err := client.CreateAgentToken(server.ID, server.Name, agentTokenDescription)
+		token, plaintext, err := client.CreateAgentToken(serverID, server.Name, agentTokenDescription)
 		if err != nil {
 			return fmt.Errorf("failed to create agent token: %w", err)
 		}
 		saveAPISession(client)
 
-		fmt.Printf("Created agent token %d for server %s (%s).\n", token.ID, verb.Blue(server.Name), verb.Gray(strconv.Itoa(server.ID)))
+		fmt.Printf("Created agent token %d for server %s (%s).\n", token.ID, verb.Blue(server.Name), verb.Gray(serverID))
 		fmt.Printf("\n%s\n\n", verb.Yellow("This token will not be shown again. Copy it into the agent's config.toml now:"))
 		fmt.Println(plaintext)
 		return nil
@@ -93,7 +95,7 @@ var agentTokenListCmd = &cobra.Command{
 			if t.AgentVersion != nil {
 				version = *t.AgentVersion
 			}
-			fmt.Printf("#%d  %s (server %d)  prefix=%s  %s  last_seen=%s  version=%s\n", t.ID, t.ServerName, t.ServerID, t.TokenPrefix, status, lastSeen, version)
+			fmt.Printf("#%d  %s (server %s)  prefix=%s  %s  last_seen=%s  version=%s\n", t.ID, t.ServerName, t.ServerID, t.TokenPrefix, status, lastSeen, version)
 		}
 		return nil
 	},
