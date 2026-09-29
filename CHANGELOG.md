@@ -1,6 +1,16 @@
 # Changelog
 
-## 6.0.0 (2026-09-29)
+## 6.1.0 (2026-09-29)
+
+#### Features
+
+- wpcli: record SSH host keys on first connection (e8f00c5)
+
+#### Bug Fixes
+
+- wpcli: pass the SSH port to ssh and scp separately (c8ff4f7)
+
+## v6.0.0 (2026-09-29)
 
 #### Features
 
