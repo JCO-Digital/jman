@@ -37,6 +37,9 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 	var fullArgs []string
 	if opts.SSH != "" {
 		knock.KnockIfNeeded(opts.SSH)
+		if err := EnsureHostKey(opts.SSH); err != nil {
+			return RunResult{}, err
+		}
 		fullArgs = append(fullArgs, fmt.Sprintf("--ssh=%s", opts.SSH))
 	}
 	if opts.Path != "" {
@@ -167,6 +170,9 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 	}
 
 	knock.KnockIfNeeded(ssh)
+	if err := EnsureHostKey(ssh); err != nil {
+		return RunResult{}, err
+	}
 
 	quotedArgs := make([]string, len(args))
 	for i, arg := range args {
@@ -177,7 +183,10 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "ssh", ssh, remoteCommand)
+	// ssh doesn't accept WP-CLI's "host:port" form, so pass the port as -p.
+	target := parseSSHSpec(ssh)
+	sshArgs := append(target.sshPortArgs("-p"), target.dest, remoteCommand)
+	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -201,13 +210,19 @@ func UploadFile(ssh, localPath, remotePath string) error {
 	}
 
 	knock.KnockIfNeeded(ssh)
+	if err := EnsureHostKey(ssh); err != nil {
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Format scp destination: user@host:path
-	destination := fmt.Sprintf("%s:%s", ssh, remotePath)
-	cmd := exec.CommandContext(ctx, "scp", "--", localPath, destination)
+	// Format scp destination: user@host:path, with the port passed as -P
+	// (scp doesn't accept WP-CLI's "host:port" form).
+	target := parseSSHSpec(ssh)
+	destination := fmt.Sprintf("%s:%s", target.dest, remotePath)
+	scpArgs := append(target.sshPortArgs("-P"), "--", localPath, destination)
+	cmd := exec.CommandContext(ctx, "scp", scpArgs...)
 
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf
