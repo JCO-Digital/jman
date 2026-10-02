@@ -119,6 +119,12 @@ apiUsername = "admin" # (optional, must be an admin-level jman-api user)
 # Plugin aliases for shorthand installs
 [pluginAliases]
 jquest = "https://github.com/JCO-Digital/jquest-plugin/releases/latest/download/jquest.zip"
+
+# Longer WP-CLI timeouts for slow SSH hosts (optional, minutes; see
+# docs/slow-ssh-hosts.md)
+[[wpcliHostTimeouts]]
+host = "*.ssh.wpengine.net"
+minutes = 5
 ```
 
 ## Usage

@@ -15,6 +15,7 @@ import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import SiteTrafficCard from "../components/SiteTrafficCard.vue";
 import PluginUpdateModal from "../components/PluginUpdateModal.vue";
 import { useCoreUpdateStore } from "../stores/coreUpdate";
+import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
 import { formatBytes, providerLabel } from "../utils/format";
@@ -31,6 +32,7 @@ const monitorStore = useMonitorStore();
 const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
 const coreUpdateStore = useCoreUpdateStore();
+const jobsStore = usePluginUpdateJobsStore();
 const ignoreStore = useIgnoreStore();
 const toast = useToastStore();
 const { confirm } = useConfirm();
@@ -238,6 +240,16 @@ watch(
 		}
 	},
 	{ immediate: true },
+);
+
+// Background plugin updates write their ledger entry when they finish,
+// usually after the update modal has been closed; reload it then.
+watch(
+	() =>
+		site.value ? jobsStore.lastFinishedBySite[site.value.id] : undefined,
+	(finishedAt) => {
+		if (finishedAt) fetchLedger();
+	},
 );
 
 // Watch for the resolved site UUID to fetch its ledger and linked organization
@@ -852,6 +864,17 @@ const unlinkOrganization = async () => {
 								<td class="font-medium">{{ plugin.name }}</td>
 								<td class="text-muted">
 									{{ plugin.version }}
+									<span
+										v-if="
+											site &&
+											jobsStore.isUpdating(
+												site.id,
+												plugin.name,
+											)
+										"
+										class="spinner spinner-small version-spinner"
+										title="Updating…"
+									/>
 								</td>
 								<td>
 									<span

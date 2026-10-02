@@ -700,6 +700,23 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// Background plugin update jobs (one site, one or more plugins).
+			// plugins/results hold JSON arrays.
+			Name: "plugin_update_jobs",
+			Columns: map[string]string{
+				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":     "TEXT NOT NULL",
+				"status":      "TEXT NOT NULL",
+				"plugins":     "TEXT NOT NULL",
+				"results":     "TEXT",
+				"error":       "TEXT",
+				"created_by":  "TEXT",
+				"created_at":  "DATETIME NOT NULL",
+				"started_at":  "DATETIME",
+				"finished_at": "DATETIME",
+			},
+		},
+		{
 			Name: "incidents",
 			Columns: map[string]string{
 				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -790,6 +807,10 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_id ON site_update_ledger(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_plugin_update_jobs_status ON plugin_update_jobs(status);")
 	if err != nil {
 		return err
 	}

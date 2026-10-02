@@ -7,6 +7,7 @@ import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
 import { useIncidentStore } from "./stores/incidents";
 import { useUserStore } from "./stores/user";
+import { usePluginUpdateJobsStore } from "./stores/pluginUpdateJobs";
 import AppNav from "./components/AppNav.vue";
 import ToastContainer from "./components/ToastContainer.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
@@ -16,6 +17,7 @@ const dataStore = useDataStore();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const userStore = useUserStore();
+const pluginUpdateJobsStore = usePluginUpdateJobsStore();
 
 authStore.initialize();
 
@@ -64,11 +66,13 @@ watch(
 		settingsStore.initialize();
 		if (authenticated) {
 			dataStore.initData();
+			pluginUpdateJobsStore.initialize();
 			startIntervals();
 		} else {
 			stopIntervals();
 			dataStore.clearCache();
 			userStore.clearCache();
+			pluginUpdateJobsStore.reset();
 		}
 	},
 	{ immediate: true },
