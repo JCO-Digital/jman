@@ -1,6 +1,24 @@
 # Changelog
 
-### 6.2.2 (2026-10-02)
+## 6.3.0 (2026-10-02)
+
+#### Features
+
+- ui: toast finished plugin updates and refresh the ledger (0176fd2)
+- ui: queue plugin updates as background jobs and show spinners (44c353f)
+- api: run plugin updates as background jobs (acad7fb)
+
+#### Bug Fixes
+
+- pluginupdates: capture the queue per runner and let tests wait for it (686ec44)
+- db: return an empty results list for newly queued jobs (09a3cec)
+- wpcli: stop slow SSH hosts from breaking plugin updates (d5d0b94)
+
+#### Documentation
+
+- document slow SSH hosts (WP Engine) (072d095)
+
+### v6.2.2 (2026-10-02)
 
 #### Bug Fixes
 
