@@ -35,10 +35,13 @@ func (r *upcomingBillingReport) Run(q url.Values) (*Result, error) {
 
 	// No lower bound — overdue assets (next_billing far in the past) are
 	// deliberately included alongside upcoming ones. before is extended to
-	// the end of its day, matching the asset-billing report's handling of
-	// text-compared DATETIME columns (see GetAssetPaymentsInRange), so an
-	// asset due exactly on the cutoff day isn't excluded by its time-of-day.
-	assets, err := db.GetAllOrganizationAssets("", string(models.AssetStatusActive), end+"T23:59:59Z")
+	// the end of its day, so an asset due exactly on the cutoff day isn't
+	// excluded by its time-of-day.
+	before, err := db.EndOfDayUTC(end)
+	if err != nil {
+		return nil, err
+	}
+	assets, err := db.GetAllOrganizationAssets("", string(models.AssetStatusActive), &before)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load organization assets: %w", err)
 	}

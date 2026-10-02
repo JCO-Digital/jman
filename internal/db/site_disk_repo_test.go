@@ -26,7 +26,11 @@ func TestDownsampleOldSiteDiskUsage(t *testing.T) {
 		{siteB, "2026-08-01T06:00:00Z", 310}, // kept: latest of 08-01
 	}
 	for _, r := range records {
-		if err := RecordSiteDiskUsage(r.site, r.bytes, r.at); err != nil {
+		at, err := time.Parse(time.RFC3339, r.at)
+		if err != nil {
+			t.Fatalf("bad fixture time %q: %v", r.at, err)
+		}
+		if err := RecordSiteDiskUsage(r.site, r.bytes, at); err != nil {
 			t.Fatalf("RecordSiteDiskUsage: %v", err)
 		}
 	}

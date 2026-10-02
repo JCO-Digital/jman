@@ -28,6 +28,17 @@ func setupTestAPIDB(t *testing.T) {
 	if err := initAPISchema(); err != nil {
 		t.Fatalf("failed to init api schema: %v", err)
 	}
+
+	// Release the handle so a later test's InitAPI opens its own database
+	// instead of silently reusing this one.
+	t.Cleanup(func() {
+		dbMutex.Lock()
+		defer dbMutex.Unlock()
+		if apiDB != nil {
+			apiDB.Close()
+			apiDB = nil
+		}
+	})
 }
 
 func TestIncidentLifecycle(t *testing.T) {

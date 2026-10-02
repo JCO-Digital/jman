@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -100,4 +101,23 @@ func normalizeArg(a any) (any, bool) {
 		return sql.NullTime{Time: v.Time.UTC(), Valid: true}, true
 	}
 	return a, false
+}
+
+// StartOfDayUTC parses a "YYYY-MM-DD" date as midnight UTC.
+func StartOfDayUTC(day string) (time.Time, error) {
+	t, err := time.ParseInLocation("2006-01-02", day, time.UTC)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid date %q, expected YYYY-MM-DD", day)
+	}
+	return t, nil
+}
+
+// EndOfDayUTC parses a "YYYY-MM-DD" date as the last instant of that UTC
+// day, for use as an inclusive upper bound.
+func EndOfDayUTC(day string) (time.Time, error) {
+	t, err := StartOfDayUTC(day)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t.AddDate(0, 0, 1).Add(-time.Nanosecond), nil
 }

@@ -806,6 +806,10 @@ func initAPISchema() error {
 		return fmt.Errorf("failed to migrate legacy API IDs to UUIDs: %w", err)
 	}
 
+	if err := NormalizeAPITimestamps(apiDB.DB, tables); err != nil {
+		return fmt.Errorf("failed to normalize API timestamps: %w", err)
+	}
+
 	return nil
 }
 

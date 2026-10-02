@@ -250,7 +250,9 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	return &oa, nil
 }
 
-func GetAllOrganizationAssets(search, status, before string) ([]models.OrganizationAsset, error) {
+// GetAllOrganizationAssets lists organization assets, optionally filtered
+// by search text, status, and a next_billing upper bound (inclusive).
+func GetAllOrganizationAssets(search, status string, before *time.Time) ([]models.OrganizationAsset, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -280,9 +282,9 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 		args = append(args, status)
 	}
 
-	if before != "" {
+	if before != nil {
 		query += " AND oa.next_billing <= ?"
-		args = append(args, before)
+		args = append(args, *before)
 	}
 
 	query += " ORDER BY oa.next_billing ASC, oa.created_at DESC"
@@ -487,14 +489,19 @@ func GetAssetPaymentsInRange(start, end string) ([]models.AssetPaymentReportRow,
 	WHERE ap.payment_date >= ? AND ap.payment_date <= ?
 	ORDER BY o.name ASC, ap.payment_date ASC
 	`
-	// Compared as plain ISO8601 text against the stored column (matching
-	// GetSiteTraffic's cutoff-expression convention) rather than wrapping
-	// the column in date()/strftime() — the modernc.org/sqlite driver's
-	// DATE/DATETIME column handling doesn't play well with SQL date
-	// functions applied to the column itself. end is extended to the end
-	// of its day so a payment_date with a non-midnight time-of-day on the
-	// last day is still included.
-	rows, err := db.Query(query, start, end+"T23:59:59Z")
+	// Bound as time values (stored and compared in canonical UTC, see
+	// APIDB) rather than wrapping the column in date(). end is extended to
+	// the end of its day so a payment_date with a non-midnight time-of-day
+	// on the last day is still included.
+	startTime, err := StartOfDayUTC(start)
+	if err != nil {
+		return nil, err
+	}
+	endTime, err := EndOfDayUTC(end)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.Query(query, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query asset payments for report: %w", err)
 	}

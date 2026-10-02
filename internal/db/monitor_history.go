@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -17,11 +18,10 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 	query := `
 		SELECT id, domain, status, error_code, first_seen, last_seen, count
 		FROM monitor_history
-		WHERE last_seen >= datetime('now', ?)
+		WHERE last_seen >= ?
 		ORDER BY first_seen DESC
 	`
-	interval := fmt.Sprintf("-%d hours", hours)
-	rows, err := db.Query(query, interval)
+	rows, err := db.Query(query, time.Now().Add(-time.Duration(hours)*time.Hour))
 	if err != nil {
 		return nil, fmt.Errorf("failed to query monitor history: %w", err)
 	}

@@ -106,9 +106,13 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 		allowedSiteIDs[site.ID] = true
 	}
 
-	measuredAt := report.CollectedAt
-	if measuredAt == "" {
-		measuredAt = time.Now().UTC().Format(time.RFC3339)
+	measuredAt := time.Now().UTC()
+	if report.CollectedAt != "" {
+		if t, err := time.Parse(time.RFC3339, report.CollectedAt); err == nil {
+			measuredAt = t
+		} else {
+			verb.LogPrintf(verb.Normal, "Agent report from server %s has invalid collected_at %q; using receive time", claims.ServerID, report.CollectedAt)
+		}
 	}
 
 	type siteDay struct {

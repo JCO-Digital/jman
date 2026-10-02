@@ -8,7 +8,7 @@ import (
 )
 
 // RecordSiteDiskUsage inserts a new disk usage measurement for a site (by UUID).
-func RecordSiteDiskUsage(siteID string, bytesUsed int64, measuredAt string) error {
+func RecordSiteDiskUsage(siteID string, bytesUsed int64, measuredAt time.Time) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
@@ -87,11 +87,10 @@ func DownsampleOldSiteDiskUsage(cutoff time.Time) error {
 		return err
 	}
 
-	cutoffStr := cutoff.UTC().Format(time.RFC3339)
 	for siteID := range latest {
-		// measured_at is stored as RFC3339 UTC text, so its first ten
-		// characters are the UTC day. SQLite returns the bare rowid from
-		// the row holding MAX(measured_at) within each group.
+		// measured_at is stored as canonical UTC text (see APIDB), so its
+		// first ten characters are the UTC day. SQLite returns the bare
+		// rowid from the row holding MAX(measured_at) within each group.
 		if _, err := dbConn.Exec(
 			`DELETE FROM site_disk_usage
 			 WHERE site_id = ? AND measured_at < ?
@@ -103,7 +102,7 @@ func DownsampleOldSiteDiskUsage(cutoff time.Time) error {
 			 		GROUP BY substr(measured_at, 1, 10)
 			 	)
 			 )`,
-			siteID, cutoffStr, siteID, cutoffStr,
+			siteID, cutoff, siteID, cutoff,
 		); err != nil {
 			return fmt.Errorf("failed to downsample disk usage for site %s: %w", siteID, err)
 		}
