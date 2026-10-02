@@ -1,6 +1,25 @@
 # Changelog
 
-## 6.2.0 (2026-10-02)
+### 6.2.1 (2026-10-02)
+
+#### Bug Fixes
+
+- tasks: show task due and reminder dates in local time in Slack (7753ada)
+- db: normalize stored api.db timestamps and compare times as values (4e0cfa6)
+
+#### Refactor
+
+- db: move monitor and Slack SQL into internal/db (c1c0305)
+- db: make api.db lookups case-insensitive explicitly (ac6e7c9)
+- db: replace SQLite-only SQL in api.db queries (af07ae2)
+- db: use INSERT ... RETURNING id instead of LastInsertId (dea6b54)
+- db: write api.db timestamps as canonical UTC via an APIDB wrapper (fed1d02)
+
+#### Documentation
+
+- record the PostgreSQL migration assessment and plan (dfb672f)
+
+## v6.2.0 (2026-10-02)
 
 #### Features
 
