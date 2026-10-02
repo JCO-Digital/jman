@@ -25,6 +25,7 @@ func CreatePluginUpdateJob(job *models.PluginUpdateJob) error {
 	}
 	job.Status = models.PluginUpdateJobQueued
 	job.CreatedAt = time.Now()
+	job.Results = []models.PluginUpdateResult{}
 
 	err = db.QueryRow(
 		`INSERT INTO plugin_update_jobs (site_id, status, plugins, created_by, created_at)
