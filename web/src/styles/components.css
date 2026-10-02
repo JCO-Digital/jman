@@ -517,6 +517,14 @@
 		height: 16px;
 		border-width: 2px;
 	}
+
+	/* Inline next to a plugin version while an update runs. */
+	&.version-spinner {
+		width: 12px;
+		height: 12px;
+		margin-left: 0.4rem;
+		vertical-align: middle;
+	}
 }
 
 @keyframes spin {

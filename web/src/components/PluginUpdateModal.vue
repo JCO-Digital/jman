@@ -2,8 +2,8 @@
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
-import { useAuthStore } from "../stores/auth";
-import { BASE_URL } from "../utils/api";
+import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
+import { useToastStore } from "../stores/toast";
 import AppIcon from "./AppIcon.vue";
 import type { Plugin, PluginUpdateResult } from "../types";
 
@@ -18,16 +18,54 @@ const emit = defineEmits<{
 
 const dataStore = useDataStore();
 const pluginUpdatesStore = usePluginUpdatesStore();
+const jobsStore = usePluginUpdateJobsStore();
+const toastStore = useToastStore();
 
 const isLoading = ref(false);
 const updates = ref<Plugin[]>([]);
 const fetchError = ref<string | null>(null);
 
 type UpdateStatus = "idle" | "updating" | "success" | "error";
-const pluginStatus = ref<Record<string, UpdateStatus>>({});
-const pluginError = ref<Record<string, string>>({});
-const pluginResult = ref<Record<string, PluginUpdateResult | null>>({});
+// Jobs queued from this modal since it was opened; only their results are
+// shown, while spinners show every queued or running update on the site.
+const myJobIds = ref(new Set<number>());
+// Errors from queueing itself (the request failed before a job existed).
+const queueError = ref<Record<string, string>>({});
+// True while the enqueue request is in flight.
 const isUpdatingAll = ref(false);
+
+const pluginResult = computed(() => {
+	const map: Record<string, PluginUpdateResult | null> = {};
+	for (const p of updates.value) {
+		map[p.name] =
+			jobsStore.resultFor(props.siteId, p.name, myJobIds.value) ?? null;
+	}
+	return map;
+});
+
+const pluginStatus = computed(() => {
+	const map: Record<string, UpdateStatus> = {};
+	for (const p of updates.value) {
+		const result = pluginResult.value[p.name];
+		if (jobsStore.isUpdating(props.siteId, p.name)) {
+			map[p.name] = "updating";
+		} else if (result) {
+			map[p.name] = result.status === "failed" ? "error" : "success";
+		} else {
+			map[p.name] = queueError.value[p.name] ? "error" : "idle";
+		}
+	}
+	return map;
+});
+
+const pluginError = computed(() => {
+	const map: Record<string, string> = {};
+	for (const p of updates.value) {
+		map[p.name] =
+			pluginResult.value[p.name]?.error ?? queueError.value[p.name] ?? "";
+	}
+	return map;
+});
 
 const isAnyUpdating = computed(() =>
 	Object.values(pluginStatus.value).some((s) => s === "updating"),
@@ -88,9 +126,8 @@ async function fetchUpdates() {
 	isLoading.value = true;
 	fetchError.value = null;
 	updates.value = [];
-	pluginStatus.value = {};
-	pluginError.value = {};
-	pluginResult.value = {};
+	myJobIds.value = new Set();
+	queueError.value = {};
 
 	try {
 		updates.value = await pluginUpdatesStore.fetchPluginUpdates(
@@ -103,112 +140,44 @@ async function fetchUpdates() {
 	}
 }
 
-async function updatePlugin(
-	pluginName: string,
-	skipLedger?: boolean,
-): Promise<boolean> {
-	pluginStatus.value[pluginName] = "updating";
-	pluginError.value[pluginName] = "";
-
+/**
+ * Queues one background job updating all the given plugins in a single
+ * WP-CLI call. jman-api writes the update ledger entry when it finishes.
+ */
+async function runUpdates(names: string[]) {
+	if (names.length === 0) return;
+	isUpdatingAll.value = true;
+	for (const name of names) delete queueError.value[name];
 	try {
-		const result = await pluginUpdatesStore.updatePlugin(
-			props.siteId,
-			pluginName,
-			skipLedger,
-		);
-		pluginResult.value[pluginName] = result;
-		pluginStatus.value[pluginName] = "success";
-		return true;
+		const jobs = await jobsStore.enqueue([
+			{ site_id: props.siteId, plugins: names },
+		]);
+		myJobIds.value = new Set([...myJobIds.value, ...jobs.map((j) => j.id)]);
 	} catch (e: any) {
-		pluginStatus.value[pluginName] = "error";
-		pluginError.value[pluginName] = e.message || "Update failed";
-		return false;
+		const message = e.message || "Failed to queue update";
+		for (const name of names) queueError.value[name] = message;
+		toastStore.addToast(
+			`Failed to queue plugin update: ${message}`,
+			"error",
+		);
+	} finally {
+		isUpdatingAll.value = false;
 	}
 }
 
-async function runUpdates(entries: Plugin[]) {
-	isUpdatingAll.value = true;
-
-	const totalAvailableBefore = updates.value.filter(isPending).length;
-
-	const attempted: {
-		name: string;
-		oldVersion: string;
-		newVersion?: string;
-		error?: string;
-		success: boolean;
-	}[] = [];
-
-	for (const plugin of entries) {
-		await updatePlugin(plugin.name, true);
-
-		const status = pluginStatus.value[plugin.name];
-		const res = pluginResult.value[plugin.name];
-		const errMessage = pluginError.value[plugin.name];
-
-		attempted.push({
-			name: plugin.name,
-			oldVersion: plugin.version,
-			newVersion:
-				status === "success" && res ? res.new_version : plugin.version,
-			error: status === "error" ? errMessage : undefined,
-			success: status === "success",
-		});
-	}
-
-	if (attempted.length > 0) {
-		const successes = attempted.filter((a) => a.success);
-		const failures = attempted.filter((a) => !a.success);
-
-		let status: "full" | "partial" | "failed";
-		if (failures.length > 0) {
-			status = "failed";
-		} else if (successes.length === totalAvailableBefore) {
-			status = "full";
-		} else {
-			status = "partial";
-		}
-
-		const ledgerData = {
-			updates: attempted.map((a) => ({
-				plugin: a.name,
-				old_version: a.oldVersion,
-				new_version: a.newVersion,
-				status: a.success ? "success" : "failed",
-				error: a.error,
-			})),
-			summary: `Bulk update of ${attempted.length} plugin(s): ${successes.length} succeeded, ${failures.length} failed.`,
-		};
-
-		try {
-			const authStore = useAuthStore();
-			await fetch(`${BASE_URL}/sites/${props.siteId}/update-ledger`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...authStore.authHeader,
-				},
-				body: JSON.stringify({
-					update_type: "plugin",
-					status: status,
-					data_json: JSON.stringify(ledgerData),
-				}),
-			});
-		} catch (e) {
-			console.error("Failed to write bulk update ledger entry", e);
-		}
-	}
-
-	isUpdatingAll.value = false;
+async function updatePlugin(pluginName: string) {
+	await runUpdates([pluginName]);
 }
 
 async function updateAll() {
-	await runUpdates(updates.value.filter(isPending));
+	await runUpdates(updates.value.filter(isPending).map((p) => p.name));
 }
 
 async function updateVulnerable() {
 	await runUpdates(
-		updates.value.filter((p) => isVulnerable(p) && isPending(p)),
+		updates.value
+			.filter((p) => isVulnerable(p) && isPending(p))
+			.map((p) => p.name),
 	);
 }
 
@@ -367,9 +336,17 @@ watch(
 							"
 							@click="updateAll"
 						>
-							{{ isUpdatingAll ? "Updating…" : "Update All" }}
+							{{
+								isUpdatingAll || isAnyUpdating
+									? "Updating…"
+									: "Update All"
+							}}
 						</button>
 					</footer>
+					<p v-if="isAnyUpdating" class="text-muted font-sm mt-2">
+						Updates run in the background on the server; you can
+						close this window.
+					</p>
 				</div>
 			</div>
 		</div>

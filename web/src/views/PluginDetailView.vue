@@ -5,6 +5,7 @@ import { useDataStore } from "../stores/data";
 import { useIgnoreStore } from "../stores/ignore";
 import { useAssetStore } from "../stores/assetStore";
 import { useAuthStore } from "../stores/auth";
+import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
@@ -22,6 +23,7 @@ const dataStore = useDataStore();
 const ignoreStore = useIgnoreStore();
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
+const jobsStore = usePluginUpdateJobsStore();
 
 onMounted(() => {
 	assetStore.fetchAssets();
@@ -197,7 +199,19 @@ const manageAssetTemplate = () => {
 								<td class="font-medium">
 									{{ item.site_domain }}
 								</td>
-								<td>{{ item.version }}</td>
+								<td>
+									{{ item.version }}
+									<span
+										v-if="
+											jobsStore.isUpdating(
+												item.site_id,
+												item.name,
+											)
+										"
+										class="spinner spinner-small version-spinner"
+										title="Updating…"
+									/>
+								</td>
 								<td>
 									<span
 										:class="[

@@ -510,6 +510,31 @@ export interface PluginUpdateResult {
 	error?: string;
 }
 
+export type PluginUpdateJobStatus =
+	| "queued"
+	| "running"
+	/** Ran to completion; individual plugins may still have failed. */
+	| "done"
+	/** Couldn't run at all (e.g. site unreachable). */
+	| "failed"
+	/** jman-api restarted mid-update; the outcome on the site is unknown. */
+	| "interrupted";
+
+/** A background `wp plugin update` run for one or more plugins on one site. */
+export interface PluginUpdateJob {
+	id: number;
+	site_id: string;
+	status: PluginUpdateJobStatus;
+	plugins: { name: string; old_version: string }[];
+	/** One entry per plugin once the job has finished. */
+	results: PluginUpdateResult[];
+	error?: string;
+	created_by: string;
+	created_at: string;
+	started_at?: string;
+	finished_at?: string;
+}
+
 export interface TwoFactorSetupResponse {
 	secret: string;
 	uri: string;

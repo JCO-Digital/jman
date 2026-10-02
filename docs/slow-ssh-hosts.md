@@ -48,7 +48,7 @@ host = "*.ssh.wpengine.net"
 minutes = 5
 ```
 
-Plugin updates in the web UI are synchronous HTTP requests. If jman-api sits behind a reverse proxy, the proxy's read timeout must be longer than the slowest update. nginx's default `proxy_read_timeout` is 60 seconds and will otherwise answer with a 504 while the update is still running.
+Plugin updates from the web UI run as background jobs, so their duration isn't limited by HTTP or proxy timeouts. Core updates still run inside the HTTP request. If jman-api sits behind a reverse proxy, its read timeout must be longer than the slowest core update. nginx's default `proxy_read_timeout` is 60 seconds and will otherwise answer with a 504 while the update is still running.
 
 ## When an update fails or times out
 
@@ -57,6 +57,6 @@ After a failed plugin update, jman checks the site:
 - the installed version of each plugin it tried to update (`wp plugin list --skip-plugins`)
 - whether the site is in maintenance mode (`wp maintenance-mode is-active`)
 
-The failure message and the site update ledger record what the check found. In the API, if the update timed out but the new version is installed and the site is not in maintenance mode, it is reported as a successful update.
+The job result and the site update ledger record what the check found. A plugin whose version changed counts as updated even if the batch as a whole failed or timed out.
 
 A site left in maintenance mode shows its maintenance page until WordPress ignores the `.maintenance` file, 10 minutes after the update started. Once you're sure the update has stopped, `wp maintenance-mode deactivate` clears it immediately.

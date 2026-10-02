@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
-import { usePluginUpdatesStore } from "../stores/pluginUpdates";
+import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
+import { useToastStore } from "../stores/toast";
 import AppIcon from "./AppIcon.vue";
 import type { Plugin, PluginUpdateResult } from "../types";
 
@@ -22,16 +23,55 @@ const emit = defineEmits<{
 }>();
 
 const dataStore = useDataStore();
-const pluginUpdatesStore = usePluginUpdatesStore();
+const jobsStore = usePluginUpdateJobsStore();
+const toastStore = useToastStore();
 
 const updates = ref<UpdateEntry[]>([]);
 
 type UpdateStatus = "idle" | "updating" | "success" | "error";
-const siteStatus = ref<Record<string, UpdateStatus>>({});
-const siteError = ref<Record<string, string>>({});
-const siteResult = ref<Record<string, PluginUpdateResult | null>>({});
+// Jobs queued from this modal since it was opened; only their results are
+// shown, while spinners show every queued or running update of the plugin.
+const myJobIds = ref(new Set<number>());
+// Errors from queueing itself (the request failed before a job existed).
+const queueError = ref<Record<string, string>>({});
+// True while the enqueue request is in flight.
 const isUpdatingAll = ref(false);
 const confirmMode = ref<"all" | "vulnerable" | null>(null);
+
+const siteResult = computed(() => {
+	const map: Record<string, PluginUpdateResult | null> = {};
+	for (const u of updates.value) {
+		map[u.site_id] =
+			jobsStore.resultFor(u.site_id, u.name, myJobIds.value) ?? null;
+	}
+	return map;
+});
+
+const siteStatus = computed(() => {
+	const map: Record<string, UpdateStatus> = {};
+	for (const u of updates.value) {
+		const result = siteResult.value[u.site_id];
+		if (jobsStore.isUpdating(u.site_id, u.name)) {
+			map[u.site_id] = "updating";
+		} else if (result) {
+			map[u.site_id] = result.status === "failed" ? "error" : "success";
+		} else {
+			map[u.site_id] = queueError.value[u.site_id] ? "error" : "idle";
+		}
+	}
+	return map;
+});
+
+const siteError = computed(() => {
+	const map: Record<string, string> = {};
+	for (const u of updates.value) {
+		map[u.site_id] =
+			siteResult.value[u.site_id]?.error ??
+			queueError.value[u.site_id] ??
+			"";
+	}
+	return map;
+});
 
 const isAnyUpdating = computed(() =>
 	Object.values(siteStatus.value).some((s) => s === "updating"),
@@ -70,36 +110,40 @@ function snapshot() {
 			};
 		})
 		.sort((a, b) => a.site_domain.localeCompare(b.site_domain));
-	siteStatus.value = {};
-	siteError.value = {};
-	siteResult.value = {};
+	myJobIds.value = new Set();
+	queueError.value = {};
 	confirmMode.value = null;
 	isUpdatingAll.value = false;
 }
 
-async function updateSite(entry: UpdateEntry): Promise<void> {
-	siteStatus.value[entry.site_id] = "updating";
-	siteError.value[entry.site_id] = "";
-	try {
-		const result = await pluginUpdatesStore.updatePlugin(
-			entry.site_id,
-			entry.name,
-		);
-		siteResult.value[entry.site_id] = result;
-		siteStatus.value[entry.site_id] = "success";
-	} catch (e: any) {
-		siteStatus.value[entry.site_id] = "error";
-		siteError.value[entry.site_id] = e.message || "Update failed";
-	}
-}
-
+/**
+ * Queues one background job per site. Sites update concurrently on the
+ * server; jman-api writes each site's update ledger entry.
+ */
 async function runUpdates(entries: UpdateEntry[]) {
 	confirmMode.value = null;
+	if (entries.length === 0) return;
 	isUpdatingAll.value = true;
-	for (const entry of entries) {
-		await updateSite(entry);
+	for (const e of entries) delete queueError.value[e.site_id];
+	try {
+		const jobs = await jobsStore.enqueue(
+			entries.map((e) => ({ site_id: e.site_id, plugins: [e.name] })),
+		);
+		myJobIds.value = new Set([...myJobIds.value, ...jobs.map((j) => j.id)]);
+	} catch (e: any) {
+		const message = e.message || "Failed to queue update";
+		for (const entry of entries) queueError.value[entry.site_id] = message;
+		toastStore.addToast(
+			`Failed to queue plugin update: ${message}`,
+			"error",
+		);
+	} finally {
+		isUpdatingAll.value = false;
 	}
-	isUpdatingAll.value = false;
+}
+
+async function updateSite(entry: UpdateEntry) {
+	await runUpdates([entry]);
 }
 
 async function updateAll() {
@@ -321,9 +365,17 @@ watch(
 							"
 							@click="confirmMode = 'all'"
 						>
-							{{ isUpdatingAll ? "Updating…" : "Update All" }}
+							{{
+								isUpdatingAll || isAnyUpdating
+									? "Updating…"
+									: "Update All"
+							}}
 						</button>
 					</footer>
+					<p v-if="isAnyUpdating" class="text-muted font-sm mt-2">
+						Updates run in the background on the server; you can
+						close this window.
+					</p>
 				</div>
 			</div>
 		</div>
