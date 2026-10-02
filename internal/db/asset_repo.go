@@ -102,7 +102,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 	`
 	var args []interface{}
 	if search != "" {
-		query += " AND (a.name LIKE ? OR a.identifier LIKE ? OR a.type LIKE ?)"
+		query += " AND (LOWER(a.name) LIKE LOWER(?) OR LOWER(a.identifier) LIKE LOWER(?) OR LOWER(a.type) LIKE LOWER(?))"
 		term := "%" + search + "%"
 		args = append(args, term, term, term)
 	}
@@ -274,7 +274,7 @@ func GetAllOrganizationAssets(search, status string, before *time.Time) ([]model
 	var args []interface{}
 
 	if search != "" {
-		query += " AND (oa.identifier LIKE ? OR o.name LIKE ? OR a.name LIKE ?)"
+		query += " AND (LOWER(oa.identifier) LIKE LOWER(?) OR LOWER(o.name) LIKE LOWER(?) OR LOWER(a.name) LIKE LOWER(?))"
 		term := "%" + search + "%"
 		args = append(args, term, term, term)
 	}

@@ -180,7 +180,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 		args = append(args, filter.ServerID)
 	}
 	if filter.Search != "" {
-		query += " AND (title LIKE ? OR description LIKE ?)"
+		query += " AND (LOWER(title) LIKE LOWER(?) OR LOWER(description) LIKE LOWER(?))"
 		term := "%" + filter.Search + "%"
 		args = append(args, term, term)
 	}

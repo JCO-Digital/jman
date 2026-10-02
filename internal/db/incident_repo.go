@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -12,6 +13,7 @@ import (
 // incident for the specified domain. If an active incident already exists, it updates its error message/code
 // and returns the existing incident.
 func CreateIncident(domain, errorMessage string, errorCode int, downSince time.Time) (*models.Incident, error) {
+	domain = strings.ToLower(domain)
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")

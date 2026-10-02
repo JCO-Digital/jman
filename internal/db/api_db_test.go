@@ -114,3 +114,42 @@ func TestInsertsReturnIDs(t *testing.T) {
 		t.Fatalf("incident %d: got %+v, err %v", inc.ID, stored, err)
 	}
 }
+
+// TestCaseInsensitiveLookups pins behavior that used to come from SQLite's
+// case-insensitive LIKE and COLLATE NOCASE, so it survives a database
+// without them.
+func TestCaseInsensitiveLookups(t *testing.T) {
+	setupTestAPIDB(t)
+
+	org := models.Organization{Name: "Acme Oy"}
+	if err := SaveOrganization(&org, "test"); err != nil {
+		t.Fatal(err)
+	}
+	found, err := GetAllOrganizations("ACME")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 {
+		t.Errorf("search ACME found %d organizations, want 1", len(found))
+	}
+
+	inc, err := CreateIncident("Shop.Example.COM", "down", 500, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if inc.Domain != "shop.example.com" {
+		t.Errorf("incident domain stored as %q, want lowercase", inc.Domain)
+	}
+	active, err := GetActiveIncidentByDomain("SHOP.example.com")
+	if err != nil || active == nil || active.ID != inc.ID {
+		t.Errorf("mixed-case lookup found %+v, err %v; want incident %d", active, err, inc.ID)
+	}
+
+	if _, err := GetAPIDB().Exec(`INSERT INTO monitor_status (domain) VALUES ('shop.example.com')`); err != nil {
+		t.Fatal(err)
+	}
+	status, err := GetMonitorStatus("Shop.Example.com")
+	if err != nil || status == nil {
+		t.Errorf("GetMonitorStatus with mixed case: %+v, %v", status, err)
+	}
+}

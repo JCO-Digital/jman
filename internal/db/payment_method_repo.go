@@ -77,7 +77,7 @@ func GetAllPaymentMethods(search, pmType string) ([]models.PaymentMethod, error)
 	query := `SELECT id, name, type, expiry_date, created_at, created_by, updated_at, updated_by FROM payment_methods WHERE 1=1`
 	var args []interface{}
 	if search != "" {
-		query += " AND name LIKE ?"
+		query += " AND LOWER(name) LIKE LOWER(?)"
 		args = append(args, "%"+search+"%")
 	}
 	if pmType != "" {

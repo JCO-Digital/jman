@@ -77,7 +77,7 @@ func GetAllOrganizations(search string) ([]models.Organization, error) {
 	query := `SELECT id, name, vat_number, info, created_at, created_by, updated_at, updated_by FROM organizations`
 	var args []interface{}
 	if search != "" {
-		query += " WHERE name LIKE ? OR vat_number LIKE ?"
+		query += " WHERE LOWER(name) LIKE LOWER(?) OR LOWER(vat_number) LIKE LOWER(?)"
 		term := "%" + search + "%"
 		args = append(args, term, term)
 	}

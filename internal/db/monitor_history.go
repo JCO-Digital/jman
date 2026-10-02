@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -53,6 +54,7 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 
 // GetMonitorStatus returns the current monitoring status for a specific domain.
 func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
+	domain = strings.ToLower(domain)
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
