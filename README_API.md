@@ -317,6 +317,12 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
 only the automatic external-cron dependency has been removed.
 
+## Slow SSH Hosts
+
+Plugin and core updates run WP-CLI over SSH while the HTTP request waits. Updates may take up to 10 minutes, or longer for hosts listed in `wpcliHostTimeouts`. A reverse proxy in front of jman-api therefore needs a read timeout above that (nginx's `proxy_read_timeout` defaults to 60 seconds).
+
+For hosts that are slow over SSH, such as WP Engine, see [docs/slow-ssh-hosts.md](docs/slow-ssh-hosts.md). It covers SSH connection reuse, per-host WP-CLI timeouts, and what jman reports when an update fails.
+
 ## Site Monitoring & Incident Management
 
 `jman-api` runs the automated uptime-monitoring scheduler in-process.
