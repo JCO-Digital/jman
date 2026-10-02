@@ -18,10 +18,11 @@ import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
 import { BASE_URL, handleErrorResponse } from "../utils/api";
 
-// Cache keys are versioned: anything holding site/server ids was bumped when
-// ids moved from SpinupWP integers to UUID strings, so stale caches are ignored.
+// Cache keys are versioned: bump a key when the shape of what it holds
+// changes (ids moving from SpinupWP integers to UUID strings, sites gaining
+// `ssh`), so stale session caches are ignored instead of served.
 const CACHE_KEY_SERVERS = "jman_servers_v2";
-const CACHE_KEY_SITES = "jman_sites_v2";
+const CACHE_KEY_SITES = "jman_sites_v3";
 const CACHE_KEY_PLUGINS = "jman_plugins_v2";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
 const CACHE_KEY_VULNS = "jman_vulns_v3";
@@ -30,6 +31,7 @@ const CACHE_KEY_SITE_ORG_LINKS = "jman_site_organization_links_v2";
 const LEGACY_CACHE_KEYS = [
 	"jman_servers",
 	"jman_sites",
+	"jman_sites_v2",
 	"jman_plugins",
 	"jman_vulns_v2",
 	"jman_core_vulns",
