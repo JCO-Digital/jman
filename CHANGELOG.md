@@ -1,6 +1,13 @@
 # Changelog
 
-### 6.2.1 (2026-10-02)
+### 6.2.2 (2026-10-02)
+
+#### Bug Fixes
+
+- ui: ignore session-cached sites without the ssh field (edab249)
+- ui: show the real SSH target in the site's connection string (05059f1)
+
+### v6.2.1 (2026-10-02)
 
 #### Bug Fixes
 
