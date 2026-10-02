@@ -20,7 +20,7 @@ func setupTestAPIDB(t *testing.T) {
 
 	// Initialize test database
 	var err error
-	apiDB, err = openDB(filepath.Join(tempDir, "api.db"))
+	apiDB, err = openAPIDB(filepath.Join(tempDir, "api.db"))
 	if err != nil {
 		t.Fatalf("failed to open api test db: %v", err)
 	}

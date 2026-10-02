@@ -87,7 +87,7 @@ func TestMigrateLegacyIDs_FromPreUUIDSchema(t *testing.T) {
 	if err := InitAPI(); err != nil {
 		t.Fatalf("InitAPI failed: %v", err)
 	}
-	inv, api := GetInventoryDB(), GetAPIDB()
+	inv, api := GetInventoryDB(), GetAPIDB().DB
 
 	site42, site43, site55, site99 := utils.SpinupWPSiteUUID(42), utils.SpinupWPSiteUUID(43), utils.SpinupWPSiteUUID(55), utils.SpinupWPSiteUUID(99)
 	server12 := utils.SpinupWPServerUUID(12)
@@ -163,7 +163,7 @@ func TestMigrateLegacyIDs_FromPreUUIDSchema(t *testing.T) {
 	if got := queryInt(t, GetInventoryDB(), `SELECT COUNT(*) FROM site_plugins`); got != 3 {
 		t.Errorf("site_plugins rows after restart = %d, want 3", got)
 	}
-	if got := queryString(t, GetAPIDB(), `SELECT site_id FROM tasks WHERE title = 'site task'`); got != site55 {
+	if got := queryString(t, GetAPIDB().DB, `SELECT site_id FROM tasks WHERE title = 'site task'`); got != site55 {
 		t.Errorf("task site_id after restart = %q, want %q", got, site55)
 	}
 }
@@ -173,7 +173,7 @@ func TestMigrateLegacyIDs_FromPreUUIDSchema(t *testing.T) {
 // rows, and "123.0" values from JSON numbers decoded as float64.
 func TestMigrateLegacyIDs_PartiallyMigrated(t *testing.T) {
 	setupTaskRepoTest(t)
-	inv, api := GetInventoryDB(), GetAPIDB()
+	inv, api := GetInventoryDB(), GetAPIDB().DB
 
 	for _, conn := range []*sql.DB{inv, api} {
 		if _, err := conn.Exec(`DELETE FROM schema_migrations`); err != nil {

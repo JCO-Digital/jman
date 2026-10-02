@@ -30,7 +30,7 @@ import (
 // every call site must be explicit about which database it means.
 var (
 	inventoryDB *sql.DB
-	apiDB       *sql.DB
+	apiDB       *APIDB
 	dbMutex     sync.Mutex
 )
 
@@ -81,6 +81,23 @@ const maxOpenConns = 8
 // openDB opens a SQLite database file with the pragma set jman relies on
 // for concurrency and reliability (shared by both inventory.db and api.db).
 func openDB(path string) (*sql.DB, error) {
+	return openDBWithParams(path, nil)
+}
+
+// openAPIDB opens api.db. On top of openDB's settings it makes the driver
+// write time.Time values in SQLite's sortable text format instead of Go's
+// time.String() (see APIDB for the UTC half of that). inventory.db keeps
+// the driver default, as it is also written by laptop CLIs running older
+// jman versions.
+func openAPIDB(path string) (*APIDB, error) {
+	conn, err := openDBWithParams(path, url.Values{"_time_format": {"sqlite"}})
+	if err != nil {
+		return nil, err
+	}
+	return &APIDB{DB: conn}, nil
+}
+
+func openDBWithParams(path string, extra url.Values) (*sql.DB, error) {
 	// Pragmas are connection-scoped, so they go in the DSN: the driver
 	// applies them to every connection the pool opens, not just the first.
 	//   - WAL lets readers run concurrently with the single writer.
@@ -92,7 +109,7 @@ func openDB(path string) (*sql.DB, error) {
 	// The path is deliberately not given a "file:" prefix: the driver then
 	// strips the query itself and opens the path verbatim, with no URI
 	// escaping concerns.
-	dsn := path + "?" + url.Values{
+	params := url.Values{
 		"_pragma": {
 			"journal_mode(WAL)",
 			"synchronous(NORMAL)",
@@ -100,7 +117,11 @@ func openDB(path string) (*sql.DB, error) {
 			"foreign_keys(1)",
 		},
 		"_txlock": {"immediate"},
-	}.Encode()
+	}
+	for k, v := range extra {
+		params[k] = v
+	}
+	dsn := path + "?" + params.Encode()
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
@@ -158,7 +179,7 @@ func InitAPI() error {
 	}
 
 	dbPath := filepath.Join(config.RunData.DataDir, "api.db")
-	conn, err := openDB(dbPath)
+	conn, err := openAPIDB(dbPath)
 	if err != nil {
 		return err
 	}
@@ -178,8 +199,9 @@ func GetInventoryDB() *sql.DB {
 	return inventoryDB
 }
 
-// GetAPIDB returns jman-api's own database instance.
-func GetAPIDB() *sql.DB {
+// GetAPIDB returns jman-api's own database instance, or nil if InitAPI
+// hasn't been called.
+func GetAPIDB() *APIDB {
 	return apiDB
 }
 
@@ -190,7 +212,7 @@ func BackupInventory(destPath string) error {
 
 // BackupAPI creates a snapshot of the api database using VACUUM INTO.
 func BackupAPI(destPath string) error {
-	return backupDB(apiDB, destPath)
+	return backupDB(apiDB.sqlDB(), destPath)
 }
 
 func backupDB(conn *sql.DB, destPath string) error {
@@ -698,7 +720,7 @@ func initAPISchema() error {
 	}
 
 	for _, table := range tables {
-		if err := migrateTable(apiDB, table); err != nil {
+		if err := migrateTable(apiDB.DB, table); err != nil {
 			return fmt.Errorf("failed to migrate table %s: %w", table.Name, err)
 		}
 	}
@@ -780,7 +802,7 @@ func initAPISchema() error {
 		return err
 	}
 
-	if err := MigrateLegacyAPIIDs(apiDB); err != nil {
+	if err := MigrateLegacyAPIIDs(apiDB.DB); err != nil {
 		return fmt.Errorf("failed to migrate legacy API IDs to UUIDs: %w", err)
 	}
 

@@ -2,7 +2,6 @@ package slack
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -78,7 +77,7 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 	return nil
 }
 
-func migrateSlackTracker(database *sql.DB) {
+func migrateSlackTracker(database *db.APIDB) {
 	// Only migrate if the file exists
 	var tracker map[string]bool
 	err := cache.ReadJSONData(slackTrackerFile, &tracker)
