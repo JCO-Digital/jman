@@ -133,3 +133,28 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 
 	return statuses, nil
 }
+
+// RecordMonitorHistory extends the latest monitor_history entry for a
+// domain if its status is unchanged, or starts a new entry otherwise.
+// The read and the write are not atomic; the monitor serializes calls.
+func RecordMonitorHistory(domain, status string, errorCode int) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	domain = strings.ToLower(domain)
+
+	var lastID int
+	var lastStatus string
+	err := db.QueryRow(`SELECT id, status FROM monitor_history WHERE domain = ? ORDER BY id DESC LIMIT 1`, domain).Scan(&lastID, &lastStatus)
+	if err == nil && lastStatus == status {
+		if _, err := db.Exec(`UPDATE monitor_history SET last_seen = CURRENT_TIMESTAMP, count = count + 1 WHERE id = ?`, lastID); err != nil {
+			return fmt.Errorf("failed to update monitor history for %s: %w", domain, err)
+		}
+		return nil
+	}
+	if _, err := db.Exec(`INSERT INTO monitor_history (domain, status, error_code) VALUES (?, ?, ?)`, domain, status, errorCode); err != nil {
+		return fmt.Errorf("failed to insert monitor history for %s: %w", domain, err)
+	}
+	return nil
+}

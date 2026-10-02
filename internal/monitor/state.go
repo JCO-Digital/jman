@@ -1,8 +1,6 @@
 package monitor
 
 import (
-	"database/sql"
-	"fmt"
 	"log"
 	"strings"
 	"sync"
@@ -59,20 +57,14 @@ type State struct {
 
 // LoadState reads the monitor state from the database.
 func LoadState() (*State, error) {
-	database := db.GetAPIDB()
-	if database == nil {
-		return nil, fmt.Errorf("database not initialized")
+	records, err := db.GetAllMonitorStatusRecords()
+	if err != nil {
+		return nil, err
 	}
 
 	state := &State{
 		Sites: make(map[string]*SiteStatus),
 	}
-
-	rows, err := database.Query("SELECT domain, is_down, failure_count, consecutive_successes, current_mode, last_alert_time, last_checked, next_check_at, down_since, pd_triggered, pd_escalated FROM monitor_status")
-	if err != nil {
-		return nil, fmt.Errorf("failed to load monitor status: %w", err)
-	}
-	defer rows.Close()
 
 	// Fetch monitor targets to populate IDs
 	targets, _ := cache.GetMonitorTargets()
@@ -81,29 +73,22 @@ func LoadState() (*State, error) {
 		siteMap[strings.ToLower(t.Domain)] = t
 	}
 
-	for rows.Next() {
-		var domain string
-		var lastAlertTime, lastChecked, nextCheckAt, downSince sql.NullTime
-		status := &SiteStatus{}
-		err := rows.Scan(
-			&domain,
-			&status.IsDown,
-			&status.FailureCount,
-			&status.ConsecutiveSuccesses,
-			&status.CurrentMode,
-			&lastAlertTime,
-			&lastChecked,
-			&nextCheckAt,
-			&downSince,
-			&status.PDTriggered,
-			&status.PDEscalated,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
+	for _, r := range records {
+		status := &SiteStatus{
+			Domain:               r.Domain,
+			IsDown:               r.IsDown,
+			FailureCount:         r.FailureCount,
+			ConsecutiveSuccesses: r.ConsecutiveSuccesses,
+			CurrentMode:          r.CurrentMode,
+			LastAlertTime:        r.LastAlertTime,
+			LastChecked:          r.LastChecked,
+			NextCheckAt:          r.NextCheckAt,
+			DownSince:            r.DownSince,
+			PDTriggered:          r.PDTriggered,
+			PDEscalated:          r.PDEscalated,
 		}
-		status.Domain = domain
 
-		if t, ok := siteMap[strings.ToLower(domain)]; ok {
+		if t, ok := siteMap[strings.ToLower(r.Domain)]; ok {
 			status.ID = t.SiteID
 			status.ServerID = t.ServerID
 		}
@@ -114,19 +99,7 @@ func LoadState() (*State, error) {
 			status.CurrentMode = ModeAlert
 		}
 
-		if lastAlertTime.Valid {
-			status.LastAlertTime = lastAlertTime.Time
-		}
-		if lastChecked.Valid {
-			status.LastChecked = lastChecked.Time
-		}
-		if nextCheckAt.Valid {
-			status.NextCheckAt = nextCheckAt.Time
-		}
-		if downSince.Valid {
-			status.DownSince = downSince.Time
-		}
-		state.Sites[domain] = status
+		state.Sites[r.Domain] = status
 	}
 
 	return state, nil
@@ -148,74 +121,28 @@ func (s *State) SaveState() error {
 // SaveSiteStatus updates or inserts the status for a single site in the database.
 // It handles its own synchronization for both the SiteStatus object and the database.
 func SaveSiteStatus(status *SiteStatus) error {
-	database := db.GetAPIDB()
-	if database == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
 	// Lock the status to get a consistent snapshot of the data
 	status.Mu.Lock()
-	domain := strings.ToLower(status.Domain)
-	isDown := status.IsDown
-	failureCount := status.FailureCount
-	consecutiveSuccesses := status.ConsecutiveSuccesses
-	currentMode := status.CurrentMode
-	lastAlertTimeVal := status.LastAlertTime
-	lastChecked := status.LastChecked
-	nextCheckAt := status.NextCheckAt
-	downSinceVal := status.DownSince
-	pdTriggered := status.PDTriggered
-	pdEscalated := status.PDEscalated
+	record := db.MonitorStatusRecord{
+		Domain:               status.Domain,
+		IsDown:               status.IsDown,
+		FailureCount:         status.FailureCount,
+		ConsecutiveSuccesses: status.ConsecutiveSuccesses,
+		CurrentMode:          status.CurrentMode,
+		LastAlertTime:        status.LastAlertTime,
+		LastChecked:          status.LastChecked,
+		NextCheckAt:          status.NextCheckAt,
+		DownSince:            status.DownSince,
+		PDTriggered:          status.PDTriggered,
+		PDEscalated:          status.PDEscalated,
+	}
 	status.Mu.Unlock()
-
-	var lastAlertTime interface{}
-	if !lastAlertTimeVal.IsZero() {
-		lastAlertTime = lastAlertTimeVal
-	}
-
-	var downSince interface{}
-	if !downSinceVal.IsZero() {
-		downSince = downSinceVal
-	}
-
-	query := `
-		INSERT INTO monitor_status (
-			domain, is_down, failure_count, consecutive_successes,
-			current_mode, last_alert_time, last_checked, next_check_at,
-			down_since, pd_triggered, pd_escalated
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(domain) DO UPDATE SET
-			is_down = excluded.is_down,
-			failure_count = excluded.failure_count,
-			consecutive_successes = excluded.consecutive_successes,
-			current_mode = excluded.current_mode,
-			last_alert_time = excluded.last_alert_time,
-			last_checked = excluded.last_checked,
-			next_check_at = excluded.next_check_at,
-			down_since = excluded.down_since,
-			pd_triggered = excluded.pd_triggered,
-			pd_escalated = excluded.pd_escalated
-	`
 
 	// Ensure serialized writes to the database
 	globalWriteMu.Lock()
 	defer globalWriteMu.Unlock()
 
-	_, err := database.Exec(query,
-		domain,
-		isDown,
-		failureCount,
-		consecutiveSuccesses,
-		currentMode,
-		lastAlertTime,
-		lastChecked,
-		nextCheckAt,
-		downSince,
-		pdTriggered,
-		pdEscalated,
-	)
-
-	return err
+	return db.SaveMonitorStatusRecord(record)
 }
 
 // GetStatus returns the status for a given domain, creating it if it doesn't exist.
@@ -257,19 +184,16 @@ func (s *State) RemoveStatus(domain string) {
 
 	delete(s.Sites, domain)
 
-	database := db.GetAPIDB()
-	if database != nil {
+	if db.GetAPIDB() != nil {
 		globalWriteMu.Lock()
 		defer globalWriteMu.Unlock()
-		_, _ = database.Exec("DELETE FROM monitor_status WHERE domain = ?", domain)
+		_ = db.DeleteMonitorStatus(domain)
 	}
 }
 
 // RecordHistory updates the history table with the current check result.
 func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
-	domain = strings.ToLower(domain)
-	database := db.GetAPIDB()
-	if database == nil {
+	if db.GetAPIDB() == nil {
 		return
 	}
 
@@ -285,23 +209,7 @@ func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
 	globalWriteMu.Lock()
 	defer globalWriteMu.Unlock()
 
-	// Check latest history record for this domain
-	var lastID int
-	var lastStatus string
-	var lastCount int
-	err := database.QueryRow("SELECT id, status, count FROM monitor_history WHERE domain = ? ORDER BY id DESC LIMIT 1", domain).Scan(&lastID, &lastStatus, &lastCount)
-
-	if err == nil && lastStatus == statusText {
-		// Same status, update existing record
-		_, err = database.Exec("UPDATE monitor_history SET last_seen = CURRENT_TIMESTAMP, count = count + 1 WHERE id = ?", lastID)
-		if err != nil {
-			log.Printf("Warning: failed to update monitor history for %s: %v\n", domain, err)
-		}
-	} else {
-		// New status or no previous record, insert new
-		_, err = database.Exec("INSERT INTO monitor_history (domain, status, error_code) VALUES (?, ?, ?)", domain, statusText, errorCode)
-		if err != nil {
-			log.Printf("Warning: failed to insert monitor history for %s: %v\n", domain, err)
-		}
+	if err := db.RecordMonitorHistory(domain, statusText, errorCode); err != nil {
+		log.Printf("Warning: %v\n", err)
 	}
 }
