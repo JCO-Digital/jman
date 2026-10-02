@@ -24,6 +24,11 @@ export const usePluginUpdateJobsStore = defineStore("pluginUpdateJobs", () => {
 	const toastStore = useToastStore();
 
 	const jobs = ref<PluginUpdateJob[]>([]);
+	/**
+	 * Site ID → when (ms) a job on that site last finished in this tab.
+	 * Views watch this to reload data jman-api wrote, like the ledger.
+	 */
+	const lastFinishedBySite = ref<Record<string, number>>({});
 	// Jobs seen while active, so a completion is handled exactly once and
 	// jobs that had already finished before this tab loaded aren't toasted.
 	const watched = new Set<number>();
@@ -70,32 +75,63 @@ export const usePluginUpdateJobsStore = defineStore("pluginUpdateJobs", () => {
 	}
 
 	function handleFinished(job: PluginUpdateJob) {
-		const site = dataStore.getSiteById(job.site_id);
-		const siteName = site?.domain ?? job.site_id;
 		for (const r of job.results) {
 			if (r.status === "Updated") {
 				dataStore.applyPluginUpdate(job.site_id, r.name, r.new_version);
 			}
 		}
-		const failed = job.results.filter((r) => r.status === "failed");
+		lastFinishedBySite.value = {
+			...lastFinishedBySite.value,
+			[job.site_id]: Date.now(),
+		};
+
+		// Only notify about the user's own updates; other users' jobs still
+		// update versions and spinners, but toasting them would be noise.
+		if (job.created_by !== authStore.user?.username) return;
+		toastStore.addToast(...finishedToast(job));
+	}
+
+	function finishedToast(
+		job: PluginUpdateJob,
+	): [string, "success" | "error", number] {
+		const site = dataStore.getSiteById(job.site_id);
+		const siteName = site?.domain ?? job.site_id;
+		const names = (status: string) =>
+			job.results
+				.filter((r) => r.status === status)
+				.map((r) => r.name)
+				.join(", ");
+		const updated = names("Updated");
+		const failed = names("failed");
+
 		if (job.status === "interrupted") {
-			toastStore.addToast(
+			return [
 				`Plugin update on ${siteName} was interrupted by a jman-api restart. Check the site's plugin versions.`,
 				"error",
 				10000,
-			);
-		} else if (failed.length > 0) {
-			const names = failed.map((r) => r.name).join(", ");
-			toastStore.addToast(
-				`Failed to update ${names} on ${siteName}.`,
+			];
+		}
+		if (failed) {
+			const alsoUpdated = updated ? ` Updated: ${updated}.` : "";
+			return [
+				`Failed to update ${failed} on ${siteName}.${alsoUpdated}`,
 				"error",
 				10000,
-			);
-		} else if (job.error) {
+			];
+		}
+		if (job.error) {
 			// Every plugin succeeded but something needs attention (e.g. the
 			// site was left in maintenance mode).
-			toastStore.addToast(`${siteName}: ${job.error}`, "error", 10000);
+			return [`${siteName}: ${job.error}`, "error", 10000];
 		}
+		if (updated) {
+			return [`Updated ${updated} on ${siteName}.`, "success", 6000];
+		}
+		return [
+			`Plugins on ${siteName} were already up to date.`,
+			"success",
+			6000,
+		];
 	}
 
 	function merge(incoming: PluginUpdateJob[]) {
@@ -190,11 +226,13 @@ export const usePluginUpdateJobsStore = defineStore("pluginUpdateJobs", () => {
 		pollTimer = null;
 		watched.clear();
 		jobs.value = [];
+		lastFinishedBySite.value = {};
 	}
 
 	return {
 		jobs,
 		activeJobs,
+		lastFinishedBySite,
 		isUpdating,
 		isSiteUpdating,
 		resultFor,

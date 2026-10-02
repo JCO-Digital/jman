@@ -242,6 +242,16 @@ watch(
 	{ immediate: true },
 );
 
+// Background plugin updates write their ledger entry when they finish,
+// usually after the update modal has been closed; reload it then.
+watch(
+	() =>
+		site.value ? jobsStore.lastFinishedBySite[site.value.id] : undefined,
+	(finishedAt) => {
+		if (finishedAt) fetchLedger();
+	},
+);
+
 // Watch for the resolved site UUID to fetch its ledger and linked organization
 watch(
 	() => site.value?.id,
