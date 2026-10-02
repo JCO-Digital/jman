@@ -107,6 +107,12 @@ export interface Site {
 	organization_id?: number;
 	domain: string;
 	site_user: string;
+	/**
+	 * SSH target jman connects to for WP-CLI ("user@host", or
+	 * "user@host:port" for a non-default port). Absent when the site has no
+	 * SSH host.
+	 */
+	ssh?: string;
 	php_version: string;
 	is_wordpress: boolean;
 	status: string;

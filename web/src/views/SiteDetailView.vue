@@ -360,11 +360,9 @@ const siteInfoItems = computed(() => {
 			label: "System User",
 			value: site.value.site_user,
 			copyable: true,
-			secondaryCopyValue: sshHost.value
-				? `${site.value.site_user}@${sshHost.value}`
-				: undefined,
-			secondaryCopyTitle: sshHost.value
-				? `Copy connection string: ${site.value.site_user}@${sshHost.value}`
+			secondaryCopyValue: site.value.ssh || undefined,
+			secondaryCopyTitle: site.value.ssh
+				? `Copy connection string: ${site.value.ssh}`
 				: undefined,
 		});
 	}
@@ -401,10 +399,6 @@ const siteInfoItems = computed(() => {
 
 // Host for the "user@host" copy shortcut: prefer the server's IP (what SSH
 // actually needs), then its name.
-const sshHost = computed(
-	() => server.value?.ip_address || serverName.value || "",
-);
-
 function connectionLabel(type: string | undefined): string {
 	switch (type) {
 		case "agent":

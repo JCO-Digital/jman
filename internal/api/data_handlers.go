@@ -168,10 +168,13 @@ type apiSite struct {
 	ConnectionType string                     `json:"connection_type"`
 	SSHHost        string                     `json:"ssh_host"`
 	SSHPort        int                        `json:"ssh_port"`
-	SitePath       string                     `json:"site_path"`
-	CanWPCLI       bool                       `json:"can_wp_cli"`
-	HasAgent       bool                       `json:"has_agent"`
-	HasMonitoring  bool                       `json:"has_monitoring"`
+	// SSH is the target jman actually connects to for WP-CLI, in WP-CLI's
+	// --ssh form ("user@host", or "user@host:port" for non-default ports).
+	SSH           string `json:"ssh,omitempty"`
+	SitePath      string `json:"site_path"`
+	CanWPCLI      bool   `json:"can_wp_cli"`
+	HasAgent      bool   `json:"has_agent"`
+	HasMonitoring bool   `json:"has_monitoring"`
 
 	DiskUsage  *models.SiteDiskUsage         `json:"disk_usage,omitempty"`
 	WpFlags    *models.SiteWpFlags           `json:"wp_flags,omitempty"`
@@ -180,7 +183,7 @@ type apiSite struct {
 }
 
 func newAPISite(ms models.ManagedSite) apiSite {
-	return apiSite{
+	site := apiSite{
 		ID:             ms.ID,
 		Provider:       ms.Provider,
 		ProviderSiteID: ms.ProviderSiteID,
@@ -200,6 +203,10 @@ func newAPISite(ms models.ManagedSite) apiSite {
 		HasAgent:       ms.HasAgent,
 		HasMonitoring:  ms.HasMonitoring,
 	}
+	if ms.SSHHost != "" {
+		site.SSH = ms.ToCliSite().SSH
+	}
+	return site
 }
 
 // loadAPISites builds the /api/sites list: every inventory site (enriched
@@ -236,6 +243,12 @@ func loadAPISites() ([]apiSite, error) {
 				continue
 			}
 			serverID := utils.SpinupWPServerUUID(c.ServerID)
+			// Not synced yet: derive the target the way the SpinupWP sync
+			// will (site user at the server's hostname).
+			ssh := ""
+			if host := serverNames[c.ServerID]; host != "" && c.SiteUser != "" {
+				ssh = c.SiteUser + "@" + host
+			}
 			sites = append(sites, apiSite{
 				Site:           c,
 				ID:             uuid,
@@ -249,6 +262,8 @@ func loadAPISites() ([]apiSite, error) {
 				PHPVersion:     c.PHPVersion,
 				SiteUser:       c.SiteUser,
 				ConnectionType: "agent",
+				SSHHost:        serverNames[c.ServerID],
+				SSH:            ssh,
 				SitePath:       "files",
 				CanWPCLI:       true,
 				HasAgent:       true,
