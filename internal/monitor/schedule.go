@@ -82,8 +82,8 @@ func ResetDomainStatus(domain string) {
 		if database != nil {
 			_, _ = database.Exec(`
 				UPDATE monitor_status
-				SET current_mode = 'normal', is_down = 0, failure_count = 0, consecutive_successes = 0,
-				    down_since = NULL, pd_triggered = 0, pd_escalated = 0, next_check_at = CURRENT_TIMESTAMP
+				SET current_mode = 'normal', is_down = FALSE, failure_count = 0, consecutive_successes = 0,
+				    down_since = NULL, pd_triggered = FALSE, pd_escalated = FALSE, next_check_at = CURRENT_TIMESTAMP
 				WHERE domain = ?
 			`, domain)
 		}

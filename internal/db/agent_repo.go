@@ -242,7 +242,7 @@ func RevokeAgentToken(id int) error {
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	result, err := dbConn.Exec(`UPDATE agent_tokens SET revoked = 1 WHERE id = ?`, id)
+	result, err := dbConn.Exec(`UPDATE agent_tokens SET revoked = TRUE WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("failed to revoke agent token %d: %w", id, err)
 	}

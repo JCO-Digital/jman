@@ -66,7 +66,7 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 	// Record the message as sent
 	if database != nil {
 		_, err := database.Exec(
-			"INSERT OR IGNORE INTO slack_messages (hash, channel) VALUES (?, ?)",
+			"INSERT INTO slack_messages (hash, channel) VALUES (?, ?) ON CONFLICT (hash) DO NOTHING",
 			hash, channel,
 		)
 		if err != nil {
@@ -89,7 +89,7 @@ func migrateSlackTracker(database *db.APIDB) {
 
 	for hash := range tracker {
 		_, err := database.Exec(
-			"INSERT OR IGNORE INTO slack_messages (hash, channel) VALUES (?, ?)",
+			"INSERT INTO slack_messages (hash, channel) VALUES (?, ?) ON CONFLICT (hash) DO NOTHING",
 			hash, "unknown",
 		)
 		if err != nil {

@@ -106,7 +106,7 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 		term := "%" + search + "%"
 		args = append(args, term, term, term)
 	}
-	query += " GROUP BY a.id ORDER BY a.type ASC, a.name ASC"
+	query += " GROUP BY a.id, pm.name ORDER BY a.type ASC, a.name ASC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

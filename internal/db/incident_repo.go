@@ -45,7 +45,7 @@ func CreateIncident(domain, errorMessage string, errorCode int, downSince time.T
 
 	query := `
 		INSERT INTO incidents (domain, status, error_message, error_code, down_since, pd_triggered, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+		VALUES (?, ?, ?, ?, ?, FALSE, ?, ?)
 		RETURNING id
 	`
 	var id int64
