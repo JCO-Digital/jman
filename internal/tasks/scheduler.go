@@ -336,7 +336,7 @@ func processReminders() error {
 func sendSlackReminder(task *models.Task) {
 	message := fmt.Sprintf("🔔 *Task Reminder: %s*\nPriority: %s", task.Title, task.Priority)
 	if task.DueDate != nil {
-		message += fmt.Sprintf("\nDue: %s", task.DueDate.Format("2006-01-02"))
+		message += fmt.Sprintf("\nDue: %s", formatDatePtr(task.DueDate))
 	}
 
 	if sendToAssignee(task, message) {
@@ -393,10 +393,10 @@ func formatFullTaskMessage(task *models.Task, created bool) string {
 		fmt.Fprintf(&sb, "Description: %s\n", *task.Description)
 	}
 	if task.DueDate != nil {
-		fmt.Fprintf(&sb, "Due: %s\n", task.DueDate.Format("2006-01-02"))
+		fmt.Fprintf(&sb, "Due: %s\n", formatDatePtr(task.DueDate))
 	}
 	if task.ReminderDate != nil {
-		fmt.Fprintf(&sb, "Reminder: %s\n", task.ReminderDate.Format("2006-01-02"))
+		fmt.Fprintf(&sb, "Reminder: %s\n", formatDatePtr(task.ReminderDate))
 	}
 	if task.Interval != nil && *task.Interval != "" {
 		fmt.Fprintf(&sb, "Repeats: every %s\n", *task.Interval)
@@ -469,11 +469,15 @@ func derefStr(s *string) string {
 	return *s
 }
 
+// formatDatePtr formats a stored time as a calendar date in the server's
+// local zone. api.db hands times back in UTC, so formatting them directly
+// would show the previous day for anything due shortly after local
+// midnight.
 func formatDatePtr(t *time.Time) string {
 	if t == nil {
 		return ""
 	}
-	return t.Format("2006-01-02")
+	return t.Local().Format("2006-01-02")
 }
 
 func sendToAssignee(task *models.Task, message string) bool {
