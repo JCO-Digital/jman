@@ -70,6 +70,22 @@ type AppConfig struct {
 	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
 	IgnoreSites         []string          `toml:"ignoreSites" mapstructure:"ignoreSites"`
 	PluginAliases       map[string]string `toml:"pluginAliases" mapstructure:"pluginAliases"`
+	// WPCLIHostTimeouts raises the WP-CLI timeout for slow SSH hosts, such
+	// as WP Engine's SSH gateway. See WPCLIHostTimeout.
+	WPCLIHostTimeouts []WPCLIHostTimeout `toml:"wpcliHostTimeouts" mapstructure:"wpcliHostTimeouts"`
+}
+
+// WPCLIHostTimeout sets a minimum WP-CLI timeout, in minutes, for every SSH
+// host matching Host, a shell glob such as "*.ssh.wpengine.net". It applies
+// to every WP-CLI call made against that host, raising (never lowering) the
+// call's own timeout. Configured as an array of tables:
+//
+//	[[wpcliHostTimeouts]]
+//	host = "*.ssh.wpengine.net"
+//	minutes = 5
+type WPCLIHostTimeout struct {
+	Host    string `toml:"host" mapstructure:"host"`
+	Minutes int    `toml:"minutes" mapstructure:"minutes"`
 }
 
 var (

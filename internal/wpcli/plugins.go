@@ -2,6 +2,7 @@ package wpcli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -70,7 +71,7 @@ func AddPlugin(site models.CliSite, plugin string, activate bool) (bool, error) 
 	if activate {
 		args = append(args, "--activate")
 	}
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: WriteTimeout}, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -118,18 +119,25 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 	args = append(args, plugins...)
 	args = append(args, "--format=json")
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, Timeout: WriteTimeout}, args...)
 	if err != nil {
+		var failure error
+		switch {
+		case errors.Is(err, ErrTimeout):
+			failure = fmt.Errorf("failed to update plugin: %w", err)
 		// If the error message from RunWP is a specific WP-CLI error, return it
 		// without the full stderr blob to avoid noise from PHP warnings/notices.
-		if strings.HasPrefix(err.Error(), "Error:") || strings.HasPrefix(err.Error(), "Fatal error:") {
+		case strings.HasPrefix(err.Error(), "Error:") || strings.HasPrefix(err.Error(), "Fatal error:"):
 			// For the specific "No plugins updated" failure, return a clean message.
 			if strings.Contains(err.Error(), "No plugins updated (1 failed)") {
-				return nil, fmt.Errorf("failed to update plugin")
+				failure = fmt.Errorf("failed to update plugin")
+			} else {
+				failure = fmt.Errorf("failed to update plugin: %w", err)
 			}
-			return nil, fmt.Errorf("failed to update plugin: %w", err)
+		default:
+			failure = fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 		}
-		return nil, fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
+		return nil, checkFailedUpdate(site, plugins, failure)
 	}
 
 	output := strings.TrimSpace(res.Output)
@@ -161,9 +169,70 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 	return updates, nil
 }
 
+// UpdateFailure is UpdatePlugin's error when the update command failed or
+// timed out. A failed or killed update can leave plugins half-updated or the
+// site stuck in maintenance mode, so it also carries what a follow-up check
+// of the site found.
+type UpdateFailure struct {
+	Err error
+	// Versions holds the version now installed for each requested plugin
+	// the check found; nil if the check itself failed.
+	Versions map[string]string
+	// MaintenanceMode reports whether the site is left in maintenance mode.
+	MaintenanceMode bool
+}
+
+func (e *UpdateFailure) Error() string {
+	msg := e.Err.Error()
+	if e.MaintenanceMode {
+		msg += "; the site is in maintenance mode (WordPress clears it after 10 minutes, or run `wp maintenance-mode deactivate` once the update has stopped)"
+	}
+	return msg
+}
+
+func (e *UpdateFailure) Unwrap() error { return e.Err }
+
+// checkFailedUpdate inspects the site after a failed plugin update and
+// wraps cause in an UpdateFailure describing what it found. The check
+// skips plugins so a plugin broken by the update can't break the check.
+func checkFailedUpdate(site models.CliSite, plugins []string, cause error) *UpdateFailure {
+	failure := &UpdateFailure{Err: cause}
+
+	if installed, err := GetPlugins(site, true); err != nil {
+		verb.Printf(verb.Normal, "Could not check plugin versions on %s after failed update: %v\n", site.Name, err)
+	} else {
+		failure.Versions = map[string]string{}
+		for _, p := range installed {
+			for _, name := range plugins {
+				if p.Name == name {
+					failure.Versions[name] = p.Version
+				}
+			}
+		}
+	}
+
+	failure.MaintenanceMode = maintenanceModeActive(site)
+	return failure
+}
+
+// maintenanceModeActive reports whether the site is in maintenance mode.
+// `wp maintenance-mode is-active` exits 0 when active and 1, silently, when
+// not; anything else (e.g. an old WP-CLI without the command) counts as not
+// active. It deliberately doesn't count towards the site's failure tracker.
+func maintenanceModeActive(site models.CliSite) bool {
+	res, err := RunWP(CliOptions{SSH: site.SSH, Path: site.Path}, "maintenance-mode", "is-active")
+	if err == nil {
+		return true
+	}
+	if strings.TrimSpace(res.Error) != "" {
+		verb.Printf(verb.Verbose, "Could not check maintenance mode on %s: %v\n", site.Name, err)
+	}
+	return false
+}
+
 // RemovePlugin uninstalls and deactivates a plugin.
 func RemovePlugin(site models.CliSite, plugin string) (bool, error) {
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}, "plugin", "uninstall", plugin, "--deactivate")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: WriteTimeout}, "plugin", "uninstall", plugin, "--deactivate")
 	if err != nil {
 		return false, fmt.Errorf("failed to remove plugin: %w (stderr: %s)", err, res.Error)
 	}

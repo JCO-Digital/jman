@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -542,20 +543,36 @@ func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
 
+	// A slow host can time out after the update itself went through; if
+	// the follow-up check shows the new version installed and the site out
+	// of maintenance mode, report it as the update it was.
+	installedVersion := currentVersion
+	var failure *wpcli.UpdateFailure
+	if errors.As(err, &failure) {
+		if v, ok := failure.Versions[body.Plugin]; ok {
+			installedVersion = v
+			if currentVersion != "" && v != currentVersion && !failure.MaintenanceMode {
+				verb.LogPrintf(verb.Normal, "Plugin %s on %s reported %v but is now at %s; treating as updated", body.Plugin, site.Name, failure.Err, v)
+				results = []wpcli.UpdateResult{{Name: body.Plugin, OldVersion: currentVersion, NewVersion: v, Status: "Updated"}}
+				err = nil
+			}
+		}
+	}
+
 	var response wpcli.UpdateResult
 	response.Name = body.Plugin
 
 	if err != nil {
 		response.Status = "failed"
 		response.OldVersion = currentVersion
-		response.NewVersion = currentVersion
+		response.NewVersion = installedVersion
 		response.Error = err.Error()
 
 		// Save to site update ledger
 		ledgerData := map[string]interface{}{
 			"plugin":      body.Plugin,
 			"old_version": currentVersion,
-			"new_version": currentVersion,
+			"new_version": installedVersion,
 			"error":       err.Error(),
 		}
 		ledgerJSON, _ := json.Marshal(ledgerData)

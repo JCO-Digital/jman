@@ -3,14 +3,36 @@ package wpcli
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
+	"path"
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/knock"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
+
+// DefaultTimeout bounds a WP-CLI call that doesn't set its own timeout.
+const DefaultTimeout = 1 * time.Minute
+
+// WriteTimeout bounds WP-CLI calls that change a site (plugin and core
+// installs, updates, removals). Killing one of those midway can leave a
+// plugin half-installed or the site in maintenance mode, so they get far
+// longer than reads.
+const WriteTimeout = 10 * time.Minute
+
+// ErrTimeout is wrapped by RunWP's error when the call was killed for
+// exceeding its timeout.
+var ErrTimeout = errors.New("wp-cli timed out")
+
+// pipeWaitDelay is how long RunWP keeps waiting for output after a timeout
+// has killed wp. wp runs ssh as a child that keeps the output pipes open,
+// so without a bound a "timed out" call would only return once the remote
+// command finished.
+const pipeWaitDelay = 2 * time.Second
 
 type CliOptions struct {
 	SiteID         string // site UUID, for failure tracking
@@ -58,14 +80,15 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 
 	fullArgs = append(fullArgs, args...)
 
-	timeout := opts.Timeout
-	if timeout == 0 {
-		timeout = 1 * time.Minute
-	}
+	timeout := effectiveTimeout(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "wp", fullArgs...)
+	// Only wp itself is killed on timeout, not its ssh child: a remote
+	// update that is still running is left to finish rather than being cut
+	// off mid-install. WaitDelay stops RunWP from waiting on that child.
+	cmd.WaitDelay = pipeWaitDelay
 
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
@@ -87,6 +110,10 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 		}
 	}
 
+	if ctx.Err() == context.DeadlineExceeded {
+		return res, fmt.Errorf("%w after %s", ErrTimeout, timeout)
+	}
+
 	// If cmd.Run() returned an error (non-zero exit code), look for the first error line.
 	if err != nil {
 		if res.Error != "" {
@@ -104,6 +131,29 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 	}
 
 	return res, nil
+}
+
+// effectiveTimeout is the call's own timeout (DefaultTimeout if unset),
+// raised to the longest configured wpcliHostTimeouts entry matching its SSH
+// host.
+func effectiveTimeout(opts CliOptions) time.Duration {
+	timeout := opts.Timeout
+	if timeout == 0 {
+		timeout = DefaultTimeout
+	}
+	if opts.SSH == "" {
+		return timeout
+	}
+	host := parseSSHSpec(opts.SSH).host
+	for _, ht := range config.Cfg.WPCLIHostTimeouts {
+		if ok, _ := path.Match(ht.Host, host); !ok {
+			continue
+		}
+		if t := time.Duration(ht.Minutes) * time.Minute; t > timeout {
+			timeout = t
+		}
+	}
+	return timeout
 }
 
 // AddUser creates a new user on the target WordPress site.
