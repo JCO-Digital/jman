@@ -1,6 +1,12 @@
 # Changelog
 
-### 6.3.1 (2026-10-02)
+## 6.4.0 (2026-10-02)
+
+#### Features
+
+- background core updates and unified task center (cb4d44e)
+
+### v6.3.1 (2026-10-02)
 
 #### Refactor
 
