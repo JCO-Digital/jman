@@ -2,10 +2,10 @@
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
-import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
+import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useToastStore } from "../stores/toast";
 import AppIcon from "./AppIcon.vue";
-import type { Plugin, PluginUpdateResult } from "../types";
+import type { Plugin, UpdateResult } from "../types";
 
 const props = defineProps<{
 	visible: boolean;
@@ -18,7 +18,7 @@ const emit = defineEmits<{
 
 const dataStore = useDataStore();
 const pluginUpdatesStore = usePluginUpdatesStore();
-const jobsStore = usePluginUpdateJobsStore();
+const jobsStore = useUpdateJobsStore();
 const toastStore = useToastStore();
 
 const isLoading = ref(false);
@@ -35,7 +35,7 @@ const queueError = ref<Record<string, string>>({});
 const isUpdatingAll = ref(false);
 
 const pluginResult = computed(() => {
-	const map: Record<string, PluginUpdateResult | null> = {};
+	const map: Record<string, UpdateResult | null> = {};
 	for (const p of updates.value) {
 		map[p.name] =
 			jobsStore.resultFor(props.siteId, p.name, myJobIds.value) ?? null;

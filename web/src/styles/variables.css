@@ -48,6 +48,10 @@
 	--z-nav-drawer: 950;
 	--z-modal: 1000;
 	--z-toast: 1100;
+	--z-task-center: 1150;
+
+	/* Task center */
+	--task-launcher-size: 48px;
 
 	/* Spacing */
 	--space-1: 0.25rem;

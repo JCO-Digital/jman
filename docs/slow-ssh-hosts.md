@@ -48,7 +48,7 @@ host = "*.ssh.wpengine.net"
 minutes = 5
 ```
 
-Plugin updates from the web UI run as background jobs, so their duration isn't limited by HTTP or proxy timeouts. Core updates still run inside the HTTP request. If jman-api sits behind a reverse proxy, its read timeout must be longer than the slowest core update. nginx's default `proxy_read_timeout` is 60 seconds and will otherwise answer with a 504 while the update is still running.
+Plugin and core updates from the web UI run as background jobs, so their duration isn't limited by HTTP or proxy timeouts.
 
 ## When an update fails or times out
 

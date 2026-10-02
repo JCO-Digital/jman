@@ -5,7 +5,7 @@ import { useDataStore } from "../stores/data";
 import { useIgnoreStore } from "../stores/ignore";
 import { useAssetStore } from "../stores/assetStore";
 import { useAuthStore } from "../stores/auth";
-import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
+import { useUpdateJobsStore } from "../stores/updateJobs";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
@@ -23,7 +23,7 @@ const dataStore = useDataStore();
 const ignoreStore = useIgnoreStore();
 const assetStore = useAssetStore();
 const authStore = useAuthStore();
-const jobsStore = usePluginUpdateJobsStore();
+const jobsStore = useUpdateJobsStore();
 
 onMounted(() => {
 	assetStore.fetchAssets();

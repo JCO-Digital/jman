@@ -2,13 +2,15 @@ import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
 import { useToastStore } from "./toast";
-import type { CoreUpdateResult, SiteCore } from "../types";
+import { useUpdateJobsStore } from "./updateJobs";
+import type { SiteCore, UpdateJob } from "../types";
 import { BASE_URL } from "../utils/api";
 
 export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 	const authStore = useAuthStore();
 	const dataStore = useDataStore();
 	const toastStore = useToastStore();
+	const jobsStore = useUpdateJobsStore();
 
 	async function checkCoreUpdate(siteId: string): Promise<SiteCore> {
 		const res = await fetch(`${BASE_URL}/sites/${siteId}/core-update`, {
@@ -34,56 +36,26 @@ export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 		return core;
 	}
 
+	/**
+	 * Queues a background core update. Progress and the outcome show in the
+	 * task center; the job store applies the new version when it finishes.
+	 */
 	async function updateCore(
 		siteId: string,
 		target: "minor" | "major",
-	): Promise<CoreUpdateResult> {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/core-update`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				...authStore.authHeader,
-			},
-			body: JSON.stringify({ target }),
-		});
-
-		if (!res.ok) {
-			if (res.status === 401) {
-				authStore.logout();
-				throw new Error("Unauthorized");
-			}
-
-			let data: any;
-			try {
-				data = await res.json();
-			} catch {
-				throw new Error(`Request failed (${res.status})`);
-			}
-
+	): Promise<UpdateJob> {
+		try {
+			return await jobsStore.enqueueCore(siteId, target);
+		} catch (e: any) {
 			const site = dataStore.getSiteById(siteId);
 			const siteName = site ? site.domain : `Site #${siteId}`;
-			let errorMessage = data.error || "Unknown error";
-			if (errorMessage.length > 150) {
-				errorMessage = errorMessage.substring(0, 147) + "...";
-			}
-
 			toastStore.addToast(
-				`Failed to update WordPress core on ${siteName}: ${errorMessage}`,
+				`Failed to queue WordPress core update on ${siteName}: ${e.message}`,
 				"error",
 				10000,
 			);
-
-			const error = new Error(errorMessage);
-			(error as any).data = data;
-			throw error;
+			throw e;
 		}
-
-		const result: CoreUpdateResult = await res.json();
-		if (result.core) {
-			dataStore.applyCoreUpdate(siteId, result.core);
-		}
-
-		return result;
 	}
 
 	return { checkCoreUpdate, updateCore };

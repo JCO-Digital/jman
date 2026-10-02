@@ -61,3 +61,29 @@ export function providerLabel(provider: string | null | undefined): string {
 			return provider;
 	}
 }
+
+/**
+ * Formats a duration in milliseconds compactly, e.g. "45s", "3m 05s",
+ * "1h 02m".
+ */
+export function formatElapsed(ms: number): string {
+	const total = Math.max(0, Math.floor(ms / 1000));
+	const h = Math.floor(total / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const s = total % 60;
+	const pad = (n: number) => String(n).padStart(2, "0");
+	if (h > 0) return `${h}h ${pad(m)}m`;
+	if (m > 0) return `${m}m ${pad(s)}s`;
+	return `${s}s`;
+}
+
+/** Formats a past timestamp relative to now, e.g. "just now", "5 min ago". */
+export function formatRelativeTime(timestamp: number, now: number): string {
+	const sec = Math.floor((now - timestamp) / 1000);
+	if (sec < 45) return "just now";
+	const min = Math.round(sec / 60);
+	if (min < 60) return `${min} min ago`;
+	const hours = Math.round(min / 60);
+	if (hours < 24) return `${hours} h ago`;
+	return new Date(timestamp).toLocaleDateString();
+}
