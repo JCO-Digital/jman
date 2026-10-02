@@ -3,6 +3,7 @@ package models
 import (
 	"fmt"
 	"strconv"
+	"strings"
 )
 
 // ManagedServer represents a host-agnostic server entity stored in inventory.db.
@@ -65,8 +66,12 @@ func (s ManagedSite) ToCliSite() CliSite {
 	}
 
 	providerSiteID := 0
+	serverName := s.ServerName
 	if s.Provider == "spinupwp" {
 		providerSiteID, _ = strconv.Atoi(s.ProviderSiteID)
+		// SpinupWP server names are FQDNs; CLI output, completions and
+		// site search use (and match on) the short host label.
+		serverName = strings.Split(serverName, ".")[0]
 	}
 	serverID := ""
 	if s.ServerID != nil {
@@ -79,7 +84,7 @@ func (s ManagedSite) ToCliSite() CliSite {
 		Provider:       s.Provider,
 		ServerID:       serverID,
 		Name:           s.Domain,
-		ServerName:     s.ServerName,
+		ServerName:     serverName,
 		SSH:            sshSpec,
 		Path:           s.SitePath,
 	}
