@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.1.0 (2026-09-29)
+## 6.2.0 (2026-10-02)
+
+#### Features
+
+- db: add downsampling and concurrency to site disk usage (8f08dc7)
+
+## v6.1.0 (2026-09-29)
 
 #### Features
 
