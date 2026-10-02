@@ -10,7 +10,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/pluginupdates"
+	"github.com/JCO-Digital/jman/internal/updatejobs"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -43,7 +43,7 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate the whole request before queueing anything.
-	jobs := make([]models.PluginUpdateJob, 0, len(body.Jobs))
+	jobs := make([]models.UpdateJob, 0, len(body.Jobs))
 	seenSites := map[string]bool{}
 	for _, req := range body.Jobs {
 		siteID, err := resolveSiteUUID(string(req.SiteID))
@@ -62,7 +62,8 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		jobs = append(jobs, models.PluginUpdateJob{
+		jobs = append(jobs, models.UpdateJob{
+			Kind:      models.UpdateJobKindPlugins,
 			SiteID:    siteID,
 			Plugins:   withInstalledVersions(siteID, plugins),
 			CreatedBy: getUsername(r),
@@ -87,7 +88,7 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for i := range jobs {
-		if err := pluginupdates.Enqueue(&jobs[i]); err != nil {
+		if err := updatejobs.Enqueue(&jobs[i]); err != nil {
 			verb.LogPrintf(verb.Normal, "CreatePluginUpdateJobsHandler: %v", err)
 			WriteError(w, http.StatusInternalServerError, "Failed to queue plugin updates")
 			return
@@ -96,28 +97,28 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusCreated, jobs)
 }
 
-// ListPluginUpdateJobsHandler returns every queued or running job, plus
-// jobs that finished in the last few minutes.
-func ListPluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
-	jobs, err := db.ListPluginUpdateJobs(time.Now().Add(-recentJobWindow))
+// ListUpdateJobsHandler returns every queued or running update job (plugin
+// and core), plus jobs that finished in the last few minutes.
+func ListUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
+	jobs, err := db.ListUpdateJobs(time.Now().Add(-recentJobWindow))
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "ListPluginUpdateJobsHandler: %v", err)
+		verb.LogPrintf(verb.Normal, "ListUpdateJobsHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 	WriteJSON(w, http.StatusOK, jobs)
 }
 
-// GetPluginUpdateJobHandler returns one job.
-func GetPluginUpdateJobHandler(w http.ResponseWriter, r *http.Request) {
+// GetUpdateJobHandler returns one update job.
+func GetUpdateJobHandler(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid job ID")
 		return
 	}
-	job, err := db.GetPluginUpdateJob(id)
+	job, err := db.GetUpdateJob(id)
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "GetPluginUpdateJobHandler: %v", err)
+		verb.LogPrintf(verb.Normal, "GetUpdateJobHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}

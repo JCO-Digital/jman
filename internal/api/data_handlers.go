@@ -9,10 +9,12 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+	"sync"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/updatejobs"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/vuln"
@@ -737,17 +739,14 @@ func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
 // coreUpdateTargetRegex restricts the update target to the two supported values.
 var coreUpdateTargetRegex = regexp.MustCompile(`^(minor|major)$`)
 
-// SiteCoreUpdateResponse is the result of a WordPress core update attempt.
-type SiteCoreUpdateResponse struct {
-	Success  bool             `json:"success"`
-	Version  string           `json:"version"`
-	Language string           `json:"language,omitempty"`
-	Error    string           `json:"error,omitempty"`
-	Core     *models.SiteCore `json:"core,omitempty"`
-}
+// coreJobMu serializes the duplicate check and enqueue of core update jobs,
+// so two concurrent requests can't both queue one for the same site.
+var coreJobMu sync.Mutex
 
-// SiteCoreUpdateHandler updates WordPress core on a site to the latest minor
-// or major version and refreshes the core version cache.
+// SiteCoreUpdateHandler queues a background update of WordPress core on a
+// site to the latest minor or major version and returns the job (202). The
+// job's result, including the refreshed core state, is available from
+// GET /api/update-jobs/{id}.
 func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
@@ -767,79 +766,36 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	site, err := getCliSite(siteID)
+	coreJobMu.Lock()
+	defer coreJobMu.Unlock()
+	active, err := db.HasActiveCoreUpdateJob(siteID)
 	if err != nil {
+		verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if active {
+		WriteError(w, http.StatusConflict, "A WordPress core update is already queued or running for this site")
+		return
+	}
+
+	if _, err := getCliSite(siteID); err != nil {
 		WriteError(w, http.StatusNotFound, err.Error())
 		return
 	}
 
-	result, updateErr := wpcli.UpdateCore(*site, body.Target == "major")
-
-	response := SiteCoreUpdateResponse{
-		Success:  result.Success,
-		Version:  result.Version,
-		Language: result.Language,
+	job := models.UpdateJob{
+		Kind:      models.UpdateJobKindCore,
+		SiteID:    siteID,
+		Target:    body.Target,
+		CreatedBy: getUsername(r),
 	}
-	var status string
-	switch {
-	case updateErr != nil:
-		status = "failed"
-		response.Error = updateErr.Error()
-	case result.Success:
-		status = "full"
-	case result.Version == "unknown":
-		// UpdateCore returns (zero-value result, nil error) when wp-cli
-		// reports WordPress is already at the latest version for this
-		// target (e.g. a concurrent update already applied it) — not a
-		// failure, just nothing to do.
-		status = "partial"
-		response.Success = true
-	default:
-		status = "failed"
-		response.Error = "Core update did not complete successfully"
-	}
-
-	// Refresh the cached version/update-availability regardless of outcome,
-	// so the UI reflects the post-update state (or confirms nothing changed
-	// if the update failed) without a separate round-trip.
-	ledgerVersion := response.Version
-	if core, err := cache.RefreshSiteCore(*site); err != nil {
-		verb.PrintErrorf(verb.Normal, "Failed to refresh core version cache for site %s after update: %v\n", site.Name, err)
-	} else {
-		response.Core = core
-		// UpdateCore reports "unknown" when wp-cli says WordPress was
-		// already at the latest version — use the freshly-checked actual
-		// version for the ledger instead of that placeholder.
-		if ledgerVersion == "unknown" {
-			ledgerVersion = core.Version
-		}
-	}
-
-	ledgerData := map[string]interface{}{
-		"target":      body.Target,
-		"new_version": ledgerVersion,
-	}
-	if response.Error != "" {
-		ledgerData["error"] = response.Error
-	}
-	ledgerJSON, _ := json.Marshal(ledgerData)
-	username := "system"
-	if claims := GetAuthClaims(r.Context()); claims != nil {
-		username = claims.Username
-	}
-	_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
-		SiteID:     siteID,
-		UpdateType: "core",
-		Status:     status,
-		DataJSON:   string(ledgerJSON),
-		UpdatedBy:  username,
-	})
-
-	if status == "failed" {
-		WriteJSON(w, http.StatusInternalServerError, response)
+	if err := updatejobs.Enqueue(&job); err != nil {
+		verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Failed to queue core update")
 		return
 	}
-	WriteJSON(w, http.StatusOK, response)
+	WriteJSON(w, http.StatusAccepted, job)
 }
 
 // getCliSite returns the WP-CLI-reachable site with the given UUID.

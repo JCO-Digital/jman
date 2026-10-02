@@ -7,9 +7,11 @@ import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
 import { useIncidentStore } from "./stores/incidents";
 import { useUserStore } from "./stores/user";
-import { usePluginUpdateJobsStore } from "./stores/pluginUpdateJobs";
+import { useUpdateJobsStore } from "./stores/updateJobs";
+import { useNotificationStore } from "./stores/notifications";
 import AppNav from "./components/AppNav.vue";
 import ToastContainer from "./components/ToastContainer.vue";
+import TaskCenter from "./components/TaskCenter.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
 import packageInfo from "../package.json";
 
@@ -17,7 +19,8 @@ const dataStore = useDataStore();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
 const userStore = useUserStore();
-const pluginUpdateJobsStore = usePluginUpdateJobsStore();
+const updateJobsStore = useUpdateJobsStore();
+const notificationStore = useNotificationStore();
 
 authStore.initialize();
 
@@ -66,13 +69,15 @@ watch(
 		settingsStore.initialize();
 		if (authenticated) {
 			dataStore.initData();
-			pluginUpdateJobsStore.initialize();
+			notificationStore.initialize();
+			updateJobsStore.initialize();
 			startIntervals();
 		} else {
 			stopIntervals();
 			dataStore.clearCache();
 			userStore.clearCache();
-			pluginUpdateJobsStore.reset();
+			updateJobsStore.reset();
+			notificationStore.reset();
 		}
 	},
 	{ immediate: true },
@@ -113,6 +118,7 @@ const handleLogout = () => {
 		</footer>
 	</div>
 	<ToastContainer />
+	<TaskCenter v-if="authStore.isAuthenticated" />
 	<ConfirmModal />
 </template>
 

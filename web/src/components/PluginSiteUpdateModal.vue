@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { useDataStore } from "../stores/data";
-import { usePluginUpdateJobsStore } from "../stores/pluginUpdateJobs";
+import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useToastStore } from "../stores/toast";
 import AppIcon from "./AppIcon.vue";
-import type { Plugin, PluginUpdateResult } from "../types";
+import type { Plugin, UpdateResult } from "../types";
 
 interface UpdateEntry extends Plugin {
 	site_domain: string;
@@ -23,7 +23,7 @@ const emit = defineEmits<{
 }>();
 
 const dataStore = useDataStore();
-const jobsStore = usePluginUpdateJobsStore();
+const jobsStore = useUpdateJobsStore();
 const toastStore = useToastStore();
 
 const updates = ref<UpdateEntry[]>([]);
@@ -39,7 +39,7 @@ const isUpdatingAll = ref(false);
 const confirmMode = ref<"all" | "vulnerable" | null>(null);
 
 const siteResult = computed(() => {
-	const map: Record<string, PluginUpdateResult | null> = {};
+	const map: Record<string, UpdateResult | null> = {};
 	for (const u of updates.value) {
 		map[u.site_id] =
 			jobsStore.resultFor(u.site_id, u.name, myJobIds.value) ?? null;

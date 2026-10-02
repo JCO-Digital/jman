@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, type Component } from "vue";
+import IconAlert from "./icons/IconAlert.vue";
+import IconBell from "./icons/IconBell.vue";
 import IconCheck from "./icons/IconCheck.vue";
 import IconChevronRight from "./icons/IconChevronRight.vue";
 import IconCopy from "./icons/IconCopy.vue";
@@ -30,6 +32,8 @@ const props = defineProps<{
 }>();
 
 const iconMap: Record<string, Component> = {
+	alert: IconAlert,
+	bell: IconBell,
 	check: IconCheck,
 	"chevron-right": IconChevronRight,
 	copy: IconCopy,

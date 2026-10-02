@@ -11,9 +11,9 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/monitor"
-	"github.com/JCO-Digital/jman/internal/pluginupdates"
 	"github.com/JCO-Digital/jman/internal/refresh"
 	"github.com/JCO-Digital/jman/internal/tasks"
+	"github.com/JCO-Digital/jman/internal/updatejobs"
 	"github.com/spf13/cobra"
 )
 
@@ -76,8 +76,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	// Start the data refresh scheduler (replaces the external `jman fetch` cron job)
 	refresh.StartScheduler(cmd.Context())
 
-	// Start the background plugin update runner
-	if err := pluginupdates.Start(cmd.Context()); err != nil {
+	// Start the background update job runner (plugin and core updates)
+	if err := updatejobs.Start(cmd.Context()); err != nil {
 		return err
 	}
 

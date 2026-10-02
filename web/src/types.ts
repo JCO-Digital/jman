@@ -165,14 +165,6 @@ export interface SiteCore {
 	major_update?: string;
 }
 
-export interface CoreUpdateResult {
-	success: boolean;
-	version: string;
-	language?: string;
-	error?: string;
-	core?: SiteCore;
-}
-
 export interface Plugin {
 	site_id: string;
 	name: string;
@@ -502,7 +494,8 @@ export interface UpdateUserPayload {
 	password?: string;
 }
 
-export interface PluginUpdateResult {
+/** The outcome of updating one plugin, or WordPress core ("WordPress"). */
+export interface UpdateResult {
 	name: string;
 	old_version: string;
 	new_version: string;
@@ -510,24 +503,35 @@ export interface PluginUpdateResult {
 	error?: string;
 }
 
-export type PluginUpdateJobStatus =
+export type UpdateJobStatus =
 	| "queued"
 	| "running"
-	/** Ran to completion; individual plugins may still have failed. */
+	/** Ran to completion; individual results may still have failed. */
 	| "done"
 	/** Couldn't run at all (e.g. site unreachable). */
 	| "failed"
 	/** jman-api restarted mid-update; the outcome on the site is unknown. */
 	| "interrupted";
 
-/** A background `wp plugin update` run for one or more plugins on one site. */
-export interface PluginUpdateJob {
+export type UpdateJobKind = "plugins" | "core";
+
+/**
+ * A background update on one site: `wp plugin update` for one or more
+ * plugins, or `wp core update`.
+ */
+export interface UpdateJob {
 	id: number;
+	kind: UpdateJobKind;
 	site_id: string;
-	status: PluginUpdateJobStatus;
+	status: UpdateJobStatus;
+	/** Plugins to update; empty for core jobs. */
 	plugins: { name: string; old_version: string }[];
-	/** One entry per plugin once the job has finished. */
-	results: PluginUpdateResult[];
+	/** Core jobs: "minor" or "major". */
+	target?: "minor" | "major";
+	/** One entry per plugin (or one "WordPress" entry) once finished. */
+	results: UpdateResult[];
+	/** Core jobs: the refreshed core state once finished. */
+	core?: SiteCore;
 	error?: string;
 	created_by: string;
 	created_at: string;

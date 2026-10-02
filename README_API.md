@@ -317,16 +317,16 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
 only the automatic external-cron dependency has been removed.
 
-## Plugin Updates
+## Plugin and Core Updates
 
-Plugin updates run as background jobs inside jman-api. The web UI queues them with `POST /api/plugin-update-jobs`, one job per site, and polls `GET /api/plugin-update-jobs` until they finish.
+Plugin and WordPress core updates run as background jobs inside jman-api. The web UI polls `GET /api/update-jobs` while any job is queued or running and shows them in its task list.
 
-- Each job updates all of its plugins on the site in a single `wp plugin update` call.
+- `POST /api/plugin-update-jobs` with `{"jobs": [{"site_id": "<uuid>", "plugins": ["akismet"]}]}` queues plugin updates, one job per site. Each job updates all of its plugins in a single `wp plugin update` call.
+- `POST /api/sites/{id}/core-update` with `{"target": "minor"|"major"}` queues a core update and returns `202` with the job. It returns `409` if a core update is already queued or running for the site. When the job finishes, its `core` field holds the refreshed core version state.
+- `GET /api/update-jobs` lists queued and running jobs of both kinds (`kind`: `plugins` or `core`), plus jobs that finished in the last 10 minutes. `GET /api/update-jobs/{id}` returns one job. `GET /api/plugin-update-jobs[/{id}]` is kept as an alias.
 - Up to four sites update at once, and a site never has two jobs running.
 - Each finished job writes one entry to the site's update ledger.
 - Jobs are stored in `api.db`, so they survive page reloads. If jman-api restarts mid-update, the running job is marked interrupted and still-queued jobs run again.
-
-Core updates still run while the HTTP request waits, which can take up to 10 minutes, or longer for hosts listed in `wpcliHostTimeouts`. A reverse proxy in front of jman-api needs a read timeout above that; nginx's `proxy_read_timeout` defaults to 60 seconds.
 
 ## Slow SSH Hosts
 

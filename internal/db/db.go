@@ -700,12 +700,17 @@ func initAPISchema() error {
 			},
 		},
 		{
-			// Background plugin update jobs (one site, one or more plugins).
-			// plugins/results hold JSON arrays.
+			// Background update jobs on one site: plugin updates (kind
+			// "plugins", one or more plugins) or WordPress core updates
+			// (kind "core"). plugins/results hold JSON arrays, core the
+			// refreshed SiteCore after a core job.
 			Name: "plugin_update_jobs",
 			Columns: map[string]string{
 				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"kind":        "TEXT NOT NULL DEFAULT 'plugins'",
 				"site_id":     "TEXT NOT NULL",
+				"target":      "TEXT",
+				"core":        "TEXT",
 				"status":      "TEXT NOT NULL",
 				"plugins":     "TEXT NOT NULL",
 				"results":     "TEXT",
