@@ -60,6 +60,10 @@ type queue struct {
 
 var q = newQueue()
 
+// running tracks the goroutines started by Start, so tests can stop the
+// runner and wait for it before swapping package state.
+var running sync.WaitGroup
+
 func newQueue() *queue {
 	qu := &queue{busy: map[string]bool{}}
 	qu.cond = sync.NewCond(&qu.mu)
@@ -124,24 +128,29 @@ func Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to load queued plugin update jobs: %w", err)
 	}
+	qu := q
 	for _, job := range queued {
-		q.push(job)
+		qu.push(job)
 	}
 
 	for range Workers {
+		running.Add(1)
 		go func() {
+			defer running.Done()
 			for {
-				job, ok := q.next()
+				job, ok := qu.next()
 				if !ok {
 					return
 				}
 				run(job)
-				q.done(job.SiteID)
+				qu.done(job.SiteID)
 			}
 		}()
 	}
 
+	running.Add(1)
 	go func() {
+		defer running.Done()
 		ticker := time.NewTicker(time.Hour)
 		defer ticker.Stop()
 		for {
@@ -150,7 +159,7 @@ func Start(ctx context.Context) error {
 			}
 			select {
 			case <-ctx.Done():
-				q.close()
+				qu.close()
 				return
 			case <-ticker.C:
 			}

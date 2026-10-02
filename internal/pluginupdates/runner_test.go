@@ -35,7 +35,10 @@ func setupRunnerTest(t *testing.T) {
 	}
 	refreshPluginCache = func(models.CliSite) error { return nil }
 	t.Cleanup(func() {
+		// Stop any runner a test started (its context is already cancelled)
+		// and wait for it before restoring the package state it reads.
 		q.close()
+		running.Wait()
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
 		db.Close()
 		config.RunData.DataDir, config.RunData.ConfigDir = oldData, oldConfig
