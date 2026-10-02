@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.3.0 (2026-10-02)
+### 6.3.1 (2026-10-02)
+
+#### Refactor
+
+- cache: build all WP-CLI targets from inventory via ToCliSite (9ccfe75)
+
+## v6.3.0 (2026-10-02)
 
 #### Features
 
