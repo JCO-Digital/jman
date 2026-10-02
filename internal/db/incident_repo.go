@@ -46,15 +46,12 @@ func CreateIncident(domain, errorMessage string, errorCode int, downSince time.T
 	query := `
 		INSERT INTO incidents (domain, status, error_message, error_code, down_since, pd_triggered, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+		RETURNING id
 	`
-	res, err := db.Exec(query, domain, models.IncidentStatusOpen, errorMessage, errorCode, downSince, now, now)
+	var id int64
+	err = db.QueryRow(query, domain, models.IncidentStatusOpen, errorMessage, errorCode, downSince, now, now).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create incident: %w", err)
-	}
-
-	id, err := res.LastInsertId()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get incident insert ID: %w", err)
 	}
 
 	return &models.Incident{

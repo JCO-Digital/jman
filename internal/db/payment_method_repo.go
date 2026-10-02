@@ -21,12 +21,13 @@ func SavePaymentMethod(pm *models.PaymentMethod, username string) error {
 		query := `
 		INSERT INTO payment_methods (name, type, expiry_date, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, pm.Name, pm.Type, pm.ExpiryDate, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, pm.Name, pm.Type, pm.ExpiryDate, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert payment method: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		pm.ID = int(id)
 		pm.CreatedAt = now
 		pm.CreatedBy = username

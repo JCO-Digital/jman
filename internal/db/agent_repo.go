@@ -68,18 +68,14 @@ func CreateAgentToken(serverID string, serverName, description, createdBy string
 		descPtr = &description
 	}
 
-	result, err := dbConn.Exec(
+	var id int64
+	err := dbConn.QueryRow(
 		`INSERT INTO agent_tokens (server_id, server_name, token_hash, token_prefix, description, created_by)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
 		serverID, serverName, hash, prefix, descPtr, createdBy,
-	)
+	).Scan(&id)
 	if err != nil {
 		return models.AgentToken{}, "", fmt.Errorf("failed to create agent token: %w", err)
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		return models.AgentToken{}, "", fmt.Errorf("failed to determine new token id: %w", err)
 	}
 
 	token := models.AgentToken{

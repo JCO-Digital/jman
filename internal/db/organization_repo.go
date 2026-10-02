@@ -21,12 +21,13 @@ func SaveOrganization(org *models.Organization, username string) error {
 		query := `
 		INSERT INTO organizations (name, vat_number, info, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, org.Name, org.VATNumber, org.Info, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, org.Name, org.VATNumber, org.Info, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert organization: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		org.ID = int(id)
 		org.CreatedAt = now
 		org.CreatedBy = username
@@ -124,12 +125,13 @@ func SaveContact(contact *models.Contact, username string) error {
 		query := `
 		INSERT INTO contacts (organization_id, name, email, phone, type, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, contact.OrganizationID, contact.Name, contact.Email, contact.Phone, contact.Type, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, contact.OrganizationID, contact.Name, contact.Email, contact.Phone, contact.Type, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert contact: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		contact.ID = int(id)
 		contact.CreatedAt = now
 		contact.CreatedBy = username
@@ -303,12 +305,13 @@ func SaveNote(note *models.Note, username string) error {
 		query := `
 		INSERT INTO notes (parent_type, parent_id, content, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, note.ParentType, note.ParentID, note.Content, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, note.ParentType, note.ParentID, note.Content, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert note: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		note.ID = int(id)
 		note.CreatedAt = now
 		note.CreatedBy = username

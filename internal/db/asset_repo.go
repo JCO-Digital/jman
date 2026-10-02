@@ -21,13 +21,14 @@ func SaveAsset(asset *models.Asset, username string) error {
 		query := `
 		INSERT INTO assets (type, identifier, name, description, default_price, default_freq, active, payment_method_id, purchase_price, quantity, next_payment, management_url, management_account, license_key, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active,
-			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, asset.LicenseKey, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active,
+			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, asset.LicenseKey, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert asset: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		asset.ID = int(id)
 		asset.CreatedAt = now
 		asset.CreatedBy = username
@@ -157,12 +158,13 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 		query := `
 		INSERT INTO organization_assets (organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, payment_method_id, license_key, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, oa.LicenseKey, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, oa.LicenseKey, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert organization asset: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		oa.ID = int(id)
 		oa.CreatedAt = now
 		oa.CreatedBy = username
@@ -419,13 +421,14 @@ func SaveAssetPayment(payment *models.AssetPayment, username string) error {
 		query := `
 		INSERT INTO asset_payments (org_asset_id, amount, payment_date, info, created_at, created_by)
 		VALUES (?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
 		now := time.Now()
-		result, err := db.Exec(query, payment.OrgAssetID, payment.Amount, payment.PaymentDate, payment.Info, now, username)
+		var id int64
+		err := db.QueryRow(query, payment.OrgAssetID, payment.Amount, payment.PaymentDate, payment.Info, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert asset payment: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		payment.ID = int(id)
 		payment.CreatedAt = now
 		payment.CreatedBy = username

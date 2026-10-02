@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"testing"
 	"time"
+
+	"github.com/JCO-Digital/jman/internal/models"
 )
 
 func TestAPIDBStoresTimesAsCanonicalUTC(t *testing.T) {
@@ -79,5 +81,36 @@ func TestNormalizeArgs(t *testing.T) {
 	plain := []any{"a", 1}
 	if got := normalizeArgs(plain); &got[0] != &plain[0] {
 		t.Errorf("slice without times was copied")
+	}
+}
+
+// TestInsertsReturnIDs covers the INSERT ... RETURNING id paths that
+// replaced LastInsertId: each saved row gets the id the database assigned.
+func TestInsertsReturnIDs(t *testing.T) {
+	setupTestAPIDB(t)
+
+	var ids []int
+	for _, name := range []string{"first", "second"} {
+		org := models.Organization{Name: name}
+		if err := SaveOrganization(&org, "test"); err != nil {
+			t.Fatalf("SaveOrganization: %v", err)
+		}
+		got, err := GetOrganization(org.ID)
+		if err != nil || got == nil || got.Name != name {
+			t.Fatalf("organization %d: got %+v, err %v; want name %q", org.ID, got, err, name)
+		}
+		ids = append(ids, org.ID)
+	}
+	if ids[0] == 0 || ids[0] == ids[1] {
+		t.Errorf("organization ids %v are not distinct non-zero values", ids)
+	}
+
+	inc, err := CreateIncident("example.com", "down", 500, time.Now())
+	if err != nil {
+		t.Fatalf("CreateIncident: %v", err)
+	}
+	stored, err := GetIncidentByID(inc.ID)
+	if err != nil || stored == nil || stored.Domain != "example.com" {
+		t.Fatalf("incident %d: got %+v, err %v", inc.ID, stored, err)
 	}
 }

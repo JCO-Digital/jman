@@ -42,18 +42,19 @@ func SaveTask(task *models.Task, username string) error {
 			created_at, created_by, updated_at, last_notified_at,
 			completed_at, completed_by
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := database.Exec(query,
+		var id int64
+		err := database.QueryRow(query,
 			task.Type, task.Status, task.Priority, task.Title, task.Description,
 			task.SiteID, task.ServerID, task.OrganizationID, task.PluginSlug,
 			task.AssignedTo, task.Metadata, task.Interval, task.DueDate, task.ReminderDate,
 			now, username, now, task.LastNotifiedAt,
 			task.CompletedAt, task.CompletedBy,
-		)
+		).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert task: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		task.ID = int(id)
 		task.CreatedAt = now
 		task.CreatedBy = username
