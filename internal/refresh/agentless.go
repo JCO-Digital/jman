@@ -87,7 +87,7 @@ func collectSingleSite(site models.ManagedSite) error {
 	diskRes, diskErr := wpcli.RunWP(opts, "eval", diskCmd)
 	if diskErr == nil && diskRes.Output != "" {
 		if bytesUsed, parseErr := strconv.ParseInt(strings.TrimSpace(diskRes.Output), 10, 64); parseErr == nil && bytesUsed > 0 {
-			_ = db.RecordSiteDiskUsage(site.ID, bytesUsed, time.Now().UTC().Format(time.RFC3339))
+			_ = db.RecordSiteDiskUsage(site.ID, bytesUsed, time.Now())
 		}
 	}
 

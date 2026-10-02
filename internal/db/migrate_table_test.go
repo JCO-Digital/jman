@@ -8,7 +8,7 @@ import "testing"
 // so a deleted row's id would be handed out again.
 func TestMigrateTable_StableSchemaIsNotRebuilt(t *testing.T) {
 	setupTaskRepoTest(t)
-	api := GetAPIDB()
+	api := GetAPIDB().DB
 
 	for _, title := range []string{"one", "two", "three"} {
 		if _, err := api.Exec(`INSERT INTO tasks (type, title) VALUES ('one-time', ?)`, title); err != nil {
@@ -28,7 +28,7 @@ func TestMigrateTable_StableSchemaIsNotRebuilt(t *testing.T) {
 	if err := InitAPI(); err != nil {
 		t.Fatalf("InitAPI failed: %v", err)
 	}
-	api = GetAPIDB()
+	api = GetAPIDB().DB
 
 	if got := queryInt(t, api, `SELECT seq FROM sqlite_sequence WHERE name = 'tasks'`); got != seqBefore {
 		t.Fatalf("tasks sequence changed across restart (%d -> %d): table was rebuilt", seqBefore, got)

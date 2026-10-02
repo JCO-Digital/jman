@@ -96,7 +96,7 @@ func MigrateSplitDB() error {
 	}
 
 	if !apiExists {
-		if err := migrateInto(legacyPath, InitAPI, GetAPIDB, APITables); err != nil {
+		if err := migrateInto(legacyPath, InitAPI, func() *sql.DB { return GetAPIDB().sqlDB() }, APITables); err != nil {
 			return fmt.Errorf("failed to migrate api data: %w", err)
 		}
 		fmt.Println("api.db created and populated.")

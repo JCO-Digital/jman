@@ -2,7 +2,6 @@ package slack
 
 import (
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -38,18 +37,15 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 
 	message = utils.StripANSI(message)
 	hash := hashMessage(message)
-	database := db.GetAPIDB()
+	// The CLI never opens api.db, so it sends without dedup (see internal/vuln/vuln.go).
+	tracked := db.GetAPIDB() != nil
 
-	if database != nil {
-		migrationOnce.Do(func() {
-			migrateSlackTracker(database)
-		})
+	if tracked {
+		migrationOnce.Do(migrateSlackTracker)
 	}
 
-	if !force && database != nil {
-		var exists bool
-		err := database.QueryRow("SELECT EXISTS(SELECT 1 FROM slack_messages WHERE hash = ?)", hash).Scan(&exists)
-		if err == nil && exists {
+	if !force && tracked {
+		if exists, err := db.HasSlackMessage(hash); err == nil && exists {
 			return nil
 		}
 	}
@@ -65,12 +61,8 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 	}
 
 	// Record the message as sent
-	if database != nil {
-		_, err := database.Exec(
-			"INSERT OR IGNORE INTO slack_messages (hash, channel) VALUES (?, ?)",
-			hash, channel,
-		)
-		if err != nil {
+	if tracked {
+		if err := db.RecordSlackMessage(hash, channel); err != nil {
 			log.Printf("Warning: failed to record Slack message hash: %v\n", err)
 		}
 	}
@@ -78,7 +70,7 @@ func SendMessageToChannel(message string, channel string, force bool) error {
 	return nil
 }
 
-func migrateSlackTracker(database *sql.DB) {
+func migrateSlackTracker() {
 	// Only migrate if the file exists
 	var tracker map[string]bool
 	err := cache.ReadJSONData(slackTrackerFile, &tracker)
@@ -89,11 +81,7 @@ func migrateSlackTracker(database *sql.DB) {
 	log.Printf("Migrating Slack message tracker to database...\n")
 
 	for hash := range tracker {
-		_, err := database.Exec(
-			"INSERT OR IGNORE INTO slack_messages (hash, channel) VALUES (?, ?)",
-			hash, "unknown",
-		)
-		if err != nil {
+		if err := db.RecordSlackMessage(hash, "unknown"); err != nil {
 			log.Printf("Warning: failed to migrate Slack message hash %s: %v\n", hash, err)
 		}
 	}

@@ -156,7 +156,15 @@ func DeleteAssetHandler(w http.ResponseWriter, r *http.Request) {
 func ListAllOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	status := r.URL.Query().Get("status")
-	before := r.URL.Query().Get("before")
+	var before *time.Time
+	if raw := r.URL.Query().Get("before"); raw != "" {
+		t, err := parseBeforeParam(raw)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "Invalid before: expected YYYY-MM-DD or RFC3339")
+			return
+		}
+		before = &t
+	}
 	assets, err := db.GetAllOrganizationAssets(search, status, before)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "ListAllOrganizationAssetsHandler: %v", err)
@@ -164,6 +172,15 @@ func ListAllOrganizationAssetsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, assets)
+}
+
+// parseBeforeParam parses the `before` filter: a bare date includes that
+// whole UTC day, an RFC3339 timestamp is used as-is.
+func parseBeforeParam(raw string) (time.Time, error) {
+	if t, err := db.EndOfDayUTC(raw); err == nil {
+		return t, nil
+	}
+	return time.Parse(time.RFC3339, raw)
 }
 
 // ListOrganizationAssetsHandler returns assets for a specific organization.

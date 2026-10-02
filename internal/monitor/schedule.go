@@ -78,14 +78,8 @@ func ResetDomainStatus(domain string) {
 		}
 		scheduler.state.Mu.Unlock()
 	} else {
-		database := db.GetAPIDB()
-		if database != nil {
-			_, _ = database.Exec(`
-				UPDATE monitor_status
-				SET current_mode = 'normal', is_down = 0, failure_count = 0, consecutive_successes = 0,
-				    down_since = NULL, pd_triggered = 0, pd_escalated = 0, next_check_at = CURRENT_TIMESTAMP
-				WHERE domain = ?
-			`, domain)
+		if db.GetAPIDB() != nil {
+			_ = db.ResetMonitorStatus(domain)
 		}
 	}
 }

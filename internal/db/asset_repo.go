@@ -21,13 +21,14 @@ func SaveAsset(asset *models.Asset, username string) error {
 		query := `
 		INSERT INTO assets (type, identifier, name, description, default_price, default_freq, active, payment_method_id, purchase_price, quantity, next_payment, management_url, management_account, license_key, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active,
-			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, asset.LicenseKey, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, asset.Type, asset.Identifier, asset.Name, asset.Description, asset.DefaultPrice, asset.DefaultFreq, asset.Active,
+			asset.PaymentMethodID, asset.PurchasePrice, asset.Quantity, asset.NextPayment, asset.ManagementURL, asset.ManagementAccount, asset.LicenseKey, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert asset: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		asset.ID = int(id)
 		asset.CreatedAt = now
 		asset.CreatedBy = username
@@ -101,11 +102,11 @@ func GetAllAssets(search string) ([]models.Asset, error) {
 	`
 	var args []interface{}
 	if search != "" {
-		query += " AND (a.name LIKE ? OR a.identifier LIKE ? OR a.type LIKE ?)"
+		query += " AND (LOWER(a.name) LIKE LOWER(?) OR LOWER(a.identifier) LIKE LOWER(?) OR LOWER(a.type) LIKE LOWER(?))"
 		term := "%" + search + "%"
 		args = append(args, term, term, term)
 	}
-	query += " GROUP BY a.id ORDER BY a.type ASC, a.name ASC"
+	query += " GROUP BY a.id, pm.name ORDER BY a.type ASC, a.name ASC"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
@@ -157,12 +158,13 @@ func SaveOrganizationAsset(oa *models.OrganizationAsset, username string) error 
 		query := `
 		INSERT INTO organization_assets (organization_id, site_id, asset_id, identifier, price, billing_freq, next_billing, status, description, payment_method_id, license_key, created_at, created_by, updated_at, updated_by)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
-		result, err := db.Exec(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, oa.LicenseKey, now, username, now, username)
+		var id int64
+		err := db.QueryRow(query, oa.OrganizationID, oa.SiteID, oa.AssetID, oa.Identifier, oa.Price, oa.BillingFreq, oa.NextBilling, oa.Status, oa.Description, oa.PaymentMethodID, oa.LicenseKey, now, username, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert organization asset: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		oa.ID = int(id)
 		oa.CreatedAt = now
 		oa.CreatedBy = username
@@ -250,7 +252,9 @@ func GetOrganizationAsset(id int) (*models.OrganizationAsset, error) {
 	return &oa, nil
 }
 
-func GetAllOrganizationAssets(search, status, before string) ([]models.OrganizationAsset, error) {
+// GetAllOrganizationAssets lists organization assets, optionally filtered
+// by search text, status, and a next_billing upper bound (inclusive).
+func GetAllOrganizationAssets(search, status string, before *time.Time) ([]models.OrganizationAsset, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -270,7 +274,7 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 	var args []interface{}
 
 	if search != "" {
-		query += " AND (oa.identifier LIKE ? OR o.name LIKE ? OR a.name LIKE ?)"
+		query += " AND (LOWER(oa.identifier) LIKE LOWER(?) OR LOWER(o.name) LIKE LOWER(?) OR LOWER(a.name) LIKE LOWER(?))"
 		term := "%" + search + "%"
 		args = append(args, term, term, term)
 	}
@@ -280,9 +284,9 @@ func GetAllOrganizationAssets(search, status, before string) ([]models.Organizat
 		args = append(args, status)
 	}
 
-	if before != "" {
+	if before != nil {
 		query += " AND oa.next_billing <= ?"
-		args = append(args, before)
+		args = append(args, *before)
 	}
 
 	query += " ORDER BY oa.next_billing ASC, oa.created_at DESC"
@@ -417,13 +421,14 @@ func SaveAssetPayment(payment *models.AssetPayment, username string) error {
 		query := `
 		INSERT INTO asset_payments (org_asset_id, amount, payment_date, info, created_at, created_by)
 		VALUES (?, ?, ?, ?, ?, ?)
+		RETURNING id
 		`
 		now := time.Now()
-		result, err := db.Exec(query, payment.OrgAssetID, payment.Amount, payment.PaymentDate, payment.Info, now, username)
+		var id int64
+		err := db.QueryRow(query, payment.OrgAssetID, payment.Amount, payment.PaymentDate, payment.Info, now, username).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert asset payment: %w", err)
 		}
-		id, _ := result.LastInsertId()
 		payment.ID = int(id)
 		payment.CreatedAt = now
 		payment.CreatedBy = username
@@ -487,14 +492,19 @@ func GetAssetPaymentsInRange(start, end string) ([]models.AssetPaymentReportRow,
 	WHERE ap.payment_date >= ? AND ap.payment_date <= ?
 	ORDER BY o.name ASC, ap.payment_date ASC
 	`
-	// Compared as plain ISO8601 text against the stored column (matching
-	// GetSiteTraffic's cutoff-expression convention) rather than wrapping
-	// the column in date()/strftime() — the modernc.org/sqlite driver's
-	// DATE/DATETIME column handling doesn't play well with SQL date
-	// functions applied to the column itself. end is extended to the end
-	// of its day so a payment_date with a non-midnight time-of-day on the
-	// last day is still included.
-	rows, err := db.Query(query, start, end+"T23:59:59Z")
+	// Bound as time values (stored and compared in canonical UTC, see
+	// APIDB) rather than wrapping the column in date(). end is extended to
+	// the end of its day so a payment_date with a non-midnight time-of-day
+	// on the last day is still included.
+	startTime, err := StartOfDayUTC(start)
+	if err != nil {
+		return nil, err
+	}
+	endTime, err := EndOfDayUTC(end)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.Query(query, startTime, endTime)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query asset payments for report: %w", err)
 	}

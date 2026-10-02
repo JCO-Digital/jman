@@ -22,6 +22,13 @@ func UpsertSiteTrafficHourly(siteID string, entry models.TrafficHourlyEntry) err
 		return fmt.Errorf("database not initialized")
 	}
 
+	// Stored as a time value rather than the agent's RFC3339 text, so it
+	// compares correctly against time-valued cutoffs (see APIDB).
+	hour, err := time.Parse(time.RFC3339, entry.Hour)
+	if err != nil {
+		return fmt.Errorf("invalid traffic hour %q: %w", entry.Hour, err)
+	}
+
 	topPages, err := json.Marshal(entry.TopPages)
 	if err != nil {
 		return fmt.Errorf("failed to encode top pages: %w", err)
@@ -49,7 +56,7 @@ func UpsertSiteTrafficHourly(siteID string, entry models.TrafficHourlyEntry) err
 		status_codes = excluded.status_codes,
 		updated_at = CURRENT_TIMESTAMP;
 	`
-	_, err = dbConn.Exec(query, siteID, entry.Hour, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers), string(statusCodes))
+	_, err = dbConn.Exec(query, siteID, hour, entry.RequestsTotal, entry.RequestsHuman, entry.RequestsBot, entry.UniqueVisitors, string(topPages), string(topReferrers), string(statusCodes))
 	if err != nil {
 		return fmt.Errorf("failed to upsert hourly traffic for site %s: %w", siteID, err)
 	}
@@ -280,8 +287,6 @@ func PruneOldSiteTrafficHourly(cutoff time.Time) error {
 		return fmt.Errorf("database not initialized")
 	}
 
-	cutoffStr := cutoff.UTC().Format(time.RFC3339)
-
 	if _, err := dbConn.Exec(
 		`DELETE FROM site_traffic_hourly
 		 WHERE hour < ?
@@ -291,7 +296,7 @@ func PruneOldSiteTrafficHourly(cutoff time.Time) error {
 		 	AND d.day = date(site_traffic_hourly.hour)
 		 	AND d.finalized_at IS NOT NULL
 		 )`,
-		cutoffStr,
+		cutoff,
 	); err != nil {
 		return fmt.Errorf("failed to prune old hourly traffic: %w", err)
 	}
@@ -347,8 +352,8 @@ func GetSiteTrafficMonthly(siteID string, days int) ([]models.SiteTrafficPeriod,
 
 	rows, err := dbConn.Query(
 		`SELECT day, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes
-		 FROM site_traffic_daily WHERE site_id = ? AND day >= date('now', ?) ORDER BY day ASC`,
-		siteID, fmt.Sprintf("-%d days", days),
+		 FROM site_traffic_daily WHERE site_id = ? AND day >= ? ORDER BY day ASC`,
+		siteID, time.Now().UTC().AddDate(0, 0, -days).Format("2006-01-02"),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query site traffic for monthly rollup: %w", err)
@@ -459,27 +464,26 @@ func GetSiteTraffic(siteID string, period string, days int) ([]models.SiteTraffi
 		return nil, fmt.Errorf("database not initialized")
 	}
 
+	// hour is a DATETIME compared against a time value (both canonical
+	// UTC, see APIDB); day is a DATE stored as "YYYY-MM-DD" and compared
+	// against the same text form.
+	since := time.Now().UTC().AddDate(0, 0, -days)
 	table := "site_traffic_hourly"
 	periodCol := "hour"
-	// hour is stored as RFC3339 ("...T...Z", matching Go's time.RFC3339
-	// formatting on the agent side) — strftime with an explicit format
-	// produces a directly comparable string. SQLite's own datetime()
-	// defaults to a space-separated, non-'Z'-suffixed format instead, which
-	// would compare incorrectly against RFC3339 values via a plain TEXT >=.
-	cutoffExpr := "strftime('%Y-%m-%dT%H:%M:%SZ', 'now', ?)"
+	var cutoff any = since
 	if period == "daily" {
 		table = "site_traffic_daily"
 		periodCol = "day"
-		cutoffExpr = "date('now', ?)"
+		cutoff = since.Format("2006-01-02")
 	}
 
 	query := fmt.Sprintf(
 		`SELECT %s, requests_total, requests_human, requests_bot, unique_visitors, top_pages, top_referrers, status_codes
-		 FROM %s WHERE site_id = ? AND %s >= %s ORDER BY %s ASC`,
-		periodCol, table, periodCol, cutoffExpr, periodCol,
+		 FROM %s WHERE site_id = ? AND %s >= ? ORDER BY %s ASC`,
+		periodCol, table, periodCol, periodCol,
 	)
 
-	rows, err := dbConn.Query(query, siteID, fmt.Sprintf("-%d days", days))
+	rows, err := dbConn.Query(query, siteID, cutoff)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query site traffic: %w", err)
 	}
