@@ -107,7 +107,14 @@ func refreshUpdateCache(site models.CliSite) {
 	}
 }
 
-// UpdatePlugin updates one or more plugins.
+// perPluginWriteTimeout is added to WriteTimeout for every plugin beyond the
+// first in one `wp plugin update` call, since each is downloaded and
+// installed in turn.
+const perPluginWriteTimeout = 2 * time.Minute
+
+// UpdatePlugin updates one or more plugins in a single WP-CLI call. On
+// failure the error is an *UpdateFailure, and the returned results still
+// hold whatever per-plugin outcomes WP-CLI reported before failing.
 func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error) {
 	if len(plugins) == 0 {
 		return nil, nil
@@ -119,7 +126,11 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 	args = append(args, plugins...)
 	args = append(args, "--format=json")
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, Timeout: WriteTimeout}, args...)
+	timeout := WriteTimeout + time.Duration(len(plugins)-1)*perPluginWriteTimeout
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, Timeout: timeout}, args...)
+	// WP-CLI prints the per-plugin JSON table even when some plugins fail,
+	// so parse it either way.
+	updates, parseErr := parseUpdateOutput(res.Output)
 	if err != nil {
 		var failure error
 		switch {
@@ -137,10 +148,27 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 		default:
 			failure = fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
 		}
-		return nil, checkFailedUpdate(site, plugins, failure)
+		return updates, checkFailedUpdate(site, plugins, failure)
+	}
+	if parseErr != nil {
+		return nil, parseErr
 	}
 
-	output := strings.TrimSpace(res.Output)
+	for _, update := range updates {
+		if update.Status == "Updated" {
+			verb.Printf(verb.Normal, "Updated %s from %s to %s\n", update.Name, update.OldVersion, update.NewVersion)
+		} else {
+			verb.Printf(verb.Normal, "Failed to update %s: %s\n", update.Name, update.Status)
+		}
+	}
+	return updates, nil
+}
+
+// parseUpdateOutput extracts the per-plugin results from `wp plugin update
+// --format=json` output. Output with no updates ("already up to date")
+// yields no results and no error.
+func parseUpdateOutput(output string) ([]UpdateResult, error) {
+	output = strings.TrimSpace(output)
 	if output == "" || strings.Contains(output, "Success: Plugin already up to date") || strings.Contains(output, "Success: Plugins already up to date") {
 		return nil, nil
 	}
@@ -158,13 +186,6 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 	decoder := json.NewDecoder(strings.NewReader(output[idx:]))
 	if err := decoder.Decode(&updates); err != nil {
 		return nil, fmt.Errorf("failed to parse update result: %w", err)
-	}
-	for _, update := range updates {
-		if update.Status == "Updated" {
-			verb.Printf(verb.Normal, "Updated %s from %s to %s\n", update.Name, update.OldVersion, update.NewVersion)
-		} else {
-			verb.Printf(verb.Normal, "Failed to update %s: %s\n", update.Name, update.Status)
-		}
 	}
 	return updates, nil
 }
