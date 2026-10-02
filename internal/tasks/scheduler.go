@@ -54,6 +54,9 @@ func runTick() {
 	if err := pruneSiteTraffic(); err != nil {
 		log.Printf("Error pruning old site traffic: %v", err)
 	}
+	if err := db.DownsampleOldSiteDiskUsage(time.Now().Add(-siteDiskUsageFullResolution)); err != nil {
+		log.Printf("Error downsampling old site disk usage: %v", err)
+	}
 	if err := checkStaleAgents(); err != nil {
 		log.Printf("Error checking for stale agents: %v", err)
 	}
@@ -66,6 +69,10 @@ func runTick() {
 // forever. Must mirror hourlyRetentionWindow in
 // internal/agent/logs/collect.go.
 const siteTrafficHourlyRetention = 168 * time.Hour
+
+// siteDiskUsageFullResolution is how long every site_disk_usage measurement
+// is kept; older ones are thinned to one per site per day.
+const siteDiskUsageFullResolution = 7 * 24 * time.Hour
 
 func pruneSiteTraffic() error {
 	// Finalize each completed day's site_traffic_daily rollup before pruning

@@ -1,8 +1,10 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -73,33 +75,42 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+// maxOpenConns caps each database's connection pool.
+const maxOpenConns = 8
+
 // openDB opens a SQLite database file with the pragma set jman relies on
 // for concurrency and reliability (shared by both inventory.db and api.db).
 func openDB(path string) (*sql.DB, error) {
-	conn, err := sql.Open("sqlite", path)
+	// Pragmas are connection-scoped, so they go in the DSN: the driver
+	// applies them to every connection the pool opens, not just the first.
+	//   - WAL lets readers run concurrently with the single writer.
+	//   - busy_timeout makes a writer wait for the write lock rather than
+	//     failing immediately with SQLITE_BUSY.
+	//   - _txlock=immediate makes explicit transactions take the write lock
+	//     at BEGIN, so a transaction never has to upgrade a read lock to a
+	//     write lock mid-way (an SQLITE_BUSY that busy_timeout can't resolve).
+	// The path is deliberately not given a "file:" prefix: the driver then
+	// strips the query itself and opens the path verbatim, with no URI
+	// escaping concerns.
+	dsn := path + "?" + url.Values{
+		"_pragma": {
+			"journal_mode(WAL)",
+			"synchronous(NORMAL)",
+			"busy_timeout(10000)",
+			"foreign_keys(1)",
+		},
+		"_txlock": {"immediate"},
+	}.Encode()
+	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Limit to a single connection to avoid "database is locked" errors.
-	// SQLite works best with a single connection when performing concurrent writes.
-	conn.SetMaxOpenConns(1)
-
-	// Set pragmas for better concurrency and reliability.
-	// WAL mode allows multiple readers and one writer simultaneously.
-	// Busy timeout ensures it retries before failing with SQLITE_BUSY.
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA busy_timeout=5000",
-		"PRAGMA foreign_keys=ON",
-	}
-	for _, p := range pragmas {
-		if _, err := conn.Exec(p); err != nil {
-			conn.Close()
-			return nil, fmt.Errorf("failed to set pragma %q: %w", p, err)
-		}
-	}
+	// Allow several connections so a slow query (or the hourly VACUUM INTO
+	// backup) doesn't stall every other request. SQLite still serializes
+	// writers on its own lock; reads proceed in parallel under WAL.
+	conn.SetMaxOpenConns(maxOpenConns)
+	conn.SetMaxIdleConns(maxOpenConns)
 
 	if err := conn.Ping(); err != nil {
 		conn.Close()
@@ -742,7 +753,9 @@ func initAPISchema() error {
 	if err != nil {
 		return err
 	}
-	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_disk_usage_site_id ON site_disk_usage(site_id);")
+	// Redundant with the (site_id, measured_at) primary key's index, which
+	// already serves site_id lookups; dropped to save space and write cost.
+	_, err = apiDB.Exec("DROP INDEX IF EXISTS idx_site_disk_usage_site_id;")
 	if err != nil {
 		return err
 	}
@@ -777,17 +790,26 @@ func initAPISchema() error {
 // migrateTable compares the current database table schema with the desired definition.
 // SQLite has restrictions on ALTER TABLE (e.g., adding columns with non-constant defaults like CURRENT_TIMESTAMP).
 // To be robust, this implementation uses the "recreate and copy" pattern if changes are detected.
-func migrateTable(conn *sql.DB, def TableDefinition) (retErr error) {
+func migrateTable(pool *sql.DB, def TableDefinition) (retErr error) {
+	// PRAGMA foreign_keys is connection-scoped, so pin a single connection
+	// from the pool for the pragma and the transaction that relies on it.
+	ctx := context.Background()
+	conn, err := pool.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
 	// Disable foreign keys during migration to avoid broken references when renaming tables.
 	// PRAGMA foreign_keys must be set outside of a transaction.
-	if _, err := conn.Exec("PRAGMA foreign_keys=OFF"); err != nil {
+	if _, err := conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
 		return fmt.Errorf("failed to disable foreign keys: %w", err)
 	}
 	defer func() {
-		_, _ = conn.Exec("PRAGMA foreign_keys=ON")
+		_, _ = conn.ExecContext(ctx, "PRAGMA foreign_keys=ON")
 	}()
 
-	tx, err := conn.Begin()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}

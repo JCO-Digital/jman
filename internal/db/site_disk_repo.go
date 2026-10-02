@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -32,12 +33,22 @@ func GetLatestSiteDiskUsage() (map[string]models.SiteDiskUsage, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
+	// The table holds every measurement ever reported (millions of rows), so
+	// rather than scanning it, walk the distinct site_ids via a recursive
+	// skip-scan over the site_id index and look up each site's latest row
+	// through the (site_id, measured_at) primary key. This touches roughly
+	// two index probes per site instead of every row in the table.
 	rows, err := dbConn.Query(`
-		SELECT s.site_id, s.bytes_used, s.measured_at
-		FROM site_disk_usage s
-		WHERE s.measured_at = (
-			SELECT MAX(s2.measured_at) FROM site_disk_usage s2 WHERE s2.site_id = s.site_id
+		WITH RECURSIVE ids(site_id) AS (
+			SELECT MIN(site_id) FROM site_disk_usage
+			UNION ALL
+			SELECT (SELECT MIN(site_id) FROM site_disk_usage WHERE site_id > ids.site_id)
+			FROM ids WHERE ids.site_id IS NOT NULL
 		)
+		SELECT d.site_id, d.bytes_used, d.measured_at
+		FROM ids
+		JOIN site_disk_usage d ON d.site_id = ids.site_id
+		 AND d.measured_at = (SELECT MAX(measured_at) FROM site_disk_usage WHERE site_id = ids.site_id)
 	`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query latest site disk usage: %w", err)
@@ -58,4 +69,44 @@ func GetLatestSiteDiskUsage() (map[string]models.SiteDiskUsage, error) {
 	}
 
 	return result, nil
+}
+
+// DownsampleOldSiteDiskUsage thins out disk usage measurements older than
+// cutoff to one per site per UTC day (the day's latest), leaving everything
+// newer at full resolution. Agents report every few minutes, so without this
+// the table grows by tens of thousands of rows a day. Work is done one site
+// at a time so each DELETE holds the write lock only briefly.
+func DownsampleOldSiteDiskUsage(cutoff time.Time) error {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	latest, err := GetLatestSiteDiskUsage()
+	if err != nil {
+		return err
+	}
+
+	cutoffStr := cutoff.UTC().Format(time.RFC3339)
+	for siteID := range latest {
+		// measured_at is stored as RFC3339 UTC text, so its first ten
+		// characters are the UTC day. SQLite returns the bare rowid from
+		// the row holding MAX(measured_at) within each group.
+		if _, err := dbConn.Exec(
+			`DELETE FROM site_disk_usage
+			 WHERE site_id = ? AND measured_at < ?
+			 AND rowid NOT IN (
+			 	SELECT keep_id FROM (
+			 		SELECT rowid AS keep_id, MAX(measured_at)
+			 		FROM site_disk_usage
+			 		WHERE site_id = ? AND measured_at < ?
+			 		GROUP BY substr(measured_at, 1, 10)
+			 	)
+			 )`,
+			siteID, cutoffStr, siteID, cutoffStr,
+		); err != nil {
+			return fmt.Errorf("failed to downsample disk usage for site %s: %w", siteID, err)
+		}
+	}
+	return nil
 }
