@@ -516,6 +516,27 @@ export const useDataStore = defineStore("data", () => {
 		}
 	}
 
+	/**
+	 * Reloads one site's plugins from jman-api's cache, e.g. after a
+	 * background plugin change or an update check refreshed it.
+	 */
+	async function reloadSitePlugins(siteId: string) {
+		const authStore = useAuthStore();
+		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugins`, {
+			headers: authStore.authHeader,
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		const sitePlugins: Plugin[] = await res.json();
+		plugins.value = [
+			...plugins.value.filter((p) => p.site_id !== siteId),
+			...sitePlugins,
+		];
+		sessionStorage.setItem(
+			CACHE_KEY_PLUGINS,
+			JSON.stringify(plugins.value),
+		);
+	}
+
 	function applyCoreUpdate(siteId: string, core: SiteCore) {
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
@@ -604,6 +625,7 @@ export const useDataStore = defineStore("data", () => {
 		setSiteEnvironment,
 		applyPluginUpdate,
 		applyCoreUpdate,
+		reloadSitePlugins,
 		// Actions
 		initData,
 		refreshData,

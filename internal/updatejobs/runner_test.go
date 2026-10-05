@@ -30,7 +30,10 @@ func setupRunnerTest(t *testing.T) {
 
 	oldFind, oldUpdate, oldRefresh, oldQueue := findSite, updatePlugins, refreshPluginCache, q
 	oldUpdateCore, oldRefreshCore, oldCachedCore := updateCore, refreshCore, cachedCoreVersion
+	oldAction, oldInstall, oldUpload, oldSSH := pluginAction, installPlugin, uploadFile, runSSH
+	oldVulnerable := pluginVulnerable
 	q = newQueue()
+	pluginVulnerable = func(string, string, string) bool { return false }
 	cachedCoreVersion = func(string) string { return "6.4.0" }
 	findSite = func(siteID string) (*models.CliSite, error) {
 		return &models.CliSite{ID: siteID, Name: "example.com"}, nil
@@ -43,6 +46,8 @@ func setupRunnerTest(t *testing.T) {
 		running.Wait()
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
 		updateCore, refreshCore, cachedCoreVersion = oldUpdateCore, oldRefreshCore, oldCachedCore
+		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
+		pluginVulnerable = oldVulnerable
 		db.Close()
 		config.RunData.DataDir, config.RunData.ConfigDir = oldData, oldConfig
 	})
@@ -389,5 +394,74 @@ func TestStartInterruptsRunningCoreJob(t *testing.T) {
 	entry, data := coreLedger(t)
 	if entry.Status != "failed" || data["error"] != interruptedCoreReason {
 		t.Errorf("ledger entry = %+v data %v", entry, data)
+	}
+}
+
+func TestLedgerStatusForPluginUpdates(t *testing.T) {
+	setupRunnerTest(t)
+	ok := []models.UpdateResult{{Name: "a", Status: models.UpdateUpdated}}
+	failed := []models.UpdateResult{{Name: "a", Status: models.UpdateFailed}}
+	// Vulnerable: "vuln-left" at 1.0. "a" was vulnerable at 1.0 too.
+	pluginVulnerable = func(_, plugin, version string) bool {
+		return (plugin == "vuln-left" || plugin == "a") && version == "1.0"
+	}
+
+	cases := []struct {
+		name              string
+		cached            []models.WPPlugin
+		results           []models.UpdateResult
+		cacheFresh        bool
+		updatedVulnerable bool
+		want              string
+	}{
+		{"failed plugin", nil, failed, true, true, models.LedgerFailed},
+		{"stale cache", nil, ok, false, true, models.LedgerPartial},
+		{"site up to date", []models.WPPlugin{{Name: "a", Version: "1.1"}}, ok, true, false, models.LedgerFull},
+		{"vulnerable fixed, others left", []models.WPPlugin{{Name: "a", Version: "1.1"}, {Name: "other", Version: "2.0", Update: "2.1"}}, ok, true, true, models.LedgerVuln},
+		{"vulnerable update left", []models.WPPlugin{{Name: "vuln-left", Version: "1.0", Update: "1.1"}}, ok, true, true, models.LedgerPartial},
+		{"nothing vulnerable updated", []models.WPPlugin{{Name: "other", Version: "2.0", Update: "2.1"}}, ok, true, false, models.LedgerPartial},
+	}
+	for _, c := range cases {
+		setSitePlugins(t, c.cached...)
+		if got := ledgerStatus(testSite, c.results, c.cacheFresh, c.updatedVulnerable); got != c.want {
+			t.Errorf("%s: status %q, want %q", c.name, got, c.want)
+		}
+	}
+
+	if !anyVulnerable(testSite, []models.PluginUpdateRequest{{Name: "b", OldVersion: "1.0"}, {Name: "a", OldVersion: "1.0"}}) {
+		t.Error("anyVulnerable missed the vulnerable plugin")
+	}
+	if anyVulnerable(testSite, []models.PluginUpdateRequest{{Name: "a"}}) {
+		t.Error("anyVulnerable counted a plugin with an unknown version")
+	}
+}
+
+func TestRunPluginUpdateWritesVulnStatus(t *testing.T) {
+	setupRunnerTest(t)
+	setSitePlugins(t,
+		models.WPPlugin{Name: "a", Version: "1.0", Update: "1.1"},
+		models.WPPlugin{Name: "b", Version: "2.0", Update: "2.1"},
+	)
+	pluginVulnerable = func(_, plugin, version string) bool { return plugin == "a" && version == "1.0" }
+	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"}}, nil
+	}
+	refreshPluginCache = func(models.CliSite) error {
+		setSitePlugins(t,
+			models.WPPlugin{Name: "a", Version: "1.1"},
+			models.WPPlugin{Name: "b", Version: "2.0", Update: "2.1"},
+		)
+		return nil
+	}
+
+	job := models.UpdateJob{SiteID: testSite, CreatedBy: "alice", Plugins: []models.PluginUpdateRequest{{Name: "a", OldVersion: "1.0"}}}
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+
+	ledger, _ := db.GetSiteUpdateLedger(testSite)
+	if len(ledger) != 1 || ledger[0].Status != models.LedgerVuln {
+		t.Errorf("ledger = %+v, want one vuln entry", ledger)
 	}
 }

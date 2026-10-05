@@ -89,7 +89,13 @@ func GetSiteUpdateLedger(siteID string) ([]models.SiteUpdateLedgerEntry, error) 
 	return entries, nil
 }
 
-// GetLatestSiteUpdateLedgerEntry retrieves the most recent update ledger entry for a specific site.
+// managementStatuses are the ledger statuses of plugin management actions,
+// which the "latest update" queries skip: activating or deleting a plugin
+// doesn't make a site up to date.
+var managementStatuses = []any{models.LedgerActivated, models.LedgerDeactivated, models.LedgerDeleted, models.LedgerInstalled}
+
+// GetLatestSiteUpdateLedgerEntry retrieves the most recent update ledger
+// entry (skipping plugin management actions) for a specific site.
 func GetLatestSiteUpdateLedgerEntry(siteID string) (*models.SiteUpdateLedgerEntry, error) {
 	db := GetAPIDB()
 	if db == nil {
@@ -99,12 +105,12 @@ func GetLatestSiteUpdateLedgerEntry(siteID string) (*models.SiteUpdateLedgerEntr
 	query := `
 	SELECT id, site_id, update_type, status, data_json, updated_by, updated_at
 	FROM site_update_ledger
-	WHERE site_id = ?
+	WHERE site_id = ? AND status NOT IN (?, ?, ?, ?)
 	ORDER BY updated_at DESC
 	LIMIT 1
 	`
 
-	e, err := scanUpdateLedgerRow(db.QueryRow(query, siteID))
+	e, err := scanUpdateLedgerRow(db.QueryRow(query, append([]any{siteID}, managementStatuses...)...))
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -115,8 +121,9 @@ func GetLatestSiteUpdateLedgerEntry(siteID string) (*models.SiteUpdateLedgerEntr
 	return e, nil
 }
 
-// GetLatestSiteUpdateLedgerEntries retrieves the most recent update ledger entry for all sites,
-// returned as a map of site UUID -> entry.
+// GetLatestSiteUpdateLedgerEntries retrieves the most recent update ledger
+// entry (skipping plugin management actions) for all sites, returned as a
+// map of site UUID -> entry.
 func GetLatestSiteUpdateLedgerEntries() (map[string]models.SiteUpdateLedgerEntry, error) {
 	db := GetAPIDB()
 	if db == nil {
@@ -129,11 +136,12 @@ func GetLatestSiteUpdateLedgerEntries() (map[string]models.SiteUpdateLedgerEntry
 	INNER JOIN (
 		SELECT site_id, MAX(id) as max_id
 		FROM site_update_ledger
+		WHERE status NOT IN (?, ?, ?, ?)
 		GROUP BY site_id
 	) t2 ON t1.id = t2.max_id
 	`
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(query, managementStatuses...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query latest site update ledger entries: %w", err)
 	}

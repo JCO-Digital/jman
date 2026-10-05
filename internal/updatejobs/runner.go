@@ -19,6 +19,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
@@ -54,7 +55,16 @@ var (
 	refreshPluginCache = cache.UpdateSitePluginCache
 	updateCore         = wpcli.UpdateCore
 	refreshCore        = cache.RefreshSiteCore
-	cachedCoreVersion  = func(siteID string) string {
+	// pluginVulnerable reports whether a plugin version on a site has an
+	// unsuppressed known vulnerability.
+	pluginVulnerable = func(siteID, plugin, version string) bool {
+		matcher, err := db.NewVulnIgnoreMatcher()
+		if err != nil {
+			log.Printf("Failed to load vulnerability ignore entries: %v", err)
+		}
+		return vuln.IsPluginVulnerableOnSite(siteID, plugin, version, matcher)
+	}
+	cachedCoreVersion = func(siteID string) string {
 		cores, err := db.GetAllSiteCore()
 		if err != nil {
 			return ""
@@ -141,17 +151,25 @@ func Start(ctx context.Context) error {
 		return fmt.Errorf("failed to recover update jobs: %w", err)
 	}
 	for _, job := range interrupted {
-		if job.Kind == models.UpdateJobKindCore {
+		switch {
+		case job.Kind == models.UpdateJobKindCore:
 			// The stored reason mentions plugin versions; core jobs get
 			// their own wording in the ledger and the job.
 			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, nil, nil, interruptedCoreReason); err != nil {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
 			}
 			writeCoreLedger(job, "", interruptedCoreReason, "failed")
-			continue
+		case isPluginManagementJob(job):
+			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, nil, nil, interruptedActionReason); err != nil {
+				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
+			}
+			writeActionLedger(job, failAll(job.Plugins, interruptedActionReason), interruptedActionReason)
+		default:
+			writeLedger(job, nil, "failed", interruptedReason)
 		}
-		writeLedger(job, nil, "failed", interruptedReason)
 	}
+	// Uploads of interrupted jobs (now finished) are no longer needed.
+	cleanupUploads()
 
 	queued, err := db.ListQueuedUpdateJobs()
 	if err != nil {
@@ -214,22 +232,36 @@ func run(job models.UpdateJob) {
 		log.Printf("Update job %d: failed to mark running: %v", job.ID, err)
 	}
 
+	if job.UploadPath != "" {
+		defer removeUpload(job)
+	}
+
 	site, err := findSite(job.SiteID)
 	if err != nil {
-		if job.Kind == models.UpdateJobKindCore {
+		switch {
+		case job.Kind == models.UpdateJobKindCore:
 			finishCore(job, models.UpdateJobFailed, failedCoreResult("", err.Error()), nil, err.Error())
 			writeCoreLedger(job, "", err.Error(), "failed")
-			return
+		case isPluginManagementJob(job):
+			results := failAll(actionTargets(job), err.Error())
+			finishAction(job, models.UpdateJobFailed, results, err.Error())
+			writeActionLedger(job, results, err.Error())
+		default:
+			finish(job, models.UpdateJobFailed, failAll(job.Plugins, err.Error()), err.Error())
 		}
-		finish(job, models.UpdateJobFailed, failAll(job.Plugins, err.Error()), err.Error())
 		return
 	}
 
-	if job.Kind == models.UpdateJobKindCore {
+	switch {
+	case job.Kind == models.UpdateJobKindCore:
 		runCore(job, *site)
-		return
+	case models.IsPluginActionKind(job.Kind):
+		runPluginAction(job, *site)
+	case job.Kind == models.UpdateJobKindInstall:
+		runInstall(job, *site)
+	default:
+		runPlugins(job, *site)
 	}
-	runPlugins(job, *site)
 }
 
 // runPlugins updates the job's plugins with one WP-CLI call.
@@ -238,6 +270,8 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 	for i, p := range job.Plugins {
 		names[i] = p.Name
 	}
+	// Checked against the pre-update versions, for the ledger status.
+	updatedVulnerable := anyVulnerable(job.SiteID, job.Plugins)
 	updates, updateErr := updatePlugins(site, names)
 	results := buildResults(job.Plugins, updates, updateErr)
 
@@ -255,7 +289,7 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 	}
 
 	finish(job, models.UpdateJobDone, results, jobErr)
-	writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil), "")
+	writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable), "")
 }
 
 // runCore updates WordPress core to the latest minor or major version and
@@ -416,28 +450,54 @@ func buildResults(reqs []models.PluginUpdateRequest, updates []wpcli.UpdateResul
 	return results
 }
 
-// ledgerStatus follows the site update ledger's convention: "failed" if any
-// plugin failed, "full" if the site has no plugin updates left, otherwise
-// "partial".
-func ledgerStatus(siteID string, results []models.UpdateResult, cacheFresh bool) string {
+// ledgerStatus picks a plugin update job's ledger status:
+//   - "failed" if any plugin failed;
+//   - "full" if the site has no plugin updates left (it's up to date);
+//   - "vuln" if the job updated vulnerable plugins and no plugin with an
+//     update left is vulnerable;
+//   - otherwise "partial" (also when the refreshed state is unknown).
+func ledgerStatus(siteID string, results []models.UpdateResult, cacheFresh, updatedVulnerable bool) string {
 	for _, r := range results {
 		if r.Status == models.UpdateFailed {
-			return "failed"
+			return models.LedgerFailed
 		}
 	}
 	if !cacheFresh {
-		return "partial"
+		return models.LedgerPartial
 	}
 	plugins, err := db.GetSitePlugins(siteID)
 	if err != nil {
-		return "partial"
+		return models.LedgerPartial
 	}
+	var remaining []models.WPPlugin
 	for _, p := range plugins {
 		if p.Update != "" && p.Update != "none" {
-			return "partial"
+			remaining = append(remaining, p)
 		}
 	}
-	return "full"
+	if len(remaining) == 0 {
+		return models.LedgerFull
+	}
+	if !updatedVulnerable {
+		return models.LedgerPartial
+	}
+	for _, p := range remaining {
+		if pluginVulnerable(siteID, p.Name, p.Version) {
+			return models.LedgerPartial
+		}
+	}
+	return models.LedgerVuln
+}
+
+// anyVulnerable reports whether any of the requested plugins was
+// vulnerable at the version installed when the job was created.
+func anyVulnerable(siteID string, plugins []models.PluginUpdateRequest) bool {
+	for _, p := range plugins {
+		if p.OldVersion != "" && pluginVulnerable(siteID, p.Name, p.OldVersion) {
+			return true
+		}
+	}
+	return false
 }
 
 // writeLedger records a finished job in the site update ledger, using the

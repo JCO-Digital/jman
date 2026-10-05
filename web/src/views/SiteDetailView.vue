@@ -13,13 +13,19 @@ import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import SiteTrafficCard from "../components/SiteTrafficCard.vue";
-import PluginUpdateModal from "../components/PluginUpdateModal.vue";
+import PluginRowActions from "../components/PluginRowActions.vue";
+import PluginInstallModal from "../components/PluginInstallModal.vue";
+import { usePluginUpdatesStore } from "../stores/pluginUpdates";
 import { useCoreUpdateStore } from "../stores/coreUpdate";
 import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
-import { formatBytes, providerLabel } from "../utils/format";
-import type { SiteUpdateLedgerEntry } from "../types";
+import {
+	availablePluginUpdate,
+	formatBytes,
+	providerLabel,
+} from "../utils/format";
+import type { LedgerStatus, SiteUpdateLedgerEntry } from "../types";
 import { BASE_URL } from "../utils/api";
 
 const props = defineProps<{
@@ -33,6 +39,7 @@ const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
 const coreUpdateStore = useCoreUpdateStore();
 const jobsStore = useUpdateJobsStore();
+const pluginUpdatesStore = usePluginUpdatesStore();
 const ignoreStore = useIgnoreStore();
 const toast = useToastStore();
 const { confirm } = useConfirm();
@@ -81,7 +88,7 @@ watch(
 const ledgerEntries = ref<SiteUpdateLedgerEntry[]>([]);
 const showAddLedgerModal = ref(false);
 const newLedgerType = ref<"core" | "plugin" | "theme">("plugin");
-const newLedgerStatus = ref<"full" | "partial" | "failed">("full");
+const newLedgerStatus = ref<LedgerStatus>("full");
 const newLedgerDetails = ref("");
 const isSavingLedger = ref(false);
 
@@ -144,10 +151,61 @@ const saveManualLedgerEntry = async () => {
 	}
 };
 
+/** Badge colour per ledger status; plugin management actions stay neutral. */
+function ledgerBadgeClass(status: LedgerStatus): string {
+	switch (status) {
+		case "full":
+			return "active";
+		case "vuln":
+			return "info";
+		case "partial":
+			return "warning";
+		case "failed":
+			return "error";
+		default:
+			return "";
+	}
+}
+
+const ledgerStatusTitle: Record<LedgerStatus, string> = {
+	full: "Site brought up to date: no plugin updates left",
+	vuln: "Vulnerable plugins updated; other updates remain",
+	partial: "Updates remain, or only some plugins were changed",
+	failed: "Failed",
+	activated: "Plugins activated",
+	deactivated: "Plugins deactivated",
+	deleted: "Plugins deleted",
+	installed: "Plugin installed",
+};
+
 function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 	if (!entry.data_json) return "—";
 	try {
 		const data = JSON.parse(entry.data_json);
+		if (data.action) {
+			const verbs: Record<string, string> = {
+				activate: "Activated",
+				deactivate: "Deactivated",
+				delete: "Deleted",
+				uninstall: "Uninstalled (data removed)",
+				install: data.activate
+					? "Installed and activated"
+					: "Installed",
+			};
+			const plugins = (data.plugins ?? [])
+				.map((p: any) => {
+					const version = p.version ? ` ${p.version}` : "";
+					const mark =
+						p.status === "success" ? "✓" : `✗ ${p.error ?? ""}`;
+					return `${p.plugin}${version} (${mark.trim()})`;
+				})
+				.join(", ");
+			let txt = `${verbs[data.action] ?? data.action}: ${plugins}`;
+			if (data.action === "install" && data.source) {
+				txt += `\nSource: ${data.source}`;
+			}
+			return txt;
+		}
 		if (data.summary) {
 			let txt = data.summary;
 			if (data.updates && data.updates.length > 0) {
@@ -480,7 +538,58 @@ const goToOrganization = () => {
 	}
 };
 
-const showPluginUpdateModal = ref(false);
+// --- Plugin management ---
+const canManagePlugins = computed(
+	() => authStore.canExecute && !!site.value?.can_wp_cli,
+);
+const showInstallModal = ref(false);
+
+/** Plugins with a cached update and no job already queued on them. */
+const updatablePlugins = computed(() =>
+	sitePlugins.value.filter(
+		(p) =>
+			availablePluginUpdate(p) &&
+			!jobsStore.pendingAction(siteId.value, p.name),
+	),
+);
+const vulnerableUpdatable = computed(() =>
+	updatablePlugins.value.filter((p) =>
+		p.vulnerabilities.some((v) => !v.suppressed),
+	),
+);
+
+async function checkPluginUpdates() {
+	if (!site.value) return;
+	try {
+		const updates = await pluginUpdatesStore.checkSite(site.value.id);
+		toast.addToast(
+			updates.length
+				? `${updates.length} plugin update${updates.length === 1 ? "" : "s"} available on ${site.value.domain}.`
+				: `All plugins on ${site.value.domain} are up to date.`,
+			updates.length ? "info" : "success",
+		);
+	} catch (e: any) {
+		toast.addToast(`Failed to check plugin updates: ${e.message}`, "error");
+	}
+}
+
+/** Queues one background job updating the given plugins. */
+async function updatePlugins(plugins: { name: string }[], vulnerable: boolean) {
+	if (!site.value || plugins.length === 0) return;
+	const what = vulnerable ? "vulnerable plugin" : "plugin";
+	const ok = await confirm(
+		`Update ${plugins.length} ${what}${plugins.length === 1 ? "" : "s"} on ${site.value.domain}?`,
+		{ confirmLabel: "Update" },
+	);
+	if (!ok) return;
+	try {
+		await jobsStore.enqueue([
+			{ site_id: site.value.id, plugins: plugins.map((p) => p.name) },
+		]);
+	} catch (e: any) {
+		toast.addToast(`Failed to queue plugin updates: ${e.message}`, "error");
+	}
+}
 
 // WordPress Core update card state
 const isCheckingCoreUpdate = ref(false);
@@ -837,13 +946,43 @@ const unlinkOrganization = async () => {
 			<section class="card mt-4">
 				<div class="card-header">
 					<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
-					<button
-						v-if="authStore.canExecute && site.can_wp_cli"
-						class="btn btn-primary btn-sm"
-						@click="showPluginUpdateModal = true"
-					>
-						Check Updates
-					</button>
+					<div v-if="canManagePlugins" class="plugin-card-actions">
+						<button
+							class="btn btn-outline btn-sm"
+							:disabled="pluginUpdatesStore.isChecking(site.id)"
+							@click="checkPluginUpdates"
+						>
+							<span
+								v-if="pluginUpdatesStore.isChecking(site.id)"
+								class="spinner spinner-small"
+							></span>
+							{{
+								pluginUpdatesStore.isChecking(site.id)
+									? "Checking…"
+									: "Check for updates"
+							}}
+						</button>
+						<button
+							v-if="vulnerableUpdatable.length"
+							class="btn btn-outline btn-sm"
+							@click="updatePlugins(vulnerableUpdatable, true)"
+						>
+							Update vulnerable ({{ vulnerableUpdatable.length }})
+						</button>
+						<button
+							v-if="updatablePlugins.length"
+							class="btn btn-primary btn-sm"
+							@click="updatePlugins(updatablePlugins, false)"
+						>
+							Update all ({{ updatablePlugins.length }})
+						</button>
+						<button
+							class="btn btn-primary btn-sm"
+							@click="showInstallModal = true"
+						>
+							Install plugin
+						</button>
+					</div>
 				</div>
 				<div class="table-container">
 					<table class="data-table">
@@ -853,11 +992,38 @@ const unlinkOrganization = async () => {
 								<th>Version</th>
 								<th>Status</th>
 								<th>Vulns</th>
+								<th v-if="canManagePlugins" class="text-right">
+									Actions
+								</th>
 							</tr>
 						</thead>
 						<tbody>
+							<tr
+								v-for="job in jobsStore.activeInstalls(site.id)"
+								:key="`install-${job.id}`"
+							>
+								<td
+									:colspan="canManagePlugins ? 5 : 4"
+									class="text-muted"
+								>
+									<span class="plugin-actions-pending">
+										<span
+											class="spinner spinner-small"
+										></span>
+										{{
+											job.status === "queued"
+												? "Queued install of"
+												: "Installing"
+										}}
+										{{ job.source }}…
+									</span>
+								</td>
+							</tr>
 							<tr v-if="sitePlugins.length === 0">
-								<td colspan="4" class="empty-state">
+								<td
+									:colspan="canManagePlugins ? 5 : 4"
+									class="empty-state"
+								>
 									No plugins found.
 								</td>
 							</tr>
@@ -871,16 +1037,12 @@ const unlinkOrganization = async () => {
 								<td class="text-muted">
 									{{ plugin.version }}
 									<span
-										v-if="
-											site &&
-											jobsStore.isUpdating(
-												site.id,
-												plugin.name,
-											)
-										"
-										class="spinner spinner-small version-spinner"
-										title="Updating…"
-									/>
+										v-if="availablePluginUpdate(plugin)"
+										class="plugin-update-available"
+										:title="`Update available: ${availablePluginUpdate(plugin)}`"
+									>
+										→ {{ availablePluginUpdate(plugin) }}
+									</span>
 								</td>
 								<td>
 									<span
@@ -907,6 +1069,13 @@ const unlinkOrganization = async () => {
 										{{ plugin.vulnerabilities.length }}
 									</span>
 									<span v-else class="text-muted">—</span>
+								</td>
+								<td v-if="canManagePlugins">
+									<PluginRowActions
+										:site-id="site.id"
+										:site-name="site.domain"
+										:plugin="plugin"
+									/>
 								</td>
 							</tr>
 						</tbody>
@@ -960,12 +1129,9 @@ const unlinkOrganization = async () => {
 										:class="[
 											'status-badge',
 											'badge-sm',
-											entry.status === 'full'
-												? 'active'
-												: entry.status === 'partial'
-													? 'warning'
-													: 'error',
+											ledgerBadgeClass(entry.status),
 										]"
+										:title="ledgerStatusTitle[entry.status]"
 									>
 										{{ entry.status }}
 									</span>
@@ -1043,17 +1209,12 @@ const unlinkOrganization = async () => {
 			</div>
 		</main>
 
-		<!-- Plugin Update Modal -->
-		<PluginUpdateModal
+		<PluginInstallModal
 			v-if="site"
-			:visible="showPluginUpdateModal"
+			:visible="showInstallModal"
 			:site-id="site.id"
-			@close="
-				() => {
-					showPluginUpdateModal = false;
-					fetchLedger();
-				}
-			"
+			:site-name="site.domain"
+			@close="showInstallModal = false"
 		/>
 
 		<!-- Link Organization Modal -->
@@ -1149,7 +1310,10 @@ const unlinkOrganization = async () => {
 					<div class="form-group mb-4">
 						<label for="ledger-status">Status</label>
 						<select id="ledger-status" v-model="newLedgerStatus">
-							<option value="full">Full Success</option>
+							<option value="full">Full (site up to date)</option>
+							<option value="vuln">
+								Vulnerable plugins updated
+							</option>
 							<option value="partial">Partial</option>
 							<option value="failed">Failed</option>
 						</select>

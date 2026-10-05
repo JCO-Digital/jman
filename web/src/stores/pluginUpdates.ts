@@ -1,33 +1,80 @@
 import { defineStore } from "pinia";
+import { ref } from "vue";
 import { useAuthStore } from "./auth";
+import { useDataStore } from "./data";
 import type { Plugin } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, handleErrorResponse } from "../utils/api";
 
+/** How many sites are checked at once when checking several. */
+const CHECK_CONCURRENCY = 4;
+
+/**
+ * Live update checks. jman-api asks the site over WP-CLI, refreshes its
+ * cached plugin list, and the data store then reloads that site's plugins,
+ * so the plugin tables show the fresh update state.
+ */
 export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	const authStore = useAuthStore();
+	const dataStore = useDataStore();
 
-	async function handleErrorResponse(res: Response): Promise<never> {
-		if (res.status === 401) {
-			authStore.logout();
-			throw new Error("Unauthorized");
-		}
-		let message: string;
+	/** Site IDs with a check in flight. */
+	const checking = ref(new Set<string>());
+
+	function isChecking(siteId: string): boolean {
+		return checking.value.has(siteId);
+	}
+
+	/** Checks one site; returns the plugins with an update available. */
+	async function checkSite(siteId: string): Promise<Plugin[]> {
+		checking.value = new Set(checking.value).add(siteId);
 		try {
-			const data = await res.json();
-			message = data.error || `Request failed (${res.status})`;
-		} catch {
-			message = `Request failed (${res.status})`;
+			const res = await fetch(
+				`${BASE_URL}/sites/${siteId}/plugin-updates`,
+				{
+					headers: authStore.authHeader,
+				},
+			);
+			if (!res.ok) await handleErrorResponse(res);
+			const updates: Plugin[] = await res.json();
+			await dataStore.reloadSitePlugins(siteId);
+			return updates;
+		} finally {
+			const next = new Set(checking.value);
+			next.delete(siteId);
+			checking.value = next;
 		}
-		throw new Error(message);
 	}
 
-	async function fetchPluginUpdates(siteId: string): Promise<Plugin[]> {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugin-updates`, {
-			headers: authStore.authHeader,
-		});
-		if (!res.ok) await handleErrorResponse(res);
-		return res.json();
+	/**
+	 * Checks several sites, a few at a time. onProgress is called after each
+	 * site; failures are collected rather than stopping the run.
+	 */
+	async function checkSites(
+		siteIds: string[],
+		onProgress?: (done: number, total: number) => void,
+	): Promise<{ failed: { siteId: string; error: string }[] }> {
+		const failed: { siteId: string; error: string }[] = [];
+		let next = 0;
+		let done = 0;
+		const worker = async () => {
+			while (next < siteIds.length) {
+				const siteId = siteIds[next++]!;
+				try {
+					await checkSite(siteId);
+				} catch (e: any) {
+					failed.push({ siteId, error: e.message || "Check failed" });
+				}
+				onProgress?.(++done, siteIds.length);
+			}
+		};
+		await Promise.all(
+			Array.from(
+				{ length: Math.min(CHECK_CONCURRENCY, siteIds.length) },
+				worker,
+			),
+		);
+		return { failed };
 	}
 
-	return { fetchPluginUpdates };
+	return { isChecking, checkSite, checkSites };
 });

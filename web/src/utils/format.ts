@@ -87,3 +87,15 @@ export function formatRelativeTime(timestamp: number, now: number): string {
 	if (hours < 24) return `${hours} h ago`;
 	return new Date(timestamp).toLocaleDateString();
 }
+
+/**
+ * The version a cached plugin can be updated to, or "" if none. WP-CLI
+ * reports no update as an empty update version; "none" is treated the same.
+ */
+export function availablePluginUpdate(plugin: {
+	update?: string;
+	version?: string;
+}): string {
+	const u = plugin.update ?? "";
+	return u && u !== "none" && u !== plugin.version ? u : "";
+}

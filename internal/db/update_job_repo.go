@@ -9,7 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-const updateJobColumns = `id, kind, site_id, status, plugins, target, results, core, error, created_by, created_at, started_at, finished_at`
+const updateJobColumns = `id, kind, site_id, status, plugins, target, source, activate, upload_path, results, core, error, created_by, created_at, started_at, finished_at`
 
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
@@ -34,9 +34,9 @@ func CreateUpdateJob(job *models.UpdateJob) error {
 	job.Results = []models.UpdateResult{}
 
 	err = db.QueryRow(
-		`INSERT INTO plugin_update_jobs (kind, site_id, status, plugins, target, created_by, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		job.Kind, job.SiteID, job.Status, string(plugins), job.Target, job.CreatedBy, job.CreatedAt,
+		`INSERT INTO plugin_update_jobs (kind, site_id, status, plugins, target, source, activate, upload_path, created_by, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		job.Kind, job.SiteID, job.Status, string(plugins), job.Target, job.Source, job.Activate, job.UploadPath, job.CreatedBy, job.CreatedAt,
 	).Scan(&job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to create update job: %w", err)
@@ -204,10 +204,10 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 	for rows.Next() {
 		var job models.UpdateJob
 		var plugins string
-		var target, results, core, errMsg, createdBy sql.NullString
+		var target, source, uploadPath, results, core, errMsg, createdBy sql.NullString
 		var startedAt, finishedAt sql.NullTime
 		if err := rows.Scan(
-			&job.ID, &job.Kind, &job.SiteID, &job.Status, &plugins, &target, &results, &core, &errMsg, &createdBy,
+			&job.ID, &job.Kind, &job.SiteID, &job.Status, &plugins, &target, &source, &job.Activate, &uploadPath, &results, &core, &errMsg, &createdBy,
 			&job.CreatedAt, &startedAt, &finishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan update job: %w", err)
@@ -228,6 +228,8 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 			}
 		}
 		job.Target = target.String
+		job.Source = source.String
+		job.UploadPath = uploadPath.String
 		job.Error = errMsg.String
 		job.CreatedBy = createdBy.String
 		if startedAt.Valid {
@@ -242,4 +244,30 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 		return nil, fmt.Errorf("failed to iterate update jobs: %w", err)
 	}
 	return jobs, nil
+}
+
+// ListUpdateJobUploadPaths returns the upload paths of jobs that haven't
+// finished, so leftover uploads of finished or deleted jobs can be removed.
+func ListUpdateJobUploadPaths() (map[string]bool, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := db.Query(
+		`SELECT upload_path FROM plugin_update_jobs WHERE upload_path IS NOT NULL AND upload_path != '' AND status IN (?, ?)`,
+		models.UpdateJobQueued, models.UpdateJobRunning,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list job uploads: %w", err)
+	}
+	defer rows.Close()
+	paths := map[string]bool{}
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths[p] = true
+	}
+	return paths, rows.Err()
 }

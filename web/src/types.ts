@@ -277,11 +277,27 @@ export interface MonitorStatus {
 	status_message?: string;
 }
 
+/**
+ * Update ledger statuses. "full": the site was brought up to date; "vuln":
+ * its vulnerable plugins were updated but other updates remain; "partial":
+ * updates remain or an action worked for only some plugins. The rest record
+ * plugin management actions.
+ */
+export type LedgerStatus =
+	| "full"
+	| "vuln"
+	| "partial"
+	| "failed"
+	| "activated"
+	| "deactivated"
+	| "deleted"
+	| "installed";
+
 export interface SiteUpdateLedgerEntry {
 	id: number;
 	site_id: string;
 	update_type: "core" | "plugin" | "theme";
-	status: "full" | "partial" | "failed";
+	status: LedgerStatus;
 	data_json?: string;
 	updated_by: string;
 	updated_at: string;
@@ -513,22 +529,37 @@ export type UpdateJobStatus =
 	/** jman-api restarted mid-update; the outcome on the site is unknown. */
 	| "interrupted";
 
-export type UpdateJobKind = "plugins" | "core";
+/** Plugin management job kinds that act on a set of installed plugins. */
+export type PluginActionKind =
+	| "activate"
+	| "deactivate"
+	| "delete"
+	| "uninstall";
+
+export type UpdateJobKind = "plugins" | "core" | PluginActionKind | "install";
 
 /**
- * A background update on one site: `wp plugin update` for one or more
- * plugins, or `wp core update`.
+ * A background change on one site: `wp plugin update` for one or more
+ * plugins (kind "plugins"), `wp core update`, activating, deactivating,
+ * deleting or uninstalling plugins, or installing one plugin.
  */
 export interface UpdateJob {
 	id: number;
 	kind: UpdateJobKind;
 	site_id: string;
 	status: UpdateJobStatus;
-	/** Plugins to update; empty for core jobs. */
+	/** Plugins to act on; empty for core and install jobs. */
 	plugins: { name: string; old_version: string }[];
 	/** Core jobs: "minor" or "major". */
 	target?: "minor" | "major";
-	/** One entry per plugin (or one "WordPress" entry) once finished. */
+	/** Install jobs: the slug, ZIP URL or uploaded file name. */
+	source?: string;
+	/** Install jobs: activate after installing. */
+	activate?: boolean;
+	/**
+	 * One entry per plugin (one "WordPress" entry for core jobs, one entry
+	 * for the installed plugin for install jobs) once finished.
+	 */
 	results: UpdateResult[];
 	/** Core jobs: the refreshed core state once finished. */
 	core?: SiteCore;
