@@ -54,7 +54,8 @@ The `jman-api` process runs a background task scheduler (every hour) for reminde
     - CVSS >= 7.0: `high`
     - CVSS >= 4.0: `medium`
     - Otherwise: `low`
-- In the same step, a detailed per-site vulnerability report (plugin/CVSS breakdown) is also posted to the `slackChannel` Slack channel, deduplicated against previously-sent reports — this is independent of the Task Reminders below, and replaces what used to be a separate `jman vuln sites --slack` cron job.
+- In the same step, a one-off Slack alert is posted to `slackChannel` for each newly found vulnerability with CVSS >= `CVSSThreshold`, listing the sites it is installed on. Each vulnerability is alerted only once.
+- Once a day, on the first slow tick at or after `vulnReportTime` (default `10:00`, server local time), a per-site vulnerability report (plugin/CVSS breakdown) is posted to `slackChannel`, skipping sites whose report is unchanged since it was last sent. This is independent of the Task Reminders below, and replaces what used to be a separate `jman vuln sites --slack` cron job.
 
 ### 2. Task Reminders
 - Sends Slack notifications for `pending` tasks that have reached their `reminder_date`.

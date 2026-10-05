@@ -63,6 +63,7 @@ type AppConfig struct {
 	RefreshSlowInterval int               `toml:"refreshSlowInterval" mapstructure:"refreshSlowInterval"`
 	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
 	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	VulnReportTime      string            `toml:"vulnReportTime" mapstructure:"vulnReportTime"` // "HH:MM" local time of the daily per-site Slack vuln report
 	KnockdPorts         string            `toml:"knockdPorts" mapstructure:"knockdPorts"`
 	KnockdTimeout       int               `toml:"knockdTimeout" mapstructure:"knockdTimeout"`
 	BehindProxy         bool              `toml:"behindProxy" mapstructure:"behindProxy"`
@@ -133,6 +134,7 @@ func loadConfig() error {
 	viper.SetDefault("refreshSlowInterval", 30)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
+	viper.SetDefault("vulnReportTime", "10:00")
 	viper.SetDefault("knockdPorts", "")
 	viper.SetDefault("knockdTimeout", 60)
 	// Default to trusting proxy headers only from loopback, the common case
@@ -173,6 +175,7 @@ func loadConfig() error {
 		"refreshSlowInterval":        "REFRESHSLOWINTERVAL",
 		"cvssThreshold":              "CVSSTHRESHOLD",
 		"vulnThreshold":              "VULNTHRESHOLD",
+		"vulnReportTime":             "VULNREPORTTIME",
 		"knockdPorts":                "KNOCKDPORTS",
 		"knockdTimeout":              "KNOCKDTIMEOUT",
 		"allowedOrigins":             "ALLOWEDORIGINS",

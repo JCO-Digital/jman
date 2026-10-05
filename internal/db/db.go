@@ -408,6 +408,18 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// vuln_alerts records which vulnerability UUIDs have already had
+			// their one-off "new vulnerability" Slack alert sent (or were
+			// seeded as pre-existing when alerting was first enabled).
+			Name: "vuln_alerts",
+			Columns: map[string]string{
+				"uuid":        "TEXT PRIMARY KEY",
+				"plugin_slug": "TEXT",
+				"cvss":        "REAL",
+				"sent_at":     "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "monitor_status",
 			Columns: map[string]string{
 				"domain":                "TEXT PRIMARY KEY COLLATE NOCASE",

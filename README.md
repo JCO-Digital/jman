@@ -104,6 +104,7 @@ slackChannel = "#alerts" # (optional, defaults to #testing)
 # Vulnerability scanning thresholds
 cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
 vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
+vulnReportTime = "10:00" # (optional, jman-api: local time of the daily per-site Slack vulnerability report)
 
 # Port knocking for SSH connections (optional)
 # knockdPorts = "7000,8000:udp,9000" # Port sequence before SSH/remote connections

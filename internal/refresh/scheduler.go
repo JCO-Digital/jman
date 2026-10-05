@@ -1,8 +1,9 @@
 // Package refresh keeps jman-api's cached SpinupWP/plugin/vulnerability data
 // fresh with an in-process scheduler, replacing the external `jman fetch`
 // cron job that jman-api previously depended on. Its slow tick also syncs
-// vulnerability Tasks and sends the Slack vulnerability summary, replacing
-// the external `jman vuln sites --slack` cron job.
+// vulnerability Tasks, sends new-vulnerability Slack alerts and, once a day,
+// the per-site Slack vulnerability summary, replacing the external
+// `jman vuln sites --slack` cron job.
 package refresh
 
 import (
@@ -12,6 +13,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/tasks"
 	"github.com/JCO-Digital/jman/internal/vuln"
@@ -105,9 +107,10 @@ func runFastTick() {
 // (a single unreachable server over SSH), not something that should page
 // anyone.
 //
-// On success, it syncs vulnerability findings into Tasks and sends the
-// per-site Slack vulnerability report — run here, right after the data that
-// feeds them is fetched, rather than on a separate fixed schedule.
+// On success, it syncs vulnerability findings into Tasks and sends a one-off
+// Slack alert for each newly found vulnerability, right after the data that
+// feeds them is fetched. The per-site Slack vulnerability report is sent only
+// once a day, on the first tick at or after config.Cfg.VulnReportTime.
 func runSlowTick() {
 	if err := cache.RunFullRefresh(slowTTL()); err != nil {
 		log.Printf("Refresh scheduler: full refresh failed: %v", err)
@@ -122,9 +125,57 @@ func runSlowTick() {
 	if err := tasks.SyncVulnerabilities(); err != nil {
 		log.Printf("Refresh scheduler: vuln task sync failed: %v", err)
 	}
+	if err := vuln.AlertNewVulnerabilities(); err != nil {
+		log.Printf("Refresh scheduler: new vuln Slack alerts failed: %v", err)
+	}
+	runDailySiteReport(time.Now())
+}
+
+// siteReportLastDateSettingKey is the system setting holding the local date
+// ("2006-01-02") the daily per-site vulnerability report was last sent, so a
+// restart neither re-sends nor skips that day's report.
+const siteReportLastDateSettingKey = "vuln_site_report_last_date"
+
+// runDailySiteReport sends the per-site Slack vulnerability report if it is
+// due today and hasn't been sent yet.
+func runDailySiteReport(now time.Time) {
+	lastDate := ""
+	setting, err := db.GetSetting(db.SystemSettingsUserID, siteReportLastDateSettingKey)
+	if err != nil {
+		log.Printf("Refresh scheduler: failed to read vuln report date: %v", err)
+		return
+	}
+	if setting != nil {
+		lastDate, _ = setting.Value.(string)
+	}
+	if !siteReportDue(now, lastDate, config.Cfg.VulnReportTime) {
+		return
+	}
+
 	if err := vuln.ScanVulnerabilities(vuln.ScanOptions{Mode: "sites", Slack: true}); err != nil {
 		log.Printf("Refresh scheduler: vuln Slack report failed: %v", err)
+		return
 	}
+	if _, err := db.SaveSetting(db.SystemSettingsUserID, siteReportLastDateSettingKey, now.Format(time.DateOnly)); err != nil {
+		log.Printf("Refresh scheduler: failed to save vuln report date: %v", err)
+	}
+}
+
+// siteReportDue reports whether the daily report should be sent at now: the
+// local time of day has reached reportTime ("HH:MM") and the report hasn't
+// already been sent on now's date. An unparsable reportTime falls back to
+// 10:00.
+func siteReportDue(now time.Time, lastDate, reportTime string) bool {
+	if lastDate == now.Format(time.DateOnly) {
+		return false
+	}
+	t, err := time.ParseInLocation("15:04", reportTime, now.Location())
+	if err != nil {
+		log.Printf("Refresh scheduler: invalid vulnReportTime %q, using 10:00", reportTime)
+		t = time.Date(0, 1, 1, 10, 0, 0, 0, now.Location())
+	}
+	due := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
+	return !now.Before(due)
 }
 
 // fastTTL/slowTTL are the TTLs passed to the cache layer's refresh
