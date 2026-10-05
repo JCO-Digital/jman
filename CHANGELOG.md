@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.4.0 (2026-10-02)
+## 6.5.0 (2026-10-05)
+
+#### Features
+
+- plugin management from the plugin lists, ledger statuses (2a788ad)
+
+## v6.4.0 (2026-10-02)
 
 #### Features
 
