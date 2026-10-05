@@ -297,8 +297,13 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
   plugin vulnerabilities, and WordPress core versions/vulnerabilities — the more expensive
   work, since it fans out over SSH/wp-cli to every managed site. On success, it also syncs
   vulnerability findings into Tasks (creating/updating a `Task` per affected site — see
-  `docs/TASK_SPECS.md`) and posts a per-site vulnerability summary to Slack
-  (`slackChannel`), deduplicated against previously-sent reports.
+  `docs/TASK_SPECS.md`) and posts a one-off Slack alert (`slackChannel`) for each newly
+  found vulnerability with CVSS >= `cvssThreshold`, listing the sites it is installed on.
+  Each vulnerability is alerted only once (tracked in the `api.db` `vuln_alerts` table);
+  on the first run after upgrading, existing vulnerabilities are recorded without alerting.
+- Once a day, on the first slow tick at or after `vulnReportTime` (server local time),
+  the per-site vulnerability summary is posted to Slack (`slackChannel`). Sites whose
+  report is identical to one already sent are skipped.
 
 If you have an external cron or systemd-timer job running `jman fetch` or
 `jman vuln sites --slack` against this host, remove it — `jman-api` now performs both of
@@ -313,6 +318,7 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 | `refreshDisabled`     | `JMAN_REFRESHDISABLED`     | `false` | Disable both refresh schedulers. |
 | `refreshFastInterval` | `JMAN_REFRESHFASTINTERVAL` | `5`     | Fast-tick interval, in minutes.  |
 | `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30`    | Slow-tick interval, in minutes.  |
+| `vulnReportTime`      | `JMAN_VULNREPORTTIME`      | `10:00` | Daily per-site vuln report time. |
 
 The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
 only the automatic external-cron dependency has been removed.
