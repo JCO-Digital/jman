@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -20,15 +21,29 @@ func JsonMiddleware(next http.Handler) http.Handler {
 }
 
 // MaxBodyMiddleware limits the size of incoming request bodies to prevent
-// memory exhaustion from excessively large payloads.
+// memory exhaustion from excessively large payloads. Plugin ZIP uploads get
+// a larger limit; their handler enforces the exact one after auth.
 func MaxBodyMiddleware(next http.Handler) http.Handler {
 	const maxBodySize = 1 << 20 // 1 MB
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Body != nil {
-			r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
+			limit := int64(maxBodySize)
+			if isPluginUpload(r) {
+				limit = maxPluginUploadBytes + 1<<20
+			}
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// isPluginUpload reports whether r is a multipart plugin ZIP upload to
+// POST /api/sites/{id}/plugin-install.
+func isPluginUpload(r *http.Request) bool {
+	return r.Method == http.MethodPost &&
+		strings.HasPrefix(r.URL.Path, "/api/sites/") &&
+		strings.HasSuffix(r.URL.Path, "/plugin-install") &&
+		strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
 }
 
 // SecurityHeadersMiddleware adds standard security headers to all responses.

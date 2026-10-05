@@ -251,6 +251,41 @@ func maintenanceModeActive(site models.CliSite) bool {
 	return false
 }
 
+// PluginAction runs `wp plugin <action>` for the given plugins in one call.
+// action is "activate", "deactivate", "delete" (files only) or "uninstall"
+// (runs each plugin's uninstall routine, deactivating it first).
+//
+// Deactivate and delete run with other plugins skipped, so they still work
+// when a broken plugin makes WordPress fatal on load, which is often why a
+// plugin is being deactivated. Activate and uninstall need the plugins'
+// code loaded to run their hooks.
+func PluginAction(site models.CliSite, action string, plugins []string) error {
+	if len(plugins) == 0 {
+		return nil
+	}
+	includePlugins := true
+	switch action {
+	case "activate", "uninstall":
+	case "deactivate", "delete":
+		includePlugins = false
+	default:
+		return fmt.Errorf("unsupported plugin action %q", action)
+	}
+
+	args := append([]string{"plugin", action}, plugins...)
+	if action == "uninstall" {
+		args = append(args, "--deactivate")
+	}
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: includePlugins, Timeout: WriteTimeout}, args...)
+	if err != nil {
+		if msg := strings.TrimSpace(res.Error); msg != "" {
+			return fmt.Errorf("failed to %s plugin: %s", action, msg)
+		}
+		return fmt.Errorf("failed to %s plugin: %w", action, err)
+	}
+	return nil
+}
+
 // RemovePlugin uninstalls and deactivates a plugin.
 func RemovePlugin(site models.CliSite, plugin string) (bool, error) {
 	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: WriteTimeout}, "plugin", "uninstall", plugin, "--deactivate")

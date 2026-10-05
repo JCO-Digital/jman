@@ -700,10 +700,11 @@ func initAPISchema() error {
 			},
 		},
 		{
-			// Background update jobs on one site: plugin updates (kind
-			// "plugins", one or more plugins) or WordPress core updates
-			// (kind "core"). plugins/results hold JSON arrays, core the
-			// refreshed SiteCore after a core job.
+			// Background jobs on one site: plugin updates (kind "plugins"),
+			// WordPress core updates (kind "core"), plugin activate,
+			// deactivate, delete and uninstall, and plugin installs (source,
+			// activate, upload_path). plugins/results hold JSON arrays, core
+			// the refreshed SiteCore after a core job.
 			Name: "plugin_update_jobs",
 			Columns: map[string]string{
 				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
@@ -711,6 +712,9 @@ func initAPISchema() error {
 				"site_id":     "TEXT NOT NULL",
 				"target":      "TEXT",
 				"core":        "TEXT",
+				"source":      "TEXT",
+				"activate":    "INTEGER NOT NULL DEFAULT 0",
+				"upload_path": "TEXT",
 				"status":      "TEXT NOT NULL",
 				"plugins":     "TEXT NOT NULL",
 				"results":     "TEXT",

@@ -403,6 +403,22 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 	return report
 }
 
+// IsPluginVulnerableOnSite reports whether the given version of a plugin
+// on a site is affected by a known vulnerability that isn't suppressed by
+// an ignore entry for the plugin, the vulnerability, the site or its server.
+func IsPluginVulnerableOnSite(siteID, plugin, version string, matcher *db.VulnIgnoreMatcher) bool {
+	report := GetVulnerabilityReportsForPlugin(plugin, []models.PluginSite{{SiteID: siteID, Version: version}}, matcher)
+	if report == nil {
+		return false
+	}
+	for _, v := range report.Vulnerabilities {
+		if !v.Suppressed {
+			return true
+		}
+	}
+	return false
+}
+
 // ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
 // determines which sites are affected by which vulnerabilities based on version ranges.
 func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport, error) {

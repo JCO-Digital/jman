@@ -4,9 +4,30 @@ import "time"
 
 // Update job kinds.
 const (
+	// UpdateJobKindPlugins updates the listed plugins.
 	UpdateJobKindPlugins = "plugins"
 	UpdateJobKindCore    = "core"
+	// Plugin management kinds act on the listed plugins.
+	UpdateJobKindActivate   = "activate"
+	UpdateJobKindDeactivate = "deactivate"
+	// UpdateJobKindDelete removes the plugins' files only.
+	UpdateJobKindDelete = "delete"
+	// UpdateJobKindUninstall runs the plugins' uninstall routines (which
+	// usually remove their data) and then deletes them.
+	UpdateJobKindUninstall = "uninstall"
+	// UpdateJobKindInstall installs one plugin from Source.
+	UpdateJobKindInstall = "install"
 )
+
+// IsPluginActionKind reports whether kind is one of the plugin management
+// kinds (activate, deactivate, delete, uninstall).
+func IsPluginActionKind(kind string) bool {
+	switch kind {
+	case UpdateJobKindActivate, UpdateJobKindDeactivate, UpdateJobKindDelete, UpdateJobKindUninstall:
+		return true
+	}
+	return false
+}
 
 // Update job statuses.
 const (
@@ -28,20 +49,31 @@ const (
 	UpdateUpdated  = "Updated"
 	UpdateUpToDate = "Up to date"
 	UpdateFailed   = "failed"
+	// UpdateDone means a plugin management action succeeded.
+	UpdateDone = "Done"
 )
 
-// UpdateJob is one background update on a single site: either
-// `wp plugin update` for a set of plugins (Kind "plugins") or
-// `wp core update` (Kind "core").
+// UpdateJob is one background change on a single site: `wp plugin update`
+// for a set of plugins (Kind "plugins"), `wp core update` (Kind "core"),
+// activating, deactivating, deleting or uninstalling a set of plugins, or
+// installing one plugin (Kind "install").
 type UpdateJob struct {
 	ID     int64  `json:"id"`
 	Kind   string `json:"kind"`
 	SiteID string `json:"site_id"` // site UUID
 	Status string `json:"status"`
-	// Plugins lists the plugins to update; empty for core jobs.
+	// Plugins lists the plugins to act on; empty for core and install jobs.
 	Plugins []PluginUpdateRequest `json:"plugins"`
 	// Target is "minor" or "major" for core jobs.
 	Target string `json:"target,omitempty"`
+	// Source is what an install job installs: a WordPress.org slug, a ZIP
+	// URL, or the original filename of an uploaded ZIP.
+	Source string `json:"source,omitempty"`
+	// Activate makes an install job activate the plugin after installing.
+	Activate bool `json:"activate,omitempty"`
+	// UploadPath is the local path of an uploaded ZIP for an install job.
+	// It's removed once the job has finished.
+	UploadPath string `json:"-"`
 	// Results has one entry per requested plugin (or a single "WordPress"
 	// entry for core jobs) once the job has finished.
 	Results []UpdateResult `json:"results"`

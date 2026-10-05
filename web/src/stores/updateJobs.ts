@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
 import { useNotificationStore, type NotificationType } from "./notifications";
-import type { UpdateJob, UpdateResult } from "../types";
+import type { PluginActionKind, UpdateJob, UpdateJobKind } from "../types";
 import { BASE_URL, handleErrorResponse } from "../utils/api";
 
 /** How often the job list is polled while any job is queued or running. */
@@ -14,6 +14,22 @@ const isActive = (job: UpdateJob) =>
 
 const truncate = (msg: string) =>
 	msg.length > 150 ? msg.substring(0, 147) + "..." : msg;
+
+/** Present and past tense of each plugin management action, for messages. */
+const ACTION_VERBS: Record<PluginActionKind, [string, string]> = {
+	activate: ["Activating", "Activated"],
+	deactivate: ["Deactivating", "Deactivated"],
+	delete: ["Deleting", "Deleted"],
+	uninstall: ["Uninstalling", "Uninstalled"],
+};
+
+const isPluginAction = (kind: UpdateJobKind): kind is PluginActionKind =>
+	kind in ACTION_VERBS;
+
+/** What an install request installs: a slug or ZIP URL, or a ZIP file. */
+export type InstallSource =
+	| { source: string; activate: boolean }
+	| { file: File; activate: boolean };
 
 /**
  * Background plugin and core updates. jman-api runs each job (one site,
@@ -40,24 +56,37 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 
 	const activeJobs = computed(() => jobs.value.filter(isActive));
 
-	/** Site ID → names of plugins currently queued or updating there. */
-	const updatingBySite = computed(() => {
-		const map = new Map<string, Set<string>>();
+	/**
+	 * Site ID → plugin name → the kind of the oldest queued or running job
+	 * acting on it (an update or a management action).
+	 */
+	const pendingBySite = computed(() => {
+		const map = new Map<string, Map<string, UpdateJobKind>>();
 		for (const job of activeJobs.value) {
-			if (job.kind === "core") continue;
-			const names = map.get(job.site_id) ?? new Set<string>();
-			for (const p of job.plugins) names.add(p.name);
+			if (job.kind === "core" || job.kind === "install") continue;
+			const names =
+				map.get(job.site_id) ?? new Map<string, UpdateJobKind>();
+			for (const p of job.plugins) {
+				if (!names.has(p.name)) names.set(p.name, job.kind);
+			}
 			map.set(job.site_id, names);
 		}
 		return map;
 	});
 
-	function isUpdating(siteId: string, pluginName: string): boolean {
-		return updatingBySite.value.get(siteId)?.has(pluginName) ?? false;
+	/** The kind of job queued or running on a plugin, if any. */
+	function pendingAction(
+		siteId: string,
+		pluginName: string,
+	): UpdateJobKind | undefined {
+		return pendingBySite.value.get(siteId)?.get(pluginName);
 	}
 
-	function isSiteUpdating(siteId: string): boolean {
-		return updatingBySite.value.has(siteId);
+	/** Queued or running plugin installs on a site. */
+	function activeInstalls(siteId: string): UpdateJob[] {
+		return activeJobs.value.filter(
+			(j) => j.kind === "install" && j.site_id === siteId,
+		);
 	}
 
 	/** The queued or running core update job on a site, if any. */
@@ -67,44 +96,26 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		);
 	}
 
-	/**
-	 * The latest finished result for a plugin on a site among the given
-	 * jobs, so a modal only shows outcomes of updates it started.
-	 */
-	function resultFor(
-		siteId: string,
-		pluginName: string,
-		jobIds: ReadonlySet<number>,
-	): UpdateResult | undefined {
-		for (let i = jobs.value.length - 1; i >= 0; i--) {
-			const job = jobs.value[i]!;
-			if (
-				job.kind === "core" ||
-				job.site_id !== siteId ||
-				isActive(job)
-			) {
-				continue;
-			}
-			if (!jobIds.has(job.id)) continue;
-			const result = job.results.find((r) => r.name === pluginName);
-			if (result) return result;
-		}
-		return undefined;
-	}
-
 	function handleFinished(job: UpdateJob) {
 		if (job.kind === "core") {
 			if (job.core) dataStore.applyCoreUpdate(job.site_id, job.core);
 		} else {
-			for (const r of job.results) {
-				if (r.status === "Updated") {
-					dataStore.applyPluginUpdate(
-						job.site_id,
-						r.name,
-						r.new_version,
-					);
+			if (job.kind === "plugins") {
+				// Show new versions right away; the reload below confirms them.
+				for (const r of job.results) {
+					if (r.status === "Updated") {
+						dataStore.applyPluginUpdate(
+							job.site_id,
+							r.name,
+							r.new_version,
+						);
+					}
 				}
 			}
+			// The job refreshed jman-api's cached plugin list for the site.
+			dataStore.reloadSitePlugins(job.site_id).catch((e) => {
+				console.error("Failed to reload site plugins", e);
+			});
 		}
 		lastFinishedBySite.value = {
 			...lastFinishedBySite.value,
@@ -123,6 +134,22 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			return {
 				title: `WordPress core · ${site}`,
 				...describeCore(job, site),
+			};
+		}
+		if (job.kind === "install") {
+			return {
+				title: `Install plugin · ${site}`,
+				...describeInstall(job, site),
+			};
+		}
+		if (isPluginAction(job.kind)) {
+			const count = job.plugins.length;
+			const what =
+				count === 1 ? job.plugins[0]!.name : `${count} plugins`;
+			const action = job.kind.charAt(0).toUpperCase() + job.kind.slice(1);
+			return {
+				title: `${action} ${what} · ${site}`,
+				...describeAction(job, job.kind, site),
 			};
 		}
 		const count = job.plugins.length;
@@ -170,6 +197,86 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const from = r?.old_version ? ` from ${r.old_version}` : "";
 		return {
 			message: `Updated WordPress on ${siteName}${from} to ${r?.new_version || "the latest version"}.`,
+			type: "success",
+		};
+	}
+
+	function describeAction(
+		job: UpdateJob,
+		kind: PluginActionKind,
+		siteName: string,
+	): { message: string; type: NotificationType } {
+		const [doing, done] = ACTION_VERBS[kind];
+		const requested = job.plugins.map((p) => p.name).join(", ");
+		switch (job.status) {
+			case "queued":
+				return {
+					message: `Queued: ${doing.toLowerCase()} ${requested} on ${siteName}.`,
+					type: "running",
+				};
+			case "running":
+				return {
+					message: `${doing} ${requested} on ${siteName}…`,
+					type: "running",
+				};
+			case "interrupted":
+				return {
+					message: `${doing} ${requested} on ${siteName} was interrupted by a jman-api restart. Check the site's plugins.`,
+					type: "error",
+				};
+		}
+		const failed = job.results.filter((r) => r.status === "failed");
+		if (job.status === "failed" || failed.length > 0) {
+			const names = failed.length
+				? failed.map((r) => r.name).join(", ")
+				: requested;
+			const reason = failed[0]?.error || job.error || "Unknown error";
+			return {
+				message: `Failed: ${doing.toLowerCase()} ${names} on ${siteName}: ${truncate(reason)}`,
+				type: "error",
+			};
+		}
+		return {
+			message: `${done} ${requested} on ${siteName}.`,
+			type: "success",
+		};
+	}
+
+	function describeInstall(
+		job: UpdateJob,
+		siteName: string,
+	): { message: string; type: NotificationType } {
+		const source = job.source ?? "plugin";
+		switch (job.status) {
+			case "queued":
+				return {
+					message: `Queued install of ${source} on ${siteName}.`,
+					type: "running",
+				};
+			case "running":
+				return {
+					message: `Installing ${source} on ${siteName}…`,
+					type: "running",
+				};
+			case "interrupted":
+				return {
+					message: `Install of ${source} on ${siteName} was interrupted by a jman-api restart. Check the site's plugins.`,
+					type: "error",
+				};
+		}
+		const r = job.results[0];
+		if (job.status === "failed" || r?.status === "failed") {
+			return {
+				message: `Failed to install ${source} on ${siteName}: ${truncate(job.error || r?.error || "Unknown error")}`,
+				type: "error",
+			};
+		}
+		const name =
+			r?.name && r.name !== source ? `${r.name} (${source})` : source;
+		const version = r?.new_version ? ` ${r.new_version}` : "";
+		const activated = job.activate ? " and activated" : "";
+		return {
+			message: `Installed${activated} ${name}${version} on ${siteName}.`,
 			type: "success",
 		};
 	}
@@ -342,6 +449,56 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return created;
 	}
 
+	/** Queues activating, deactivating, deleting or uninstalling plugins. */
+	async function enqueueAction(
+		siteId: string,
+		action: PluginActionKind,
+		plugins: string[],
+	): Promise<UpdateJob> {
+		const job = await postJobs<UpdateJob>(
+			`/sites/${siteId}/plugin-actions`,
+			{
+				action,
+				plugins,
+			},
+		);
+		merge([job]);
+		schedulePoll();
+		return job;
+	}
+
+	/** Queues installing a plugin from a slug, a ZIP URL or a ZIP upload. */
+	async function enqueueInstall(
+		siteId: string,
+		install: InstallSource,
+	): Promise<UpdateJob> {
+		let job: UpdateJob;
+		if ("file" in install) {
+			const form = new FormData();
+			form.append("file", install.file);
+			form.append("activate", String(install.activate));
+			const res = await fetch(
+				`${BASE_URL}/sites/${siteId}/plugin-install`,
+				{
+					method: "POST",
+					// No Content-Type: the browser sets the multipart boundary.
+					headers: authStore.authHeader,
+					body: form,
+				},
+			);
+			if (!res.ok) await handleErrorResponse(res);
+			job = (await res.json()) as UpdateJob;
+		} else {
+			job = await postJobs<UpdateJob>(
+				`/sites/${siteId}/plugin-install`,
+				install,
+			);
+		}
+		merge([job]);
+		schedulePoll();
+		return job;
+	}
+
 	/** Queues a WordPress core update on a site. */
 	async function enqueueCore(
 		siteId: string,
@@ -367,12 +524,13 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		jobs,
 		activeJobs,
 		lastFinishedBySite,
-		isUpdating,
-		isSiteUpdating,
+		pendingAction,
+		activeInstalls,
 		activeCoreJob,
-		resultFor,
 		initialize,
 		enqueue,
+		enqueueAction,
+		enqueueInstall,
 		enqueueCore,
 		fetchJobs,
 		reset,

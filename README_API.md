@@ -317,15 +317,25 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
 only the automatic external-cron dependency has been removed.
 
-## Plugin and Core Updates
+## Plugin Management and Core Updates
 
-Plugin and WordPress core updates run as background jobs inside jman-api. The web UI polls `GET /api/update-jobs` while any job is queued or running and shows them in its task list.
+Plugin updates, plugin activation, deactivation, deletion and installs, and WordPress core updates run as background jobs inside jman-api. The web UI polls `GET /api/update-jobs` while any job is queued or running and shows them in its task list.
 
 - `POST /api/plugin-update-jobs` with `{"jobs": [{"site_id": "<uuid>", "plugins": ["akismet"]}]}` queues plugin updates, one job per site. Each job updates all of its plugins in a single `wp plugin update` call.
 - `POST /api/sites/{id}/core-update` with `{"target": "minor"|"major"}` queues a core update and returns `202` with the job. It returns `409` if a core update is already queued or running for the site. When the job finishes, its `core` field holds the refreshed core version state.
 - `GET /api/update-jobs` lists queued and running jobs of both kinds (`kind`: `plugins` or `core`), plus jobs that finished in the last 10 minutes. `GET /api/update-jobs/{id}` returns one job. `GET /api/plugin-update-jobs[/{id}]` is kept as an alias.
+- `POST /api/sites/{id}/plugin-actions` with `{"action": "activate"|"deactivate"|"delete"|"uninstall", "plugins": ["akismet"]}` queues a plugin management job and returns `202`. `delete` removes the plugin's files only; `uninstall` runs its uninstall routine, which usually also removes its settings and data. Active plugins must be deactivated before they're deleted or uninstalled. Must-use plugins and drop-ins can't be managed.
+- `POST /api/sites/{id}/plugin-install` queues installing one plugin and returns `202`. Send `{"source": "<slug or https ZIP URL>", "activate": true}` as JSON, or upload a ZIP (up to 64 MB) as `multipart/form-data` with fields `file` and `activate`. Uploaded ZIPs are copied to the site's server with scp and removed afterwards. A slug that's already installed returns `409`.
+- `GET /api/sites/{id}/plugins` returns a site's cached plugins. `GET /api/sites/{id}/plugin-updates` checks the site live and refreshes that cache.
 - Up to four sites update at once, and a site never has two jobs running.
-- Each finished job writes one entry to the site's update ledger.
+- Each finished job writes one entry to the site's update ledger, with one of these statuses:
+  - `full`: the site was brought up to date. Every update succeeded and no plugin updates are left.
+  - `vuln`: the job updated vulnerable plugins, and no plugin with an update left is vulnerable (ignored vulnerabilities don't count), but other updates remain.
+  - `partial`: the requested updates succeeded but updates remain, or a plugin action worked for only some of its plugins.
+  - `failed`: nothing in the job succeeded (for updates: any plugin failed).
+  - `activated`, `deactivated`, `deleted` (deleting files or a full uninstall; the entry's data says which), `installed`: a plugin action that worked for every plugin.
+  - Core updates keep their existing statuses: `full` when updated, `partial` when already at the latest version, `failed` on error.
+- A site's `last_update` (in `GET /api/sites`) is its latest ledger entry that isn't a plugin action, so activating or installing a plugin doesn't count as updating the site.
 - Jobs are stored in `api.db`, so they survive page reloads. If jman-api restarts mid-update, the running job is marked interrupted and still-queued jobs run again.
 
 ## Slow SSH Hosts
