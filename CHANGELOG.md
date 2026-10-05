@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.5.0 (2026-10-05)
+## 6.6.0 (2026-10-05)
+
+#### Features
+
+- daily site vuln reports and one-off new-vulnerability alerts (c059d11)
+
+## v6.5.0 (2026-10-05)
 
 #### Features
 
