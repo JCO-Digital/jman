@@ -26,7 +26,7 @@ import {
 	providerLabel,
 } from "../utils/format";
 import type { LedgerStatus, SiteUpdateLedgerEntry } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 const props = defineProps<{
 	id: string;
@@ -94,11 +94,8 @@ const isSavingLedger = ref(false);
 
 const fetchLedger = async () => {
 	try {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/sites/${siteId.value}/update-ledger`,
-			{
-				headers: authStore.authHeader,
-			},
 		);
 		if (res.ok) {
 			const data = await res.json();
@@ -117,13 +114,12 @@ const saveManualLedgerEntry = async () => {
 			dataJSON = JSON.stringify({ note: newLedgerDetails.value.trim() });
 		}
 
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/sites/${siteId.value}/update-ledger`,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					...authStore.authHeader,
 				},
 				body: JSON.stringify({
 					update_type: newLedgerType.value,

@@ -1,12 +1,10 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import type { Organization, Contact, ContactType, Site } from "../types";
-import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
-import { handleErrorResponse, BASE_URL } from "../utils/api";
+import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
 export const useOrganizationStore = defineStore("organization", () => {
-	const authStore = useAuthStore();
 	const dataStore = useDataStore();
 
 	const organizations = ref<Organization[]>([]);
@@ -25,8 +23,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 				url.searchParams.append("search", search);
 			}
 
-			const res = await fetch(url.toString(), {
-				headers: authStore.authHeader,
+			const res = await apiFetch(url.toString(), {
 				signal,
 			});
 
@@ -45,9 +42,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 
 	async function getOrganization(id: number): Promise<Organization | null> {
 		try {
-			const res = await fetch(`${BASE_URL}/organizations/${id}`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/organizations/${id}`);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -57,11 +52,10 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function createOrganization(organization: Partial<Organization>) {
-		const res = await fetch(`${BASE_URL}/organizations`, {
+		const res = await apiFetch(`${BASE_URL}/organizations`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(organization),
 		});
@@ -73,11 +67,10 @@ export const useOrganizationStore = defineStore("organization", () => {
 		id: number,
 		organization: Partial<Organization>,
 	) {
-		const res = await fetch(`${BASE_URL}/organizations/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/organizations/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(organization),
 		});
@@ -86,9 +79,8 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function deleteOrganization(id: number) {
-		const res = await fetch(`${BASE_URL}/organizations/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/organizations/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}
@@ -96,22 +88,16 @@ export const useOrganizationStore = defineStore("organization", () => {
 	async function fetchOrganizationContacts(
 		organizationId: number,
 	): Promise<Contact[]> {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/organizations/${organizationId}/contacts`,
-			{
-				headers: authStore.authHeader,
-			},
 		);
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
 	async function fetchOrganizationSites(organizationId: number) {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/organizations/${organizationId}/sites`,
-			{
-				headers: authStore.authHeader,
-			},
 		);
 		if (!res.ok) await handleErrorResponse(res);
 		const sites = await res.json();
@@ -132,11 +118,10 @@ export const useOrganizationStore = defineStore("organization", () => {
 		phone?: string;
 		type: ContactType;
 	}) {
-		const res = await fetch(`${BASE_URL}/contacts`, {
+		const res = await apiFetch(`${BASE_URL}/contacts`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(contact),
 		});
@@ -145,11 +130,10 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function updateContact(id: number, contact: Partial<Contact>) {
-		const res = await fetch(`${BASE_URL}/contacts/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/contacts/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(contact),
 		});
@@ -158,9 +142,8 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function deleteContact(id: number) {
-		const res = await fetch(`${BASE_URL}/contacts/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/contacts/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}
@@ -168,9 +151,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 	async function getOrganizationForSite(
 		siteId: string,
 	): Promise<Organization | null> {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/organization`, {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/organization`);
 		if (res.status === 404) return null;
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
@@ -180,11 +161,10 @@ export const useOrganizationStore = defineStore("organization", () => {
 		siteId: string,
 		organizationId: number,
 	) {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/link`, {
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/link`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify({ organization_id: organizationId }),
 		});
@@ -192,9 +172,8 @@ export const useOrganizationStore = defineStore("organization", () => {
 	}
 
 	async function unlinkSite(siteId: string) {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/link`, {
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/link`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}

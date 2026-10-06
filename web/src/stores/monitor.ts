@@ -2,7 +2,7 @@ import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import type { MonitorHistory, MonitorStatus } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 export const useMonitorStore = defineStore("monitor", () => {
 	const authStore = useAuthStore();
@@ -30,11 +30,8 @@ export const useMonitorStore = defineStore("monitor", () => {
 	async function fetchHistory(hours: number = 48) {
 		isLoadingHistory.value = true;
 		try {
-			const res = await fetch(
+			const res = await apiFetch(
 				`${BASE_URL}/monitor/history?hours=${hours}`,
-				{
-					headers: authStore.authHeader,
-				},
 			);
 			if (!res.ok) {
 				if (res.status === 401) {
@@ -68,9 +65,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 	async function fetchStatus(domain?: string) {
 		try {
 			const url = `${BASE_URL}/monitor/status${domain ? `?domain=${encodeURIComponent(domain)}` : ""}`;
-			const res = await fetch(url, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(url);
 			if (!res.ok) {
 				if (res.status === 401) {
 					authStore.logout();

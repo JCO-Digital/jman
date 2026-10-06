@@ -4,7 +4,7 @@ import { useAuthStore } from "../../stores/auth";
 import { useUserStore } from "../../stores/user";
 import { validatePasswordStrength } from "../../utils/passwordStrength";
 import QRCode from "qrcode";
-import { BASE_URL } from "../../utils/api";
+import { BASE_URL, apiFetch } from "../../utils/api";
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
@@ -48,12 +48,8 @@ async function fetchSlackSettings() {
 	if (!authStore.isAuthenticated) return;
 	try {
 		const [idRes, timeRes] = await Promise.all([
-			fetch(`${BASE_URL}/settings/slack_id`, {
-				headers: authStore.authHeader,
-			}),
-			fetch(`${BASE_URL}/settings/slack_reminder_time`, {
-				headers: authStore.authHeader,
-			}),
+			apiFetch(`${BASE_URL}/settings/slack_id`),
+			apiFetch(`${BASE_URL}/settings/slack_reminder_time`),
 		]);
 
 		if (idRes.ok) {
@@ -93,18 +89,16 @@ async function saveSlackSettings() {
 	slackError.value = "";
 	try {
 		const [idRes, timeRes] = await Promise.all([
-			fetch(`${BASE_URL}/settings/slack_id`, {
+			apiFetch(`${BASE_URL}/settings/slack_id`, {
 				method: "POST",
 				headers: {
-					...authStore.authHeader,
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify(slackId.value),
 			}),
-			fetch(`${BASE_URL}/settings/slack_reminder_time`, {
+			apiFetch(`${BASE_URL}/settings/slack_reminder_time`, {
 				method: "POST",
 				headers: {
-					...authStore.authHeader,
 					"Content-Type": "application/json",
 				},
 				body: JSON.stringify(slackReminderTime.value),

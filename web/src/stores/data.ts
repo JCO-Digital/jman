@@ -16,7 +16,7 @@ import type {
 } from "../types";
 import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
-import { BASE_URL, handleErrorResponse } from "../utils/api";
+import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 // Cache keys are versioned: bump a key when the shape of what it holds
 // changes (ids moving from SpinupWP integers to UUID strings, sites gaining
@@ -345,25 +345,23 @@ export const useDataStore = defineStore("data", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const headers: Record<string, string> = {
-				...authStore.authHeader,
-			};
+			const headers: Record<string, string> = {};
 
 			const monitorStore = useMonitorStore();
 
 			const [serversRes, sitesRes, pluginsRes, pluginInfoRes] =
 				await Promise.all([
-					fetch(`${BASE_URL}/servers`, { headers }),
-					fetch(`${BASE_URL}/sites`, { headers }),
-					fetch(`${BASE_URL}/plugins`, { headers }),
-					fetch(`${BASE_URL}/plugininfo`, { headers }),
+					apiFetch(`${BASE_URL}/servers`, { headers }),
+					apiFetch(`${BASE_URL}/sites`, { headers }),
+					apiFetch(`${BASE_URL}/plugins`, { headers }),
+					apiFetch(`${BASE_URL}/plugininfo`, { headers }),
 					monitorStore.fetchHistory(),
 				]);
 
 			// Fetch vulnerabilities separately to not block primary data
 			isVulnsLoading.value = true;
 			vulnsError.value = null;
-			fetch(`${BASE_URL}/vulns/core`, { headers })
+			apiFetch(`${BASE_URL}/vulns/core`, { headers })
 				.then(async (res) => {
 					if (res.ok) {
 						const data = await res.json();
@@ -383,7 +381,7 @@ export const useDataStore = defineStore("data", () => {
 					console.error("Failed to fetch core vulnerabilities:", err);
 				});
 
-			fetch(`${BASE_URL}/vulns`, { headers })
+			apiFetch(`${BASE_URL}/vulns`, { headers })
 				.then(async (res) => {
 					if (res.ok) {
 						const data = await res.json();
@@ -521,10 +519,7 @@ export const useDataStore = defineStore("data", () => {
 	 * background plugin change or an update check refreshed it.
 	 */
 	async function reloadSitePlugins(siteId: string) {
-		const authStore = useAuthStore();
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/plugins`, {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/plugins`);
 		if (!res.ok) await handleErrorResponse(res);
 		const sitePlugins: Plugin[] = await res.json();
 		plugins.value = [
@@ -554,13 +549,10 @@ export const useDataStore = defineStore("data", () => {
 		siteId: string,
 		environment: SiteEnvironment | "",
 	) {
-		const authStore = useAuthStore();
-
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/environment`, {
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/environment`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify({ environment }),
 		});

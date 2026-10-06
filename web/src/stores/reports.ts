@@ -1,12 +1,9 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import type { ReportMeta, ReportResult } from "../types";
-import { useAuthStore } from "./auth";
-import { handleErrorResponse, BASE_URL } from "../utils/api";
+import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
 export const useReportsStore = defineStore("reports", () => {
-	const authStore = useAuthStore();
-
 	const reports = ref<ReportMeta[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
@@ -15,9 +12,7 @@ export const useReportsStore = defineStore("reports", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/reports`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/reports`);
 			if (!res.ok) await handleErrorResponse(res);
 			reports.value = await res.json();
 		} catch (e: any) {
@@ -44,9 +39,7 @@ export const useReportsStore = defineStore("reports", () => {
 			if (value) url.searchParams.append(key, value);
 		}
 
-		const res = await fetch(url.toString(), {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(url.toString(), {});
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}

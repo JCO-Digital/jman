@@ -51,7 +51,7 @@ func runUseradd(cmd *cobra.Command, args []string) error {
 		if _, err := rand.Read(secret); err != nil {
 			return fmt.Errorf("failed to generate JWT secret: %w", err)
 		}
-		cfg = config.NewUsersConfig(hex.EncodeToString(secret), 24)
+		cfg = config.NewUsersConfig(hex.EncodeToString(secret))
 		fmt.Fprintf(os.Stderr, "No users.toml found — a new file will be created at %s\n", filePath)
 	} else {
 		loaded, err := config.LoadUsersConfig(configDir)

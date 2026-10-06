@@ -6,12 +6,9 @@ import type {
 	AssetPayment,
 	EnrichedOrganizationAsset,
 } from "../types";
-import { useAuthStore } from "./auth";
-import { handleErrorResponse, BASE_URL } from "../utils/api";
+import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
 export const useAssetStore = defineStore("asset", () => {
-	const authStore = useAuthStore();
-
 	const assets = ref<Asset[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
@@ -21,8 +18,7 @@ export const useAssetStore = defineStore("asset", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/assets`, {
-				headers: authStore.authHeader,
+			const res = await apiFetch(`${BASE_URL}/assets`, {
 				signal,
 			});
 
@@ -48,8 +44,7 @@ export const useAssetStore = defineStore("asset", () => {
 		const url = new URL(`${BASE_URL}/assets`, window.location.origin);
 		url.searchParams.append("search", search);
 
-		const res = await fetch(url.toString(), {
-			headers: authStore.authHeader,
+		const res = await apiFetch(url.toString(), {
 			signal,
 		});
 
@@ -59,9 +54,7 @@ export const useAssetStore = defineStore("asset", () => {
 
 	async function getAsset(id: number): Promise<Asset | null> {
 		try {
-			const res = await fetch(`${BASE_URL}/assets/${id}`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/assets/${id}`);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -71,11 +64,10 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function createAsset(asset: Partial<Asset>) {
-		const res = await fetch(`${BASE_URL}/assets`, {
+		const res = await apiFetch(`${BASE_URL}/assets`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(asset),
 		});
@@ -84,11 +76,10 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function updateAsset(id: number, asset: Partial<Asset>) {
-		const res = await fetch(`${BASE_URL}/assets/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/assets/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(asset),
 		});
@@ -97,9 +88,8 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function deleteAsset(id: number) {
-		const res = await fetch(`${BASE_URL}/assets/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/assets/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}
@@ -108,11 +98,8 @@ export const useAssetStore = defineStore("asset", () => {
 	async function fetchOrganizationAssets(
 		organizationId: number,
 	): Promise<EnrichedOrganizationAsset[]> {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/organizations/${organizationId}/assets`,
-			{
-				headers: authStore.authHeader,
-			},
 		);
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
@@ -131,9 +118,7 @@ export const useAssetStore = defineStore("asset", () => {
 		if (params?.status) url.searchParams.append("status", params.status);
 		if (params?.before) url.searchParams.append("before", params.before);
 
-		const res = await fetch(url.toString(), {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(url.toString(), {});
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
@@ -142,13 +127,12 @@ export const useAssetStore = defineStore("asset", () => {
 		organizationId: number,
 		data: Partial<OrganizationAsset>,
 	) {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/organizations/${organizationId}/assets`,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					...authStore.authHeader,
 				},
 				body: JSON.stringify(data),
 			},
@@ -161,9 +145,7 @@ export const useAssetStore = defineStore("asset", () => {
 		id: number,
 	): Promise<EnrichedOrganizationAsset | null> {
 		try {
-			const res = await fetch(`${BASE_URL}/organization-assets/${id}`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/organization-assets/${id}`);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -176,11 +158,10 @@ export const useAssetStore = defineStore("asset", () => {
 		id: number,
 		data: Partial<OrganizationAsset>,
 	) {
-		const res = await fetch(`${BASE_URL}/organization-assets/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/organization-assets/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(data),
 		});
@@ -189,9 +170,8 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function unlinkAsset(id: number) {
-		const res = await fetch(`${BASE_URL}/organization-assets/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/organization-assets/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}
@@ -200,11 +180,8 @@ export const useAssetStore = defineStore("asset", () => {
 	async function fetchAssetPayments(
 		organizationAssetId: number,
 	): Promise<AssetPayment[]> {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/organization-assets/${organizationAssetId}/payments`,
-			{
-				headers: authStore.authHeader,
-			},
 		);
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
@@ -219,13 +196,12 @@ export const useAssetStore = defineStore("asset", () => {
 			next_billing?: string;
 		},
 	) {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/organization-assets/${organizationAssetId}/payments`,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					...authStore.authHeader,
 				},
 				body: JSON.stringify(data),
 			},
@@ -235,9 +211,8 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function deletePayment(id: number) {
-		const res = await fetch(`${BASE_URL}/asset-payments/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/asset-payments/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}

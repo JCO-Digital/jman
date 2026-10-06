@@ -1,9 +1,8 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
 import type { Plugin } from "../types";
-import { BASE_URL, handleErrorResponse } from "../utils/api";
+import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 /** How many sites are checked at once when checking several. */
 const CHECK_CONCURRENCY = 4;
@@ -14,7 +13,6 @@ const CHECK_CONCURRENCY = 4;
  * so the plugin tables show the fresh update state.
  */
 export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
-	const authStore = useAuthStore();
 	const dataStore = useDataStore();
 
 	/** Site IDs with a check in flight. */
@@ -28,11 +26,8 @@ export const usePluginUpdatesStore = defineStore("pluginUpdates", () => {
 	async function checkSite(siteId: string): Promise<Plugin[]> {
 		checking.value = new Set(checking.value).add(siteId);
 		try {
-			const res = await fetch(
+			const res = await apiFetch(
 				`${BASE_URL}/sites/${siteId}/plugin-updates`,
-				{
-					headers: authStore.authHeader,
-				},
 			);
 			if (!res.ok) await handleErrorResponse(res);
 			const updates: Plugin[] = await res.json();

@@ -15,6 +15,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Public routes (no auth required) ---
 	mux.HandleFunc("GET /api/health", HealthHandler(version))
 	mux.HandleFunc("POST /api/auth/login", LoginHandler(&usersCfg, limiter))
+	mux.HandleFunc("POST /api/auth/refresh", RefreshHandler(&usersCfg))
+	mux.HandleFunc("POST /api/auth/logout", LogoutHandler)
 
 	// --- Protected routes (JWT required with level check) ---
 	basic := func(h http.HandlerFunc) http.Handler {
@@ -29,7 +31,6 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	execute := func(h http.HandlerFunc) http.Handler {
 		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelExecute)(h))
 	}
-	mux.Handle("POST /api/auth/refresh", basic(RefreshHandler(&usersCfg)))
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
 	mux.Handle("GET /api/plugininfo", basic(PluginInfoHandler))
 	mux.Handle("GET /api/servers", basic(ServersHandler))

@@ -3,7 +3,7 @@ import { ref, onMounted } from "vue";
 import { useSettingsStore } from "../../stores/settings";
 import { useAuthStore } from "../../stores/auth";
 import { useUserStore } from "../../stores/user";
-import { BASE_URL } from "../../utils/api";
+import { BASE_URL, apiFetch } from "../../utils/api";
 import type { VulnSettings } from "../../types";
 
 const settingsStore = useSettingsStore();
@@ -21,9 +21,7 @@ onMounted(async () => {
 	if (!authStore.canAdmin) return;
 	userStore.ensureUsers();
 	try {
-		const res = await fetch(`${BASE_URL}/vuln-settings`, {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(`${BASE_URL}/vuln-settings`);
 		if (res.ok) {
 			const data: VulnSettings = await res.json();
 			vulnDefaultAssignee.value = data.defaultAssignee;
@@ -38,10 +36,9 @@ async function saveVulnAssignee() {
 	vulnAssigneeSuccess.value = "";
 	vulnAssigneeError.value = "";
 	try {
-		const res = await fetch(`${BASE_URL}/vuln-settings`, {
+		const res = await apiFetch(`${BASE_URL}/vuln-settings`, {
 			method: "POST",
 			headers: {
-				...authStore.authHeader,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({

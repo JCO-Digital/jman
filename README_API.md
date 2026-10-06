@@ -87,8 +87,12 @@ This creates `~/.config/jman/users.toml` automatically. You can also create it m
 # Generate with: openssl rand -hex 32
 jwtSecret = "your_64_char_hex_string_here"
 
-# JWT token lifetime in hours (default: 24)
-tokenLifetimeHours = 24
+# Lifetime of the short-lived access token (JWT) in minutes (default: 15)
+accessTokenLifetimeMinutes = 15
+
+# How long a login session lasts without being used, in days (default: 30).
+# Each refresh restarts this window.
+refreshTokenLifetimeDays = 30
 
 [[users]]
 username = "admin"
@@ -159,7 +163,7 @@ If a user has a `totpSecret` configured, they must provide a valid TOTP code at 
 
 ### `POST /api/auth/login`
 
-Authenticate with username and password to receive a JWT token.
+Authenticate with username and password to receive a short-lived access token (JWT). The response also sets the refresh token as a `jman_refresh` cookie (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/auth`).
 
 **Request:**
 
@@ -198,22 +202,27 @@ The `totp` field is only required if the user has a `totpSecret` configured.
 
 ### `POST /api/auth/refresh`
 
-Exchange a valid JWT for a fresh token with a new expiry. Requires authentication.
-
-**Request Headers:**
-
-```
-Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
-```
+Exchange the `jman_refresh` cookie for a new access token. No `Authorization` header is needed, so this works after the access token has expired. The refresh token is rotated: the response sets a new cookie, and the old one stops working. Presenting an already rotated refresh token more than 30 seconds after its rotation revokes the whole session, since it suggests the token was copied.
 
 **Success Response (`200 OK`):**
 
 ```json
 {
 	"token": "eyJhbGciOiJIUzI1NiIs...",
-	"expiresAt": "2025-01-17T14:30:00Z"
+	"expiresAt": "2025-01-17T14:30:00Z",
+	"user": {
+		"username": "admin",
+		"displayName": "Admin User",
+		"level": "admin"
+	}
 }
 ```
+
+**Error Responses:** `401` with `Session expired` (missing, unknown or expired cookie), `Session revoked` (rotated token reused, or the user's password or 2FA changed) or `User no longer exists`. The cookie is cleared.
+
+### `POST /api/auth/logout`
+
+Ends the session named by the `jman_refresh` cookie and clears the cookie. Returns `204 No Content`. Access tokens already issued remain valid until they expire.
 
 ## Data Endpoints
 
@@ -259,23 +268,24 @@ These endpoints do not require authentication:
 
 - `GET /api/health` — API health status and version.
 - `POST /api/auth/login` — Authentication.
+- `POST /api/auth/refresh` — Authenticated by the refresh token cookie.
+- `POST /api/auth/logout` — Ends the session in the refresh token cookie.
 
 ## Usage Example
 
 ```bash
-# 1. Login to get a token
-TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/login \
+# 1. Login to get a token; the refresh token cookie goes into cookies.txt
+TOKEN=$(curl -s -c cookies.txt -X POST https://jman.example.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"admin","password":"your_password"}' \
   | jq -r '.token')
 
 # 2. Use the token to access protected endpoints
-curl -s http://localhost:8080/api/servers \
+curl -s https://jman.example.com/api/servers \
   -H "Authorization: Bearer $TOKEN" | jq .
 
-# 3. Refresh the token before it expires
-NEW_TOKEN=$(curl -s -X POST http://localhost:8080/api/auth/refresh \
-  -H "Authorization: Bearer $TOKEN" \
+# 3. Get a new access token with the (rotated) refresh token cookie
+NEW_TOKEN=$(curl -s -b cookies.txt -c cookies.txt -X POST https://jman.example.com/api/auth/refresh \
   | jq -r '.token')
 ```
 
@@ -365,4 +375,6 @@ For hosts that are slow over SSH, such as WP Engine, see [docs/slow-ssh-hosts.md
 - Passwords are never stored or logged in plaintext — only bcrypt hashes.
 - Error messages for wrong username vs. wrong password are intentionally identical to prevent user enumeration.
 - JWT tokens are signed with HS256 (HMAC-SHA256) using the `jwtSecret` from `users.toml`.
-- Tokens are stateless and cannot be individually revoked. The configurable token lifetime (default: 24 hours) limits exposure.
+- Access tokens are stateless and short-lived (default: 15 minutes). The web UI keeps them in memory only.
+- Refresh tokens are random, stored only as SHA-256 hashes in `api.db`, and rotated on every use. Logging out, changing a password, or changing 2FA revokes them.
+- The refresh token cookie is `Secure`, so the web UI must be served over HTTPS (or `localhost`). If the web UI runs on a different origin than the API, list that origin explicitly in `allowedOrigins`; a `*` wildcard can't carry cookies.

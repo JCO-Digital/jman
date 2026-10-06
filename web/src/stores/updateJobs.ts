@@ -1,10 +1,9 @@
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
-import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
 import { useNotificationStore, type NotificationType } from "./notifications";
 import type { PluginActionKind, UpdateJob, UpdateJobKind } from "../types";
-import { BASE_URL, handleErrorResponse } from "../utils/api";
+import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 /** How often the job list is polled while any job is queued or running. */
 const POLL_INTERVAL_MS = 3000;
@@ -39,7 +38,6 @@ export type InstallSource =
  * jman-api, so spinners survive reloads and show other users' updates too.
  */
 export const useUpdateJobsStore = defineStore("updateJobs", () => {
-	const authStore = useAuthStore();
 	const dataStore = useDataStore();
 	const notifications = useNotificationStore();
 
@@ -370,9 +368,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	}
 
 	async function fetchJobs() {
-		const res = await fetch(`${BASE_URL}/update-jobs`, {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(`${BASE_URL}/update-jobs`);
 		if (!res.ok) await handleErrorResponse(res);
 		const listed: UpdateJob[] = await res.json();
 
@@ -382,9 +378,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const missing = [...watched].filter((id) => !listedIds.has(id));
 		const fetched = await Promise.all(
 			missing.map(async (id) => {
-				const r = await fetch(`${BASE_URL}/update-jobs/${id}`, {
-					headers: authStore.authHeader,
-				});
+				const r = await apiFetch(`${BASE_URL}/update-jobs/${id}`);
 				if (r.status === 404) {
 					watched.delete(id);
 					return null;
@@ -422,11 +416,10 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	}
 
 	async function postJobs<T>(path: string, body: unknown): Promise<T> {
-		const res = await fetch(`${BASE_URL}${path}`, {
+		const res = await apiFetch(`${BASE_URL}${path}`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(body),
 		});
@@ -477,12 +470,11 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			const form = new FormData();
 			form.append("file", install.file);
 			form.append("activate", String(install.activate));
-			const res = await fetch(
+			const res = await apiFetch(
 				`${BASE_URL}/sites/${siteId}/plugin-install`,
 				{
 					method: "POST",
 					// No Content-Type: the browser sets the multipart boundary.
-					headers: authStore.authHeader,
 					body: form,
 				},
 			);

@@ -6,7 +6,7 @@ import type {
 	CreateAgentTokenPayload,
 	CreatedAgentToken,
 } from "../types";
-import { BASE_URL, handleErrorResponse } from "../utils/api";
+import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 export const useAgentTokensStore = defineStore("agentTokens", () => {
 	const authStore = useAuthStore();
@@ -24,9 +24,7 @@ export const useAgentTokensStore = defineStore("agentTokens", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/agent-tokens`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/agent-tokens`);
 			if (res.status === 401) {
 				authStore.logout();
 				return;
@@ -56,11 +54,10 @@ export const useAgentTokensStore = defineStore("agentTokens", () => {
 			server_name: serverName,
 			description: description || undefined,
 		};
-		const res = await fetch(`${BASE_URL}/agent-tokens`, {
+		const res = await apiFetch(`${BASE_URL}/agent-tokens`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -73,9 +70,8 @@ export const useAgentTokensStore = defineStore("agentTokens", () => {
 	}
 
 	async function revokeToken(id: number): Promise<void> {
-		const res = await fetch(`${BASE_URL}/agent-tokens/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/agent-tokens/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) {
 			await handleErrorResponse(res);

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp/totp"
@@ -61,16 +62,12 @@ func effectiveLevel(user *config.UserEntry) config.UserLevel {
 	return level
 }
 
-// signToken creates a new signed JWT for the given user.
+// signToken creates a new signed, short-lived access JWT for the given user.
 func signToken(usersCfg *config.UsersConfig, user *config.UserEntry) (string, time.Time, error) {
 	usersCfg.LockRead()
 	defer usersCfg.UnlockRead()
-	lifetime := time.Duration(usersCfg.TokenLifetimeHours) * time.Hour
-	if lifetime <= 0 {
-		lifetime = 24 * time.Hour
-	}
 	now := time.Now()
-	expiresAt := now.Add(lifetime)
+	expiresAt := now.Add(usersCfg.AccessTokenLifetime())
 
 	level := effectiveLevel(user)
 
@@ -137,8 +134,58 @@ type loginRespUser struct {
 }
 
 type refreshResponse struct {
-	Token     string    `json:"token"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	Token     string        `json:"token"`
+	ExpiresAt time.Time     `json:"expiresAt"`
+	User      loginRespUser `json:"user"`
+}
+
+// --- Refresh token cookie ---
+
+const (
+	// refreshCookieName holds the long-lived refresh token. It is httpOnly,
+	// so page scripts never see it, and scoped to the auth endpoints.
+	refreshCookieName = "jman_refresh"
+	refreshCookiePath = "/api/auth"
+
+	// refreshReuseGrace is how long a rotated refresh token is still
+	// accepted. Two tabs refreshing at once both send the same cookie; the
+	// loser gets an access token without a new cookie instead of tripping
+	// reuse detection. After the grace period, presenting a rotated token
+	// means it was copied, and the whole session is revoked.
+	refreshReuseGrace = 30 * time.Second
+)
+
+func setRefreshCookie(w http.ResponseWriter, raw string, expiresAt time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    raw,
+		Path:     refreshCookiePath,
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func clearRefreshCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshCookieName,
+		Value:    "",
+		Path:     refreshCookiePath,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func refreshCookieValue(r *http.Request) string {
+	c, err := r.Cookie(refreshCookieName)
+	if err != nil {
+		return ""
+	}
+	return c.Value
 }
 
 // --- Handlers ---
@@ -195,13 +242,29 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 			}
 		}
 
-		// Authentication succeeded — issue a token.
+		// Authentication succeeded — issue an access token and start a session.
 		token, expiresAt, err := signToken(usersCfg, user)
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to sign JWT: %v", err)
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
+
+		now := time.Now()
+		if err := db.DeleteExpiredRefreshTokens(now); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
+		usersCfg.LockRead()
+		tokenVersion := user.TokenVersion
+		refreshExpiresAt := now.Add(usersCfg.RefreshTokenLifetime())
+		usersCfg.UnlockRead()
+		refreshToken, err := db.CreateRefreshToken(user.Username, tokenVersion, refreshExpiresAt)
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to create refresh token: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		setRefreshCookie(w, refreshToken, refreshExpiresAt)
 
 		limiter.Reset(clientIP)
 
@@ -217,23 +280,66 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 	}
 }
 
-// RefreshHandler returns an http.HandlerFunc that issues a fresh JWT for the
-// currently authenticated user. It must be placed behind AuthMiddleware.
+// RefreshHandler returns an http.HandlerFunc that exchanges the refresh
+// token cookie for a new access token, rotating the refresh token. It is a
+// public route: the cookie is the credential, so it keeps working after the
+// access token has expired.
 func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		claims := GetAuthClaims(r.Context())
-		if claims == nil {
-			WriteError(w, http.StatusUnauthorized, "Authentication required")
+		rt, err := db.GetRefreshToken(refreshCookieValue(r))
+		if err != nil {
+			if err != db.ErrRefreshTokenInvalid {
+				verb.LogPrintf(verb.Normal, "%v", err)
+			}
+			clearRefreshCookie(w)
+			WriteError(w, http.StatusUnauthorized, "Session expired")
+			return
+		}
+
+		revoke := func(reason string) {
+			if err := db.RevokeRefreshTokenFamily(rt.FamilyID); err != nil {
+				verb.LogPrintf(verb.Normal, "%v", err)
+			}
+			clearRefreshCookie(w)
+			WriteError(w, http.StatusUnauthorized, reason)
+		}
+
+		if rt.RotatedAt.Valid && time.Since(rt.RotatedAt.Time) > refreshReuseGrace {
+			verb.LogPrintf(verb.Normal, "Rotated refresh token reused for user %s; revoking session", rt.Username)
+			revoke("Session revoked")
 			return
 		}
 
 		usersCfg.LockRead()
-		user := config.FindUser(usersCfg, claims.Username)
+		user := config.FindUser(usersCfg, rt.Username)
+		var tokenVersion int
+		if user != nil {
+			tokenVersion = user.TokenVersion
+		}
+		refreshExpiresAt := time.Now().Add(usersCfg.RefreshTokenLifetime())
 		usersCfg.UnlockRead()
 
 		if user == nil {
-			WriteError(w, http.StatusUnauthorized, "User no longer exists")
+			revoke("User no longer exists")
 			return
+		}
+		if rt.TokenVersion != tokenVersion {
+			revoke("Session revoked")
+			return
+		}
+
+		// A token inside its grace period was already rotated by a
+		// concurrent request, which set the new cookie; don't rotate again.
+		if !rt.RotatedAt.Valid {
+			raw, rotated, err := db.RotateRefreshToken(rt, refreshExpiresAt)
+			if err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to rotate refresh token: %v", err)
+				WriteError(w, http.StatusInternalServerError, "Internal server error")
+				return
+			}
+			if rotated {
+				setRefreshCookie(w, raw, refreshExpiresAt)
+			}
 		}
 
 		token, expiresAt, err := signToken(usersCfg, user)
@@ -243,11 +349,32 @@ func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 			return
 		}
 
+		usersCfg.LockRead()
+		respUser := loginRespUser{
+			Username:    user.Username,
+			DisplayName: user.DisplayName,
+			Level:       effectiveLevel(user),
+		}
+		usersCfg.UnlockRead()
+
 		WriteJSON(w, http.StatusOK, refreshResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
+			User:      respUser,
 		})
 	}
+}
+
+// LogoutHandler ends the session named by the refresh token cookie and
+// clears the cookie. Outstanding access tokens stay valid until they expire.
+func LogoutHandler(w http.ResponseWriter, r *http.Request) {
+	if rt, err := db.GetRefreshToken(refreshCookieValue(r)); err == nil {
+		if err := db.RevokeRefreshTokenFamily(rt.FamilyID); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
+	}
+	clearRefreshCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- Middleware ---

@@ -2,7 +2,7 @@ import { ref, watch, nextTick } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import type { DashboardWidgetType } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 const LS_SETTINGS = "jman_settings";
 
@@ -48,9 +48,7 @@ export const useSettingsStore = defineStore("settings", () => {
 
 		isInitializing.value = true;
 		try {
-			const response = await fetch(`${BASE_URL}/settings/general`, {
-				headers: authStore.authHeader,
-			});
+			const response = await apiFetch(`${BASE_URL}/settings/general`);
 			if (response.ok) {
 				const data = await response.json();
 				if (data && data.value) {
@@ -113,10 +111,9 @@ export const useSettingsStore = defineStore("settings", () => {
 		if (authStore.isAuthenticated && !isInitializing.value) {
 			debounceTimeout = setTimeout(async () => {
 				try {
-					await fetch(`${BASE_URL}/settings/general`, {
+					await apiFetch(`${BASE_URL}/settings/general`, {
 						method: "POST",
 						headers: {
-							...authStore.authHeader,
 							"Content-Type": "application/json",
 						},
 						body: JSON.stringify(settings),

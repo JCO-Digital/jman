@@ -4,7 +4,7 @@ import { useDataStore } from "./data";
 import { useToastStore } from "./toast";
 import { useUpdateJobsStore } from "./updateJobs";
 import type { SiteCore, UpdateJob } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 	const authStore = useAuthStore();
@@ -13,9 +13,7 @@ export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 	const jobsStore = useUpdateJobsStore();
 
 	async function checkCoreUpdate(siteId: string): Promise<SiteCore> {
-		const res = await fetch(`${BASE_URL}/sites/${siteId}/core-update`, {
-			headers: authStore.authHeader,
-		});
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/core-update`);
 		if (!res.ok) {
 			if (res.status === 401) {
 				authStore.logout();

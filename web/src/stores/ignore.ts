@@ -6,7 +6,7 @@ import type {
 	UpdateIgnorePayload,
 } from "../types";
 import { useAuthStore } from "./auth";
-import { handleErrorResponse, BASE_URL } from "../utils/api";
+import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
 export const useIgnoreStore = defineStore("ignore", () => {
 	const authStore = useAuthStore();
@@ -42,9 +42,7 @@ export const useIgnoreStore = defineStore("ignore", () => {
 			const url = new URL(`${BASE_URL}/ignore`, window.location.origin);
 			if (type) url.searchParams.append("type", type);
 
-			const res = await fetch(url.toString(), {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(url.toString(), {});
 
 			if (!res.ok) {
 				if (res.status === 401) {
@@ -70,11 +68,10 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/ignore`, {
+			const res = await apiFetch(`${BASE_URL}/ignore`, {
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					...authStore.authHeader,
 				},
 				body: JSON.stringify(payload),
 			});
@@ -96,11 +93,10 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/ignore/${id}`, {
+			const res = await apiFetch(`${BASE_URL}/ignore/${id}`, {
 				method: "PATCH",
 				headers: {
 					"Content-Type": "application/json",
-					...authStore.authHeader,
 				},
 				body: JSON.stringify(payload),
 			});
@@ -122,9 +118,8 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/ignore/${id}`, {
+			const res = await apiFetch(`${BASE_URL}/ignore/${id}`, {
 				method: "DELETE",
-				headers: authStore.authHeader,
 			});
 
 			if (!res.ok) await handleErrorResponse(res);

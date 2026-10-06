@@ -74,6 +74,9 @@ func CorsMiddleware(next http.Handler) http.Handler {
 			for _, o := range allowedOrigins {
 				if o == origin {
 					w.Header().Set("Access-Control-Allow-Origin", origin)
+					// Lets a cross-origin web UI send and receive the
+					// refresh token cookie. Never combined with "*".
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
 					allow = true
 					break
 				}

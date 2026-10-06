@@ -7,12 +7,9 @@ import type {
 	UpdateTaskPayload,
 	TaskFilters,
 } from "../types";
-import { useAuthStore } from "./auth";
-import { handleErrorResponse, BASE_URL } from "../utils/api";
+import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
 export const useTaskStore = defineStore("tasks", () => {
-	const authStore = useAuthStore();
-
 	const tasks = ref<Task[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
@@ -29,9 +26,7 @@ export const useTaskStore = defineStore("tasks", () => {
 					}
 				}
 			}
-			const res = await fetch(url.toString(), {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(url.toString(), {});
 			if (!res.ok) await handleErrorResponse(res);
 			tasks.value = await res.json();
 		} catch (e: any) {
@@ -44,9 +39,7 @@ export const useTaskStore = defineStore("tasks", () => {
 
 	async function getTask(id: number): Promise<Task | null> {
 		try {
-			const res = await fetch(`${BASE_URL}/tasks/${id}`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/tasks/${id}`);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -68,11 +61,10 @@ export const useTaskStore = defineStore("tasks", () => {
 	}
 
 	async function createTask(payload: CreateTaskPayload): Promise<Task> {
-		const res = await fetch(`${BASE_URL}/tasks`, {
+		const res = await apiFetch(`${BASE_URL}/tasks`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -86,11 +78,10 @@ export const useTaskStore = defineStore("tasks", () => {
 		id: number,
 		payload: UpdateTaskPayload,
 	): Promise<Task> {
-		const res = await fetch(`${BASE_URL}/tasks/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/tasks/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -105,9 +96,8 @@ export const useTaskStore = defineStore("tasks", () => {
 	}
 
 	async function completeTask(id: number): Promise<Task> {
-		const res = await fetch(`${BASE_URL}/tasks/${id}/complete`, {
+		const res = await apiFetch(`${BASE_URL}/tasks/${id}/complete`, {
 			method: "POST",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 		const task = await res.json();
@@ -122,9 +112,8 @@ export const useTaskStore = defineStore("tasks", () => {
 	}
 
 	async function deleteTask(id: number): Promise<void> {
-		const res = await fetch(`${BASE_URL}/tasks/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/tasks/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 		tasks.value = tasks.value.filter((t) => t.id !== id);

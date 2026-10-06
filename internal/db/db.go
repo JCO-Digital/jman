@@ -603,6 +603,22 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// refresh_tokens holds web/CLI login sessions. Only a SHA-256
+			// hash of each token is stored. A login starts a family; every
+			// refresh rotates the token within it (see refresh_token_repo.go).
+			Name: "refresh_tokens",
+			Columns: map[string]string{
+				"id":            "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"family_id":     "TEXT NOT NULL",
+				"username":      "TEXT NOT NULL",
+				"token_hash":    "TEXT NOT NULL",
+				"token_version": "INTEGER NOT NULL",
+				"expires_at":    "DATETIME NOT NULL",
+				"rotated_at":    "DATETIME",
+				"created_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "site_disk_usage",
 			Columns: map[string]string{
 				"site_id":     "TEXT NOT NULL",
@@ -810,6 +826,14 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_agent_tokens_server_id ON agent_tokens(server_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id);")
 	if err != nil {
 		return err
 	}

@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import type { SiteTrafficPeriod } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 export type TrafficPeriod = "hourly" | "daily" | "monthly";
 
@@ -42,11 +42,8 @@ export const useTrafficAnalyticsStore = defineStore("trafficAnalytics", () => {
 		isLoading.value[key] = true;
 		error.value[key] = null;
 		try {
-			const res = await fetch(
+			const res = await apiFetch(
 				`${BASE_URL}/sites/${siteId}/traffic?period=${period}&days=${days}`,
-				{
-					headers: authStore.authHeader,
-				},
 			);
 			if (res.status === 401) {
 				authStore.logout();

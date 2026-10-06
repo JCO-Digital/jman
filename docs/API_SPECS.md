@@ -26,7 +26,7 @@ This document provides a comprehensive technical specification for the `jman-api
 
 `POST /auth/login`
 
-Authenticates a user and returns a JWT.
+Authenticates a user and returns a short-lived access JWT. Also sets the `jman_refresh` refresh token cookie (`HttpOnly`, `Secure`, `SameSite=Strict`, `Path=/api/auth`).
 
 **Request Body**
 | Field | Type | Required | Description |
@@ -51,18 +51,29 @@ Authenticates a user and returns a JWT.
 
 ### Token Refresh
 
-`POST /auth/refresh` (Protected: `basic`)
+`POST /auth/refresh` (Public, authenticated by the `jman_refresh` cookie)
 
-Exchanges a valid, non-expired JWT for a new one.
+Exchanges the refresh token cookie for a new access JWT and rotates the cookie. Reusing a rotated refresh token after a 30-second grace period revokes the session. Returns `401` if the session is missing, expired or revoked.
 
 **Success Response (200 OK)**
 
 ```json
 {
 	"token": "string",
-	"expiresAt": "datetime"
+	"expiresAt": "datetime",
+	"user": {
+		"username": "string",
+		"displayName": "string",
+		"level": "string"
+	}
 }
 ```
+
+### Logout
+
+`POST /auth/logout` (Public)
+
+Revokes the session in the `jman_refresh` cookie and clears the cookie. Returns `204 No Content`.
 
 ---
 

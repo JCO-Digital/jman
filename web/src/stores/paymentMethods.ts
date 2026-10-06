@@ -1,12 +1,9 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import type { PaymentMethod } from "../types";
-import { useAuthStore } from "./auth";
-import { handleErrorResponse, BASE_URL } from "../utils/api";
+import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
 export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
-	const authStore = useAuthStore();
-
 	const paymentMethods = ref<PaymentMethod[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
@@ -26,9 +23,7 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 				url.searchParams.append("search", params.search);
 			if (params?.type) url.searchParams.append("type", params.type);
 
-			const res = await fetch(url.toString(), {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(url.toString(), {});
 			if (!res.ok) await handleErrorResponse(res);
 			paymentMethods.value = await res.json();
 		} catch (e: any) {
@@ -41,9 +36,7 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 
 	async function getPaymentMethod(id: number): Promise<PaymentMethod | null> {
 		try {
-			const res = await fetch(`${BASE_URL}/payment-methods/${id}`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/payment-methods/${id}`);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -53,11 +46,10 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 	}
 
 	async function createPaymentMethod(payload: Partial<PaymentMethod>) {
-		const res = await fetch(`${BASE_URL}/payment-methods`, {
+		const res = await apiFetch(`${BASE_URL}/payment-methods`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -69,11 +61,10 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 		id: number,
 		payload: Partial<PaymentMethod>,
 	) {
-		const res = await fetch(`${BASE_URL}/payment-methods/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/payment-methods/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -82,9 +73,8 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 	}
 
 	async function deletePaymentMethod(id: number) {
-		const res = await fetch(`${BASE_URL}/payment-methods/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/payment-methods/${id}`, {
 			method: "DELETE",
-			headers: authStore.authHeader,
 		});
 		if (!res.ok) await handleErrorResponse(res);
 	}

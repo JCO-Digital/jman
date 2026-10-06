@@ -10,7 +10,7 @@ import type {
 	SpinupWPSyncResult,
 	TestConnectionResult,
 } from "../types";
-import { BASE_URL, handleErrorResponse } from "../utils/api";
+import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 /** Provider whose sites/servers are owned by the SpinupWP sync and read-only. */
 export const READ_ONLY_PROVIDER = "spinupwp";
@@ -34,12 +34,8 @@ export const useManagedSitesStore = defineStore("managedSites", () => {
 		error.value = null;
 		try {
 			const [sitesRes, serversRes] = await Promise.all([
-				fetch(`${BASE_URL}/sites?format=managed`, {
-					headers: authStore.authHeader,
-				}),
-				fetch(`${BASE_URL}/servers?format=managed`, {
-					headers: authStore.authHeader,
-				}),
+				apiFetch(`${BASE_URL}/sites?format=managed`),
+				apiFetch(`${BASE_URL}/servers?format=managed`),
 			]);
 			if (sitesRes.status === 401 || serversRes.status === 401) {
 				authStore.logout();
@@ -68,9 +64,9 @@ export const useManagedSitesStore = defineStore("managedSites", () => {
 		method: string,
 		payload?: unknown,
 	): Promise<T> {
-		const headers: Record<string, string> = { ...authStore.authHeader };
+		const headers: Record<string, string> = {};
 		if (payload !== undefined) headers["Content-Type"] = "application/json";
-		const res = await fetch(`${BASE_URL}${path}`, {
+		const res = await apiFetch(`${BASE_URL}${path}`, {
 			method,
 			headers,
 			body: payload !== undefined ? JSON.stringify(payload) : undefined,

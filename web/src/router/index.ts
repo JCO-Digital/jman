@@ -116,8 +116,10 @@ const router = createRouter({
 	],
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
 	const authStore = useAuthStore();
+	// Wait for the startup session restore before deciding.
+	await authStore.ready;
 
 	if (to.meta.public) {
 		// If already authenticated and going to login, redirect to home

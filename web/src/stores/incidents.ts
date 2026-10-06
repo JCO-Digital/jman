@@ -2,7 +2,7 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import type { Incident, IncidentsResponse } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 export const useIncidentStore = defineStore("incidents", () => {
 	const authStore = useAuthStore();
@@ -15,9 +15,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 
 	async function fetchActiveIncidents() {
 		try {
-			const res = await fetch(`${BASE_URL}/incidents?filter=active`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/incidents?filter=active`);
 			if (!res.ok) {
 				if (res.status === 401) {
 					authStore.logout();
@@ -38,11 +36,8 @@ export const useIncidentStore = defineStore("incidents", () => {
 	async function fetchHistoryIncidents(page: number = 1, limit: number = 20) {
 		isLoading.value = true;
 		try {
-			const res = await fetch(
+			const res = await apiFetch(
 				`${BASE_URL}/incidents?filter=history&page=${page}&limit=${limit}`,
-				{
-					headers: authStore.authHeader,
-				},
 			);
 			if (!res.ok) {
 				if (res.status === 401) {
@@ -66,9 +61,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 
 	async function fetchActiveCount() {
 		try {
-			const res = await fetch(`${BASE_URL}/incidents?filter=active&limit=1`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/incidents?filter=active&limit=1`);
 			if (!res.ok) return;
 			const data: IncidentsResponse = await res.json();
 			activeCount.value = data.active_count;
@@ -78,10 +71,9 @@ export const useIncidentStore = defineStore("incidents", () => {
 	}
 
 	async function acknowledgeIncident(id: number) {
-		const res = await fetch(`${BASE_URL}/incidents/${id}/acknowledge`, {
+		const res = await apiFetch(`${BASE_URL}/incidents/${id}/acknowledge`, {
 			method: "POST",
 			headers: {
-				...authStore.authHeader,
 				"Content-Type": "application/json",
 			},
 		});
@@ -99,10 +91,9 @@ export const useIncidentStore = defineStore("incidents", () => {
 	}
 
 	async function closeIncident(id: number) {
-		const res = await fetch(`${BASE_URL}/incidents/${id}/close`, {
+		const res = await apiFetch(`${BASE_URL}/incidents/${id}/close`, {
 			method: "POST",
 			headers: {
-				...authStore.authHeader,
 				"Content-Type": "application/json",
 			},
 		});
@@ -123,10 +114,9 @@ export const useIncidentStore = defineStore("incidents", () => {
 		useForMonitor: boolean = true,
 		useForVuln: boolean = false,
 	) {
-		const res = await fetch(`${BASE_URL}/incidents/${id}/ignore`, {
+		const res = await apiFetch(`${BASE_URL}/incidents/${id}/ignore`, {
 			method: "POST",
 			headers: {
-				...authStore.authHeader,
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({

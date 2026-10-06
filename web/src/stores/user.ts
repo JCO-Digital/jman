@@ -8,7 +8,7 @@ import type {
 	TwoFactorSetupResponse,
 	UserProfile,
 } from "../types";
-import { BASE_URL } from "../utils/api";
+import { BASE_URL, apiFetch } from "../utils/api";
 
 const CACHE_KEY_USERS = "jman_users";
 
@@ -58,9 +58,7 @@ export const useUserStore = defineStore("user", () => {
 		profileLoading.value = true;
 		profileError.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/user/profile`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/user/profile`);
 			if (res.status === 401) {
 				authStore.logout();
 				return null;
@@ -87,9 +85,7 @@ export const useUserStore = defineStore("user", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await fetch(`${BASE_URL}/users`, {
-				headers: authStore.authHeader,
-			});
+			const res = await apiFetch(`${BASE_URL}/users`);
 			if (res.status === 401) {
 				authStore.logout();
 				return;
@@ -125,11 +121,10 @@ export const useUserStore = defineStore("user", () => {
 	// ---------------------------------------------------------------------------
 
 	async function createUser(payload: CreateUserPayload): Promise<void> {
-		const res = await fetch(`${BASE_URL}/users`, {
+		const res = await apiFetch(`${BASE_URL}/users`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify(payload),
 		});
@@ -143,13 +138,12 @@ export const useUserStore = defineStore("user", () => {
 		username: string,
 		payload: UpdateUserPayload,
 	): Promise<void> {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/users/${encodeURIComponent(username)}`,
 			{
 				method: "PATCH",
 				headers: {
 					"Content-Type": "application/json",
-					...authStore.authHeader,
 				},
 				body: JSON.stringify(payload),
 			},
@@ -161,11 +155,10 @@ export const useUserStore = defineStore("user", () => {
 	}
 
 	async function deleteUser(username: string): Promise<void> {
-		const res = await fetch(
+		const res = await apiFetch(
 			`${BASE_URL}/users/${encodeURIComponent(username)}`,
 			{
 				method: "DELETE",
-				headers: authStore.authHeader,
 			},
 		);
 		if (!res.ok) {
@@ -179,11 +172,10 @@ export const useUserStore = defineStore("user", () => {
 	// ---------------------------------------------------------------------------
 
 	async function updateProfile(displayName: string): Promise<void> {
-		const res = await fetch(`${BASE_URL}/user/profile`, {
+		const res = await apiFetch(`${BASE_URL}/user/profile`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify({ displayName }),
 		});
@@ -197,11 +189,10 @@ export const useUserStore = defineStore("user", () => {
 		currentPassword: string,
 		newPassword: string,
 	): Promise<void> {
-		const res = await fetch(`${BASE_URL}/user/password`, {
+		const res = await apiFetch(`${BASE_URL}/user/password`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify({ currentPassword, newPassword }),
 		});
@@ -211,11 +202,10 @@ export const useUserStore = defineStore("user", () => {
 	}
 
 	async function setup2FA(): Promise<TwoFactorSetupResponse> {
-		const res = await fetch(`${BASE_URL}/user/2fa/setup`, {
+		const res = await apiFetch(`${BASE_URL}/user/2fa/setup`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 		});
 		if (!res.ok) {
@@ -225,11 +215,10 @@ export const useUserStore = defineStore("user", () => {
 	}
 
 	async function activate2FA(secret: string, code: string): Promise<void> {
-		const res = await fetch(`${BASE_URL}/user/2fa/activate`, {
+		const res = await apiFetch(`${BASE_URL}/user/2fa/activate`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify({ secret, code }),
 		});
@@ -243,11 +232,10 @@ export const useUserStore = defineStore("user", () => {
 	}
 
 	async function deactivate2FA(code: string): Promise<void> {
-		const res = await fetch(`${BASE_URL}/user/2fa/deactivate`, {
+		const res = await apiFetch(`${BASE_URL}/user/2fa/deactivate`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
-				...authStore.authHeader,
 			},
 			body: JSON.stringify({ code }),
 		});

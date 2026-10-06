@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/viper"
@@ -34,10 +35,38 @@ type UserEntry struct {
 
 // UsersConfig holds the authentication-related configuration loaded from users.toml.
 type UsersConfig struct {
-	JWTSecret          string        `toml:"jwtSecret,omitempty" mapstructure:"jwtSecret"`
-	TokenLifetimeHours int           `toml:"tokenLifetimeHours" mapstructure:"tokenLifetimeHours"`
-	Users              []UserEntry   `toml:"users" mapstructure:"users"`
-	mu                 *sync.RWMutex `toml:"-" mapstructure:"-"` // Protects fields from concurrent access
+	JWTSecret string `toml:"jwtSecret,omitempty" mapstructure:"jwtSecret"`
+	// AccessTokenLifetimeMinutes is the lifetime of the short-lived JWT sent
+	// as a Bearer token on every request.
+	AccessTokenLifetimeMinutes int `toml:"accessTokenLifetimeMinutes" mapstructure:"accessTokenLifetimeMinutes"`
+	// RefreshTokenLifetimeDays is how long a session survives without use.
+	// Each refresh rotates the token and restarts this window.
+	RefreshTokenLifetimeDays int           `toml:"refreshTokenLifetimeDays" mapstructure:"refreshTokenLifetimeDays"`
+	Users                    []UserEntry   `toml:"users" mapstructure:"users"`
+	mu                       *sync.RWMutex `toml:"-" mapstructure:"-"` // Protects fields from concurrent access
+}
+
+const (
+	DefaultAccessTokenLifetimeMinutes = 15
+	DefaultRefreshTokenLifetimeDays   = 30
+)
+
+// AccessTokenLifetime returns the configured access token lifetime, falling
+// back to the default for unset or invalid values.
+func (c *UsersConfig) AccessTokenLifetime() time.Duration {
+	if c.AccessTokenLifetimeMinutes <= 0 {
+		return DefaultAccessTokenLifetimeMinutes * time.Minute
+	}
+	return time.Duration(c.AccessTokenLifetimeMinutes) * time.Minute
+}
+
+// RefreshTokenLifetime returns the configured refresh token lifetime, falling
+// back to the default for unset or invalid values.
+func (c *UsersConfig) RefreshTokenLifetime() time.Duration {
+	if c.RefreshTokenLifetimeDays <= 0 {
+		return DefaultRefreshTokenLifetimeDays * 24 * time.Hour
+	}
+	return time.Duration(c.RefreshTokenLifetimeDays) * 24 * time.Hour
 }
 
 // LockWrite locks the config for writing.
@@ -75,14 +104,16 @@ func (c *UsersConfig) UnlockRead() {
 }
 
 // NewUsersConfig creates an empty UsersConfig with the given JWT secret and
-// token lifetime, ready for use (e.g. when creating a fresh users.toml).
-// Unlike a bare UsersConfig{} literal, this ensures the config's internal
-// lock is initialized so concurrent access is actually protected.
-func NewUsersConfig(jwtSecret string, tokenLifetimeHours int) UsersConfig {
+// default token lifetimes, ready for use (e.g. when creating a fresh
+// users.toml). Unlike a bare UsersConfig{} literal, this ensures the
+// config's internal lock is initialized so concurrent access is actually
+// protected.
+func NewUsersConfig(jwtSecret string) UsersConfig {
 	return UsersConfig{
-		JWTSecret:          jwtSecret,
-		TokenLifetimeHours: tokenLifetimeHours,
-		mu:                 &sync.RWMutex{},
+		JWTSecret:                  jwtSecret,
+		AccessTokenLifetimeMinutes: DefaultAccessTokenLifetimeMinutes,
+		RefreshTokenLifetimeDays:   DefaultRefreshTokenLifetimeDays,
+		mu:                         &sync.RWMutex{},
 	}
 }
 
@@ -94,11 +125,16 @@ func LoadUsersConfig(configDir string) (UsersConfig, error) {
 	v.SetConfigType("toml")
 	v.AddConfigPath(configDir)
 
-	v.SetDefault("tokenLifetimeHours", 24)
+	v.SetDefault("accessTokenLifetimeMinutes", DefaultAccessTokenLifetimeMinutes)
+	v.SetDefault("refreshTokenLifetimeDays", DefaultRefreshTokenLifetimeDays)
 
 	if err := v.ReadInConfig(); err != nil {
 		expectedPath := filepath.Join(configDir, "users.toml")
 		return UsersConfig{}, fmt.Errorf("failed to read users config at %s: %w", expectedPath, err)
+	}
+
+	if v.IsSet("tokenLifetimeHours") {
+		log.Println("WARNING: tokenLifetimeHours in users.toml is no longer used; see accessTokenLifetimeMinutes and refreshTokenLifetimeDays")
 	}
 
 	var cfg UsersConfig

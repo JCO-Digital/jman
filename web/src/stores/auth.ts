@@ -3,21 +3,60 @@ import { defineStore } from "pinia";
 import router from "../router";
 import { BASE_URL } from "../utils/api";
 
-const LS_TOKEN = "jman_auth_token";
-const LS_USER = "jman_auth_user";
-const LS_EXPIRES_AT = "jman_auth_expires_at";
+// Keys of the pre-cookie session, which kept a 24h access token in
+// localStorage. Cleared on startup so old tokens don't linger.
+const LEGACY_LS_KEYS = [
+	"jman_auth_token",
+	"jman_auth_user",
+	"jman_auth_expires_at",
+];
+
+// Refresh this long before the access token expires.
+const REFRESH_MARGIN_MS = 60 * 1000;
+// Retry delay after a refresh that failed for a reason other than an
+// expired session (e.g. the API was briefly unreachable).
+const RETRY_DELAY_MS = 30 * 1000;
+
+type UserLevel = "basic" | "edit" | "execute" | "admin";
+
+interface AuthUser {
+	username: string;
+	displayName: string;
+	level?: UserLevel;
+}
+
+interface TokenResponse {
+	token: string;
+	expiresAt: string;
+	user: AuthUser;
+}
 
 let refreshTimeoutId: ReturnType<typeof setTimeout> | null = null;
+let refreshInFlight: Promise<boolean> | null = null;
 
+// Tells other tabs about logins and logouts so they follow along.
+const channel =
+	typeof BroadcastChannel !== "undefined"
+		? new BroadcastChannel("jman-auth")
+		: null;
+
+/**
+ * Auth state. The access token (a short-lived JWT) lives only in memory.
+ * The long-lived refresh token is an httpOnly cookie scoped to /api/auth,
+ * so page scripts never see it; POST /auth/refresh trades it for a new
+ * access token and rotates it.
+ */
 export const useAuthStore = defineStore("auth", () => {
 	// State
 	const token = ref<string | null>(null);
-	const user = ref<{
-		username: string;
-		displayName: string;
-		level?: "basic" | "edit" | "execute" | "admin";
-	} | null>(null);
+	const user = ref<AuthUser | null>(null);
 	const expiresAt = ref<string | null>(null);
+
+	// Resolves once the startup session restore has finished.
+	let readyResolve: () => void = () => {};
+	const ready = new Promise<void>((resolve) => {
+		readyResolve = resolve;
+	});
 
 	// Getters
 	const userLevel = computed(() => {
@@ -38,18 +77,12 @@ export const useAuthStore = defineStore("auth", () => {
 		return userLevel.value === "admin";
 	});
 
-	const isAuthenticated = computed(() => {
-		if (!token.value || !expiresAt.value) return false;
-		return new Date(expiresAt.value) > new Date();
-	});
-
-	const authHeader = computed<Record<string, string>>(() => {
-		if (!token.value) return {} as Record<string, string>;
-		return { Authorization: `Bearer ${token.value}` };
-	});
+	// True while a session exists. The access token may be momentarily
+	// expired; apiFetch refreshes it before the next request.
+	const isAuthenticated = computed(() => !!token.value && !!user.value);
 
 	// Helper
-	function extractLevel(t: string): "basic" | "edit" | "execute" | "admin" {
+	function extractLevel(t: string): UserLevel {
 		try {
 			const parts = t.split(".");
 			const payloadPart = parts[1];
@@ -60,6 +93,30 @@ export const useAuthStore = defineStore("auth", () => {
 			return payload.level || "basic";
 		} catch {
 			return "basic";
+		}
+	}
+
+	function applyTokenResponse(data: TokenResponse) {
+		token.value = data.token;
+		expiresAt.value = data.expiresAt;
+		user.value = { ...data.user, level: extractLevel(data.token) };
+		scheduleRefresh();
+	}
+
+	function clearSession() {
+		token.value = null;
+		user.value = null;
+		expiresAt.value = null;
+		if (refreshTimeoutId !== null) {
+			clearTimeout(refreshTimeoutId);
+			refreshTimeoutId = null;
+		}
+	}
+
+	function redirectToLogin() {
+		const current = router.currentRoute.value;
+		if (!current.meta.public) {
+			router.push("/login");
 		}
 	}
 
@@ -78,6 +135,7 @@ export const useAuthStore = defineStore("auth", () => {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body),
+			credentials: "include",
 		});
 
 		const contentType = res.headers.get("content-type") || "";
@@ -117,69 +175,78 @@ export const useAuthStore = defineStore("auth", () => {
 		if (!data) {
 			throw new Error("Unexpected server response");
 		}
-		token.value = data.token;
-		user.value = {
-			...data.user,
-			level: extractLevel(data.token),
-		};
-		expiresAt.value = data.expiresAt;
-
-		localStorage.setItem(LS_TOKEN, data.token);
-		localStorage.setItem(LS_USER, JSON.stringify(user.value));
-		localStorage.setItem(LS_EXPIRES_AT, data.expiresAt);
-
-		scheduleRefresh();
+		applyTokenResponse(data);
+		channel?.postMessage("login");
 	}
 
 	function logout() {
-		token.value = null;
-		user.value = null;
-		expiresAt.value = null;
-
-		localStorage.removeItem(LS_TOKEN);
-		localStorage.removeItem(LS_USER);
-		localStorage.removeItem(LS_EXPIRES_AT);
-
-		if (refreshTimeoutId !== null) {
-			clearTimeout(refreshTimeoutId);
-			refreshTimeoutId = null;
-		}
-
+		// Revoke the session server-side; the cookie is cleared either way.
+		fetch(`${BASE_URL}/auth/logout`, {
+			method: "POST",
+			credentials: "include",
+		}).catch(() => {});
+		clearSession();
+		channel?.postMessage("logout");
 		router.push("/login");
 	}
 
-	async function refreshToken(): Promise<void> {
-		try {
-			const res = await fetch(`${BASE_URL}/auth/refresh`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					...authHeader.value,
-				},
-			});
+	/**
+	 * Trades the refresh token cookie for a new access token. Concurrent
+	 * callers share one request. Resolves to whether a session is active
+	 * afterwards: a rejected refresh ends the session, while a network
+	 * failure keeps it and retries later.
+	 */
+	function refreshToken(): Promise<boolean> {
+		if (refreshInFlight) return refreshInFlight;
 
+		refreshInFlight = (async () => {
+			let res: Response;
+			try {
+				res = await fetch(`${BASE_URL}/auth/refresh`, {
+					method: "POST",
+					credentials: "include",
+				});
+			} catch {
+				scheduleRetry();
+				return isAuthenticated.value;
+			}
+
+			if (res.status === 401) {
+				const hadSession = isAuthenticated.value;
+				clearSession();
+				if (hadSession) redirectToLogin();
+				return false;
+			}
 			if (!res.ok) {
-				logout();
-				return;
+				scheduleRetry();
+				return isAuthenticated.value;
 			}
 
-			const data = await res.json();
+			applyTokenResponse(await res.json());
+			return true;
+		})().finally(() => {
+			refreshInFlight = null;
+		});
 
-			token.value = data.token;
-			expiresAt.value = data.expiresAt;
+		return refreshInFlight;
+	}
 
-			if (user.value) {
-				user.value.level = extractLevel(data.token);
-				localStorage.setItem(LS_USER, JSON.stringify(user.value));
-			}
+	function msUntilExpiry(): number {
+		if (!expiresAt.value) return 0;
+		return new Date(expiresAt.value).getTime() - Date.now();
+	}
 
-			localStorage.setItem(LS_TOKEN, data.token);
-			localStorage.setItem(LS_EXPIRES_AT, data.expiresAt);
-
-			scheduleRefresh();
-		} catch {
-			logout();
+	/**
+	 * Returns an access token that is valid for at least the refresh margin,
+	 * refreshing first if needed. Null when there is no session.
+	 */
+	async function getValidToken(): Promise<string | null> {
+		await ready;
+		if (!token.value) return null;
+		if (msUntilExpiry() <= REFRESH_MARGIN_MS) {
+			await refreshToken();
 		}
+		return token.value;
 	}
 
 	function scheduleRefresh() {
@@ -187,20 +254,25 @@ export const useAuthStore = defineStore("auth", () => {
 			clearTimeout(refreshTimeoutId);
 			refreshTimeoutId = null;
 		}
-
 		if (!expiresAt.value) return;
 
-		const expiresMs = new Date(expiresAt.value).getTime();
-		const nowMs = Date.now();
-		const fiveMinutes = 5 * 60 * 1000;
-		const delay = expiresMs - nowMs - fiveMinutes;
+		const delay = Math.max(msUntilExpiry() - REFRESH_MARGIN_MS, 0);
+		refreshTimeoutId = setTimeout(() => {
+			refreshToken();
+		}, delay);
+	}
 
-		if (delay > 0) {
-			refreshTimeoutId = setTimeout(() => {
-				refreshToken();
-			}, delay);
-		} else {
-			// Token expires in less than 5 minutes, refresh immediately
+	function scheduleRetry() {
+		if (refreshTimeoutId !== null) clearTimeout(refreshTimeoutId);
+		refreshTimeoutId = setTimeout(() => {
+			refreshToken();
+		}, RETRY_DELAY_MS);
+	}
+
+	// Timers stall while a laptop sleeps or a tab is in the background, so
+	// check the token whenever the page becomes active again.
+	function refreshIfStale() {
+		if (token.value && msUntilExpiry() <= REFRESH_MARGIN_MS) {
 			refreshToken();
 		}
 	}
@@ -208,35 +280,42 @@ export const useAuthStore = defineStore("auth", () => {
 	function setDisplayName(name: string) {
 		if (user.value) {
 			user.value.displayName = name;
-			localStorage.setItem(LS_USER, JSON.stringify(user.value));
 		}
 	}
 
-	function initialize() {
-		const storedToken = localStorage.getItem(LS_TOKEN);
-		const storedUser = localStorage.getItem(LS_USER);
-		const storedExpiresAt = localStorage.getItem(LS_EXPIRES_AT);
+	/** Restores the session from the refresh token cookie, if any. */
+	async function initialize(): Promise<void> {
+		try {
+			for (const key of LEGACY_LS_KEYS) localStorage.removeItem(key);
+		} catch {
+			// Storage may be unavailable; nothing to clean up then.
+		}
 
-		if (storedToken && storedUser && storedExpiresAt) {
-			token.value = storedToken;
-			try {
-				const parsedUser = JSON.parse(storedUser);
-				// Ensure level is present if we just upgraded
-				if (!parsedUser.level) {
-					parsedUser.level = extractLevel(storedToken);
+		document.addEventListener("visibilitychange", () => {
+			if (document.visibilityState === "visible") refreshIfStale();
+		});
+		window.addEventListener("focus", refreshIfStale);
+		window.addEventListener("online", refreshIfStale);
+
+		if (channel) {
+			channel.onmessage = (e) => {
+				if (e.data === "logout") {
+					clearSession();
+					redirectToLogin();
+				} else if (e.data === "login" && !isAuthenticated.value) {
+					refreshToken().then((ok) => {
+						if (ok && router.currentRoute.value.name === "login") {
+							router.push("/");
+						}
+					});
 				}
-				user.value = parsedUser;
-			} catch {
-				logout();
-				return;
-			}
-			expiresAt.value = storedExpiresAt;
+			};
+		}
 
-			if (new Date(storedExpiresAt) > new Date()) {
-				scheduleRefresh();
-			} else {
-				logout();
-			}
+		try {
+			await refreshToken();
+		} finally {
+			readyResolve();
 		}
 	}
 
@@ -245,9 +324,9 @@ export const useAuthStore = defineStore("auth", () => {
 		token,
 		user,
 		expiresAt,
+		ready,
 		// Getters
 		isAuthenticated,
-		authHeader,
 		userLevel,
 		canEdit,
 		canExecute,
@@ -256,7 +335,7 @@ export const useAuthStore = defineStore("auth", () => {
 		login,
 		logout,
 		refreshToken,
-		scheduleRefresh,
+		getValidToken,
 		initialize,
 		setDisplayName,
 	};
