@@ -1,6 +1,17 @@
 # Changelog
 
-## 6.6.0 (2026-10-05)
+## 6.7.0 (2026-10-06)
+
+#### Features
+
+- web: reload the web UI after a deploy (dc3f9b7)
+- auth: refresh token sessions with short-lived access tokens (f17e0fb)
+
+#### Refactor
+
+- cli: remove `jman agent token` commands (92e9aca)
+
+## v6.6.0 (2026-10-05)
 
 #### Features
 
