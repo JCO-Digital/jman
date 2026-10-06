@@ -59,6 +59,18 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// VersionHeader is the response header carrying the running jman-api
+// version. The web UI reloads itself when it changes, i.e. after a deploy.
+const VersionHeader = "X-Jman-Version"
+
+// VersionMiddleware adds the VersionHeader to every response.
+func VersionMiddleware(version string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(VersionHeader, version)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // CorsMiddleware adds CORS headers based on allowed origins in configuration.
 func CorsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -85,6 +97,7 @@ func CorsMiddleware(next http.Handler) http.Handler {
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Expose-Headers", VersionHeader)
 
 		if r.Method == "OPTIONS" {
 			if !allow && origin != "" {

@@ -2,6 +2,7 @@ import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import router from "../router";
 import { BASE_URL } from "../utils/api";
+import { noteServerVersion } from "../utils/appUpdate";
 
 // Keys of the pre-cookie session, which kept a 24h access token in
 // localStorage. Cleared on startup so old tokens don't linger.
@@ -137,6 +138,7 @@ export const useAuthStore = defineStore("auth", () => {
 			body: JSON.stringify(body),
 			credentials: "include",
 		});
+		noteServerVersion(res);
 
 		const contentType = res.headers.get("content-type") || "";
 		let data: any = null;
@@ -210,6 +212,7 @@ export const useAuthStore = defineStore("auth", () => {
 				scheduleRetry();
 				return isAuthenticated.value;
 			}
+			noteServerVersion(res);
 
 			if (res.status === 401) {
 				const hadSession = isAuthenticated.value;

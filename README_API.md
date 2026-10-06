@@ -267,6 +267,8 @@ Authorization: Bearer <token>
 These endpoints do not require authentication:
 
 - `GET /api/health` — API health status and version.
+
+Every response also carries the running version in an `X-Jman-Version` header. The web UI reloads itself when it changes, so open tabs pick up a new deploy.
 - `POST /api/auth/login` — Authentication.
 - `POST /api/auth/refresh` — Authenticated by the refresh token cookie.
 - `POST /api/auth/logout` — Ends the session in the refresh token cookie.

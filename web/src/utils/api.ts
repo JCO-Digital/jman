@@ -1,4 +1,5 @@
 import { useAuthStore } from "../stores/auth";
+import { noteServerVersion } from "./appUpdate";
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -13,10 +14,12 @@ export async function apiFetch(
 ): Promise<Response> {
 	const authStore = useAuthStore();
 
-	const send = (token: string | null) => {
+	const send = async (token: string | null) => {
 		const headers = new Headers(init.headers);
 		if (token) headers.set("Authorization", `Bearer ${token}`);
-		return fetch(input, { ...init, headers });
+		const res = await fetch(input, { ...init, headers });
+		noteServerVersion(res);
+		return res;
 	};
 
 	const token = await authStore.getValidToken();
