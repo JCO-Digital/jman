@@ -41,22 +41,9 @@ make build
 
 ## Generating a Server Token
 
-`jman-agent` authenticates to `jman-api` with a per-server token, not a human login. Generate one from a machine that already has `jman` set up against the same `jman-api` database:
+`jman-agent` authenticates to `jman-api` with a per-server token, not a human login. Admins create and revoke tokens on the jman-ui Settings page.
 
-```bash
-jman agent token create <server-id-or-name> --description "optional note"
-```
-
-This prints the plaintext token (`<id>.<secret>`) **once** — it cannot be retrieved again, only revoked and replaced. Copy it into the agent's config file (below).
-
-Manage existing tokens with:
-
-```bash
-jman agent token list
-jman agent token revoke <id>
-```
-
-Tokens can also be created and revoked from the jman-ui admin Settings page.
+A new token (`<id>.<secret>`) is shown **once** — it cannot be retrieved again, only revoked and replaced. Copy it into the agent's config file (below).
 
 ## Configuration
 
@@ -64,7 +51,7 @@ Create a config file on the managed server at `/etc/jman-agent/config.toml` (or 
 
 ```toml
 apiUrl = "https://jman.example.com/api"
-token = "3.q1w2e3r4t5y6..."   # from `jman agent token create`
+token = "3.q1w2e3r4t5y6..."   # from the jman-ui Settings page
 
 # Optional — defaults shown
 reportIntervalMinutes = 15
@@ -81,7 +68,7 @@ sudo chmod 600 /etc/jman-agent/config.toml
 | Key                            | Default | Description                                                             |
 | :------------------------------ | :------ | :----------------------------------------------------------------------- |
 | `apiUrl`                         | -       | Base URL of `jman-api`, e.g. `https://jman.example.com/api`.              |
-| `token`                          | -       | This server's agent token, from `jman agent token create`.               |
+| `token`                          | -       | This server's agent token, from the jman-ui Settings page.               |
 | `reportIntervalMinutes`          | `15`    | How often to collect and push data.                                      |
 | `selfUpdateEnabled`              | `true`  | Whether the agent checks for and installs its own updates.               |
 | `selfUpdateCheckIntervalHours`   | `24`    | How often to check for a new version.                                    |
@@ -168,7 +155,7 @@ Set `selfUpdateEnabled = false` in `config.toml` to manage updates manually inst
 
 ## Troubleshooting
 
-`jman agent token list` (and the jman-ui Settings token table) show both **Last Seen** and the reporting agent's **version**. These update at different points, which makes them useful together for diagnosing a silent agent:
+The jman-ui Settings token table shows both **Last Seen** and the reporting agent's **version**. These update at different points, which makes them useful together for diagnosing a silent agent:
 
 - **Last Seen** updates on *any* authenticated request, including the manifest fetch at the start of every collection cycle.
 - **Version** only updates after a full, successfully parsed `POST /api/agent/report` — so it doubles as confirmation that reports are actually getting through, not just that the token is valid.

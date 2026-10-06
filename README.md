@@ -110,13 +110,6 @@ vulnReportTime = "10:00" # (optional, jman-api: local time of the daily per-site
 # knockdPorts = "7000,8000:udp,9000" # Port sequence before SSH/remote connections
 # knockdTimeout = 60 # Timeout in seconds to assume knocked port remains open (defaults to 60)
 
-# Required only for `jman agent token` (create/list/revoke) — these talk to
-# jman-api over HTTP, since agent tokens live in jman-api's own database.
-# You'll be prompted for your jman-api password (and TOTP, if configured);
-# it's never stored in this file.
-apiURL = "https://jman-api.example.com" # (optional)
-apiUsername = "admin" # (optional, must be an admin-level jman-api user)
-
 # Plugin aliases for shorthand installs
 [pluginAliases]
 jquest = "https://github.com/JCO-Digital/jquest-plugin/releases/latest/download/jquest.zip"

@@ -25,14 +25,7 @@ type Runtime struct {
 
 // AppConfig represents the user-defined settings mapped from the config file or environment variables.
 type AppConfig struct {
-	TokenSpinup string `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
-	// APIURL/APIUsername configure the `jman agent token` subcommands' HTTP
-	// client to jman-api (agent_tokens lives in jman-api's own database, not
-	// the shared inventory database the rest of the CLI reads/writes
-	// directly). Deliberately no password field here — it's prompted for
-	// interactively and never stored in config.toml.
-	APIURL              string `toml:"apiURL" mapstructure:"apiURL"`
-	APIUsername         string `toml:"apiUsername" mapstructure:"apiUsername"`
+	TokenSpinup         string `toml:"tokenSpinup" mapstructure:"tokenSpinup"`
 	TokenSlack          string `toml:"slackToken" mapstructure:"slackToken"`
 	SlackChannel        string `toml:"slackChannel" mapstructure:"slackChannel"`
 	SlackMonitorChannel string `toml:"slackMonitorChannel" mapstructure:"slackMonitorChannel"`
