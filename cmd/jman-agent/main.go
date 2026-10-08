@@ -18,6 +18,8 @@ var (
 	flagDebug      bool
 	flagService    bool
 	flagOnce       bool
+	flagCheckWP    bool
+	flagSite       string
 	flagConfigPath string
 )
 
@@ -34,6 +36,8 @@ func run() int {
 	flag.BoolVar(&flagService, "service", false, "Run as a continuous service")
 	flag.BoolVar(&flagService, "s", false, "Run as a continuous service (shorthand)")
 	flag.BoolVar(&flagOnce, "once", false, "Run a single collection cycle and exit")
+	flag.BoolVar(&flagCheckWP, "check-wp", false, "Collect WordPress data (plugins, core) as each site's owner once and print the result, without reporting it")
+	flag.StringVar(&flagSite, "site", "", "With --check-wp, only check this domain")
 	flag.StringVar(&flagConfigPath, "config", "", "Path to config.toml (default: /etc/jman-agent/config.toml, or $XDG_CONFIG_HOME/jman-agent/config.toml)")
 	flag.Parse()
 
@@ -54,6 +58,18 @@ func run() int {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		return 1
+	}
+
+	if flagCheckWP {
+		failed, err := agent.CheckWPData(context.Background(), cfg, flagSite, os.Stdout)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 1
+		}
+		if failed > 0 {
+			return 1
+		}
+		return 0
 	}
 
 	if flagOnce {

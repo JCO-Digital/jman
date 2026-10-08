@@ -99,6 +99,8 @@ jman-agent --once
 
 - `-s`, `--service`: Run as a continuous background service.
 - `--once`: Run a single collection cycle and exit.
+- `--check-wp`: Collect each WordPress site's plugins and core as the service would, print the result (path, the user wp-cli ran as, and the data or why the site was refused), and exit without reporting anything. Exits non-zero if any site failed.
+- `--site <domain>`: With `--check-wp`, only check this site.
 - `--config <path>`: Path to `config.toml` (default: `/etc/jman-agent/config.toml`, or `$XDG_CONFIG_HOME/jman-agent/config.toml` if not root).
 - `-v`, `--verbose`: Enable verbose output.
 - `-d`, `--debug`: Enable debug output.
@@ -130,6 +132,8 @@ The agent runs as root, but **never runs wp-cli as root**. Each call runs as the
 - the domain isn't a valid hostname.
 
 The agent only runs a `wp` binary found in a system directory (`/usr/local/bin`, `/usr/bin`, …) that is owned by root and not writable by group or others; otherwise WordPress data collection is off and every site reports why. Each call is limited to 2 minutes (the whole process group is killed after that), its output to 4 MiB, and it runs at a lower CPU priority.
+
+To try it on a server before (or after) jman-api enables it, run `sudo jman-agent --check-wp` (optionally with `--site example.com`): it uses the server's manifest but ignores whether jman-api has enabled collection, reports nothing and doesn't self-update. If the installed agent self-updates, test a newer build with `selfUpdateEnabled = false` in a separate config (`--config`), since a development build's version (e.g. `v6.6.0-7-g79e5220`) sorts below the release it's based on.
 
 Data is only sent in full when it changed: the manifest carries a hash of what jman-api holds for each site, and the agent sends just its own hash when they match. That small report still tells jman-api the site was collected, which is what its staleness warnings are based on. Once the agent has collected a site, jman-api stops reading it over SSH in its periodic refresh.
 
