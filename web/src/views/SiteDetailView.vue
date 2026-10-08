@@ -160,6 +160,8 @@ function ledgerBadgeClass(status: LedgerStatus): string {
 			return "warning";
 		case "failed":
 			return "error";
+		case "detected":
+			return "info";
 		default:
 			return "";
 	}
@@ -174,12 +176,44 @@ const ledgerStatusTitle: Record<LedgerStatus, string> = {
 	deactivated: "Plugins deactivated",
 	deleted: "Plugins deleted",
 	installed: "Plugin installed",
+	detected: "Changed outside jman (found by jman-agent or a refresh)",
 };
+
+/** Describes a change found on the site that jman didn't make. */
+function formatDetectedChange(data: any): string {
+	const window = data.since
+		? `\nBetween ${formatDate(data.since)} and ${formatDate(data.observed_at)} (found by ${data.source === "agent" ? "jman-agent" : "an SSH refresh"})`
+		: "";
+	if (data.target) {
+		return `WordPress Core changed outside jman: ${data.old_version} → ${data.new_version}${window}`;
+	}
+	const describe = (c: any) => {
+		switch (c.change) {
+			case "installed":
+				return `${c.plugin} installed (${c.new_version || "?"})`;
+			case "removed":
+				return `${c.plugin} removed (was ${c.old_version || "?"})`;
+			case "activated":
+			case "deactivated":
+				return `${c.plugin} ${c.change}`;
+			default:
+				return `${c.plugin} ${c.change} (${c.old_version || "?"} → ${c.new_version || "?"})`;
+		}
+	};
+	const changes: any[] = data.changes ?? [];
+	return (
+		`Plugins changed outside jman: ${changes.map(describe).join(", ")}` +
+		window
+	);
+}
 
 function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 	if (!entry.data_json) return "—";
 	try {
 		const data = JSON.parse(entry.data_json);
+		if (data.detected) {
+			return formatDetectedChange(data);
+		}
 		if (data.action) {
 			const verbs: Record<string, string> = {
 				activate: "Activated",
@@ -401,6 +435,19 @@ const sitePlugins = computed(() => {
 	});
 });
 
+/** Where the site's plugin and core data comes from, and how fresh it is. */
+const wpDataSource = computed(() => {
+	const agent = site.value?.agent_wp;
+	if (!agent) return "SSH refresh";
+	let text = agent.collected_at
+		? `jman-agent, ${formatDate(agent.collected_at)}`
+		: "SSH refresh (jman-agent hasn't collected it yet)";
+	if (agent.error) {
+		text += ` · last attempt failed: ${agent.error}`;
+	}
+	return text;
+});
+
 const siteInfoItems = computed(() => {
 	if (!site.value) return [];
 	const items: InfoItem[] = [
@@ -469,6 +516,10 @@ const siteInfoItems = computed(() => {
 			label: "Disk Usage",
 			value: formatBytes(site.value.disk_usage.bytes_used),
 		});
+	}
+
+	if (site.value.is_wordpress) {
+		items.push({ label: "Plugin & Core Data", value: wpDataSource.value });
 	}
 
 	items.push({ label: "Status", value: site.value.status });

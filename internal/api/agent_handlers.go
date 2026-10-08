@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -39,6 +41,9 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		ServerID:   claims.ServerID,
 		Sites:      make([]models.AgentManifestSite, 0, len(sites)),
 		APIVersion: config.AppVersion,
+		// Agents of this version and later collect WordPress data; older
+		// ones ignore the field and stay on the SSH refresh.
+		WPDataIntervalMinutes: config.AgentWPDataIntervalMinutes(),
 	}
 	for _, site := range sites {
 		// SpinupWP sites go through deploying -> deployed (or failed), and
@@ -63,10 +68,70 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		if site.Provider == "spinupwp" {
 			entry.LegacySiteID, _ = strconv.Atoi(site.ProviderSiteID)
 		}
+		if site.IsWordpress && manifest.WPDataIntervalMinutes > 0 {
+			hash, err := sitestate.StoredHash(site.ID)
+			if err != nil {
+				// An empty hash just makes the agent send its data in full.
+				verb.LogPrintf(verb.Normal, "Failed to compute stored WordPress data hash for %s: %v", site.Domain, err)
+			}
+			entry.WPDataHash = hash
+		}
 		manifest.Sites = append(manifest.Sites, entry)
 	}
 
 	WriteJSON(w, http.StatusOK, manifest)
+}
+
+// maxAgentPlugins bounds the plugin list an agent may report for one site.
+const maxAgentPlugins = 2000
+
+// applyAgentWPData stores a site's WordPress data collected by jman-agent:
+// a failure is recorded so it can be shown and alerted on; a success
+// counts as a collection (which takes the site off the SSH refresh), and
+// full data, sent when the agent's hash differed from jman-api's, goes
+// through sitestate like any other observation.
+func applyAgentWPData(siteID string, wp *models.AgentWPData, receivedAt time.Time) {
+	collectedAt := receivedAt
+	if t, err := time.Parse(time.RFC3339, wp.CollectedAt); err == nil && !t.After(receivedAt.Add(5*time.Minute)) {
+		collectedAt = t
+	}
+	record := func(errMsg string) {
+		if err := db.RecordSiteAgentWPCollection(siteID, collectedAt, errMsg); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
+	}
+
+	if wp.Error != "" {
+		if len(wp.Error) > 1000 {
+			wp.Error = wp.Error[:1000]
+		}
+		record(wp.Error)
+		return
+	}
+
+	if wp.Plugins != nil || wp.Core != nil {
+		switch {
+		case wp.Plugins == nil || wp.Core == nil:
+			record("the agent sent incomplete WordPress data")
+			return
+		case len(wp.Plugins) > maxAgentPlugins:
+			record(fmt.Sprintf("the agent reported %d plugins, more than the %d accepted", len(wp.Plugins), maxAgentPlugins))
+			return
+		case models.WPDataHash(wp.Plugins, *wp.Core) != wp.Hash:
+			record("the agent's WordPress data doesn't match its hash")
+			return
+		}
+		if _, err := sitestate.ApplyPlugins(siteID, wp.Plugins, sitestate.SourceAgent, collectedAt); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to store agent-reported plugins for site %s: %v", siteID, err)
+			return
+		}
+		cache.UpdatePluginInfoFromPlugins(wp.Plugins)
+		if _, err := sitestate.ApplyCore(siteID, *wp.Core, sitestate.SourceAgent, collectedAt); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to store agent-reported core version for site %s: %v", siteID, err)
+			return
+		}
+	}
+	record("")
 }
 
 // validAutoUpdateCore holds the core auto-update settings an agent may
@@ -148,6 +213,10 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 			if err := db.SetSiteWpFlags(siteReport.SiteID, isMultisite, disallowFileMods, autoUpdateCore); err != nil {
 				verb.LogPrintf(verb.Normal, "Failed to set wp flags for site %s: %v", siteReport.SiteID, err)
 			}
+		}
+
+		if siteReport.WPData != nil {
+			applyAgentWPData(siteReport.SiteID, siteReport.WPData, measuredAt)
 		}
 
 		for _, hourly := range siteReport.TrafficHourly {

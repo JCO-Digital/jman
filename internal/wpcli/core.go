@@ -24,7 +24,12 @@ func CheckCore(site models.CliSite) ([]CoreUpdate, error) {
 		return nil, fmt.Errorf("failed to check core updates: %w (stderr: %s)", err, res.Error)
 	}
 
-	output := strings.TrimSpace(res.Output)
+	return ParseCoreUpdates(res.Output)
+}
+
+// ParseCoreUpdates parses `wp core check-update --format=json` output.
+func ParseCoreUpdates(output string) ([]CoreUpdate, error) {
+	output = strings.TrimSpace(output)
 	if output == "" || output == "[]" {
 		return nil, nil
 	}
@@ -35,6 +40,24 @@ func CheckCore(site models.CliSite) ([]CoreUpdate, error) {
 	}
 
 	return updates, nil
+}
+
+// SplitCoreUpdates returns the first minor and first major update version
+// in updates, or "" for either kind if there is none.
+func SplitCoreUpdates(updates []CoreUpdate) (minorUpdate, majorUpdate string) {
+	for _, u := range updates {
+		switch u.UpdateType {
+		case "minor":
+			if minorUpdate == "" {
+				minorUpdate = u.Version
+			}
+		case "major":
+			if majorUpdate == "" {
+				majorUpdate = u.Version
+			}
+		}
+	}
+	return minorUpdate, majorUpdate
 }
 
 var updateRegex = regexp.MustCompile(`(?m)^Updating to version ([0-9.-]+) \(([^)]+)\)...`)

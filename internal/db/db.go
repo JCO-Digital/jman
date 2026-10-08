@@ -763,6 +763,33 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// jman-agent's WordPress data collection per site: when it last
+			// collected successfully (NULL until it first has; until then
+			// the periodic SSH refresh keeps covering the site) and the
+			// latest error, if the last attempt failed.
+			Name: "site_agent_wp_status",
+			Columns: map[string]string{
+				"site_id":      "TEXT PRIMARY KEY",
+				"collected_at": "DATETIME",
+				"error":        "TEXT",
+				"error_at":     "DATETIME",
+				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			// Open "agent is stale" alerts for sites (kind "site"), so
+			// each is sent to Slack once (repeated daily while it lasts),
+			// with a recovery message when it clears. Whole agents keep
+			// theirs on agent_tokens.
+			Name: "agent_stale_alerts",
+			Columns: map[string]string{
+				"kind":       "TEXT NOT NULL",
+				"target_id":  "TEXT NOT NULL",
+				"alerted_at": "DATETIME NOT NULL",
+			},
+			PrimaryKey: []string{"kind", "target_id"},
+		},
+		{
 			// Update locks restrict a site (plugin = '') or one plugin on
 			// a site to fix-release updates. See models.UpdateLock.
 			Name: "update_locks",

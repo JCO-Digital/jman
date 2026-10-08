@@ -20,6 +20,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -58,7 +59,11 @@ var (
 	siteLocks          = db.GetSiteLocks
 	refreshPluginCache = cache.UpdateSitePluginCache
 	updateCore         = wpcli.UpdateCore
-	refreshCore        = cache.RefreshSiteCore
+	// refreshCore is the refresh after a core job, which records its own
+	// ledger entry (see sitestate.SourceJob).
+	refreshCore = func(site models.CliSite) (*models.SiteCore, error) {
+		return cache.RefreshSiteCore(site, sitestate.SourceJob)
+	}
 	// pluginVulnerable reports whether a plugin version on a site has an
 	// unsuppressed known vulnerability.
 	pluginVulnerable = func(siteID, plugin, version string) bool {

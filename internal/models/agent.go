@@ -62,6 +62,10 @@ type AgentManifestSite struct {
 	Domain       string `json:"domain"`
 	SiteUser     string `json:"site_user"`
 	IsWordpress  bool   `json:"is_wordpress"`
+	// WPDataHash is the WPDataHash of the plugins and core state jman-api
+	// holds for the site ("" if none). The agent sends its collected
+	// WordPress data in full only when its own hash differs.
+	WPDataHash string `json:"wp_data_hash,omitempty"`
 }
 
 // AgentManifest is the response body for GET /api/agent/manifest.
@@ -74,6 +78,10 @@ type AgentManifest struct {
 	// exist too — the agent uses this to trigger an immediate self-update
 	// check instead of waiting for its periodic ticker.
 	APIVersion string `json:"api_version"`
+	// WPDataIntervalMinutes is how often the agent collects each site's
+	// WordPress data (plugins and core) with wp-cli. Zero means don't:
+	// jman-api versions that predate agent collection don't send it.
+	WPDataIntervalMinutes int `json:"wp_data_interval_minutes,omitempty"`
 }
 
 // TrafficTopEntry is a single ranked entry (a page path or a referrer) in a
@@ -152,13 +160,16 @@ type SiteTrafficDailyRow struct {
 // AgentReportSite is a single site's worth of freshly collected data in a
 // POST /api/agent/report request body.
 type AgentReportSite struct {
-	SiteID           string               `json:"site_id"` // site UUID
-	DiskUsageBytes   *int64               `json:"disk_usage_bytes"`
-	IsMultisite      *bool                `json:"is_multisite"`
-	DisallowFileMods *bool                `json:"disallow_file_mods"`
-	AutoUpdateCore   *string              `json:"auto_update_core,omitempty"` // see SiteWpFlags.AutoUpdateCore
-	TrafficHourly    []TrafficHourlyEntry `json:"traffic_hourly,omitempty"`
-	TrafficDaily     []TrafficDailyEntry  `json:"traffic_daily,omitempty"`
+	SiteID           string  `json:"site_id"` // site UUID
+	DiskUsageBytes   *int64  `json:"disk_usage_bytes"`
+	IsMultisite      *bool   `json:"is_multisite"`
+	DisallowFileMods *bool   `json:"disallow_file_mods"`
+	AutoUpdateCore   *string `json:"auto_update_core,omitempty"` // see SiteWpFlags.AutoUpdateCore
+	// WPData is set on cycles where the agent collected the site's
+	// WordPress data (about every WPDataIntervalMinutes).
+	WPData        *AgentWPData         `json:"wp_data,omitempty"`
+	TrafficHourly []TrafficHourlyEntry `json:"traffic_hourly,omitempty"`
+	TrafficDaily  []TrafficDailyEntry  `json:"traffic_daily,omitempty"`
 }
 
 // AgentReport is the request body jman-agent POSTs on each collection cycle.

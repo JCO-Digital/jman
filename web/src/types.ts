@@ -187,6 +187,19 @@ export interface Site {
 	last_update?: SiteUpdateLedgerEntry;
 	wp_core?: SiteCore;
 	update_locks?: UpdateLock[];
+	/** jman-agent's WordPress data collection, once it has tried one. */
+	agent_wp?: AgentWPStatus;
+}
+
+/**
+ * jman-agent's collection of a site's plugins and core version. Until the
+ * first successful collection the site stays on the periodic SSH refresh.
+ */
+export interface AgentWPStatus {
+	collected_at?: string;
+	/** The latest failure, cleared by the next successful collection. */
+	error?: string;
+	error_at?: string;
 }
 
 export interface SiteCore {
@@ -322,7 +335,9 @@ export type LedgerStatus =
 	| "activated"
 	| "deactivated"
 	| "deleted"
-	| "installed";
+	| "installed"
+	/** A change jman found on the site but didn't make itself. */
+	| "detected";
 
 export interface SiteUpdateLedgerEntry {
 	id: number;

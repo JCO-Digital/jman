@@ -332,6 +332,33 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 | `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30`    | Slow-tick interval, in minutes.  |
 | `vulnReportTime`      | `JMAN_VULNREPORTTIME`      | `10:00` | Daily per-site vuln report time. |
 
+### Agent collection
+
+On servers running `jman-agent`, the agent collects each WordPress site's plugins and core
+version itself, running wp-cli locally as the site's owner (see
+[README_AGENT.md](README_AGENT.md#wordpress-data)). Once the agent has collected a site,
+the slow tick no longer reaches it over SSH; jobs, "Check for updates" and the refresh after
+an update still use SSH. A site the agent hasn't collected yet (an older agent, or a failure
+on the first attempt) stays on the SSH refresh.
+
+Whichever way a site's plugins and core version are read, jman compares them with what it
+knew and records changes it didn't make itself (updates in wp-admin, WordPress
+auto-updates, installs, removals, activations and deactivations, and major core changes) in
+the site's update ledger with the status `detected`. Must-use plugins, drop-ins and minor
+core changes are left out, and a read that suddenly lacks most of a site's plugins is only
+believed once it's seen twice.
+
+Agent health is checked every 5 minutes and reported to Slack (`slackMonitorChannel`, or
+`slackChannel`): once when an agent stops calling in, once when a site's WordPress data
+hasn't been collected for a while (sites that went stale together share one message), with
+a daily reminder while it lasts and a message when it recovers.
+
+| Key                       | Env var                        | Default | Description                                                                                       |
+| ------------------------- | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------- |
+| `agentWpDataInterval`     | `JMAN_AGENTWPDATAINTERVAL`     | `60`    | How often agents collect each site's plugins and core, in minutes. Negative turns it off.         |
+| `agentServerStaleMinutes` | `JMAN_AGENTSERVERSTALEMINUTES` | `30`    | Warn when a server's agent hasn't called in for this long.                                        |
+| `agentSiteStaleMinutes`   | `JMAN_AGENTSITESTALEMINUTES`   | `180`   | Warn when an agent site's WordPress data hasn't been collected successfully for this long.        |
+
 The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
 only the automatic external-cron dependency has been removed.
 

@@ -9,10 +9,12 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/updatejobs"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -185,6 +187,19 @@ type apiSite struct {
 	// UpdateLocks are the site's update locks: the site lock (empty
 	// plugin) and plugin locks.
 	UpdateLocks []models.UpdateLock `json:"update_locks,omitempty"`
+	// AgentWP is jman-agent's WordPress data collection for the site, if
+	// it has attempted one.
+	AgentWP *apiAgentWPStatus `json:"agent_wp,omitempty"`
+}
+
+// apiAgentWPStatus is jman-agent's WordPress data collection state of a
+// site in GET /api/sites.
+type apiAgentWPStatus struct {
+	// CollectedAt is the last successful collection; until there is one
+	// the site stays on the SSH refresh.
+	CollectedAt *time.Time `json:"collected_at,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	ErrorAt     *time.Time `json:"error_at,omitempty"`
 }
 
 func newAPISite(ms models.ManagedSite) apiSite {
@@ -309,6 +324,10 @@ func loadAPISites() ([]apiSite, error) {
 	for _, l := range locks {
 		locksBySiteID[l.SiteID] = append(locksBySiteID[l.SiteID], l)
 	}
+	agentWP, err := db.ListSiteAgentWPStatus()
+	if err != nil {
+		return nil, fmt.Errorf("agent collection status: %w", err)
+	}
 
 	for i := range sites {
 		id := sites[i].ID
@@ -330,6 +349,16 @@ func loadAPISites() ([]apiSite, error) {
 			sites[i].WPCore = &core
 		}
 		sites[i].UpdateLocks = locksBySiteID[id]
+		if st, ok := agentWP[id]; ok {
+			status := &apiAgentWPStatus{Error: st.Error}
+			if !st.CollectedAt.IsZero() {
+				status.CollectedAt = &st.CollectedAt
+			}
+			if !st.ErrorAt.IsZero() {
+				status.ErrorAt = &st.ErrorAt
+			}
+			sites[i].AgentWP = status
+		}
 	}
 
 	sort.Slice(sites, func(i, j int) bool {
@@ -482,25 +511,12 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist the freshly-fetched plugin state for this site.
-	// Delete first to remove plugins that are no longer installed; if that
-	// fails, log and continue — SaveSitePlugin uses ON CONFLICT UPDATE so
-	// existing rows are still refreshed and updated_at is kept current.
-	if err := db.DeleteSitePlugins(site.ID); err != nil {
-		verb.PrintErrorf(verb.Normal, "Warning: failed to clear plugin cache for site %s: %v\n", site.Name, err)
+	// Persist the freshly-fetched plugin state for this site; changes made
+	// outside jman since the last read go to the update ledger.
+	if _, err := sitestate.ApplyPlugins(site.ID, plugins, sitestate.SourceSSH, time.Now()); err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: failed to save plugins for site %s: %v\n", site.Name, err)
 	}
-	for _, p := range plugins {
-		if err := db.SaveSitePlugin(p); err != nil {
-			verb.PrintErrorf(verb.Normal, "Warning: failed to save plugin %s for site %s: %v\n", p.Name, site.Name, err)
-		}
-		if p.Status != "must-use" && p.Status != "dropin" {
-			bestVer := p.Version
-			if p.Update != "" {
-				bestVer = p.Update
-			}
-			cache.UpdatePluginInfo(p.Name, "", bestVer)
-		}
-	}
+	cache.UpdatePluginInfoFromPlugins(plugins)
 
 	updates := []models.WPPlugin{}
 	for _, p := range plugins {
@@ -528,7 +544,7 @@ func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	core, err := cache.RefreshSiteCore(*site)
+	core, err := cache.RefreshSiteCore(*site, sitestate.SourceSSH)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SiteCoreCheckHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to check core version")
