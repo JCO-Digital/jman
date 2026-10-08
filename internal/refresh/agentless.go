@@ -10,6 +10,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -112,16 +113,17 @@ func collectSingleSite(site models.ManagedSite) error {
 	coreVer, coreErr := wpcli.CoreVersion(cliSite)
 	if coreErr == nil && coreVer != "" {
 		minorUpdate, majorUpdate := checkCoreUpdates(cliSite)
-		_ = db.SaveSiteCore(site.ID, coreVer, minorUpdate, majorUpdate)
+		core := models.SiteCore{Version: coreVer, MinorUpdate: minorUpdate, MajorUpdate: majorUpdate}
+		if _, err := sitestate.ApplyCore(site.ID, core, sitestate.SourceSSH, time.Now()); err != nil {
+			verb.LogPrintf(verb.Normal, "Agentless collection: failed to save core version for %s: %v", site.Domain, err)
+		}
 	}
 
 	// 4. Collect Installed Plugins
 	plugins, plugErr := wpcli.GetPlugins(cliSite, false)
 	if plugErr == nil {
-		_ = db.DeleteSitePlugins(site.ID)
-		for _, p := range plugins {
-			p.SiteID = site.ID
-			_ = db.SaveSitePlugin(p)
+		if _, err := sitestate.ApplyPlugins(site.ID, plugins, sitestate.SourceSSH, time.Now()); err != nil {
+			verb.LogPrintf(verb.Normal, "Agentless collection: failed to save plugins for %s: %v", site.Domain, err)
 		}
 	}
 
@@ -133,17 +135,5 @@ func checkCoreUpdates(cliSite models.CliSite) (minorUpdate, majorUpdate string) 
 	if err != nil {
 		return "", ""
 	}
-	for _, u := range updates {
-		switch u.UpdateType {
-		case "minor":
-			if minorUpdate == "" {
-				minorUpdate = u.Version
-			}
-		case "major":
-			if majorUpdate == "" {
-				majorUpdate = u.Version
-			}
-		}
-	}
-	return minorUpdate, majorUpdate
+	return wpcli.SplitCoreUpdates(updates)
 }

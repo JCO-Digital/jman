@@ -8,6 +8,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/fetch/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -43,7 +44,13 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 	updated := false
 	var mu sync.Mutex
 
+	// jman-agent collects these sites itself (see GetCachedPlugins).
+	agentSites := db.AgentCollectedSites()
+
 	for _, site := range sites {
+		if agentSites[site.ID] {
+			continue
+		}
 		if !force {
 			if lastUpdate, ok := lastUpdates[site.ID]; ok && lastUpdate != "" {
 				if t == -1 {
@@ -72,7 +79,8 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 
 			minorUpdate, majorUpdate := checkCoreUpdates(site)
 
-			if err := db.SaveSiteCore(site.ID, version, minorUpdate, majorUpdate); err != nil {
+			core := models.SiteCore{Version: version, MinorUpdate: minorUpdate, MajorUpdate: majorUpdate}
+			if _, err := sitestate.ApplyCore(site.ID, core, sitestate.SourceSSH, time.Now()); err != nil {
 				verb.PrintErrorf(verb.Normal, "Warning: failed to save core version for site %s: %v\n", verb.Blue(site.Name), err)
 				return
 			}
@@ -103,20 +111,7 @@ func checkCoreUpdates(site models.CliSite) (minorUpdate, majorUpdate string) {
 		return "", ""
 	}
 
-	for _, u := range updates {
-		switch u.UpdateType {
-		case "minor":
-			if minorUpdate == "" {
-				minorUpdate = u.Version
-			}
-		case "major":
-			if majorUpdate == "" {
-				majorUpdate = u.Version
-			}
-		}
-	}
-
-	return minorUpdate, majorUpdate
+	return wpcli.SplitCoreUpdates(updates)
 }
 
 // RefreshSiteCore fetches the live installed WordPress core version and any
@@ -125,7 +120,10 @@ func checkCoreUpdates(site models.CliSite) (minorUpdate, majorUpdate string) {
 // answer an explicit "check for updates" request or to refresh the cache
 // right after a core update, where the result must reflect the current
 // state rather than a possibly-stale cached one.
-func RefreshSiteCore(site models.CliSite) (*models.SiteCore, error) {
+//
+// src says whether this is the refresh after jman's own core update
+// (sitestate.SourceJob) or an explicit check (sitestate.SourceSSH).
+func RefreshSiteCore(site models.CliSite, src sitestate.Source) (*models.SiteCore, error) {
 	version, err := wpcli.CoreVersion(site)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get core version: %w", err)
@@ -133,7 +131,8 @@ func RefreshSiteCore(site models.CliSite) (*models.SiteCore, error) {
 
 	minorUpdate, majorUpdate := checkCoreUpdates(site)
 
-	if err := db.SaveSiteCore(site.ID, version, minorUpdate, majorUpdate); err != nil {
+	core := models.SiteCore{Version: version, MinorUpdate: minorUpdate, MajorUpdate: majorUpdate}
+	if _, err := sitestate.ApplyCore(site.ID, core, src, time.Now()); err != nil {
 		return nil, fmt.Errorf("failed to save core version: %w", err)
 	}
 

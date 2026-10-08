@@ -17,6 +17,11 @@ StandardError=journal
 # this service's user needs write access there (root is the simplest choice
 # since the agent also needs to read every site's files to measure disk
 # usage and wp-config.php).
+#
+# Root also lets the agent run wp-cli as each site's owner (it never runs
+# wp-cli as root). Don't remove CAP_SETUID/CAP_SETGID with
+# CapabilityBoundingSet= or similar sandboxing, or WordPress data
+# collection is refused for every site.
 
 [Install]
 WantedBy=multi-user.target

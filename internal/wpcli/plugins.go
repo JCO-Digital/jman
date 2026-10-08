@@ -19,7 +19,14 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 		return nil, err
 	}
 
-	output := strings.TrimSpace(res.Output)
+	return ParsePluginList(res.Output, site.ID)
+}
+
+// ParsePluginList parses `wp plugin list --format=json` output (with the
+// name, status, version, update_version and auto_update fields) into
+// plugins of the given site.
+func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
+	output = strings.TrimSpace(output)
 	if output == "" || output == "[]" {
 		return nil, nil
 	}
@@ -47,7 +54,7 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 	var plugins []models.WPPlugin
 	for _, rp := range raw {
 		plugins = append(plugins, models.WPPlugin{
-			SiteID:     site.ID,
+			SiteID:     siteID,
 			Name:       rp.Name,
 			Status:     rp.Status,
 			Version:    rp.Version,
