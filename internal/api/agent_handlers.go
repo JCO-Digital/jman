@@ -69,6 +69,10 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, manifest)
 }
 
+// validAutoUpdateCore holds the core auto-update settings an agent may
+// report; anything else is stored as unknown.
+var validAutoUpdateCore = map[string]bool{"true": true, "false": true, "minor": true, "disabled": true, "default": true}
+
 // AgentReportHandler ingests a batched report of freshly collected per-site
 // data from a jman-agent instance and persists it.
 func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +141,11 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 		if siteReport.IsMultisite != nil || siteReport.DisallowFileMods != nil {
 			isMultisite := siteReport.IsMultisite != nil && *siteReport.IsMultisite
 			disallowFileMods := siteReport.DisallowFileMods != nil && *siteReport.DisallowFileMods
-			if err := db.SetSiteWpFlags(siteReport.SiteID, isMultisite, disallowFileMods); err != nil {
+			autoUpdateCore := siteReport.AutoUpdateCore
+			if autoUpdateCore != nil && !validAutoUpdateCore[*autoUpdateCore] {
+				autoUpdateCore = nil
+			}
+			if err := db.SetSiteWpFlags(siteReport.SiteID, isMultisite, disallowFileMods, autoUpdateCore); err != nil {
 				verb.LogPrintf(verb.Normal, "Failed to set wp flags for site %s: %v", siteReport.SiteID, err)
 			}
 		}

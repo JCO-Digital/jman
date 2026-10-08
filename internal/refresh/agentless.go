@@ -56,6 +56,23 @@ func CollectAgentlessSites() error {
 	return nil
 }
 
+// wpFlagsEval reports the site's WordPress config flags as JSON. The core
+// auto-update setting mirrors what jman-agent reads from wp-config.php
+// ("disabled", the WP_AUTO_UPDATE_CORE value, or "default"), except that
+// with no WP_AUTO_UPDATE_CORE it also honours the wp-admin toggle for
+// major updates (the auto_update_core_major option).
+const wpFlagsEval = `$auto = "default";
+if (defined("AUTOMATIC_UPDATER_DISABLED") && AUTOMATIC_UPDATER_DISABLED) {
+	$auto = "disabled";
+} elseif (defined("WP_AUTO_UPDATE_CORE")) {
+	// "beta", "rc", "development" and "branch-development" also allow
+	// major updates.
+	$auto = WP_AUTO_UPDATE_CORE === false || WP_AUTO_UPDATE_CORE === "false" ? "false" : (WP_AUTO_UPDATE_CORE === "minor" ? "minor" : "true");
+} elseif (get_site_option("auto_update_core_major") === "enabled") {
+	$auto = "true";
+}
+echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS, "auto_update_core" => $auto]);`
+
 func collectSingleSite(site models.ManagedSite) error {
 	sshSpec := fmt.Sprintf("%s@%s", site.SSHUser, site.SSHHost)
 	if site.SSHPort > 0 && site.SSHPort != 22 {
@@ -69,16 +86,16 @@ func collectSingleSite(site models.ManagedSite) error {
 	}
 	cliSite := site.ToCliSite()
 
-	// 1. Collect WP Flags (MULTISITE, DISALLOW_FILE_MODS)
-	flagCmd := `echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS]);`
-	flagRes, flagErr := wpcli.RunWP(opts, "eval", flagCmd)
+	// 1. Collect WP Flags (MULTISITE, DISALLOW_FILE_MODS, core auto-updates)
+	flagRes, flagErr := wpcli.RunWP(opts, "eval", wpFlagsEval)
 	if flagErr == nil && flagRes.Output != "" {
 		var flags struct {
-			Multisite        bool `json:"multisite"`
-			DisallowFileMods bool `json:"disallow_file_mods"`
+			Multisite        bool   `json:"multisite"`
+			DisallowFileMods bool   `json:"disallow_file_mods"`
+			AutoUpdateCore   string `json:"auto_update_core"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(flagRes.Output)), &flags); err == nil {
-			_ = db.SetSiteWpFlags(site.ID, flags.Multisite, flags.DisallowFileMods)
+			_ = db.SetSiteWpFlags(site.ID, flags.Multisite, flags.DisallowFileMods, &flags.AutoUpdateCore)
 		}
 	}
 

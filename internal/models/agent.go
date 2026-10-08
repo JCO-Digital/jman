@@ -32,9 +32,14 @@ type SiteDiskUsage struct {
 // SiteWpFlags holds the current WordPress configuration flags jman-agent
 // reads directly from wp-config.php on the server.
 type SiteWpFlags struct {
-	IsMultisite      bool   `json:"is_multisite"`
-	DisallowFileMods bool   `json:"disallow_file_mods"`
-	UpdatedAt        string `json:"updated_at"`
+	IsMultisite      bool `json:"is_multisite"`
+	DisallowFileMods bool `json:"disallow_file_mods"`
+	// AutoUpdateCore is WordPress's core auto-update setting: "true"
+	// (major updates too), "minor", "false", "disabled" (all automatic
+	// updates off), "default" (minor only), or "" if unknown (an older
+	// agent that doesn't report it).
+	AutoUpdateCore string `json:"auto_update_core"`
+	UpdatedAt      string `json:"updated_at"`
 }
 
 // AgentManifestSite is a single site entry returned to jman-agent by the
@@ -151,6 +156,7 @@ type AgentReportSite struct {
 	DiskUsageBytes   *int64               `json:"disk_usage_bytes"`
 	IsMultisite      *bool                `json:"is_multisite"`
 	DisallowFileMods *bool                `json:"disallow_file_mods"`
+	AutoUpdateCore   *string              `json:"auto_update_core,omitempty"` // see SiteWpFlags.AutoUpdateCore
 	TrafficHourly    []TrafficHourlyEntry `json:"traffic_hourly,omitempty"`
 	TrafficDaily     []TrafficDailyEntry  `json:"traffic_daily,omitempty"`
 }

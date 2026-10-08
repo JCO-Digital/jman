@@ -31,9 +31,12 @@ func setupRunnerTest(t *testing.T) {
 	oldFind, oldUpdate, oldRefresh, oldQueue := findSite, updatePlugins, refreshPluginCache, q
 	oldUpdateCore, oldRefreshCore, oldCachedCore := updateCore, refreshCore, cachedCoreVersion
 	oldAction, oldInstall, oldUpload, oldSSH := pluginAction, installPlugin, uploadFile, runSSH
-	oldVulnerable := pluginVulnerable
+	oldVulnerable, oldFixedIn := pluginVulnerable, pluginFixedIn
+	oldPatch, oldPackages := updatePluginsPatch, updatePackages
 	q = newQueue()
 	pluginVulnerable = func(string, string, string) bool { return false }
+	pluginFixedIn = func(string, string, string) string { return "" }
+	updatePackages = func(models.CliSite) (map[string]string, error) { return map[string]string{}, nil }
 	cachedCoreVersion = func(string) string { return "6.4.0" }
 	findSite = func(siteID string) (*models.CliSite, error) {
 		return &models.CliSite{ID: siteID, Name: "example.com"}, nil
@@ -47,7 +50,8 @@ func setupRunnerTest(t *testing.T) {
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
 		updateCore, refreshCore, cachedCoreVersion = oldUpdateCore, oldRefreshCore, oldCachedCore
 		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
-		pluginVulnerable = oldVulnerable
+		pluginVulnerable, pluginFixedIn = oldVulnerable, oldFixedIn
+		updatePluginsPatch, updatePackages = oldPatch, oldPackages
 		db.Close()
 		config.RunData.DataDir, config.RunData.ConfigDir = oldData, oldConfig
 	})

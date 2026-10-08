@@ -51,6 +51,9 @@ const (
 	UpdateFailed   = "failed"
 	// UpdateDone means a plugin management action succeeded.
 	UpdateDone = "Done"
+	// UpdateSkippedLocked means a locked plugin still has an update, but
+	// no fix release of it was available, so it wasn't updated.
+	UpdateSkippedLocked = "Skipped (locked)"
 )
 
 // UpdateJob is one background change on a single site: `wp plugin update`
@@ -71,6 +74,9 @@ type UpdateJob struct {
 	Source string `json:"source,omitempty"`
 	// Activate makes an install job activate the plugin after installing.
 	Activate bool `json:"activate,omitempty"`
+	// AllowMajor lets a plugins or core job go past fix releases on locked
+	// plugins or a locked site. Only a confirmed single-item update sets it.
+	AllowMajor bool `json:"allow_major,omitempty"`
 	// UploadPath is the local path of an uploaded ZIP for an install job.
 	// It's removed once the job has finished.
 	UploadPath string `json:"-"`
@@ -107,4 +113,7 @@ type UpdateResult struct {
 	NewVersion string `json:"new_version"`
 	Status     string `json:"status"`
 	Error      string `json:"error,omitempty"`
+	// Note explains a skipped update, e.g. that a known vulnerability is
+	// only fixed by a major update the lock held back.
+	Note string `json:"note,omitempty"`
 }

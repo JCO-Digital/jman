@@ -213,11 +213,12 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 			}
 
 			if site.IsWordpress {
-				if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
+				if flags, err := CollectWpFlags(sitePath); err != nil {
 					verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
 				} else {
-					siteReport.IsMultisite = &isMultisite
-					siteReport.DisallowFileMods = &disallowFileMods
+					siteReport.IsMultisite = &flags.IsMultisite
+					siteReport.DisallowFileMods = &flags.DisallowFileMods
+					siteReport.AutoUpdateCore = &flags.AutoUpdateCore
 				}
 			}
 		}
