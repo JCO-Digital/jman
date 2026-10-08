@@ -41,9 +41,10 @@ export const useCoreUpdateStore = defineStore("coreUpdate", () => {
 	async function updateCore(
 		siteId: string,
 		target: "minor" | "major",
+		allowMajor = false,
 	): Promise<UpdateJob> {
 		try {
-			return await jobsStore.enqueueCore(siteId, target);
+			return await jobsStore.enqueueCore(siteId, target, allowMajor);
 		} catch (e: any) {
 			const site = dataStore.getSiteById(siteId);
 			const siteName = site ? site.domain : `Site #${siteId}`;

@@ -15,6 +15,8 @@ import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
 import SiteTrafficCard from "../components/SiteTrafficCard.vue";
 import PluginRowActions from "../components/PluginRowActions.vue";
 import PluginInstallModal from "../components/PluginInstallModal.vue";
+import UpdateLockModal from "../components/UpdateLockModal.vue";
+import AppIcon from "../components/AppIcon.vue";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
 import { useCoreUpdateStore } from "../stores/coreUpdate";
 import { useUpdateJobsStore } from "../stores/updateJobs";
@@ -205,13 +207,19 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 		if (data.summary) {
 			let txt = data.summary;
 			if (data.updates && data.updates.length > 0) {
+				const mark = (status: string) =>
+					status === "success"
+						? "✓"
+						: status === "skipped"
+							? "locked"
+							: "✗";
 				const pluginsList = data.updates
-					.map(
-						(u: any) =>
-							`${u.plugin} (${u.status === "success" ? "✓" : "✗"})`,
-					)
+					.map((u: any) => `${u.plugin} (${mark(u.status)})`)
 					.join(", ");
 				txt += `\nPlugins: ${pluginsList}`;
+				for (const u of data.updates) {
+					if (u.note) txt += `\n${u.plugin}: ${u.note}`;
+				}
 			}
 			return txt;
 		}
@@ -219,6 +227,8 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 			let txt = `Plugin: ${data.plugin}`;
 			if (data.error) {
 				txt += ` [Error: ${data.error}]`;
+			} else if (data.skipped) {
+				txt += ` (Held back by update lock at ${data.old_version || "?"})`;
 			} else if (
 				data.old_version &&
 				data.new_version &&
@@ -228,6 +238,7 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 			} else if (data.old_version || data.new_version) {
 				txt += ` (${data.old_version || "?"} → ${data.new_version || "?"})`;
 			}
+			if (data.note) txt += `\n${data.note}`;
 			return txt;
 		}
 		if (data.target) {
@@ -237,6 +248,7 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 			} else {
 				txt += `Updated to ${data.new_version}`;
 			}
+			if (data.note) txt += `\n${data.note}`;
 			return txt;
 		}
 		if (data.note) {
@@ -569,12 +581,73 @@ async function checkPluginUpdates() {
 	}
 }
 
+// --- Update locks ---
+const siteLocks = computed(() => dataStore.getSiteLocks(siteId.value));
+const lockedPlugins = computed(() => [...siteLocks.value.plugins.values()]);
+const hasLocks = computed(
+	() => !!siteLocks.value.site || lockedPlugins.value.length > 0,
+);
+const showLockModal = ref(false);
+
+/**
+ * Automatic updates that bypass jman's locks: WordPress's own major core
+ * updates on a locked site, and plugin auto-updates of locked plugins.
+ * "unknown" when no agent (or an old one) reported the core setting.
+ */
+const coreAutoUpdates = computed<"major" | "unknown" | null>(() => {
+	if (!siteLocks.value.site) return null;
+	const setting = site.value?.wp_flags?.auto_update_core;
+	if (!setting) return "unknown";
+	return setting === "true" ? "major" : null;
+});
+const autoUpdatingLockedPlugins = computed(() =>
+	sitePlugins.value
+		.filter(
+			(p) =>
+				(p.autoUpdate === true || p.autoUpdate === "on") &&
+				dataStore.isPluginLocked(siteId.value, p.name),
+		)
+		.map((p) => p.name),
+);
+
+function lockLabel(lock: { created_by: string; created_at: string }) {
+	return `${lock.created_by || "unknown"}, ${formatDate(lock.created_at)}`;
+}
+
+async function unlockSite() {
+	const lock = siteLocks.value.site;
+	if (!site.value || !lock) return;
+	const plugins = lockedPlugins.value.length;
+	const ok = await confirm(
+		`Remove the update lock of ${site.value.domain}? Bulk updates will install the latest versions again.` +
+			(plugins
+				? ` The ${plugins} plugin lock${plugins === 1 ? "" : "s"} on this site stay in place.`
+				: ""),
+		{ confirmLabel: "Unlock" },
+	);
+	if (!ok) return;
+	try {
+		await dataStore.unlockUpdates(site.value.id, lock.id);
+	} catch (e: any) {
+		toast.addToast(
+			`Failed to unlock ${site.value.domain}: ${e.message}`,
+			"error",
+		);
+	}
+}
+
 /** Queues one background job updating the given plugins. */
 async function updatePlugins(plugins: { name: string }[], vulnerable: boolean) {
 	if (!site.value || plugins.length === 0) return;
 	const what = vulnerable ? "vulnerable plugin" : "plugin";
+	const locked = plugins.filter((p) =>
+		dataStore.isPluginLocked(siteId.value, p.name),
+	).length;
+	const lockNote = locked
+		? ` ${locked === plugins.length ? (locked === 1 ? "It is" : "All are") : `${locked} of them are`} update-locked and only get fix releases.`
+		: "";
 	const ok = await confirm(
-		`Update ${plugins.length} ${what}${plugins.length === 1 ? "" : "s"} on ${site.value.domain}?`,
+		`Update ${plugins.length} ${what}${plugins.length === 1 ? "" : "s"} on ${site.value.domain}?${lockNote}`,
 		{ confirmLabel: "Update" },
 	);
 	if (!ok) return;
@@ -617,9 +690,17 @@ async function checkCoreUpdate() {
 
 async function runCoreUpdate(target: "minor" | "major") {
 	if (!site.value) return;
+	const allowMajor = target === "major" && !!siteLocks.value.site;
+	if (allowMajor) {
+		const ok = await confirm(
+			`${site.value.domain} is update-locked. Update WordPress from ${site.value.wp_core?.version ?? "?"} to ${site.value.wp_core?.major_update ?? "the latest version"}? The lock stays in place.`,
+			{ confirmLabel: "Update anyway", danger: true },
+		);
+		if (!ok) return;
+	}
 	queueingCoreTarget.value = target;
 	try {
-		await coreUpdateStore.updateCore(site.value.id, target);
+		await coreUpdateStore.updateCore(site.value.id, target, allowMajor);
 	} catch {
 		// The store already surfaces a toast with the error detail.
 	} finally {
@@ -855,6 +936,95 @@ const unlinkOrganization = async () => {
 
 			<section class="card mt-4">
 				<div class="card-header">
+					<h2>Update Lock</h2>
+					<div
+						v-if="authStore.canExecute && site.can_wp_cli"
+						class="flex-row gap-2"
+					>
+						<template v-if="siteLocks.site">
+							<button
+								class="btn btn-outline btn-sm"
+								@click="showLockModal = true"
+							>
+								Edit comment
+							</button>
+							<button
+								class="btn btn-outline btn-sm"
+								@click="unlockSite"
+							>
+								Unlock
+							</button>
+						</template>
+						<button
+							v-else
+							class="btn btn-outline btn-sm"
+							@click="showLockModal = true"
+						>
+							<AppIcon name="lock" size="14" /> Lock updates
+						</button>
+					</div>
+				</div>
+
+				<div v-if="siteLocks.site" class="info-item">
+					<span class="label">Site</span>
+					<span class="value">
+						<span class="status-badge badge-sm warning">
+							<AppIcon name="lock" size="11" /> Fix releases only
+						</span>
+						{{ siteLocks.site.comment || "No comment" }}
+						<span class="text-muted">
+							({{ lockLabel(siteLocks.site) }})
+						</span>
+					</span>
+				</div>
+				<p v-else class="text-muted">
+					Updates on this site aren't locked.
+					{{
+						lockedPlugins.length
+							? "Locked plugins only get fix releases."
+							: "Lock the site, or single plugins below, to only allow fix-release updates."
+					}}
+				</p>
+
+				<div
+					v-for="lock in lockedPlugins"
+					:key="lock.id"
+					class="info-item"
+				>
+					<span class="label">{{ lock.plugin }}</span>
+					<span class="value">
+						{{ lock.comment || "No comment" }}
+						<span class="text-muted">({{ lockLabel(lock) }})</span>
+					</span>
+				</div>
+
+				<p
+					v-if="coreAutoUpdates === 'major'"
+					class="confirm-option-warning"
+				>
+					WordPress installs major core updates on its own on this
+					site (WP_AUTO_UPDATE_CORE or the wp-admin setting), which
+					the lock can't stop.
+				</p>
+				<p
+					v-else-if="coreAutoUpdates === 'unknown'"
+					class="confirm-option-warning"
+				>
+					WordPress's own core auto-update setting is unknown for this
+					site, so it may install major updates despite the lock.
+				</p>
+				<p
+					v-if="hasLocks && autoUpdatingLockedPlugins.length"
+					class="confirm-option-warning"
+				>
+					WordPress auto-updates these locked plugins on its own,
+					which the lock can't stop:
+					{{ autoUpdatingLockedPlugins.join(", ") }}.
+				</p>
+			</section>
+
+			<section class="card mt-4">
+				<div class="card-header">
 					<h2>WordPress Core</h2>
 					<button
 						v-if="authStore.canExecute && site.can_wp_cli"
@@ -928,8 +1098,14 @@ const unlinkOrganization = async () => {
 						v-if="site.wp_core?.major_update"
 						class="btn btn-outline btn-sm"
 						:disabled="!!coreJob || !!queueingCoreTarget"
+						:title="
+							siteLocks.site
+								? 'Update-locked: asks for confirmation'
+								: undefined
+						"
 						@click="runCoreUpdate('major')"
 					>
+						<AppIcon v-if="siteLocks.site" name="lock" size="12" />
 						{{
 							isUpdatingCore.major
 								? "Updating..."
@@ -1029,7 +1205,27 @@ const unlinkOrganization = async () => {
 								class="clickable-row"
 								@click="goToPlugin(plugin.name)"
 							>
-								<td class="font-medium">{{ plugin.name }}</td>
+								<td class="font-medium">
+									{{ plugin.name }}
+									<span
+										v-if="
+											dataStore.isPluginLocked(
+												site.id,
+												plugin.name,
+											)
+										"
+										class="status-badge badge-sm warning"
+										:title="
+											siteLocks.plugins.get(plugin.name)
+												?.comment ||
+											siteLocks.site?.comment ||
+											'Update-locked: fix releases only'
+										"
+									>
+										<AppIcon name="lock" size="11" />
+										Locked
+									</span>
+								</td>
 								<td class="text-muted">
 									{{ plugin.version }}
 									<span
@@ -1211,6 +1407,15 @@ const unlinkOrganization = async () => {
 			:site-id="site.id"
 			:site-name="site.domain"
 			@close="showInstallModal = false"
+		/>
+
+		<UpdateLockModal
+			v-if="site"
+			v-model="showLockModal"
+			:site-id="site.id"
+			:site-name="site.domain"
+			plugin=""
+			:comment="siteLocks.site?.comment"
 		/>
 
 		<!-- Link Organization Modal -->

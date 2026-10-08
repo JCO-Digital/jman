@@ -187,14 +187,16 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			};
 		}
 		if (r?.status === "Up to date") {
+			const note = r.note ? ` ${r.note}.` : "";
 			return {
-				message: `WordPress on ${siteName} was already up to date (${r.new_version}).`,
+				message: `WordPress on ${siteName} was already up to date (${r.new_version}).${note}`,
 				type: "success",
 			};
 		}
 		const from = r?.old_version ? ` from ${r.old_version}` : "";
+		const note = r?.note ? ` ${r.note}.` : "";
 		return {
-			message: `Updated WordPress on ${siteName}${from} to ${r?.new_version || "the latest version"}.`,
+			message: `Updated WordPress on ${siteName}${from} to ${r?.new_version || "the latest version"}.${note}`,
 			type: "success",
 		};
 	}
@@ -304,6 +306,15 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				.join(", ");
 		const updated = names("Updated");
 		const failed = names("failed");
+		const heldBack = names("Skipped (locked)");
+		// Notes flag locked plugins left vulnerable by the held-back update.
+		const notes = job.results
+			.filter((r) => r.note)
+			.map((r) => `${r.name}: ${r.note}.`)
+			.join(" ");
+		const lockInfo =
+			(heldBack ? ` Held back by update locks: ${heldBack}.` : "") +
+			(notes ? ` ${notes}` : "");
 
 		if (job.status === "interrupted") {
 			return {
@@ -314,18 +325,36 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		if (failed) {
 			const alsoUpdated = updated ? ` Updated: ${updated}.` : "";
 			return {
-				message: `Failed to update ${failed} on ${siteName}.${alsoUpdated}`,
+				message: `Failed to update ${failed} on ${siteName}.${alsoUpdated}${lockInfo}`,
 				type: "error",
 			};
 		}
 		if (job.error) {
 			// Every plugin succeeded but something needs attention (e.g. the
 			// site was left in maintenance mode).
-			return { message: `${siteName}: ${job.error}`, type: "error" };
+			return {
+				message: `${siteName}: ${job.error}${lockInfo}`,
+				type: "error",
+			};
+		}
+		if (notes) {
+			// A vulnerable plugin was held back: flag it rather than
+			// reporting a plain success.
+			const done = updated ? ` Updated: ${updated}.` : "";
+			return {
+				message: `${siteName}:${done}${lockInfo}`,
+				type: "info",
+			};
 		}
 		if (updated) {
 			return {
-				message: `Updated ${updated} on ${siteName}.`,
+				message: `Updated ${updated} on ${siteName}.${lockInfo}`,
+				type: "success",
+			};
+		}
+		if (heldBack) {
+			return {
+				message: `No fix releases to install on ${siteName}.${lockInfo}`,
 				type: "success",
 			};
 		}
@@ -429,10 +458,15 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 
 	/**
 	 * Queues updates: one job per site, each updating all its plugins in one
-	 * WP-CLI call.
+	 * WP-CLI call. Update-locked plugins only get fix releases, unless a
+	 * single-plugin request sets allow_major (after the user confirmed).
 	 */
 	async function enqueue(
-		requests: { site_id: string; plugins: string[] }[],
+		requests: {
+			site_id: string;
+			plugins: string[];
+			allow_major?: boolean;
+		}[],
 	): Promise<UpdateJob[]> {
 		const created = await postJobs<UpdateJob[]>("/plugin-update-jobs", {
 			jobs: requests,
@@ -491,13 +525,18 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return job;
 	}
 
-	/** Queues a WordPress core update on a site. */
+	/**
+	 * Queues a WordPress core update on a site. A major update on an
+	 * update-locked site needs allowMajor (after the user confirmed).
+	 */
 	async function enqueueCore(
 		siteId: string,
 		target: "minor" | "major",
+		allowMajor = false,
 	): Promise<UpdateJob> {
 		const job = await postJobs<UpdateJob>(`/sites/${siteId}/core-update`, {
 			target,
+			allow_major: allowMajor,
 		});
 		merge([job]);
 		schedulePoll();

@@ -13,6 +13,7 @@ import type {
 	EnrichedSite,
 	EnrichedPlugin,
 	SiteCore,
+	UpdateLock,
 } from "../types";
 import { useAuthStore } from "./auth";
 import { useMonitorStore } from "./monitor";
@@ -22,7 +23,9 @@ import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 // changes (ids moving from SpinupWP integers to UUID strings, sites gaining
 // `ssh`), so stale session caches are ignored instead of served.
 const CACHE_KEY_SERVERS = "jman_servers_v2";
-const CACHE_KEY_SITES = "jman_sites_v3";
+// v4: sites carry update_locks; a v3 cache would show locked sites as
+// unlocked.
+const CACHE_KEY_SITES = "jman_sites_v4";
 const CACHE_KEY_PLUGINS = "jman_plugins_v2";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
 const CACHE_KEY_VULNS = "jman_vulns_v3";
@@ -32,6 +35,7 @@ const LEGACY_CACHE_KEYS = [
 	"jman_servers",
 	"jman_sites",
 	"jman_sites_v2",
+	"jman_sites_v3",
 	"jman_plugins",
 	"jman_vulns_v2",
 	"jman_core_vulns",
@@ -568,6 +572,76 @@ export const useDataStore = defineStore("data", () => {
 		}
 	}
 
+	/** A site's update locks: the site lock and plugin locks by slug. */
+	function getSiteLocks(siteId: string): {
+		site?: UpdateLock;
+		plugins: Map<string, UpdateLock>;
+	} {
+		const locks = getSiteById(siteId)?.update_locks ?? [];
+		return {
+			site: locks.find((l) => l.plugin === ""),
+			plugins: new Map(
+				locks.filter((l) => l.plugin !== "").map((l) => [l.plugin, l]),
+			),
+		};
+	}
+
+	/** Whether a plugin on a site is update-locked, itself or by the site lock. */
+	function isPluginLocked(siteId: string, pluginName: string): boolean {
+		const locks = getSiteLocks(siteId);
+		return !!locks.site || locks.plugins.has(pluginName);
+	}
+
+	function storeSiteLocks(siteId: string, locks: UpdateLock[]) {
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.update_locks = locks;
+			sessionStorage.setItem(
+				CACHE_KEY_SITES,
+				JSON.stringify(sites.value),
+			);
+		}
+	}
+
+	/**
+	 * Locks a site (empty plugin) or one of its plugins to fix-release
+	 * updates. Locking something already locked replaces its comment.
+	 */
+	async function lockUpdates(
+		siteId: string,
+		plugin: string,
+		comment: string,
+	) {
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/update-locks`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ plugin, comment }),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		const lock: UpdateLock = await res.json();
+		const others = (getSiteById(siteId)?.update_locks ?? []).filter(
+			(l) => l.id !== lock.id && l.plugin !== lock.plugin,
+		);
+		storeSiteLocks(siteId, [...others, lock]);
+	}
+
+	/** Removes an update lock. A site's plugin locks outlive its site lock. */
+	async function unlockUpdates(siteId: string, lockId: number) {
+		const res = await apiFetch(`${BASE_URL}/update-locks/${lockId}`, {
+			method: "DELETE",
+		});
+		// Already gone (e.g. removed by someone else) is what we wanted.
+		if (!res.ok && res.status !== 404) await handleErrorResponse(res);
+		storeSiteLocks(
+			siteId,
+			(getSiteById(siteId)?.update_locks ?? []).filter(
+				(l) => l.id !== lockId,
+			),
+		);
+	}
+
 	function setSiteOrganizationLink(
 		siteId: string,
 		organizationId: number | undefined,
@@ -615,6 +689,10 @@ export const useDataStore = defineStore("data", () => {
 		getVulnerabilitiesBySlug,
 		setSiteOrganizationLink,
 		setSiteEnvironment,
+		getSiteLocks,
+		isPluginLocked,
+		lockUpdates,
+		unlockUpdates,
 		applyPluginUpdate,
 		applyCoreUpdate,
 		reloadSitePlugins,
