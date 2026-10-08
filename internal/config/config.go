@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/adrg/xdg"
 	"github.com/spf13/viper"
@@ -64,6 +65,17 @@ type AppConfig struct {
 	AllowedOrigins      []string          `toml:"allowedOrigins" mapstructure:"allowedOrigins"`
 	IgnoreSites         []string          `toml:"ignoreSites" mapstructure:"ignoreSites"`
 	PluginAliases       map[string]string `toml:"pluginAliases" mapstructure:"pluginAliases"`
+
+	// AgentWPDataInterval is how often, in minutes, jman-agent collects
+	// each site's plugins and core version (default 60; negative turns
+	// agent collection off, leaving those sites to the SSH refresh).
+	AgentWPDataInterval int `toml:"agentWpDataInterval" mapstructure:"agentWpDataInterval"`
+	// AgentServerStaleMinutes and AgentSiteStaleMinutes are how long a
+	// server's agent may go without calling in (default 30), and a site
+	// without a successful WordPress data collection (default 180),
+	// before jman-api warns in Slack.
+	AgentServerStaleMinutes int `toml:"agentServerStaleMinutes" mapstructure:"agentServerStaleMinutes"`
+	AgentSiteStaleMinutes   int `toml:"agentSiteStaleMinutes" mapstructure:"agentSiteStaleMinutes"`
 	// WPCLIHostTimeouts raises the WP-CLI timeout for slow SSH hosts, such
 	// as WP Engine's SSH gateway. See WPCLIHostTimeout.
 	WPCLIHostTimeouts []WPCLIHostTimeout `toml:"wpcliHostTimeouts" mapstructure:"wpcliHostTimeouts"`
@@ -210,4 +222,34 @@ func loadConfig() error {
 	}
 
 	return nil
+}
+
+// AgentWPDataIntervalMinutes returns the agent's WordPress data collection
+// interval, or 0 if agent collection is turned off.
+func AgentWPDataIntervalMinutes() int {
+	switch {
+	case Cfg.AgentWPDataInterval < 0:
+		return 0
+	case Cfg.AgentWPDataInterval == 0:
+		return 60
+	}
+	return Cfg.AgentWPDataInterval
+}
+
+// AgentServerStaleAfter returns how long a server's agent may stay silent
+// before jman-api warns.
+func AgentServerStaleAfter() time.Duration {
+	if Cfg.AgentServerStaleMinutes <= 0 {
+		return 30 * time.Minute
+	}
+	return time.Duration(Cfg.AgentServerStaleMinutes) * time.Minute
+}
+
+// AgentSiteStaleAfter returns how long a site may go without a successful
+// agent collection of its WordPress data before jman-api warns.
+func AgentSiteStaleAfter() time.Duration {
+	if Cfg.AgentSiteStaleMinutes <= 0 {
+		return 180 * time.Minute
+	}
+	return time.Duration(Cfg.AgentSiteStaleMinutes) * time.Minute
 }

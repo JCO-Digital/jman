@@ -23,14 +23,18 @@ const maxPluginsPerJob = 50
 
 // CreatePluginUpdateJobsHandler queues background plugin updates: one job
 // per site, each updating all of its listed plugins in one WP-CLI call.
+// Update-locked plugins only get fix releases, unless the job sets
+// allow_major, which is only accepted for a job with a single plugin (an
+// explicitly confirmed update), so bulk updates can't bypass locks.
 //
 //	POST /api/plugin-update-jobs
 //	{"jobs": [{"site_id": "<uuid>", "plugins": ["akismet", "jetpack"]}]}
 func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Jobs []struct {
-			SiteID  FlexID   `json:"site_id"`
-			Plugins []string `json:"plugins"`
+			SiteID     FlexID   `json:"site_id"`
+			Plugins    []string `json:"plugins"`
+			AllowMajor bool     `json:"allow_major"`
 		} `json:"jobs"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -62,11 +66,16 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
+		if req.AllowMajor && (len(plugins) != 1 || len(body.Jobs) != 1) {
+			WriteError(w, http.StatusBadRequest, "allow_major is only allowed for a single plugin on a single site")
+			return
+		}
 		jobs = append(jobs, models.UpdateJob{
-			Kind:      models.UpdateJobKindPlugins,
-			SiteID:    siteID,
-			Plugins:   withInstalledVersions(siteID, plugins),
-			CreatedBy: getUsername(r),
+			Kind:       models.UpdateJobKindPlugins,
+			SiteID:     siteID,
+			Plugins:    withInstalledVersions(siteID, plugins),
+			AllowMajor: req.AllowMajor,
+			CreatedBy:  getUsername(r),
 		})
 	}
 

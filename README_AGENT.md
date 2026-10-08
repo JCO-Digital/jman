@@ -1,6 +1,6 @@
 # jman-agent
 
-`jman-agent` is a lightweight sidecar service that runs directly on each server managed by `jman`. It collects data that can't be pulled from SpinupWP or over SSH — per-site disk usage, whether a site is running WordPress Multisite, whether `DISALLOW_FILE_MODS` is set, and hourly visitor traffic from access logs — and pushes it to `jman-api` on a schedule.
+`jman-agent` is a lightweight sidecar service that runs directly on each server managed by `jman`. It collects data that can't be pulled from SpinupWP or over SSH — per-site disk usage, whether a site is running WordPress Multisite, whether `DISALLOW_FILE_MODS` is set, and hourly visitor traffic from access logs — plus each WordPress site's plugins and core version, which `jman-api` would otherwise read over SSH, and pushes it to `jman-api` on a schedule.
 
 Unlike `jman-api` and `jman-monitor`, `jman-agent` does **not** need `jman` installed alongside it. It runs standalone, on the managed server itself, with only a small config file and its own binary.
 
@@ -13,6 +13,7 @@ On each collection cycle, `jman-agent`:
    - **Disk usage** per site, via `du -sb` (falling back to a manual directory walk if `du` isn't available).
    - **WordPress flags** per site, by reading `wp-config.php` directly for the `MULTISITE` and `DISALLOW_FILE_MODS` constants.
    - **Visitor traffic** per site, by tailing its nginx access logs — see [Visitor Traffic Analytics](#visitor-traffic-analytics) below.
+   - **WordPress data** (installed plugins, core version and available updates) per WordPress site, with wp-cli run as the site's owner, about once an hour — see [WordPress Data](#wordpress-data) below.
 3. Sends everything back in one batched `POST /api/agent/report` request.
 
 It also checks for and installs its own updates on a schedule — see [Self-Updating](#self-updating) below.
@@ -98,6 +99,8 @@ jman-agent --once
 
 - `-s`, `--service`: Run as a continuous background service.
 - `--once`: Run a single collection cycle and exit.
+- `--check-wp`: Collect each WordPress site's plugins and core as the service would, print the result (path, the user wp-cli ran as, and the data or why the site was refused), and exit without reporting anything. Exits non-zero if any site failed.
+- `--site <domain>`: With `--check-wp`, only check this site.
 - `--config <path>`: Path to `config.toml` (default: `/etc/jman-agent/config.toml`, or `$XDG_CONFIG_HOME/jman-agent/config.toml` if not root).
 - `-v`, `--verbose`: Enable verbose output.
 - `-d`, `--debug`: Enable debug output.
@@ -117,6 +120,22 @@ A systemd unit file is provided in the repository. To install it:
    ```
 
 The service runs as `root` by default (see the comments in `jman-agent.service`) since the agent needs read access to every site's files to measure disk usage and check `wp-config.php`, and write access to its own binary to self-update.
+
+## WordPress Data
+
+About once an hour (`agentWpDataInterval` in jman-api's config; the agent has no setting of its own), the agent runs `wp plugin list`, `wp core version` and `wp core check-update` for each WordPress site, with other plugins and themes skipped (`--skip-plugins --skip-themes`), so a broken plugin can't break collection and site code beyond WordPress core doesn't run.
+
+The agent runs as root, but **never runs wp-cli as root**. Each call runs as the Unix user that owns the site's directory (`/sites/<domain>/files`), with that user's primary group, no supplementary groups, a fixed `PATH`, and a fresh environment that doesn't include the agent's own (which holds its token). A site is skipped, and the reason reported to jman-api, if:
+
+- its directory is a symlink, owned by root, or owned by a user without an account or whose primary group is root;
+- the site user jman-api knows exists locally but isn't the directory's owner;
+- the domain isn't a valid hostname.
+
+The agent only runs a `wp` binary found in a system directory (`/usr/local/bin`, `/usr/bin`, …) that is owned by root and not writable by group or others; otherwise WordPress data collection is off and every site reports why. Each call is limited to 2 minutes (the whole process group is killed after that), its output to 4 MiB, and it runs at a lower CPU priority.
+
+To try it on a server before (or after) jman-api enables it, run `sudo jman-agent --check-wp` (optionally with `--site example.com`): it uses the server's manifest but ignores whether jman-api has enabled collection, reports nothing and doesn't self-update. If the installed agent self-updates, test a newer build with `selfUpdateEnabled = false` in a separate config (`--config`), since a development build's version (e.g. `v6.6.0-7-g79e5220`) sorts below the release it's based on.
+
+Data is only sent in full when it changed: the manifest carries a hash of what jman-api holds for each site, and the agent sends just its own hash when they match. That small report still tells jman-api the site was collected, which is what its staleness warnings are based on. Once the agent has collected a site, jman-api stops reading it over SSH in its periodic refresh.
 
 ## Self-Updating
 
@@ -159,6 +178,8 @@ The jman-ui Settings token table shows both **Last Seen** and the reporting agen
 
 - **Last Seen** updates on *any* authenticated request, including the manifest fetch at the start of every collection cycle.
 - **Version** only updates after a full, successfully parsed `POST /api/agent/report` — so it doubles as confirmation that reports are actually getting through, not just that the token is valid.
+
+If a site's **Plugin & Core Data** (on its page in jman-ui) says "last attempt failed", the reason shown is the agent's: typically a refusal to run wp-cli as the site's owner (see [WordPress Data](#wordpress-data)) or wp-cli's own error, such as a database connection failure.
 
 If **Last Seen** is recent but **Version** never appears (or stops updating), the agent is authenticating fine but its reports aren't landing — check `journalctl -u jman-agent` on that server for collection or network errors. Per-site collection failures (e.g. a `du`/`wp-config.php` read failing for a specific site) are logged at normal verbosity by default, no `--debug` flag needed.
 

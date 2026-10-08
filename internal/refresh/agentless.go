@@ -10,6 +10,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -56,6 +57,23 @@ func CollectAgentlessSites() error {
 	return nil
 }
 
+// wpFlagsEval reports the site's WordPress config flags as JSON. The core
+// auto-update setting mirrors what jman-agent reads from wp-config.php
+// ("disabled", the WP_AUTO_UPDATE_CORE value, or "default"), except that
+// with no WP_AUTO_UPDATE_CORE it also honours the wp-admin toggle for
+// major updates (the auto_update_core_major option).
+const wpFlagsEval = `$auto = "default";
+if (defined("AUTOMATIC_UPDATER_DISABLED") && AUTOMATIC_UPDATER_DISABLED) {
+	$auto = "disabled";
+} elseif (defined("WP_AUTO_UPDATE_CORE")) {
+	// "beta", "rc", "development" and "branch-development" also allow
+	// major updates.
+	$auto = WP_AUTO_UPDATE_CORE === false || WP_AUTO_UPDATE_CORE === "false" ? "false" : (WP_AUTO_UPDATE_CORE === "minor" ? "minor" : "true");
+} elseif (get_site_option("auto_update_core_major") === "enabled") {
+	$auto = "true";
+}
+echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS, "auto_update_core" => $auto]);`
+
 func collectSingleSite(site models.ManagedSite) error {
 	sshSpec := fmt.Sprintf("%s@%s", site.SSHUser, site.SSHHost)
 	if site.SSHPort > 0 && site.SSHPort != 22 {
@@ -69,16 +87,16 @@ func collectSingleSite(site models.ManagedSite) error {
 	}
 	cliSite := site.ToCliSite()
 
-	// 1. Collect WP Flags (MULTISITE, DISALLOW_FILE_MODS)
-	flagCmd := `echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS]);`
-	flagRes, flagErr := wpcli.RunWP(opts, "eval", flagCmd)
+	// 1. Collect WP Flags (MULTISITE, DISALLOW_FILE_MODS, core auto-updates)
+	flagRes, flagErr := wpcli.RunWP(opts, "eval", wpFlagsEval)
 	if flagErr == nil && flagRes.Output != "" {
 		var flags struct {
-			Multisite        bool `json:"multisite"`
-			DisallowFileMods bool `json:"disallow_file_mods"`
+			Multisite        bool   `json:"multisite"`
+			DisallowFileMods bool   `json:"disallow_file_mods"`
+			AutoUpdateCore   string `json:"auto_update_core"`
 		}
 		if err := json.Unmarshal([]byte(strings.TrimSpace(flagRes.Output)), &flags); err == nil {
-			_ = db.SetSiteWpFlags(site.ID, flags.Multisite, flags.DisallowFileMods)
+			_ = db.SetSiteWpFlags(site.ID, flags.Multisite, flags.DisallowFileMods, &flags.AutoUpdateCore)
 		}
 	}
 
@@ -95,16 +113,17 @@ func collectSingleSite(site models.ManagedSite) error {
 	coreVer, coreErr := wpcli.CoreVersion(cliSite)
 	if coreErr == nil && coreVer != "" {
 		minorUpdate, majorUpdate := checkCoreUpdates(cliSite)
-		_ = db.SaveSiteCore(site.ID, coreVer, minorUpdate, majorUpdate)
+		core := models.SiteCore{Version: coreVer, MinorUpdate: minorUpdate, MajorUpdate: majorUpdate}
+		if _, err := sitestate.ApplyCore(site.ID, core, sitestate.SourceSSH, time.Now()); err != nil {
+			verb.LogPrintf(verb.Normal, "Agentless collection: failed to save core version for %s: %v", site.Domain, err)
+		}
 	}
 
 	// 4. Collect Installed Plugins
 	plugins, plugErr := wpcli.GetPlugins(cliSite, false)
 	if plugErr == nil {
-		_ = db.DeleteSitePlugins(site.ID)
-		for _, p := range plugins {
-			p.SiteID = site.ID
-			_ = db.SaveSitePlugin(p)
+		if _, err := sitestate.ApplyPlugins(site.ID, plugins, sitestate.SourceSSH, time.Now()); err != nil {
+			verb.LogPrintf(verb.Normal, "Agentless collection: failed to save plugins for %s: %v", site.Domain, err)
 		}
 	}
 
@@ -116,17 +135,5 @@ func checkCoreUpdates(cliSite models.CliSite) (minorUpdate, majorUpdate string) 
 	if err != nil {
 		return "", ""
 	}
-	for _, u := range updates {
-		switch u.UpdateType {
-		case "minor":
-			if minorUpdate == "" {
-				minorUpdate = u.Version
-			}
-		case "major":
-			if majorUpdate == "" {
-				majorUpdate = u.Version
-			}
-		}
-	}
-	return minorUpdate, majorUpdate
+	return wpcli.SplitCoreUpdates(updates)
 }

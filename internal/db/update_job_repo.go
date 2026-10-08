@@ -9,7 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-const updateJobColumns = `id, kind, site_id, status, plugins, target, source, activate, upload_path, results, core, error, created_by, created_at, started_at, finished_at`
+const updateJobColumns = `id, kind, site_id, status, plugins, target, source, activate, allow_major, upload_path, results, core, error, created_by, created_at, started_at, finished_at`
 
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
@@ -34,9 +34,9 @@ func CreateUpdateJob(job *models.UpdateJob) error {
 	job.Results = []models.UpdateResult{}
 
 	err = db.QueryRow(
-		`INSERT INTO plugin_update_jobs (kind, site_id, status, plugins, target, source, activate, upload_path, created_by, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		job.Kind, job.SiteID, job.Status, string(plugins), job.Target, job.Source, job.Activate, job.UploadPath, job.CreatedBy, job.CreatedAt,
+		`INSERT INTO plugin_update_jobs (kind, site_id, status, plugins, target, source, activate, allow_major, upload_path, created_by, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		job.Kind, job.SiteID, job.Status, string(plugins), job.Target, job.Source, job.Activate, job.AllowMajor, job.UploadPath, job.CreatedBy, job.CreatedAt,
 	).Scan(&job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to create update job: %w", err)
@@ -207,7 +207,7 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 		var target, source, uploadPath, results, core, errMsg, createdBy sql.NullString
 		var startedAt, finishedAt sql.NullTime
 		if err := rows.Scan(
-			&job.ID, &job.Kind, &job.SiteID, &job.Status, &plugins, &target, &source, &job.Activate, &uploadPath, &results, &core, &errMsg, &createdBy,
+			&job.ID, &job.Kind, &job.SiteID, &job.Status, &plugins, &target, &source, &job.Activate, &job.AllowMajor, &uploadPath, &results, &core, &errMsg, &createdBy,
 			&job.CreatedAt, &startedAt, &finishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan update job: %w", err)

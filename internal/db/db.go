@@ -634,7 +634,12 @@ func initAPISchema() error {
 				"site_id":            "TEXT PRIMARY KEY",
 				"is_multisite":       "BOOLEAN DEFAULT 0",
 				"disallow_file_mods": "BOOLEAN DEFAULT 0",
-				"updated_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				// The WP_AUTO_UPDATE_CORE setting the agent found ("true",
+				// "false", "minor", "disabled" for AUTOMATIC_UPDATER_DISABLED,
+				// or "default" when neither is set). NULL means unknown: the
+				// agent is too old to report it.
+				"auto_update_core": "TEXT",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
 		{
@@ -743,6 +748,10 @@ func initAPISchema() error {
 				"source":      "TEXT",
 				"activate":    "INTEGER NOT NULL DEFAULT 0",
 				"upload_path": "TEXT",
+				// allow_major lets a job update locked plugins (or core on
+				// a locked site) past fix releases; set only by an
+				// explicitly confirmed single-item update.
+				"allow_major": "INTEGER NOT NULL DEFAULT 0",
 				"status":      "TEXT NOT NULL",
 				"plugins":     "TEXT NOT NULL",
 				"results":     "TEXT",
@@ -751,6 +760,46 @@ func initAPISchema() error {
 				"created_at":  "DATETIME NOT NULL",
 				"started_at":  "DATETIME",
 				"finished_at": "DATETIME",
+			},
+		},
+		{
+			// jman-agent's WordPress data collection per site: when it last
+			// collected successfully (NULL until it first has; until then
+			// the periodic SSH refresh keeps covering the site) and the
+			// latest error, if the last attempt failed.
+			Name: "site_agent_wp_status",
+			Columns: map[string]string{
+				"site_id":      "TEXT PRIMARY KEY",
+				"collected_at": "DATETIME",
+				"error":        "TEXT",
+				"error_at":     "DATETIME",
+				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			// Open "agent is stale" alerts for sites (kind "site"), so
+			// each is sent to Slack once (repeated daily while it lasts),
+			// with a recovery message when it clears. Whole agents keep
+			// theirs on agent_tokens.
+			Name: "agent_stale_alerts",
+			Columns: map[string]string{
+				"kind":       "TEXT NOT NULL",
+				"target_id":  "TEXT NOT NULL",
+				"alerted_at": "DATETIME NOT NULL",
+			},
+			PrimaryKey: []string{"kind", "target_id"},
+		},
+		{
+			// Update locks restrict a site (plugin = '') or one plugin on
+			// a site to fix-release updates. See models.UpdateLock.
+			Name: "update_locks",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":    "TEXT NOT NULL",
+				"plugin":     "TEXT NOT NULL DEFAULT ''",
+				"comment":    "TEXT",
+				"created_by": "TEXT",
+				"created_at": "DATETIME NOT NULL",
 			},
 		},
 		{
@@ -856,6 +905,10 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_plugin_update_jobs_status ON plugin_update_jobs(status);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_update_locks_site_plugin ON update_locks(site_id, plugin);")
 	if err != nil {
 		return err
 	}

@@ -86,10 +86,40 @@ export interface SiteDiskUsage {
 	measured_at: string;
 }
 
+/**
+ * WordPress's core auto-update setting: "true" (major updates too),
+ * "minor", "false", "disabled" (all automatic updates off), "default"
+ * (minor only), or "" if unknown (an agent too old to report it).
+ */
+export type AutoUpdateCore =
+	| "true"
+	| "minor"
+	| "false"
+	| "disabled"
+	| "default"
+	| "";
+
 export interface SiteWpFlags {
 	is_multisite: boolean;
 	disallow_file_mods: boolean;
+	auto_update_core: AutoUpdateCore;
 	updated_at: string;
+}
+
+/**
+ * Restricts updates on a site (empty plugin: core and every plugin) or of
+ * one plugin to fix releases. Bulk and ordinary updates of locked items
+ * only install patch versions; a bigger update needs an explicit,
+ * confirmed major update, and the lock stays in place.
+ */
+export interface UpdateLock {
+	id: number;
+	site_id: string;
+	/** Plugin slug, or "" for a site lock. */
+	plugin: string;
+	comment: string;
+	created_by: string;
+	created_at: string;
 }
 
 /**
@@ -156,6 +186,20 @@ export interface Site {
 	wp_flags?: SiteWpFlags;
 	last_update?: SiteUpdateLedgerEntry;
 	wp_core?: SiteCore;
+	update_locks?: UpdateLock[];
+	/** jman-agent's WordPress data collection, once it has tried one. */
+	agent_wp?: AgentWPStatus;
+}
+
+/**
+ * jman-agent's collection of a site's plugins and core version. Until the
+ * first successful collection the site stays on the periodic SSH refresh.
+ */
+export interface AgentWPStatus {
+	collected_at?: string;
+	/** The latest failure, cleared by the next successful collection. */
+	error?: string;
+	error_at?: string;
 }
 
 export interface SiteCore {
@@ -291,7 +335,9 @@ export type LedgerStatus =
 	| "activated"
 	| "deactivated"
 	| "deleted"
-	| "installed";
+	| "installed"
+	/** A change jman found on the site but didn't make itself. */
+	| "detected";
 
 export interface SiteUpdateLedgerEntry {
 	id: number;
@@ -515,8 +561,11 @@ export interface UpdateResult {
 	name: string;
 	old_version: string;
 	new_version: string;
+	/** "Updated", "Up to date", "failed", "Done" or "Skipped (locked)". */
 	status: string;
 	error?: string;
+	/** Explains a skipped update, e.g. a vulnerability the lock holds back. */
+	note?: string;
 }
 
 export type UpdateJobStatus =
@@ -556,6 +605,8 @@ export interface UpdateJob {
 	source?: string;
 	/** Install jobs: activate after installing. */
 	activate?: boolean;
+	/** Plugins and core jobs: update-locked items may get major updates. */
+	allow_major?: boolean;
 	/**
 	 * One entry per plugin (one "WordPress" entry for core jobs, one entry
 	 * for the installed plugin for install jobs) once finished.

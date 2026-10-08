@@ -196,8 +196,13 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	sites := rotateSites(manifest.Sites, reportRotationCounter)
 	reportRotationCounter++
 
+	// WordPress data (plugins, core) runs on its own, slower schedule set
+	// by jman-api; a site is only marked collected once the report holding
+	// its data has been sent.
+	wpData, wpCollected := collectWPDataForSites(ctx, manifest, time.Now())
+
 	for _, site := range sites {
-		siteReport := models.AgentReportSite{SiteID: site.SiteID}
+		siteReport := models.AgentReportSite{SiteID: site.SiteID, WPData: wpData[site.SiteID]}
 
 		if sitePath, err := ResolveSitePath(site.Domain, site.SiteUser); err != nil {
 			skipTarget := "disk usage"
@@ -213,11 +218,12 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 			}
 
 			if site.IsWordpress {
-				if isMultisite, disallowFileMods, err := CollectWpFlags(sitePath); err != nil {
+				if flags, err := CollectWpFlags(sitePath); err != nil {
 					verb.LogPrintf(verb.Normal, "Failed to read wp-config.php flags for %s at %s: %v", site.Domain, sitePath, err)
 				} else {
-					siteReport.IsMultisite = &isMultisite
-					siteReport.DisallowFileMods = &disallowFileMods
+					siteReport.IsMultisite = &flags.IsMultisite
+					siteReport.DisallowFileMods = &flags.DisallowFileMods
+					siteReport.AutoUpdateCore = &flags.AutoUpdateCore
 				}
 			}
 		}
@@ -257,6 +263,8 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	if err := client.SendReport(ctx, report); err != nil {
 		return false, fmt.Errorf("failed to send report: %w", err)
 	}
+
+	markWPCollected(wpCollected, time.Now())
 
 	for siteID, state := range pendingLogStates {
 		if err := logs.SaveState(cfg.StateDir, siteID, state); err != nil {

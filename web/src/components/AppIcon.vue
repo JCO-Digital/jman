@@ -11,6 +11,7 @@ import IconEdit from "./icons/IconEdit.vue";
 import IconExternalLink from "./icons/IconExternalLink.vue";
 import IconEye from "./icons/IconEye.vue";
 import IconEyeOff from "./icons/IconEyeOff.vue";
+import IconLock from "./icons/IconLock.vue";
 import IconMenu from "./icons/IconMenu.vue";
 import IconNote from "./icons/IconNote.vue";
 import IconOrganization from "./icons/IconOrganization.vue";
@@ -43,6 +44,7 @@ const iconMap: Record<string, Component> = {
 	eye: IconEye,
 	"eye-off": IconEyeOff,
 	"external-link": IconExternalLink,
+	lock: IconLock,
 	menu: IconMenu,
 	note: IconNote,
 	organization: IconOrganization,

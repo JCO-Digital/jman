@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -18,7 +19,14 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 		return nil, err
 	}
 
-	output := strings.TrimSpace(res.Output)
+	return ParsePluginList(res.Output, site.ID)
+}
+
+// ParsePluginList parses `wp plugin list --format=json` output (with the
+// name, status, version, update_version and auto_update fields) into
+// plugins of the given site.
+func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
+	output = strings.TrimSpace(output)
 	if output == "" || output == "[]" {
 		return nil, nil
 	}
@@ -46,7 +54,7 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 	var plugins []models.WPPlugin
 	for _, rp := range raw {
 		plugins = append(plugins, models.WPPlugin{
-			SiteID:     site.ID,
+			SiteID:     siteID,
 			Name:       rp.Name,
 			Status:     rp.Status,
 			Version:    rp.Version,
@@ -116,6 +124,19 @@ const perPluginWriteTimeout = 2 * time.Minute
 // failure the error is an *UpdateFailure, and the returned results still
 // hold whatever per-plugin outcomes WP-CLI reported before failing.
 func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error) {
+	return updatePlugins(site, plugins, false)
+}
+
+// UpdatePluginPatch is UpdatePlugin limited to fix releases: each plugin is
+// updated to the newest stable release with the same major.minor version
+// (e.g. 9.3.0 → 9.3.3 even if 9.4.1 is the latest), looked up on
+// WordPress.org. Plugins with no such release, or that aren't on
+// WordPress.org, are left alone and don't appear in the results.
+func UpdatePluginPatch(site models.CliSite, plugins []string) ([]UpdateResult, error) {
+	return updatePlugins(site, plugins, true)
+}
+
+func updatePlugins(site models.CliSite, plugins []string, patchOnly bool) ([]UpdateResult, error) {
 	if len(plugins) == 0 {
 		return nil, nil
 	}
@@ -124,6 +145,9 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 
 	args := []string{"plugin", "update"}
 	args = append(args, plugins...)
+	if patchOnly {
+		args = append(args, "--patch")
+	}
 	args = append(args, "--format=json")
 
 	timeout := WriteTimeout + time.Duration(len(plugins)-1)*perPluginWriteTimeout
@@ -162,6 +186,50 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 		}
 	}
 	return updates, nil
+}
+
+// PluginUpdatePackages returns the package URL of each plugin's pending
+// update on the site, keyed by plugin slug; plugins without an update are
+// left out. It refreshes WordPress's cached update information first, like
+// UpdatePlugin.
+func PluginUpdatePackages(site models.CliSite) (map[string]string, error) {
+	refreshUpdateCache(site)
+
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true}, "plugin", "list", "--fields=name,update_package", "--format=json")
+	if err != nil {
+		return nil, err
+	}
+
+	output := strings.TrimSpace(res.Output)
+	idx := strings.Index(output, "[")
+	if idx == -1 {
+		if output == "" {
+			return map[string]string{}, nil
+		}
+		return nil, fmt.Errorf("no valid JSON array found in output")
+	}
+
+	var raw []struct {
+		Name          string  `json:"name"`
+		UpdatePackage *string `json:"update_package"`
+	}
+	if err := json.NewDecoder(strings.NewReader(output[idx:])).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("failed to parse plugin update packages: %w", err)
+	}
+	packages := make(map[string]string, len(raw))
+	for _, p := range raw {
+		if p.UpdatePackage != nil && *p.UpdatePackage != "" {
+			packages[p.Name] = *p.UpdatePackage
+		}
+	}
+	return packages, nil
+}
+
+// IsWordPressOrgPackage reports whether a plugin update package is
+// downloaded from WordPress.org.
+func IsWordPressOrgPackage(pkg string) bool {
+	u, err := url.Parse(pkg)
+	return err == nil && u.Scheme == "https" && strings.EqualFold(u.Hostname(), "downloads.wordpress.org")
 }
 
 // parseUpdateOutput extracts the per-plugin results from `wp plugin update
