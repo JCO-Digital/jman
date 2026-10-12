@@ -25,6 +25,10 @@ const (
 	// it (the entry's data says which).
 	LedgerDeleted   = "deleted"
 	LedgerInstalled = "installed"
+
+	// LedgerDetected is a change jman found on the site but didn't make
+	// itself (e.g. an update in wp-admin or a WordPress auto-update).
+	LedgerDetected = "detected"
 )
 
 // SiteUpdateLedgerEntry represents an entry in the update ledger for a specific site.

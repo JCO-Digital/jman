@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
@@ -10,10 +9,12 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/updatejobs"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -183,6 +184,22 @@ type apiSite struct {
 	WpFlags    *models.SiteWpFlags           `json:"wp_flags,omitempty"`
 	LastUpdate *models.SiteUpdateLedgerEntry `json:"last_update,omitempty"`
 	WPCore     *models.SiteCore              `json:"wp_core,omitempty"`
+	// UpdateLocks are the site's update locks: the site lock (empty
+	// plugin) and plugin locks.
+	UpdateLocks []models.UpdateLock `json:"update_locks,omitempty"`
+	// AgentWP is jman-agent's WordPress data collection for the site, if
+	// it has attempted one.
+	AgentWP *apiAgentWPStatus `json:"agent_wp,omitempty"`
+}
+
+// apiAgentWPStatus is jman-agent's WordPress data collection state of a
+// site in GET /api/sites.
+type apiAgentWPStatus struct {
+	// CollectedAt is the last successful collection; until there is one
+	// the site stays on the SSH refresh.
+	CollectedAt *time.Time `json:"collected_at,omitempty"`
+	Error       string     `json:"error,omitempty"`
+	ErrorAt     *time.Time `json:"error_at,omitempty"`
 }
 
 func newAPISite(ms models.ManagedSite) apiSite {
@@ -299,6 +316,18 @@ func loadAPISites() ([]apiSite, error) {
 	for _, c := range coreVersions {
 		coreBySiteID[c.SiteID] = c
 	}
+	locks, err := db.ListUpdateLocks()
+	if err != nil {
+		return nil, fmt.Errorf("update locks: %w", err)
+	}
+	locksBySiteID := make(map[string][]models.UpdateLock)
+	for _, l := range locks {
+		locksBySiteID[l.SiteID] = append(locksBySiteID[l.SiteID], l)
+	}
+	agentWP, err := db.ListSiteAgentWPStatus()
+	if err != nil {
+		return nil, fmt.Errorf("agent collection status: %w", err)
+	}
 
 	for i := range sites {
 		id := sites[i].ID
@@ -318,6 +347,17 @@ func loadAPISites() ([]apiSite, error) {
 		}
 		if core, ok := coreBySiteID[id]; ok {
 			sites[i].WPCore = &core
+		}
+		sites[i].UpdateLocks = locksBySiteID[id]
+		if st, ok := agentWP[id]; ok {
+			status := &apiAgentWPStatus{Error: st.Error}
+			if !st.CollectedAt.IsZero() {
+				status.CollectedAt = &st.CollectedAt
+			}
+			if !st.ErrorAt.IsZero() {
+				status.ErrorAt = &st.ErrorAt
+			}
+			sites[i].AgentWP = status
 		}
 	}
 
@@ -471,25 +511,12 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist the freshly-fetched plugin state for this site.
-	// Delete first to remove plugins that are no longer installed; if that
-	// fails, log and continue — SaveSitePlugin uses ON CONFLICT UPDATE so
-	// existing rows are still refreshed and updated_at is kept current.
-	if err := db.DeleteSitePlugins(site.ID); err != nil {
-		verb.PrintErrorf(verb.Normal, "Warning: failed to clear plugin cache for site %s: %v\n", site.Name, err)
+	// Persist the freshly-fetched plugin state for this site; changes made
+	// outside jman since the last read go to the update ledger.
+	if _, err := sitestate.ApplyPlugins(site.ID, plugins, sitestate.SourceSSH, time.Now()); err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: failed to save plugins for site %s: %v\n", site.Name, err)
 	}
-	for _, p := range plugins {
-		if err := db.SaveSitePlugin(p); err != nil {
-			verb.PrintErrorf(verb.Normal, "Warning: failed to save plugin %s for site %s: %v\n", p.Name, site.Name, err)
-		}
-		if p.Status != "must-use" && p.Status != "dropin" {
-			bestVer := p.Version
-			if p.Update != "" {
-				bestVer = p.Update
-			}
-			cache.UpdatePluginInfo(p.Name, "", bestVer)
-		}
-	}
+	cache.UpdatePluginInfoFromPlugins(plugins)
 
 	updates := []models.WPPlugin{}
 	for _, p := range plugins {
@@ -499,215 +526,6 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, updates)
-}
-
-// SitePluginUpdateHandler updates a single plugin on a site and refreshes the plugin cache.
-func SitePluginUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	siteID, err := resolveSiteUUID(r.PathValue("id"))
-	if err != nil {
-		WriteError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	var body struct {
-		Plugin     string `json:"plugin"`
-		SkipLedger bool   `json:"skip_ledger"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		WriteError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-	if body.Plugin == "" {
-		WriteError(w, http.StatusBadRequest, "Plugin name is required")
-		return
-	}
-	if !pluginSlugRegex.MatchString(body.Plugin) {
-		WriteError(w, http.StatusBadRequest, "Invalid plugin slug: must start with a letter or digit and contain only [a-z0-9_-/]")
-		return
-	}
-
-	site, err := getCliSite(siteID)
-	if err != nil {
-		WriteError(w, http.StatusNotFound, err.Error())
-		return
-	}
-
-	// Try to get current version from cache for fallback
-	currentVersion := ""
-	if plugins, err := db.GetSitePlugins(site.ID); err == nil {
-		for _, p := range plugins {
-			if p.Name == body.Plugin {
-				currentVersion = p.Version
-				break
-			}
-		}
-	}
-
-	results, err := wpcli.UpdatePlugin(*site, []string{body.Plugin})
-
-	// A slow host can time out after the update itself went through; if
-	// the follow-up check shows the new version installed and the site out
-	// of maintenance mode, report it as the update it was.
-	installedVersion := currentVersion
-	var failure *wpcli.UpdateFailure
-	if errors.As(err, &failure) {
-		if v, ok := failure.Versions[body.Plugin]; ok {
-			installedVersion = v
-			if currentVersion != "" && v != currentVersion && !failure.MaintenanceMode {
-				verb.LogPrintf(verb.Normal, "Plugin %s on %s reported %v but is now at %s; treating as updated", body.Plugin, site.Name, failure.Err, v)
-				results = []wpcli.UpdateResult{{Name: body.Plugin, OldVersion: currentVersion, NewVersion: v, Status: "Updated"}}
-				err = nil
-			}
-		}
-	}
-
-	var response wpcli.UpdateResult
-	response.Name = body.Plugin
-
-	if err != nil {
-		response.Status = "failed"
-		response.OldVersion = currentVersion
-		response.NewVersion = installedVersion
-		response.Error = err.Error()
-
-		// Save to site update ledger
-		ledgerData := map[string]interface{}{
-			"plugin":      body.Plugin,
-			"old_version": currentVersion,
-			"new_version": installedVersion,
-			"error":       err.Error(),
-		}
-		ledgerJSON, _ := json.Marshal(ledgerData)
-		username := "system"
-		claims := GetAuthClaims(r.Context())
-		if claims != nil {
-			username = claims.Username
-		}
-		if !body.SkipLedger {
-			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
-				SiteID:     siteID,
-				UpdateType: "plugin",
-				Status:     "failed",
-				DataJSON:   string(ledgerJSON),
-				UpdatedBy:  username,
-			})
-		}
-
-		WriteJSON(w, http.StatusInternalServerError, response)
-		return
-	}
-
-	if len(results) == 0 {
-		response.Status = "Up to date"
-		// If we think it's up to date but versions don't match, or if we didn't have
-		// a version, we should try to get the real current version.
-		actual, err := wpcli.GetPlugins(*site, true)
-		if err == nil {
-			for _, p := range actual {
-				if p.Name == body.Plugin {
-					currentVersion = p.Version
-					break
-				}
-			}
-		}
-		response.OldVersion = currentVersion
-		response.NewVersion = currentVersion
-
-		// Save to site update ledger
-		ledgerData := map[string]interface{}{
-			"plugin":      body.Plugin,
-			"old_version": currentVersion,
-			"new_version": currentVersion,
-		}
-		ledgerJSON, _ := json.Marshal(ledgerData)
-		username := "system"
-		claims := GetAuthClaims(r.Context())
-		if claims != nil {
-			username = claims.Username
-		}
-		if !body.SkipLedger {
-			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
-				SiteID:     siteID,
-				UpdateType: "plugin",
-				Status:     "partial",
-				DataJSON:   string(ledgerJSON),
-				UpdatedBy:  username,
-			})
-		}
-
-		WriteJSON(w, http.StatusOK, response)
-		return
-	}
-
-	response = results[0]
-
-	// Normalize status to "failed" if it's not "Updated" and ensure versions are same on failure.
-	if response.Status != "Updated" {
-		response.Status = "failed"
-		if response.OldVersion == "" {
-			response.OldVersion = currentVersion
-		}
-		response.NewVersion = response.OldVersion
-		response.Error = "Plugin update failed"
-
-		// Save to site update ledger
-		ledgerData := map[string]interface{}{
-			"plugin":      body.Plugin,
-			"old_version": response.OldVersion,
-			"new_version": response.NewVersion,
-			"error":       response.Error,
-		}
-		ledgerJSON, _ := json.Marshal(ledgerData)
-		username := "system"
-		claims := GetAuthClaims(r.Context())
-		if claims != nil {
-			username = claims.Username
-		}
-		if !body.SkipLedger {
-			_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
-				SiteID:     siteID,
-				UpdateType: "plugin",
-				Status:     "failed",
-				DataJSON:   string(ledgerJSON),
-				UpdatedBy:  username,
-			})
-		}
-
-		WriteJSON(w, http.StatusInternalServerError, response)
-		return
-	}
-
-	// Save successful update to site update ledger
-	ledgerData := map[string]interface{}{
-		"plugin":      body.Plugin,
-		"old_version": response.OldVersion,
-		"new_version": response.NewVersion,
-	}
-	ledgerJSON, _ := json.Marshal(ledgerData)
-	username := "system"
-	claims := GetAuthClaims(r.Context())
-	if claims != nil {
-		username = claims.Username
-	}
-	if !body.SkipLedger {
-		_ = db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{
-			SiteID:     siteID,
-			UpdateType: "plugin",
-			Status:     "partial",
-			DataJSON:   string(ledgerJSON),
-			UpdatedBy:  username,
-		})
-	}
-
-	// Refresh the full plugin list for this site so all versions and
-	// update_available flags reflect the post-update state.
-	go func() {
-		if err := cache.UpdateSitePluginCache(*site); err != nil {
-			verb.PrintErrorf(verb.Normal, "Failed to refresh plugin cache for site %s after update: %v\n", site.Name, err)
-		}
-	}()
-
-	WriteJSON(w, http.StatusOK, response)
 }
 
 // SiteCoreCheckHandler returns the installed WordPress core version and any
@@ -726,7 +544,7 @@ func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	core, err := cache.RefreshSiteCore(*site)
+	core, err := cache.RefreshSiteCore(*site, sitestate.SourceSSH)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SiteCoreCheckHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to check core version")
@@ -747,6 +565,9 @@ var coreJobMu sync.Mutex
 // site to the latest minor or major version and returns the job (202). The
 // job's result, including the refreshed core state, is available from
 // GET /api/update-jobs/{id}.
+//
+// A major update on an update-locked site is refused (409) unless the
+// request sets allow_major, which the UI sends after the user confirms.
 func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	siteID, err := resolveSiteUUID(r.PathValue("id"))
 	if err != nil {
@@ -755,7 +576,8 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var body struct {
-		Target string `json:"target"`
+		Target     string `json:"target"`
+		AllowMajor bool   `json:"allow_major"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -764,6 +586,18 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	if !coreUpdateTargetRegex.MatchString(body.Target) {
 		WriteError(w, http.StatusBadRequest, `Target must be "minor" or "major"`)
 		return
+	}
+	if body.Target == "major" && !body.AllowMajor {
+		locks, err := db.GetSiteLocks(siteID)
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		if locks.CoreLocked() {
+			WriteError(w, http.StatusConflict, "The site is update-locked; confirm the major update to run it")
+			return
+		}
 	}
 
 	coreJobMu.Lock()
@@ -785,10 +619,11 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	job := models.UpdateJob{
-		Kind:      models.UpdateJobKindCore,
-		SiteID:    siteID,
-		Target:    body.Target,
-		CreatedBy: getUsername(r),
+		Kind:       models.UpdateJobKindCore,
+		SiteID:     siteID,
+		Target:     body.Target,
+		AllowMajor: body.Target == "major" && body.AllowMajor,
+		CreatedBy:  getUsername(r),
 	}
 	if err := updatejobs.Enqueue(&job); err != nil {
 		verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)

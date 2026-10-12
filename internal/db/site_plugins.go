@@ -3,6 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -191,4 +192,80 @@ func GetSitePluginLastUpdates() (map[string]string, error) {
 	}
 
 	return updates, nil
+}
+
+// inventoryTimestamp formats t the way SQLite's CURRENT_TIMESTAMP does, so
+// rows written with an explicit time sort and parse like the rest.
+func inventoryTimestamp(t time.Time) string {
+	return t.UTC().Format("2006-01-02 15:04:05")
+}
+
+// parseInventoryTimestamp parses a CURRENT_TIMESTAMP-style or RFC3339
+// timestamp.
+func parseInventoryTimestamp(value string) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		return t, nil
+	}
+	return time.ParseInLocation("2006-01-02 15:04:05", value, time.UTC)
+}
+
+// ReplaceSitePlugins replaces a site's plugin rows with plugins in one
+// transaction, stamping them with observedAt (when the list was read from
+// the site), so a reader never sees a half-replaced list.
+func ReplaceSitePlugins(siteID string, plugins []models.WPPlugin, observedAt time.Time) error {
+	db := GetInventoryDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to replace plugins for site %s: %w", siteID, err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`DELETE FROM site_plugins WHERE site_id = ?`, siteID); err != nil {
+		return fmt.Errorf("failed to clear plugins for site %s: %w", siteID, err)
+	}
+	stamp := inventoryTimestamp(observedAt)
+	for _, p := range plugins {
+		if _, err := tx.Exec(
+			`INSERT INTO site_plugins (site_id, slug, status, version, update_available, auto_update, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			 ON CONFLICT(site_id, slug) DO UPDATE SET
+				status = excluded.status,
+				version = excluded.version,
+				update_available = excluded.update_available,
+				auto_update = excluded.auto_update,
+				updated_at = excluded.updated_at`,
+			siteID, p.Name, p.Status, p.Version, p.Update, p.AutoUpdate, stamp,
+		); err != nil {
+			return fmt.Errorf("failed to save plugin %s for site %s: %w", p.Name, siteID, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to replace plugins for site %s: %w", siteID, err)
+	}
+	return nil
+}
+
+// GetSitePluginsObservedAt returns when a site's cached plugin list was
+// last written, and false if the site has no cached plugins.
+func GetSitePluginsObservedAt(siteID string) (time.Time, bool, error) {
+	db := GetInventoryDB()
+	if db == nil {
+		return time.Time{}, false, fmt.Errorf("database not initialized")
+	}
+	var updatedAt sql.NullString
+	if err := db.QueryRow(`SELECT MAX(updated_at) FROM site_plugins WHERE site_id = ?`, siteID).Scan(&updatedAt); err != nil {
+		return time.Time{}, false, fmt.Errorf("failed to read plugin cache time for site %s: %w", siteID, err)
+	}
+	if !updatedAt.Valid || updatedAt.String == "" {
+		return time.Time{}, false, nil
+	}
+	t, err := parseInventoryTimestamp(updatedAt.String)
+	if err != nil {
+		return time.Time{}, false, fmt.Errorf("invalid plugin cache time %q for site %s: %w", updatedAt.String, siteID, err)
+	}
+	return t, true, nil
 }

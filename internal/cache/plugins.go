@@ -8,6 +8,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/fetch/wpvuln"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -73,7 +74,14 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	sem := make(chan struct{}, 12)
 	var mu sync.Mutex
 
+	// jman-agent collects these sites itself (only in jman-api; the CLI
+	// has no API database and sweeps every site).
+	agentSites := db.AgentCollectedSites()
+
 	for _, site := range sites {
+		if agentSites[site.ID] {
+			continue
+		}
 		// Skip sites that already have cached plugins unless forcing a refresh or expired.
 		if !force {
 			if lastUpdate, ok := lastUpdates[site.ID]; ok && lastUpdate != "" {
@@ -104,22 +112,11 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 			}
 			verb.Printf(verb.Verbose, "Fetched %d plugins for site %s\n", len(sitePlugins), verb.Blue(site.Name))
 
-			// Clear old entries and save new ones for this site.
-			_ = db.DeleteSitePlugins(site.ID)
-			for _, p := range sitePlugins {
-				_ = db.SaveSitePlugin(p)
-
-				if p.Status == "must-use" || p.Status == "dropin" {
-					continue
-				}
-
-				// Incrementally update plugin metadata cache (slug/name/version).
-				bestVer := p.Version
-				if p.Update != "" {
-					bestVer = p.Update
-				}
-				UpdatePluginInfo(p.Name, "", bestVer)
+			if _, err := sitestate.ApplyPlugins(site.ID, sitePlugins, sitestate.SourceSSH, time.Now()); err != nil {
+				verb.PrintErrorf(verb.Normal, "Warning: failed to save plugins for site %s: %v\n", verb.Blue(site.Name), err)
+				return
 			}
+			UpdatePluginInfoFromPlugins(sitePlugins)
 
 			mu.Lock()
 			updated = true
@@ -135,8 +132,17 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 	return existingPlugins, nil
 }
 
-// UpdateSitePluginCache fetches current plugins for a specific site and updates the database.
+// UpdateSitePluginCache fetches current plugins for a specific site and
+// updates the database. It's the refresh after one of jman's own changes
+// (an update job, a CLI update), which records the change itself, so the
+// refresh doesn't log it again; see sitestate.
 func UpdateSitePluginCache(site models.CliSite) error {
+	return RefreshSitePlugins(site, sitestate.SourceJob)
+}
+
+// RefreshSitePlugins fetches a site's current plugins over WP-CLI and
+// stores them as observed from src.
+func RefreshSitePlugins(site models.CliSite, src sitestate.Source) error {
 	sitePlugins, err := wpcli.GetPlugins(site, true)
 	if err != nil {
 		return fmt.Errorf("failed to fetch plugins for site %s: %w", site.Name, err)
@@ -144,29 +150,28 @@ func UpdateSitePluginCache(site models.CliSite) error {
 
 	verb.Printf(verb.Verbose, "Fetched %d plugins for site %s to update cache\n", len(sitePlugins), verb.Blue(site.Name))
 
-	// Refresh the database records for this site.
-	if err := db.DeleteSitePlugins(site.ID); err != nil {
-		return fmt.Errorf("failed to clear site plugins for %s: %w", site.Name, err)
+	if _, err := sitestate.ApplyPlugins(site.ID, sitePlugins, src, time.Now()); err != nil {
+		return fmt.Errorf("failed to save plugins for site %s: %w", site.Name, err)
 	}
+	UpdatePluginInfoFromPlugins(sitePlugins)
 
-	for _, p := range sitePlugins {
-		if err := db.SaveSitePlugin(p); err != nil {
-			verb.PrintErrorf(verb.Verbose, "Warning: failed to save plugin %s for site %s: %v\n", p.Name, site.Name, err)
-		}
+	verb.Printf(verb.Verbose, "Cache updated in database for site %s\n", verb.Blue(site.Name))
+	return nil
+}
 
+// UpdatePluginInfoFromPlugins updates the plugin metadata cache with the
+// best known version of each regular plugin in a site's list.
+func UpdatePluginInfoFromPlugins(plugins []models.WPPlugin) {
+	for _, p := range plugins {
 		if p.Status == "must-use" || p.Status == "dropin" {
 			continue
 		}
-
 		bestVer := p.Version
 		if p.Update != "" {
 			bestVer = p.Update
 		}
 		UpdatePluginInfo(p.Name, "", bestVer)
 	}
-
-	verb.Printf(verb.Verbose, "Cache updated in database for site %s\n", verb.Blue(site.Name))
-	return nil
 }
 
 // GetCachedPluginData groups all active plugins into WPPluginData structures for easier scanning.

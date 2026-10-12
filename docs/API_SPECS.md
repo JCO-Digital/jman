@@ -665,7 +665,7 @@ Returns a single plugin report. Note that if active vulnerabilities are found, t
 
 ## Plugin Update Operations
 
-These endpoints allow a UI to perform plugin updates one at a time, so progress can be displayed per plugin. Both require the **`execute`** level.
+Plugin and core updates run as background jobs (`POST /plugin-update-jobs`, `POST /sites/{id}/core-update`; progress via `GET /update-jobs`). Queueing them requires the **`execute`** level.
 
 ### Get Available Plugin Updates for a Site
 
@@ -695,48 +695,54 @@ Calls WP-CLI live to fetch the current list of plugins that have updates availab
 
 Returns an empty array if no updates are available.
 
-### Update a Single Plugin on a Site
+### Update Locks
 
-`POST /sites/{id}/plugin-updates` (Protected: `execute`)
+Sites that may not freely update can be **update-locked**: a site lock (empty `plugin`) covers WordPress core and every plugin on the site, a plugin lock covers one plugin on one site. Locked items only get **fix releases**:
 
-Updates one plugin on the site. The plugin cache is refreshed in the background after the call returns.
+- Plugins are updated with `wp plugin update --patch`: the newest stable release with the same `major.minor` version (9.3.0 → 9.3.3, even when 9.4.1 is the latest), looked up on WordPress.org. Only plugins whose pending update package comes from `downloads.wordpress.org` are updated this way; others (premium plugins, plugins with their own updater) are held back.
+- Core only gets `minor` updates (6.6.1 → 6.6.2).
 
-**Path Parameters**
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `id` | integer | Site ID |
+Locks are checked when a job runs, not when it is queued. A held-back plugin's job result has status `"Skipped (locked)"`; if it is still vulnerable, its `note` names the version the vulnerability database records as the fix.
 
-**Request Body**
+A bigger update needs `"allow_major": true`: accepted on `POST /plugin-update-jobs` only for a single job with a single plugin (so bulk updates can't bypass locks), and on `POST /sites/{id}/core-update` with `"target": "major"`. Without it, a major core update on a locked site is refused with `409 Conflict`. The lock stays in place after such an update.
+
+Locks only restrict jman's own updates. WordPress's automatic updates are reported so the UI can warn about them: the site's `wp_flags.auto_update_core` (`"true"` means major core updates are automatic; `""` means unknown) and each plugin's `autoUpdate`.
+
+#### List Update Locks
+
+`GET /update-locks` (Protected: `basic`)
+
+Locks are also included in each site of `GET /sites` as `update_locks`.
+
+```json
+[
+	{
+		"id": 3,
+		"site_id": "6467c171-4e72-5d82-b430-fb50868b9bf1",
+		"plugin": "woocommerce",
+		"comment": "Custom checkout, test updates on staging first",
+		"created_by": "niklas",
+		"created_at": "2026-10-08T12:00:00Z"
+	}
+]
+```
+
+#### Lock a Site or Plugin
+
+`POST /sites/{id}/update-locks` (Protected: `execute`)
+
 | Field | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `plugin` | string | Yes | Plugin slug to update |
+| `plugin` | string | No | Plugin slug; empty or missing locks the whole site |
+| `comment` | string | No | Why it is locked (up to 1000 characters) |
 
-**Response (200 OK)**
+Locking something already locked replaces the lock's comment and author. Returns the lock (`201 Created`), or `404` if the site isn't reachable over WP-CLI.
 
-```json
-{
-	"name": "akismet",
-	"old_version": "5.0.0",
-	"new_version": "5.1.0",
-	"status": "Updated"
-}
-```
+#### Remove a Lock
 
-If the plugin is already up to date, `status` will be `"Up to date"` and versions will be identical.
+`DELETE /update-locks/{id}` (Protected: `execute`)
 
-**Response (500 Internal Server Error)**
-
-```json
-{
-	"name": "akismet",
-	"old_version": "5.0.0",
-	"new_version": "5.0.0",
-	"status": "failed",
-	"error": "Error message"
-}
-```
-
-If the update fails, `status` will be `"failed"`, versions will reflect the state before the attempt, and the `error` field will contain a description of the failure.
+Returns `204 No Content`, or `404` if the lock doesn't exist. Removing a site lock leaves the site's plugin locks in place.
 
 ---
 

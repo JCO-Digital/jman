@@ -41,6 +41,34 @@ func StartScheduler(ctx context.Context) {
 			}
 		}
 	}()
+
+	// Agent health runs more often than the hourly tick: agent sites
+	// aren't covered by the SSH refresh, so a dead agent should be noticed
+	// within its (by default 30-minute) stale threshold.
+	go func() {
+		ticker := time.NewTicker(agentHealthInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				runAgentHealthChecks()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+// agentHealthInterval is how often agent and site staleness is checked.
+const agentHealthInterval = 5 * time.Minute
+
+func runAgentHealthChecks() {
+	if err := checkStaleAgents(); err != nil {
+		log.Printf("Error checking for stale agents: %v", err)
+	}
+	if err := checkStaleAgentSites(); err != nil {
+		log.Printf("Error checking for stale agent sites: %v", err)
+	}
 }
 
 func runTick() {
@@ -56,9 +84,6 @@ func runTick() {
 	}
 	if err := db.DownsampleOldSiteDiskUsage(time.Now().Add(-siteDiskUsageFullResolution)); err != nil {
 		log.Printf("Error downsampling old site disk usage: %v", err)
-	}
-	if err := checkStaleAgents(); err != nil {
-		log.Printf("Error checking for stale agents: %v", err)
 	}
 }
 

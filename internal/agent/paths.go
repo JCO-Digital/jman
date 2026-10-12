@@ -5,7 +5,14 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"regexp"
 )
+
+// domainRe matches a hostname: dot-separated labels of letters, digits,
+// hyphens and underscores. Site paths are built from the domain jman-api
+// sends, so anything else (a "..", a slash) is refused rather than joined
+// into a path the root-running agent then reads or runs wp-cli in.
+var domainRe = regexp.MustCompile(`^[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?(\.[A-Za-z0-9_]([A-Za-z0-9_-]*[A-Za-z0-9_])?)+$`)
 
 // siteContentDir is the subdirectory under a site's home that holds its
 // actual WordPress install (wp-config.php, wp-content, etc.). This is a
@@ -25,6 +32,9 @@ const siteContentDir = "files"
 // user whose home directory holds the site, so that's tried as a fallback
 // if the standard path doesn't exist locally.
 func ResolveSitePath(domain, siteUser string) (string, error) {
+	if !domainRe.MatchString(domain) {
+		return "", fmt.Errorf("invalid site domain %q", domain)
+	}
 	standardPath := filepath.Join("/sites", domain, siteContentDir)
 	if info, err := os.Stat(standardPath); err == nil && info.IsDir() {
 		return standardPath, nil

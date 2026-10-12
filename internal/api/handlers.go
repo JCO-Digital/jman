@@ -131,7 +131,6 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	// --- Plugin update routes ---
 	mux.Handle("GET /api/sites/{id}/plugin-updates", execute(SitePluginUpdatesHandler))
-	mux.Handle("POST /api/sites/{id}/plugin-updates", execute(SitePluginUpdateHandler))
 	mux.Handle("POST /api/plugin-update-jobs", execute(CreatePluginUpdateJobsHandler))
 	// The plugin-update-jobs list/get routes predate core jobs; they return
 	// the same jobs as update-jobs.
@@ -146,6 +145,11 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/sites/{id}/plugins", basic(SitePluginsHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-actions", execute(SitePluginActionHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-install", execute(SitePluginInstallHandler))
+
+	// --- Update locks (fix-release-only updates) ---
+	mux.Handle("GET /api/update-locks", basic(ListUpdateLocksHandler))
+	mux.Handle("POST /api/sites/{id}/update-locks", execute(CreateUpdateLockHandler))
+	mux.Handle("DELETE /api/update-locks/{id}", execute(DeleteUpdateLockHandler))
 
 	// --- Core update routes ---
 	mux.Handle("GET /api/sites/{id}/core-update", execute(SiteCoreCheckHandler))

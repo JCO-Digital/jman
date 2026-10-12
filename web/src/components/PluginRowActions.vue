@@ -1,15 +1,20 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useUpdateJobsStore } from "../stores/updateJobs";
+import { useDataStore } from "../stores/data";
 import { useToastStore } from "../stores/toast";
 import { useConfirm } from "../composables/useConfirm";
 import { availablePluginUpdate } from "../utils/format";
 import type { PluginActionKind, UpdateJobKind } from "../types";
+import AppIcon from "./AppIcon.vue";
+import UpdateLockModal from "./UpdateLockModal.vue";
 
 /**
- * Update / activate / deactivate / delete buttons for one plugin on one
- * site. Each queues a background job; while one is queued or running the
- * buttons give way to its progress.
+ * Update / activate / deactivate / delete / lock buttons for one plugin on
+ * one site. Each change queues a background job; while one is queued or
+ * running the buttons give way to its progress. An update-locked plugin's
+ * Update only installs a fix release; "Major…" updates it all the way,
+ * after confirmation.
  */
 const props = defineProps<{
 	siteId: string;
@@ -18,6 +23,7 @@ const props = defineProps<{
 }>();
 
 const jobsStore = useUpdateJobsStore();
+const dataStore = useDataStore();
 const toast = useToastStore();
 const { confirm, confirmWithOption } = useConfirm();
 
@@ -36,6 +42,12 @@ const pending = computed(() =>
 );
 const updateTo = computed(() => availablePluginUpdate(props.plugin));
 const status = computed(() => props.plugin.status);
+const siteLocks = computed(() => dataStore.getSiteLocks(props.siteId));
+const pluginLock = computed(() =>
+	siteLocks.value.plugins.get(props.plugin.name),
+);
+const locked = computed(() => !!siteLocks.value.site || !!pluginLock.value);
+const lockModalOpen = ref(false);
 
 async function queue(what: string, fn: () => Promise<unknown>) {
 	queueing.value = true;
@@ -63,6 +75,41 @@ function update() {
 			{ site_id: props.siteId, plugins: [props.plugin.name] },
 		]),
 	);
+}
+
+async function majorUpdate() {
+	const ok = await confirm(
+		`${props.plugin.name} on ${props.siteName} is update-locked. Update it from ${props.plugin.version} to ${updateTo.value}, past fix releases? The lock stays in place.`,
+		{ confirmLabel: "Update anyway", danger: true },
+	);
+	if (!ok) return;
+	return queue("update", () =>
+		jobsStore.enqueue([
+			{
+				site_id: props.siteId,
+				plugins: [props.plugin.name],
+				allow_major: true,
+			},
+		]),
+	);
+}
+
+async function unlock() {
+	const lock = pluginLock.value;
+	if (!lock) return;
+	const ok = await confirm(
+		`Remove the update lock of ${props.plugin.name} on ${props.siteName}? Bulk updates will install its latest version again.`,
+		{ confirmLabel: "Unlock" },
+	);
+	if (!ok) return;
+	try {
+		await dataStore.unlockUpdates(props.siteId, lock.id);
+	} catch (e: any) {
+		toast.addToast(
+			`Failed to unlock ${props.plugin.name}: ${e.message}`,
+			"error",
+		);
+	}
 }
 
 async function deactivate() {
@@ -96,8 +143,26 @@ async function remove() {
 			{{ PENDING_LABELS[pending] ?? "Working…" }}
 		</span>
 		<template v-else>
+			<template v-if="updateTo && locked">
+				<button
+					class="btn btn-primary btn-sm"
+					:disabled="queueing"
+					:title="`Update-locked: installs the newest fix release of ${plugin.version}, if any (latest is ${updateTo})`"
+					@click="update"
+				>
+					<AppIcon name="lock" size="12" /> Update
+				</button>
+				<button
+					class="btn btn-outline btn-sm"
+					:disabled="queueing"
+					:title="`Update ${plugin.version} → ${updateTo} despite the lock`"
+					@click="majorUpdate"
+				>
+					Major…
+				</button>
+			</template>
 			<button
-				v-if="updateTo"
+				v-else-if="updateTo"
 				class="btn btn-primary btn-sm"
 				:disabled="queueing"
 				:title="`Update ${plugin.version} → ${updateTo}`"
@@ -129,6 +194,28 @@ async function remove() {
 					Delete
 				</button>
 			</template>
+			<button
+				v-if="pluginLock"
+				class="btn btn-text btn-sm"
+				:title="`Locked by ${pluginLock.created_by}${pluginLock.comment ? ': ' + pluginLock.comment : ''}. Click to unlock.`"
+				@click="unlock"
+			>
+				Unlock
+			</button>
+			<button
+				v-else-if="!siteLocks.site"
+				class="btn btn-text btn-sm"
+				title="Only allow fix-release updates of this plugin"
+				@click="lockModalOpen = true"
+			>
+				Lock
+			</button>
 		</template>
+		<UpdateLockModal
+			v-model="lockModalOpen"
+			:site-id="siteId"
+			:site-name="siteName"
+			:plugin="plugin.name"
+		/>
 	</div>
 </template>

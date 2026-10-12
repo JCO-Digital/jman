@@ -21,6 +21,8 @@ func TestCreatePluginUpdateJobsValidation(t *testing.T) {
 		{"bad slug", `{"jobs": [{"site_id": "` + site + `", "plugins": ["../evil"]}]}`},
 		{"duplicate site", `{"jobs": [{"site_id": "` + site + `", "plugins": ["a"]}, {"site_id": "` + site + `", "plugins": ["b"]}]}`},
 		{"malformed", `{"jobs": `},
+		{"allow_major with several plugins", `{"jobs": [{"site_id": "` + site + `", "plugins": ["a", "b"], "allow_major": true}]}`},
+		{"allow_major with several sites", `{"jobs": [{"site_id": "` + site + `", "plugins": ["a"], "allow_major": true}, {"site_id": "22222222-2222-2222-2222-222222222222", "plugins": ["a"]}]}`},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -91,5 +93,42 @@ func TestSiteCoreUpdateRejectsDuplicateJob(t *testing.T) {
 	SiteCoreUpdateHandler(rec, coreUpdateRequest(site, `{"target": "major"}`))
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("status %d, want 404 (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSiteCoreUpdateOnLockedSite(t *testing.T) {
+	dir := t.TempDir()
+	oldDataDir := config.RunData.DataDir
+	config.RunData.DataDir = dir
+	if err := db.InitInventory(); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.InitAPI(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		db.Close()
+		config.RunData.DataDir = oldDataDir
+	})
+
+	site := "11111111-1111-1111-1111-111111111111"
+	if err := db.SaveUpdateLock(&models.UpdateLock{SiteID: site}); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	SiteCoreUpdateHandler(rec, coreUpdateRequest(site, `{"target": "major"}`))
+	if rec.Code != http.StatusConflict {
+		t.Errorf("unconfirmed major: status %d, want 409 (body %s)", rec.Code, rec.Body.String())
+	}
+
+	// Minor updates and confirmed major updates get past the lock; the site
+	// isn't in the (empty) inventory, so they're rejected as unknown.
+	for _, body := range []string{`{"target": "minor"}`, `{"target": "major", "allow_major": true}`} {
+		rec = httptest.NewRecorder()
+		SiteCoreUpdateHandler(rec, coreUpdateRequest(site, body))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("%s: status %d, want 404 (body %s)", body, rec.Code, rec.Body.String())
+		}
 	}
 }

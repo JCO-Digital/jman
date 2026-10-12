@@ -7,6 +7,7 @@ import (
 
 func TestDecideStaleAgentAction(t *testing.T) {
 	now := time.Date(2026, 8, 24, 12, 0, 0, 0, time.UTC)
+	agentStaleThreshold := 30 * time.Minute
 
 	tests := []struct {
 		name          string
@@ -51,7 +52,7 @@ func TestDecideStaleAgentAction(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := decideStaleAgentAction(now, tc.lastSeen, tc.lastAlertedAt)
+			got := decideStaleAgentAction(now, tc.lastSeen, tc.lastAlertedAt, agentStaleThreshold)
 			if got != tc.want {
 				t.Errorf("decideStaleAgentAction() = %v, want %v", got, tc.want)
 			}
@@ -79,5 +80,36 @@ func TestParseSQLiteTimestamp(t *testing.T) {
 	}
 	if _, err := parseSQLiteTimestamp("not a time"); err == nil {
 		t.Error("parseSQLiteTimestamp should reject garbage")
+	}
+}
+
+func TestStaleSitesMessage(t *testing.T) {
+	if got := staleSitesMessage(nil, nil); got != "" {
+		t.Errorf("no changes: %q", got)
+	}
+	got := staleSitesMessage(
+		[]staleSiteChange{
+			{domain: "a.example.com", detail: "last collected 3h ago: refusing to run wp-cli: owned by root"},
+			{domain: "b.example.com", detail: "last collected 4h ago"},
+		},
+		[]staleSiteChange{{domain: "c.example.com"}},
+	)
+	want := "⚠️ jman-agent hasn't collected WordPress data (plugins, core) for 2 site(s):\n" +
+		"• a.example.com (last collected 3h ago: refusing to run wp-cli: owned by root)\n" +
+		"• b.example.com (last collected 4h ago)\n" +
+		"✅ jman-agent is collecting WordPress data again for: c.example.com"
+	if got != want {
+		t.Errorf("message:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestRoundedDuration(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		45 * time.Minute:             "45m",
+		3*time.Hour + 20*time.Minute: "3h",
+	} {
+		if got := roundedDuration(d); got != want {
+			t.Errorf("roundedDuration(%s) = %q, want %q", d, got, want)
+		}
 	}
 }

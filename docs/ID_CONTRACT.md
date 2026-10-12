@@ -92,3 +92,4 @@ Built from the `servers` table, enriched with SpinupWP cache details for SpinupW
 - `POST /api/agent/report` → `sites[].site_id: UUID`
 - Agent log state is stored as `site-<uuid>.json`; on first run a legacy `site-<legacy_site_id>.json` is renamed.
 - Old agents fail to decode the new manifest; their periodic self-update ticker upgrades them.
+- WordPress data (additive, not breaking): the manifest adds `wp_data_interval_minutes` and per-site `wp_data_hash`; reports add per-site `wp_data: { collected_at, hash?, plugins?, core?, error? }`, with `plugins`/`core` only when the agent's hash differs from `wp_data_hash`. Older agents ignore the new manifest fields and their sites stay on the SSH refresh; older jman-api versions omit the interval, which turns agent collection off.

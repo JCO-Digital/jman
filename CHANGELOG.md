@@ -1,6 +1,27 @@
 # Changelog
 
-## 6.6.0 (2026-10-05)
+## 6.8.0 (2026-10-08)
+
+#### Features
+
+- agent: --check-wp to test WordPress data collection on a server (b24be5c)
+- web: show detected changes and agent collection status (79e5220)
+- agent: collect plugins and core with wp-cli as each site's owner (282d1b7)
+- web: manage update locks and confirm major updates of locked items (da287c3)
+- api: update locks restricting sites and plugins to fix releases (364afd2)
+
+## v6.7.0 (2026-10-06)
+
+#### Features
+
+- web: reload the web UI after a deploy (dc3f9b7)
+- auth: refresh token sessions with short-lived access tokens (f17e0fb)
+
+#### Refactor
+
+- cli: remove `jman agent token` commands (92e9aca)
+
+## v6.6.0 (2026-10-05)
 
 #### Features
 

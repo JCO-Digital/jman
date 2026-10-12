@@ -85,6 +85,7 @@ const sitesWithPlugin = computed(() => {
 				site_id: p.site_id,
 				isVulnerable,
 				suppressed,
+				locked: dataStore.isPluginLocked(p.site_id, p.name),
 				// Plugin changes run over WP-CLI.
 				canManage: authStore.canExecute && !!site?.can_wp_cli,
 			};
@@ -148,8 +149,14 @@ async function updateSites(
 ) {
 	if (sites.length === 0) return;
 	const what = vulnerable ? "vulnerable site" : "site";
+	const locked = sites.filter((s) =>
+		dataStore.isPluginLocked(s.site_id, s.name),
+	).length;
+	const lockNote = locked
+		? ` It is update-locked on ${locked === sites.length ? (locked === 1 ? "that site" : "all of them") : `${locked} of them`}, which only get fix releases.`
+		: "";
 	const ok = await confirm(
-		`Update ${props.name} on ${sites.length} ${what}${sites.length === 1 ? "" : "s"}?`,
+		`Update ${props.name} on ${sites.length} ${what}${sites.length === 1 ? "" : "s"}?${lockNote}`,
 		{ confirmLabel: "Update" },
 	);
 	if (!ok) return;
@@ -284,6 +291,14 @@ const manageAssetTemplate = () => {
 							>
 								<td class="font-medium">
 									{{ item.site_domain }}
+									<span
+										v-if="item.locked"
+										class="status-badge badge-sm warning"
+										title="Update-locked: fix releases only"
+									>
+										<AppIcon name="lock" size="11" />
+										Locked
+									</span>
 								</td>
 								<td>
 									{{ item.version }}

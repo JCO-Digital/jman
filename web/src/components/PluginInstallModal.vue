@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useUpdateJobsStore } from "../stores/updateJobs";
+import { useDataStore } from "../stores/data";
 import { useToastStore } from "../stores/toast";
 import AppIcon from "./AppIcon.vue";
 
@@ -15,6 +16,7 @@ const emit = defineEmits<{
 }>();
 
 const jobsStore = useUpdateJobsStore();
+const dataStore = useDataStore();
 const toast = useToastStore();
 
 /** Matches jman-api's limit for uploaded ZIPs. */
@@ -42,6 +44,23 @@ const fileError = computed(() => {
 	}
 	if (file.value.size > MAX_UPLOAD_MB * 1024 * 1024) {
 		return `The file is larger than ${MAX_UPLOAD_MB} MB.`;
+	}
+	return "";
+});
+
+/**
+ * ZIP installs replace an installed plugin of the same name with whatever
+ * version the ZIP holds, update lock or not (a slug install refuses to
+ * overwrite one), so warn when the site has locks.
+ */
+const lockWarning = computed(() => {
+	if (mode.value === "slug") return "";
+	const locks = dataStore.getSiteLocks(props.siteId);
+	if (locks.site) {
+		return "This site is update-locked. A ZIP of an installed plugin replaces it with the ZIP's version, regardless of the lock.";
+	}
+	if (locks.plugins.size) {
+		return `Update-locked plugins on this site (${[...locks.plugins.keys()].join(", ")}) are replaced with the ZIP's version if the ZIP holds one of them, regardless of the lock.`;
 	}
 	return "";
 });
@@ -189,6 +208,10 @@ watch(
 						the same folder name is replaced.
 					</small>
 				</div>
+
+				<p v-if="lockWarning" class="confirm-option-warning">
+					{{ lockWarning }}
+				</p>
 
 				<label class="checkbox-label">
 					<input v-model="activate" type="checkbox" />

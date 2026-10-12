@@ -419,6 +419,35 @@ func IsPluginVulnerableOnSite(siteID, plugin, version string, matcher *db.VulnIg
 	return false
 }
 
+// PluginFixedInOnSite returns the lowest version that fixes every
+// unsuppressed known vulnerability of the given plugin version on a site,
+// as recorded by the vulnerability database. It returns "" if the version
+// isn't vulnerable or if some vulnerability has no recorded fix. The
+// recorded version is often the next minor or major release even when a
+// fix release on the installed branch also fixes it.
+func PluginFixedInOnSite(siteID, plugin, version string, matcher *db.VulnIgnoreMatcher) string {
+	report := GetVulnerabilityReportsForPlugin(plugin, []models.PluginSite{{SiteID: siteID, Version: version}}, matcher)
+	if report == nil {
+		return ""
+	}
+	fixedIn := ""
+	for _, v := range report.Vulnerabilities {
+		if v.Suppressed {
+			continue
+		}
+		op := v.Operator
+		if op.MaxVersion == nil || op.MaxOperator == nil || *op.MaxOperator != "lt" {
+			return ""
+		}
+		if fixedIn == "" {
+			fixedIn = *op.MaxVersion
+		} else if newer, err := versionCompare(*op.MaxVersion, fixedIn, "gt"); err == nil && newer {
+			fixedIn = *op.MaxVersion
+		}
+	}
+	return fixedIn
+}
+
 // ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
 // determines which sites are affected by which vulnerabilities based on version ranges.
 func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport, error) {
