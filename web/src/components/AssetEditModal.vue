@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import { useAssetStore } from "../stores/assetStore";
 import { usePaymentMethodsStore } from "../stores/paymentMethods";
+import AssetTemplateSearch from "./AssetTemplateSearch.vue";
 
 const props = defineProps<{
 	modelValue: boolean;
@@ -29,7 +30,6 @@ const emit = defineEmits<{
 const assetStore = useAssetStore();
 const paymentMethodsStore = usePaymentMethodsStore();
 const assetSearchQuery = ref("");
-const availableAssetTemplates = ref<Asset[]>([]);
 
 const assetForm = ref({
 	asset_id: null as number | null,
@@ -124,7 +124,6 @@ watch(
 					(template.default_price || 0) / 100
 				).toFixed(2);
 				assetSearchQuery.value = template.name;
-				availableAssetTemplates.value = [];
 				linkedTemplateCost.value = {
 					purchase_price: template.purchase_price,
 					quantity: template.quantity,
@@ -154,16 +153,6 @@ watch(
 	},
 );
 
-const searchAssets = async () => {
-	if (assetSearchQuery.value.length < 2) {
-		availableAssetTemplates.value = [];
-		return;
-	}
-	availableAssetTemplates.value = await assetStore.searchAssetTemplates(
-		assetSearchQuery.value,
-	);
-};
-
 const selectAssetTemplate = (template: Asset) => {
 	assetForm.value.asset_id = template.id;
 	assetForm.value.identifier = template.identifier || "";
@@ -173,7 +162,6 @@ const selectAssetTemplate = (template: Asset) => {
 	assetForm.value.payment_method_id = template.payment_method_id;
 	assetForm.value.license_key = "";
 	assetSearchQuery.value = template.name;
-	availableAssetTemplates.value = [];
 	linkedTemplateCost.value = {
 		purchase_price: template.purchase_price,
 		quantity: template.quantity,
@@ -276,32 +264,12 @@ const close = () => {
 
 				<div v-if="!isEditing" class="form-group">
 					<label for="a-search">Search Asset Template</label>
-					<input
-						id="a-search"
-						v-model="assetSearchQuery"
-						type="text"
-						placeholder="Start typing to search templates..."
+					<AssetTemplateSearch
+						input-id="a-search"
+						:selected-name="assetSearchQuery"
 						:disabled="!isOrgSelected"
-						@input="searchAssets"
+						@select="selectAssetTemplate"
 					/>
-					<div
-						v-if="availableAssetTemplates.length > 0"
-						class="search-results-dropdown"
-					>
-						<div
-							v-for="t in availableAssetTemplates"
-							:key="t.id"
-							class="search-result-item"
-							@click="selectAssetTemplate(t)"
-						>
-							<div class="res-name">{{ t.name }}</div>
-							<div class="sub-text">
-								{{ t.type }} •
-								{{ (t.default_price || 0) / 100 }}€ /
-								{{ t.default_freq }}
-							</div>
-						</div>
-					</div>
 				</div>
 
 				<div v-if="isEditing" class="form-group">
