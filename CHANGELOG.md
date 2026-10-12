@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.8.0 (2026-10-08)
+## 6.9.0 (2026-10-12)
+
+#### Features
+
+- web: extract asset template search into dedicated component (8e4489c)
+
+## v6.8.0 (2026-10-08)
 
 #### Features
 
