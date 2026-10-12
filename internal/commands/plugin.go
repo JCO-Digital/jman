@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -289,27 +288,35 @@ func installPlugin(site models.CliSite, pluginName string) error {
 	// Check if pluginName is a local ZIP file
 	if strings.HasSuffix(strings.ToLower(pluginName), ".zip") {
 		if info, err := os.Stat(pluginName); err == nil && !info.IsDir() {
+			// WordPress names the directory of a ZIP with files at its root
+			// after the ZIP, so install it as <slug>.zip.
 			if site.SSH != "" {
-				// Remote site: upload the file
-				remoteTempPath := fmt.Sprintf("/tmp/jman-%d-%s", time.Now().Unix(), filepath.Base(pluginName))
+				// Remote site: upload the file into a directory of its own
+				remoteDir := fmt.Sprintf("/tmp/jman-%d", time.Now().UnixNano())
+				remoteTempPath := remoteDir + "/" + wpcli.PluginZipSlug(pluginName, pluginName) + ".zip"
 				verb.Printf(verb.Verbose, "Uploading %s to %s:%s...\n", pluginName, site.ServerName, remoteTempPath)
 
+				// Ensure cleanup on the remote server
+				defer func() {
+					verb.Printf(verb.Debug, "Cleaning up remote directory %s...\n", remoteDir)
+					wpcli.RunSSH(site.SSH, "rm", "-rf", remoteDir)
+				}()
+				if _, err := wpcli.RunSSH(site.SSH, "mkdir", "-p", "-m", "700", remoteDir); err != nil {
+					return fmt.Errorf("failed to create upload directory: %w", err)
+				}
 				if err := wpcli.UploadFile(site.SSH, pluginName, remoteTempPath); err != nil {
 					return fmt.Errorf("failed to upload plugin: %w", err)
 				}
 
 				installSource = remoteTempPath
-				// Ensure cleanup on the remote server
-				defer func() {
-					verb.Printf(verb.Debug, "Cleaning up remote file %s...\n", remoteTempPath)
-					wpcli.RunSSH(site.SSH, "rm", remoteTempPath)
-				}()
 			} else {
-				// Local site: use absolute path
-				absPath, err := filepath.Abs(pluginName)
-				if err == nil {
-					installSource = absPath
+				// Local site: install from a copy named after the slug
+				staged, cleanup, err := wpcli.StagePluginZip(pluginName, pluginName)
+				if err != nil {
+					return fmt.Errorf("failed to stage plugin: %w", err)
 				}
+				defer cleanup()
+				installSource = staged
 			}
 		}
 	}

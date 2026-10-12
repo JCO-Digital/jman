@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/db"
@@ -183,7 +184,7 @@ func TestRunInstallUploadedZip(t *testing.T) {
 	setSitePlugins(t, models.WPPlugin{Name: "existing", Status: "active"})
 
 	var uploadedTo, installedFrom string
-	var removed []string
+	var sshCmds [][]string
 	uploadFile = func(_, local, remote string) error {
 		if local != upload {
 			t.Errorf("uploaded %s, want %s", local, upload)
@@ -192,7 +193,7 @@ func TestRunInstallUploadedZip(t *testing.T) {
 		return nil
 	}
 	runSSH = func(_ string, args ...string) (wpcli.RunResult, error) {
-		removed = args
+		sshCmds = append(sshCmds, args)
 		return wpcli.RunResult{}, nil
 	}
 	installPlugin = func(_ models.CliSite, source string, _ bool) (bool, error) {
@@ -210,11 +211,14 @@ func TestRunInstallUploadedZip(t *testing.T) {
 	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindInstall, Source: "my-plugin.zip", UploadPath: upload})
 	run(job)
 
-	if installedFrom != uploadedTo || filepath.Ext(uploadedTo) != ".zip" {
+	// The upload isn't a readable ZIP, so the slug comes from its name.
+	if installedFrom != uploadedTo || filepath.Base(uploadedTo) != "my-plugin.zip" {
 		t.Errorf("installed from %q, uploaded to %q", installedFrom, uploadedTo)
 	}
-	if len(removed) != 3 || removed[2] != uploadedTo {
-		t.Errorf("remote cleanup = %v, want rm of %s", removed, uploadedTo)
+	dir := filepath.Dir(uploadedTo)
+	wantCmds := [][]string{{"mkdir", "-p", "-m", "700", dir}, {"rm", "-rf", dir}}
+	if !reflect.DeepEqual(sshCmds, wantCmds) {
+		t.Errorf("ssh commands = %v, want %v", sshCmds, wantCmds)
 	}
 	if _, err := os.Stat(upload); !os.IsNotExist(err) {
 		t.Errorf("local upload still exists (err %v)", err)

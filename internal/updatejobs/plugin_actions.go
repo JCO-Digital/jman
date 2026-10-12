@@ -137,20 +137,33 @@ func stateProblem(kind string, status map[string]string, name string) string {
 func runInstall(job models.UpdateJob, site models.CliSite) {
 	source := job.Source
 	if job.UploadPath != "" {
+		// WordPress names the directory of a ZIP with files at its root
+		// after the ZIP, so stage it as <slug>.zip in a directory of its
+		// own. The .zip suffix makes WP-CLI install it as a ZIP (with --force).
 		if site.SSH == "" {
-			source = job.UploadPath
+			staged, cleanup, err := wpcli.StagePluginZip(job.UploadPath, job.Source)
+			if err != nil {
+				failInstall(job, err.Error())
+				return
+			}
+			defer cleanup()
+			source = staged
 		} else {
-			// The .zip suffix makes WP-CLI install it as a ZIP (with --force).
-			remote := fmt.Sprintf("/tmp/jman-plugin-%d.zip", job.ID)
+			dir := fmt.Sprintf("/tmp/jman-plugin-%d", job.ID)
+			remote := dir + "/" + wpcli.PluginZipSlug(job.UploadPath, job.Source) + ".zip"
+			defer func() {
+				if _, err := runSSH(site.SSH, "rm", "-rf", dir); err != nil {
+					log.Printf("Plugin install job %d: failed to remove %s on %s: %v", job.ID, dir, site.Name, err)
+				}
+			}()
+			if _, err := runSSH(site.SSH, "mkdir", "-p", "-m", "700", dir); err != nil {
+				failInstall(job, err.Error())
+				return
+			}
 			if err := uploadFile(site.SSH, job.UploadPath, remote); err != nil {
 				failInstall(job, err.Error())
 				return
 			}
-			defer func() {
-				if _, err := runSSH(site.SSH, "rm", "-f", remote); err != nil {
-					log.Printf("Plugin install job %d: failed to remove %s on %s: %v", job.ID, remote, site.Name, err)
-				}
-			}()
 			source = remote
 		}
 	}
