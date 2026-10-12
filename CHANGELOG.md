@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.9.0 (2026-10-12)
+### 6.9.1 (2026-10-12)
+
+#### Bug Fixes
+
+- plugins: name uploaded plugin ZIPs after the plugin (4b61ba9)
+
+## v6.9.0 (2026-10-12)
 
 #### Features
 
