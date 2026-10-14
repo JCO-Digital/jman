@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.10.0 (2026-10-14)
+## 6.11.0 (2026-10-14)
+
+#### Features
+
+- web: show when privileges are limited by missing 2FA (f873608)
+
+## v6.10.0 (2026-10-14)
 
 #### Features
 
