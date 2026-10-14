@@ -334,6 +334,24 @@ func initInventorySchema() error {
 			},
 		},
 		{
+			// vuln_backports records vulnerabilities fixed by backport
+			// releases the vulnerability database doesn't know about.
+			Name: "vuln_backports",
+			Columns: map[string]string{
+				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"type":        "TEXT NOT NULL",
+				"slug":        "TEXT NOT NULL DEFAULT ''",
+				"vuln_uuid":   "TEXT NOT NULL",
+				"branch":      "TEXT NOT NULL",
+				"min_version": "TEXT NOT NULL",
+				"reason":      "TEXT NOT NULL DEFAULT ''",
+				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":  "TEXT",
+				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":  "TEXT",
+			},
+		},
+		{
 			Name: "servers",
 			Columns: map[string]string{
 				"id":                 "TEXT PRIMARY KEY",
@@ -387,6 +405,11 @@ func initInventorySchema() error {
 	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_sites_domain ON sites(domain);")
 	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_sites_provider_site_id ON sites(provider, provider_site_id);")
 	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_servers_provider_server_id ON servers(provider, provider_server_id);")
+	// Enforces one rule per vulnerability and branch; the CLI and jman-api
+	// both write here, so this must not rely on a check-then-insert.
+	if _, err := inventoryDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vuln_backports_uuid_branch ON vuln_backports(vuln_uuid, branch);"); err != nil {
+		return fmt.Errorf("failed to create vuln_backports unique index: %w", err)
+	}
 
 	if err := MigrateLegacyInventoryIDs(inventoryDB); err != nil {
 		return fmt.Errorf("failed to migrate legacy inventory IDs to UUIDs: %w", err)

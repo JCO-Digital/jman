@@ -232,6 +232,7 @@ const manageAssetTemplate = () => {
 			<PluginVulnerabilityList
 				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
 				:vulnerabilities="info.vulnerabilities"
+				:slug="name"
 			/>
 
 			<section class="card">

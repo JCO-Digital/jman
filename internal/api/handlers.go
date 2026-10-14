@@ -87,6 +87,11 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PATCH /api/ignore/{id}", edit(UpdateIgnoreEntryHandler))
 	mux.Handle("DELETE /api/ignore/{id}", edit(DeleteIgnoreEntryHandler))
 
+	// --- Vulnerability backport routes ---
+	mux.Handle("GET /api/vuln-backports", basic(ListVulnBackportsHandler))
+	mux.Handle("POST /api/vuln-backports", edit(CreateVulnBackportHandler))
+	mux.Handle("DELETE /api/vuln-backports/{id}", edit(DeleteVulnBackportHandler))
+
 	// --- Organization & Contact routes ---
 	mux.Handle("GET /api/organizations", basic(ListOrganizationsHandler))
 	mux.Handle("POST /api/organizations", edit(CreateOrganizationHandler))

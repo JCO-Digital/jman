@@ -661,6 +661,57 @@ Returns a single plugin report. Note that if active vulnerabilities are found, t
 - If a **Site** or **Server** is ignored, affected sites will be marked with `"suppressed": true`.
 - A vulnerability is marked `"suppressed": true` if either the plugin is ignored or **all** affected sites are suppressed.
 
+**Notes on Backport Rules**
+
+- Sites whose installed version is covered by a [backport rule](#vulnerability-backport-rules) are not affected: they are listed in `"patched_sites"` instead of `"sites"`.
+- A vulnerability whose affected sites are all patched is excluded from the response, so `"patched_sites"` only appears while some site is still affected.
+- In `GET /vulns/core`, a vulnerability is excluded from a core version's report if a backport rule covers that version.
+
+### Vulnerability Backport Rules
+
+`GET /vuln-backports` (Protected: `basic`)
+`POST /vuln-backports` (Protected: `edit`)
+`DELETE /vuln-backports/{id}` (Protected: `edit`)
+
+A backport rule records that a vulnerability was fixed in a release the vulnerability database doesn't list: installed versions within `branch` that are at least `min_version` are not affected. A vulnerability can have one rule per branch. Rules can't be edited; delete and recreate them instead.
+
+**Backport Rule Object**
+
+```json
+{
+	"id": 1,
+	"type": "plugin",
+	"slug": "woocommerce",
+	"vuln_uuid": "...",
+	"branch": "11.1",
+	"min_version": "11.1.2",
+	"reason": "Fix backported in 11.1.2",
+	"created_at": "datetime",
+	"created_by": "username",
+	"updated_at": "datetime",
+	"updated_by": "username",
+	"matched_sites": 3
+}
+```
+
+- `type` is `plugin` or `core`; `slug` is required for plugin rules and empty for core rules.
+- `matched_sites` is the number of sites whose installed version the rule currently matches.
+
+**Create Request**
+
+`type`, `slug`, `vuln_uuid`, `branch`, `min_version` and `reason` as above. `branch` and `min_version` are dotted numbers, and `min_version` must lie within `branch` and have more segments than it.
+
+**Create Response (201 Created)**
+
+```json
+{
+	"rule": { "...": "Backport Rule Object" },
+	"warnings": ["Version 11.2.0 is outside the vulnerability's affected range, so the rule has no effect."]
+}
+```
+
+Warnings flag rules that can't be verified against cached vulnerability data or look like they'd have no effect; the rule is saved anyway. A malformed rule returns `400`, and a second rule for the same vulnerability and branch returns `409`.
+
 ---
 
 ## Plugin Update Operations

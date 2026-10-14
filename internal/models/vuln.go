@@ -69,7 +69,10 @@ type Vulnerability struct {
 	Source      []Source     `json:"source"`
 	Impact      *Impact      `json:"impact,omitempty"`
 	Sites       []PluginSite `json:"sites,omitempty"`
-	Suppressed  bool         `json:"suppressed"`
+	// PatchedSites are sites inside the affected range that a backport rule
+	// marks as not affected. Only kept while Sites is non-empty.
+	PatchedSites []PluginSite `json:"patched_sites,omitempty"`
+	Suppressed   bool         `json:"suppressed"`
 }
 
 type VulnData struct {

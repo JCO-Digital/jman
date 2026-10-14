@@ -6,6 +6,7 @@ import ViewHeader from "../components/ViewHeader.vue";
 import SettingsTabs from "../components/settings/SettingsTabs.vue";
 import GeneralSettings from "../components/settings/GeneralSettings.vue";
 import IgnoreManager from "../components/settings/IgnoreManager.vue";
+import BackportManager from "../components/settings/BackportManager.vue";
 import AccountSettings from "../components/settings/AccountSettings.vue";
 import UserManagement from "../components/settings/UserManagement.vue";
 import AgentTokenManagement from "../components/settings/AgentTokenManagement.vue";
@@ -17,7 +18,7 @@ const authStore = useAuthStore();
 
 const validTabs = computed(() => {
 	const tabs = ["account", "general"];
-	if (authStore.canEdit) tabs.push("ignored", "sites");
+	if (authStore.canEdit) tabs.push("ignored", "backports", "sites");
 	if (authStore.canAdmin) tabs.push("users", "agent-tokens");
 	return tabs;
 });
@@ -55,6 +56,7 @@ watch(
 				v-model="activeTab"
 				:show-users-tab="authStore.canAdmin"
 				:show-ignored-tab="authStore.canEdit"
+				:show-backports-tab="authStore.canEdit"
 				:show-sites-tab="authStore.canEdit"
 				:show-agent-tokens-tab="authStore.canAdmin"
 			/>
@@ -62,6 +64,9 @@ watch(
 			<div class="settings-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
 				<IgnoreManager v-else-if="activeTab === 'ignored'" />
+				<BackportManager
+					v-else-if="activeTab === 'backports' && authStore.canEdit"
+				/>
 				<SiteManagement
 					v-else-if="activeTab === 'sites' && authStore.canEdit"
 				/>

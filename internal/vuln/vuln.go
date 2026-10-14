@@ -156,10 +156,9 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 
 		if opts.SiteSearch != "" {
 			// Filter vulnerabilities and their sites to those matching the search term.
-			var activeVulns []models.Vulnerability
-			for _, v := range report.Vulnerabilities {
+			filterSites := func(sites []models.PluginSite) []models.PluginSite {
 				var matchedSites []models.PluginSite
-				for _, site := range v.Sites {
+				for _, site := range sites {
 					if site.Suppressed {
 						continue
 					}
@@ -171,8 +170,13 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 						matchedSites = append(matchedSites, site)
 					}
 				}
-				if len(matchedSites) > 0 {
+				return matchedSites
+			}
+			var activeVulns []models.Vulnerability
+			for _, v := range report.Vulnerabilities {
+				if matchedSites := filterSites(v.Sites); len(matchedSites) > 0 {
 					v.Sites = matchedSites
+					v.PatchedSites = filterSites(v.PatchedSites)
 					activeVulns = append(activeVulns, v)
 				}
 			}
@@ -214,7 +218,7 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 
 		// Recompute final maxCvss for Slack force flag after all filtering is complete.
 		finalMaxCvss := getCvss(report)
-		message, err := formatReport(report)
+		message, err := formatReport(report, true)
 		if err != nil {
 			// Skip malformed/unformattable entries without stopping the whole scan.
 			continue
@@ -223,8 +227,11 @@ func scanReports(opts ScanOptions, matcher *db.VulnIgnoreMatcher) error {
 		fmt.Println(message)
 
 		if opts.Slack {
+			// Slack gets the report without backport-patched sites, so rule
+			// changes don't alter the message and defeat its dedup.
+			slackMessage, _ := formatReport(report, false)
 			force := finalMaxCvss >= config.Cfg.CVSSThreshold
-			slack.SendMessage(message, force)
+			slack.SendMessage(slackMessage, force)
 		}
 	}
 
@@ -329,7 +336,8 @@ func IsVersionAffected(ver string, op models.Operator) bool {
 }
 
 // GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
-// Vulnerabilities whose UUID appears in the ignore list are silently skipped.
+// Vulnerabilities whose UUID appears in the ignore list are silently skipped. Sites whose version is
+// covered by a backport rule are listed in PatchedSites instead of Sites.
 func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher) *models.VulnReport {
 	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
 	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
@@ -380,15 +388,22 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, serverID)
 			}
 
-			if IsVersionAffected(site.Version, v.Operator) {
-				v.Sites = append(v.Sites, site)
-				if !site.Suppressed {
-					allSitesSuppressed = false
-				}
+			if !IsVersionAffected(site.Version, v.Operator) {
+				continue
+			}
+			// Versions fixed by a backport release aren't affected.
+			if matcher != nil && matcher.PatchedBy(v.Uuid, site.Version) != nil {
+				v.PatchedSites = append(v.PatchedSites, site)
+				continue
+			}
+			v.Sites = append(v.Sites, site)
+			if !site.Suppressed {
+				allSitesSuppressed = false
 			}
 		}
 
-		// Keep only vulnerabilities that affect at least one known site.
+		// Keep only vulnerabilities that affect at least one known site;
+		// one whose affected sites are all patched by backports is dropped.
 		if len(v.Sites) > 0 {
 			// A vulnerability is suppressed if the plugin is suppressed OR all affected sites are suppressed.
 			v.Suppressed = pluginSuppressed || allSitesSuppressed
@@ -474,7 +489,8 @@ func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport,
 // It prefers enriched metadata from vulnerability sources (name/description/date/link),
 // then falls back to base vulnerability fields where needed.
 // User-facing text is HTML-cleaned before display.
-func formatReport(report models.VulnReport) (string, error) {
+// If showPatched is true, sites excluded by a backport rule are listed too.
+func formatReport(report models.VulnReport, showPatched bool) (string, error) {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s %s\n", verb.Gray("Plugin:"), verb.Bold(utils.CleanHTML(report.PluginName)))
 
@@ -531,6 +547,14 @@ func formatReport(report models.VulnReport) (string, error) {
 		for _, site := range v.Sites {
 			siteName, _ := getSiteName(site.SiteID)
 			fmt.Fprintf(&sb, "  %s %s\n", verb.Green("→"), fmt.Sprintf("%s %s", siteName, verb.Gray("("+site.Version+")")))
+		}
+
+		if showPatched && len(v.PatchedSites) > 0 {
+			fmt.Fprintf(&sb, "\n%s\n", verb.Bold("Patched (backport):"))
+			for _, site := range v.PatchedSites {
+				siteName, _ := getSiteName(site.SiteID)
+				fmt.Fprintf(&sb, "  %s %s\n", verb.Gray("✓"), fmt.Sprintf("%s %s", siteName, verb.Gray("("+site.Version+")")))
+			}
 		}
 	}
 
