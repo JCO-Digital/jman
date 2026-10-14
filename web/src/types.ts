@@ -273,6 +273,9 @@ export interface Vulnerability {
 	source: VulnerabilitySource[];
 	impact: VulnerabilityImpact;
 	sites: VulnerabilitySite[];
+	// Sites in the affected range that a backport rule marks as not
+	// affected. Only present while some site is still affected.
+	patched_sites?: VulnerabilitySite[];
 	suppressed: boolean;
 }
 
@@ -375,6 +378,41 @@ export interface CreateIgnorePayload {
 }
 
 export type UpdateIgnorePayload = Partial<CreateIgnorePayload>;
+
+export type VulnBackportType = "plugin" | "core";
+
+// A vulnerability fixed by a backport release the vulnerability database
+// doesn't know about: versions within `branch` that are at least
+// `min_version` are not affected.
+export interface VulnBackport {
+	id: number;
+	type: VulnBackportType;
+	slug: string;
+	vuln_uuid: string;
+	branch: string;
+	min_version: string;
+	reason: string;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+	// Sites whose installed version the rule currently matches.
+	matched_sites: number;
+}
+
+export interface CreateVulnBackportPayload {
+	type: VulnBackportType;
+	slug: string;
+	vuln_uuid: string;
+	branch: string;
+	min_version: string;
+	reason: string;
+}
+
+export interface CreateVulnBackportResponse {
+	rule: VulnBackport;
+	warnings: string[];
+}
 
 export interface EnrichedSite extends Site {
 	server: string;

@@ -343,6 +343,58 @@ export const useDataStore = defineStore("data", () => {
 		isLoaded.value = false;
 	}
 
+	// Loads plugin and core vulnerability reports. Called on every data
+	// fetch, and after backport rule changes alter which sites are affected.
+	async function fetchVulnerabilities() {
+		isVulnsLoading.value = true;
+		vulnsError.value = null;
+		const core = apiFetch(`${BASE_URL}/vulns/core`, {})
+			.then(async (res) => {
+				if (res.ok) {
+					const data = await res.json();
+					coreVulnerabilities.value = data;
+					sessionStorage.setItem(
+						CACHE_KEY_CORE_VULNS,
+						JSON.stringify(data),
+					);
+				} else if (res.status !== 401) {
+					console.error(
+						"Failed to fetch core vulnerabilities:",
+						res.statusText,
+					);
+				}
+			})
+			.catch((err) => {
+				console.error("Failed to fetch core vulnerabilities:", err);
+			});
+
+		const plugin = apiFetch(`${BASE_URL}/vulns`, {})
+			.then(async (res) => {
+				if (res.ok) {
+					const data = await res.json();
+					vulnerabilities.value = data;
+					sessionStorage.setItem(
+						CACHE_KEY_VULNS,
+						JSON.stringify(data),
+					);
+				} else if (res.status !== 401) {
+					vulnsError.value = "Failed to load vulnerability data";
+					console.error(
+						"Failed to fetch vulnerabilities:",
+						res.statusText,
+					);
+				}
+			})
+			.catch((err) => {
+				vulnsError.value = "Failed to load vulnerability data";
+				console.error("Failed to fetch vulnerabilities:", err);
+			})
+			.finally(() => {
+				isVulnsLoading.value = false;
+			});
+		await Promise.all([core, plugin]);
+	}
+
 	async function fetchFromApi() {
 		const authStore = useAuthStore();
 
@@ -363,52 +415,7 @@ export const useDataStore = defineStore("data", () => {
 				]);
 
 			// Fetch vulnerabilities separately to not block primary data
-			isVulnsLoading.value = true;
-			vulnsError.value = null;
-			apiFetch(`${BASE_URL}/vulns/core`, { headers })
-				.then(async (res) => {
-					if (res.ok) {
-						const data = await res.json();
-						coreVulnerabilities.value = data;
-						sessionStorage.setItem(
-							CACHE_KEY_CORE_VULNS,
-							JSON.stringify(data),
-						);
-					} else if (res.status !== 401) {
-						console.error(
-							"Failed to fetch core vulnerabilities:",
-							res.statusText,
-						);
-					}
-				})
-				.catch((err) => {
-					console.error("Failed to fetch core vulnerabilities:", err);
-				});
-
-			apiFetch(`${BASE_URL}/vulns`, { headers })
-				.then(async (res) => {
-					if (res.ok) {
-						const data = await res.json();
-						vulnerabilities.value = data;
-						sessionStorage.setItem(
-							CACHE_KEY_VULNS,
-							JSON.stringify(data),
-						);
-					} else if (res.status !== 401) {
-						vulnsError.value = "Failed to load vulnerability data";
-						console.error(
-							"Failed to fetch vulnerabilities:",
-							res.statusText,
-						);
-					}
-				})
-				.catch((err) => {
-					vulnsError.value = "Failed to load vulnerability data";
-					console.error("Failed to fetch vulnerabilities:", err);
-				})
-				.finally(() => {
-					isVulnsLoading.value = false;
-				});
+			void fetchVulnerabilities();
 
 			// Handle 401 on any response — token is invalid or expired
 			if (
@@ -699,6 +706,7 @@ export const useDataStore = defineStore("data", () => {
 		// Actions
 		initData,
 		refreshData,
+		fetchVulnerabilities,
 		clearCache,
 	};
 });

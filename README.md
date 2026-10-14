@@ -202,6 +202,9 @@ jman vuln list --cvss 7.0
 
 # Send vulnerability reports to Slack (requires Slack configuration)
 jman vuln list --slack
+
+# List backport rules (vulnerabilities fixed in releases the database doesn't list)
+jman vuln backports
 ```
 
 The `vuln` command checks all cached plugins against known vulnerability databases and reports:
@@ -211,6 +214,8 @@ The `vuln` command checks all cached plugins against known vulnerability databas
 - List of sites running vulnerable plugin versions
 
 When using the `--slack` flag, the command tracks sent messages to avoid duplicates and only resends for high-severity vulnerabilities (based on configured CVSS threshold).
+
+When a vendor backports a fix to an older branch (e.g. WooCommerce 11.1.2 fixing a vulnerability the database lists as fixed in 11.2.0), add a backport rule with "Mark patched…" on the affected version in the web UI. Sites on a matching version are then not reported as affected; `jman vuln list` shows them under "Patched (backport)" while other sites are still affected.
 
 ## Sidecar Utilities
 

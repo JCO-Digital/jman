@@ -199,11 +199,20 @@ type VulnIgnoreMatcher struct {
 	siteServerIgnores
 	pluginIgnores        map[string]bool
 	vulnerabilityIgnores map[string]bool
+	// backports holds backport rules by vulnerability UUID. They aren't
+	// ignores — matching versions are not affected at all — but every
+	// vulnerability check already receives this matcher.
+	backports map[string][]models.VulnBackport
 }
 
-// NewVulnIgnoreMatcher fetches all vulnerability ignore entries and returns a matcher.
+// NewVulnIgnoreMatcher fetches all vulnerability ignore entries and backport
+// rules and returns a matcher.
 func NewVulnIgnoreMatcher() (*VulnIgnoreMatcher, error) {
 	entries, err := GetAllIgnoreEntries("")
+	if err != nil {
+		return nil, err
+	}
+	rules, err := ListVulnBackports()
 	if err != nil {
 		return nil, err
 	}
@@ -212,6 +221,10 @@ func NewVulnIgnoreMatcher() (*VulnIgnoreMatcher, error) {
 		siteServerIgnores:    newSiteServerIgnores(),
 		pluginIgnores:        make(map[string]bool),
 		vulnerabilityIgnores: make(map[string]bool),
+		backports:            make(map[string][]models.VulnBackport),
+	}
+	for _, r := range rules {
+		matcher.backports[r.VulnUUID] = append(matcher.backports[r.VulnUUID], r)
 	}
 
 	for _, e := range entries {
@@ -245,4 +258,15 @@ func (m *VulnIgnoreMatcher) IsVulnerabilityUUIDIgnored(vulnUUID string) bool {
 // IsPluginIgnored checks if a plugin is ignored for vulnerabilities.
 func (m *VulnIgnoreMatcher) IsPluginIgnored(pluginSlug string) bool {
 	return m.pluginIgnores[pluginSlug]
+}
+
+// PatchedBy returns the backport rule under which the given installed
+// version is not affected by the vulnerability, or nil if none applies.
+func (m *VulnIgnoreMatcher) PatchedBy(vulnUUID, ver string) *models.VulnBackport {
+	for i, r := range m.backports[vulnUUID] {
+		if r.Matches(ver) {
+			return &m.backports[vulnUUID][i]
+		}
+	}
+	return nil
 }

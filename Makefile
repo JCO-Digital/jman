@@ -3,6 +3,9 @@
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
 
+# air from PATH, else where `go install` puts it (GOBIN, or GOPATH/bin)
+AIR ?= $(or $(shell command -v air 2>/dev/null),$(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)/air)
+
 build: clean prepare bin/jman bin/jman-api bin/jman-agent completions
 
 # Build without the built-in update command (for use with external package managers)
@@ -27,7 +30,8 @@ dev: clean prepare
 	go build -o bin/jman-agent ./cmd/jman-agent
 
 dev-api:
-	air
+	@test -x "$(AIR)" || { echo "air not found; install it with: go install github.com/air-verse/air@latest"; exit 1; }
+	$(AIR)
 
 prepare:
 	go mod download

@@ -2,6 +2,8 @@ package commands
 
 import (
 	"fmt"
+	"os"
+	"text/tabwriter"
 
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/spf13/cobra"
@@ -91,6 +93,35 @@ var vulnCoreCmd = &cobra.Command{
 	},
 }
 
+var vulnBackportsCmd = &cobra.Command{
+	Use:   "backports",
+	Short: "List backport rules",
+	Long:  `Lists rules marking vulnerabilities as fixed by backport releases, with the number of sites each rule currently matches. Rules are managed in the web UI.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		listings, err := vuln.ListVulnBackports()
+		if err != nil {
+			return err
+		}
+
+		if len(listings) == 0 {
+			fmt.Println("No backport rules found.")
+			return nil
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "ID\tTYPE\tPLUGIN\tUUID\tBRANCH\tMIN\tSITES\tREASON\tCREATED_BY")
+		for _, l := range listings {
+			slug := l.Slug
+			if slug == "" {
+				slug = "-"
+			}
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\t%s\t%d\t%s\t%s\n", l.ID, l.Type, slug, l.VulnUUID, l.Branch, l.MinVersion, l.MatchedSites, l.Reason, l.CreatedBy)
+		}
+		w.Flush()
+		return nil
+	},
+}
+
 func init() {
 	vulnCmd.PersistentFlags().BoolVarP(&vulnSlack, "slack", "s", false, "Send reports to Slack")
 	vulnCmd.PersistentFlags().Float64VarP(&vulnCVSS, "cvss", "c", 0, "Filter by CVSS threshold")
@@ -98,5 +129,6 @@ func init() {
 	vulnCmd.AddCommand(vulnListCmd)
 	vulnCmd.AddCommand(vulnSitesCmd)
 	vulnCmd.AddCommand(vulnCoreCmd)
+	vulnCmd.AddCommand(vulnBackportsCmd)
 	rootCmd.AddCommand(vulnCmd)
 }

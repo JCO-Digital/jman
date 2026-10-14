@@ -43,6 +43,11 @@ func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.Plu
 		if matcher != nil && matcher.IsVulnerabilityUUIDIgnored(vulnerability.Uuid) {
 			continue
 		}
+		// Every site here runs coreVersion, so a backport rule covering it
+		// means none of them are affected.
+		if matcher != nil && matcher.PatchedBy(vulnerability.Uuid, coreVersion) != nil {
+			continue
+		}
 
 		v := vulnerability
 		v.Sites = make([]models.PluginSite, 0, len(sites))
