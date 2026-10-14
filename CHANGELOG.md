@@ -1,6 +1,16 @@
 # Changelog
 
-### 6.9.1 (2026-10-12)
+## 6.10.0 (2026-10-14)
+
+#### Features
+
+- vuln: backport rules for vulnerabilities fixed in unlisted releases (e16eaf5)
+
+#### Maintenance
+
+- make: find locally installed air for dev-api (5c3fe58)
+
+### v6.9.1 (2026-10-12)
 
 #### Bug Fixes
 
