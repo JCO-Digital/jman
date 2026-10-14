@@ -131,6 +131,22 @@ type loginRespUser struct {
 	Username    string           `json:"username"`
 	DisplayName string           `json:"displayName"`
 	Level       config.UserLevel `json:"level"`
+	// RestrictedFrom is the user's configured level when the TOTP policy
+	// has downgraded it, so the UI can tell the user why.
+	RestrictedFrom config.UserLevel `json:"restrictedFrom,omitempty"`
+}
+
+// newLoginRespUser builds the user part of a login or refresh response.
+func newLoginRespUser(user *config.UserEntry) loginRespUser {
+	resp := loginRespUser{
+		Username:    user.Username,
+		DisplayName: user.DisplayName,
+		Level:       effectiveLevel(user),
+	}
+	if resp.Level != user.Level {
+		resp.RestrictedFrom = user.Level
+	}
+	return resp
 }
 
 type refreshResponse struct {
@@ -271,11 +287,7 @@ func LoginHandler(usersCfg *config.UsersConfig, limiter *LoginRateLimiter) http.
 		WriteJSON(w, http.StatusOK, loginResponse{
 			Token:     token,
 			ExpiresAt: expiresAt,
-			User: loginRespUser{
-				Username:    user.Username,
-				DisplayName: user.DisplayName,
-				Level:       effectiveLevel(user),
-			},
+			User:      newLoginRespUser(user),
 		})
 	}
 }
@@ -350,11 +362,7 @@ func RefreshHandler(usersCfg *config.UsersConfig) http.HandlerFunc {
 		}
 
 		usersCfg.LockRead()
-		respUser := loginRespUser{
-			Username:    user.Username,
-			DisplayName: user.DisplayName,
-			Level:       effectiveLevel(user),
-		}
+		respUser := newLoginRespUser(user)
 		usersCfg.UnlockRead()
 
 		WriteJSON(w, http.StatusOK, refreshResponse{
