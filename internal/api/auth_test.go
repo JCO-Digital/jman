@@ -172,6 +172,9 @@ func TestLoginHandler(t *testing.T) {
 		if resp.User.Level != config.LevelEdit {
 			t.Errorf("Expected level edit, got %s", resp.User.Level)
 		}
+		if resp.User.RestrictedFrom != config.LevelAdmin {
+			t.Errorf("Expected restrictedFrom admin, got %q", resp.User.RestrictedFrom)
+		}
 
 		cookie := findRefreshCookie(w.Result().Cookies())
 		if cookie == nil || cookie.Value == "" {

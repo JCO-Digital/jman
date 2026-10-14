@@ -216,6 +216,34 @@
 		border-top: 1px solid var(--border-color);
 	}
 
+	/* Shown when 2FA is missing and the session's level was downgraded */
+	& .nav-user.restricted {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--warning-text);
+		text-decoration: none;
+	}
+
+	& .nav-restricted-notice {
+		display: flex;
+		align-items: flex-start;
+		gap: 8px;
+		padding: 8px 10px;
+		border-left: 3px solid var(--warning-border);
+		background-color: var(--warning-bg);
+		color: var(--warning-text);
+		font-size: 13px;
+		text-decoration: none;
+
+		& svg {
+			flex-shrink: 0;
+			margin-top: 1px;
+		}
+	}
+
 	& .app-footer {
 		margin-top: auto;
 		padding: 1rem;

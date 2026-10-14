@@ -51,6 +51,18 @@ const navLinks: NavLink[] = [
 const version = packageInfo.version;
 const menuOpen = ref(false);
 
+const levelLabels: Record<string, string> = {
+	execute: "Execute",
+	admin: "Admin",
+};
+
+// Explains why the session has fewer privileges than the user's account.
+const restrictedNotice = computed(() => {
+	const from = authStore.restrictedFrom;
+	if (!from) return null;
+	return `Two-factor authentication is not enabled, so your ${levelLabels[from] ?? from} privileges are limited to Edit. Enable 2FA under Settings → Account.`;
+});
+
 const isActive = (link: NavLink) =>
 	link.match.includes(String(route.name ?? ""));
 
@@ -143,7 +155,20 @@ onUnmounted(() => {
 					<AppIcon name="settings" size="18" />
 				</RouterLink>
 				<div class="flex-row gap-3">
-					<span v-if="authStore.user" class="sub-text font-medium">
+					<RouterLink
+						v-if="authStore.user && restrictedNotice"
+						to="/settings?tab=account"
+						class="nav-user restricted"
+						:title="restrictedNotice"
+						:aria-label="`${authStore.user.displayName}. ${restrictedNotice}`"
+					>
+						<AppIcon name="alert" size="16" />
+						{{ authStore.user.displayName }}
+					</RouterLink>
+					<span
+						v-else-if="authStore.user"
+						class="sub-text font-medium"
+					>
 						{{ authStore.user.displayName }}
 					</span>
 					<button
@@ -248,6 +273,14 @@ onUnmounted(() => {
 					>
 						{{ authStore.user.displayName }}
 					</span>
+					<RouterLink
+						v-if="restrictedNotice"
+						to="/settings?tab=account"
+						class="nav-restricted-notice"
+					>
+						<AppIcon name="alert" size="16" />
+						<span>{{ restrictedNotice }}</span>
+					</RouterLink>
 					<button
 						class="btn btn-outline btn-sm w-full"
 						@click="handleLogout"

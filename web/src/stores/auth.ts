@@ -24,6 +24,9 @@ interface AuthUser {
 	username: string;
 	displayName: string;
 	level?: UserLevel;
+	// Configured level when the server has downgraded it because 2FA is
+	// not enabled.
+	restrictedFrom?: UserLevel;
 }
 
 interface TokenResponse {
@@ -77,6 +80,8 @@ export const useAuthStore = defineStore("auth", () => {
 	const canAdmin = computed(() => {
 		return userLevel.value === "admin";
 	});
+
+	const restrictedFrom = computed(() => user.value?.restrictedFrom ?? null);
 
 	// True while a session exists. The access token may be momentarily
 	// expired; apiFetch refreshes it before the next request.
@@ -334,6 +339,7 @@ export const useAuthStore = defineStore("auth", () => {
 		canEdit,
 		canExecute,
 		canAdmin,
+		restrictedFrom,
 		// Actions
 		login,
 		logout,
