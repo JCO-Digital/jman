@@ -92,7 +92,7 @@ Identifier:
   server: server name
   plugin: plugin slug
   vuln: vulnerability UUID`,
-	Args: cobra.MinimumNArgs(2),
+	Args: usageArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		entryType := strings.ToLower(args[0])
 		if entryType == "vuln" {
@@ -162,7 +162,7 @@ Identifier:
 var ignoreRemoveCmd = &cobra.Command{
 	Use:   "remove <id>",
 	Short: "Remove an ignore entry by ID",
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		id, err := strconv.Atoi(args[0])
 		if err != nil {

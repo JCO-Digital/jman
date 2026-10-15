@@ -9,11 +9,9 @@ import (
 )
 
 var adminCmd = &cobra.Command{
-	Use:           "admin <target> <username> <email>",
-	Short:         "Create a new administrator user on target sites.",
-	Args:          cobra.ExactArgs(3),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Use:   "admin <target> <username> <email>",
+	Short: "Create a new administrator user on target sites.",
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()

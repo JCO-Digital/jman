@@ -9,11 +9,9 @@ import (
 )
 
 var modsCmd = &cobra.Command{
-	Use:           "mods [enable|disable|allow|disallow] <target>",
-	Short:         "Set DISALLOW_FILE_MODS on target sites.",
-	Args:          cobra.ExactArgs(2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Use:   "mods <enable|disable|allow|disallow> <target>",
+	Short: "Set DISALLOW_FILE_MODS on target sites.",
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return []string{"enable", "disable", "allow", "disallow"}, cobra.ShellCompDirectiveNoFileComp

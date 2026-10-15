@@ -22,9 +22,7 @@ var refreshCmd = &cobra.Command{
 Users with the execute level also make jman-api refresh servers and sites
 from SpinupWP first, so a site created moments ago shows up. jman-api skips
 that step if it refreshed less than a minute ago.`,
-	Args:          cobra.NoArgs,
-	SilenceUsage:  true,
-	SilenceErrors: true,
+	Args: usageArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		apiURL := config.Cfg.APIURL
 		if apiURL == "" {

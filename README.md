@@ -184,6 +184,13 @@ jman wp mysite.com plugin list --status=active
 jman plugin install mysite.com akismet
 ```
 
+**Show plugin details (name, version, status, author, available update):**
+
+```bash
+jman plugin info mysite.com akismet   # one plugin
+jman plugin info mysite.com           # every plugin on the site
+```
+
 **Create an admin user:**
 
 ```bash

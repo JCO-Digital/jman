@@ -18,11 +18,11 @@ var rootCmd = &cobra.Command{
 	Short: "A CLI tool for managing WordPress projects",
 	Long:  `jman is a command-line utility for managing the WordPress sites in jman-api. Run "jman login <api-url>" to get started.`,
 	Args:  cobra.NoArgs,
-	// main prints errors, once.
+	// main prints errors, once. Usage mistakes say so themselves (see
+	// usageArgs), so cobra's full usage text isn't printed.
 	SilenceErrors: true,
+	SilenceUsage:  true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// The arguments were valid, so a later error isn't a usage mistake.
-		cmd.SilenceUsage = true
 
 		switch {
 		case flagDebug:
@@ -80,6 +80,9 @@ func init() {
 	rootCmd.MarkFlagsMutuallyExclusive("quiet", "verbose", "debug")
 
 	rootCmd.Version = config.AppVersion
+	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
+		return usageError(cmd, err.Error())
+	})
 
 	// Hide the default completion command
 	rootCmd.CompletionOptions.HiddenDefaultCmd = true

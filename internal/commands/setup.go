@@ -27,7 +27,7 @@ var setupMuCmd = &cobra.Command{
 	Use:   "mu <target> [path-or-url]",
 	Short: "Install or update the bojaco mu-plugin",
 	Long:  `Ensures the bojaco mu-plugin is installed and updated to the latest version. Accepts an optional local file path or URL.`,
-	Args:  cobra.MinimumNArgs(1),
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -110,7 +110,7 @@ var setupCompatCmd = &cobra.Command{
 	Use:   "compat <slug>",
 	Short: "Install or update a compatibility plugin",
 	Long:  `Checks for a compatibility mu-plugin for the specified slug in the JCO-Digital/bojaco-compat repository and installs/updates it on all sites that have the plugin installed.`,
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getPluginCompletions(toComplete, false)

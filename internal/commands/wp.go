@@ -26,11 +26,9 @@ var (
 )
 
 var wpCmd = &cobra.Command{
-	Use:           "wp <target> [args...]",
-	Short:         "Run a wp-cli command on a target site.",
-	Args:          cobra.MinimumNArgs(2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Use:   "wp <target> <wp-cli-args...>",
+	Short: "Run a wp-cli command on a target site.",
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
