@@ -38,16 +38,25 @@ const (
 	// reports that want to show everything up to a cutoff, including
 	// anything already overdue (e.g. upcoming billing).
 	ParamEndDate ParamType = "enddate"
+	// ParamSelect is a single choice from Options, sent under the param's Key.
+	ParamSelect ParamType = "select"
 )
+
+// ParamOption is one choice of a ParamSelect input.
+type ParamOption struct {
+	Value string `json:"value"`
+	Label string `json:"label"`
+}
 
 // ParamDef describes one input field a report accepts, so the frontend can
 // render a generic form without hardcoding per-report knowledge.
 type ParamDef struct {
-	Key      string    `json:"key"`
-	Type     ParamType `json:"type"`
-	Label    string    `json:"label"`
-	Required bool      `json:"required"`
-	Default  string    `json:"default,omitempty"`
+	Key      string        `json:"key"`
+	Type     ParamType     `json:"type"`
+	Label    string        `json:"label"`
+	Required bool          `json:"required"`
+	Default  string        `json:"default,omitempty"`
+	Options  []ParamOption `json:"options,omitempty"`
 }
 
 // Result is the JSON body returned by Run.
