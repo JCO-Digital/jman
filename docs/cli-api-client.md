@@ -1,6 +1,6 @@
 # Making the jman CLI a client of jman-api
 
-Status: **planned** (design agreed 2026-10-15, no open questions). No phases started.
+Status: **in progress** (design agreed 2026-10-15). Phase 1 is done; Phases 2–5 are still to do.
 
 ## Why
 
@@ -28,18 +28,15 @@ Status: **planned** (design agreed 2026-10-15, no open questions). No phases sta
 ```json
 {
   "schema_version": 1,
-  "generated_at": "2026-10-15T09:00:00Z",
   "servers": [...],
-  "sites":   [...],            // SpinupWP and manual, with SSH host/user/port
+  "sites":   [...],            // SpinupWP and manual, with SSH details, core version and update locks
   "plugins": [...],            // per-site plugin lists
-  "plugin_info": [...],        // slug → display name, latest version
-  "core_versions": [...],      // per-site WordPress core version
-  "update_locks": [...]
+  "plugin_info": [...]         // slug → display name, latest version
 }
 ```
 
 - **Manual sites override SpinupWP ones.** When a manual site and a SpinupWP site share a domain, the snapshot contains only the manual one. The merge happens on the server, so the CLI never has to resolve duplicates.
-- **Same data for every role**, so one ETag covers everyone. The ETag is a hash of the serialized body, or of the newest change timestamps across the included tables.
+- **Same data for every role**, so one ETag covers everyone. The ETag is a hash of the serialized body.
 - **Expected size:** a few hundred sites with about 30 plugins each, so roughly 10k plugin rows. That's fine gzipped. If it grows too large, split plugins out or add delta sync.
 - **The CLI stores the body plus metadata** (`etag`, `fetched_at`, `last_attempt_at`, `last_error`) under the XDG data dir as `snapshot.json`.
 
@@ -64,10 +61,10 @@ Shell completions read the mirror only and never hit the network.
 
 ### Server-side refresh
 
-The existing `POST /api/providers/spinupwp/sync` (edit level) calls `cache.RefreshServersAndSites(0)` with no guard. Rework it, or add `POST /api/refresh`, as follows:
+`POST /api/refresh` refreshes servers and sites from SpinupWP for the CLI:
 
 - **Execute level or higher.** It blocks until the fetch is done.
-- **Singleflight.** Requests that arrive while a refresh is running wait for that same refresh. `runFastTick` in `internal/refresh/scheduler.go` goes through the same guard, so a manual refresh and a scheduled one never overlap.
+- **Singleflight.** Requests that arrive while a refresh is running wait for that same refresh. The scheduler's fast tick and the web UI's `POST /api/providers/spinupwp/sync` go through the same guard (`internal/refresh/fast.go`), so a manual refresh and a scheduled one never overlap.
 - **Rate limit.** If the last successful refresh finished less than 60s ago, return immediately without fetching. The caller then re-fetches the snapshot as usual.
 - **Errors.** On a SpinupWP error or timeout, return the error. The CLI prints a warning and keeps the cached data.
 
@@ -130,15 +127,14 @@ The values go in headers because a `304` has no body, and because headers stay r
 
 ## Phases
 
-### Phase 1: API groundwork
+### Phase 1: API groundwork (done)
 
-- Add the `cli_tokens` table, the token middleware path, `POST /api/cli/token`, and the list and revoke endpoints.
-- Add the web UI pieces: the `/cli-login` approval page and the token list on the profile page.
-- Add `GET /api/cli/snapshot` with ETag and gzip support.
-- Add singleflight and the rate limit to the refresh path, and move the endpoint to execute level.
-- Add the version headers. The minimum and latest versions come from config, with the latest defaulting to the API's own version.
-- Add `webUrl` to `GET /api/health`.
-- Apply the manual-over-SpinupWP override by domain when building the snapshot.
+- `cli_tokens` table in `api.db`, CLI tokens in `AuthMiddleware`, and the login endpoints `POST /api/cli/authorize` (web session only) and `POST /api/cli/token`. Approved login codes live in memory for 2 minutes, so a restart only fails logins in progress.
+- `GET /api/cli/tokens` (`?all=true` for admins), `DELETE /api/cli/tokens/{id}`, and `DELETE /api/cli/token` to revoke the token a request is made with (for `jman logout`).
+- Web UI: the `/cli-login` approval page, and a CLI Tokens tab in Settings rather than on the profile page. Logging in now returns to the page that required it.
+- `GET /api/cli/snapshot` with ETag and gzip. Each site carries its own `wp_core` and `update_locks`, so there are no separate top-level `core_versions` and `update_locks` lists. The last SpinupWP refresh time is sent in an `X-Jman-Refreshed-At` header instead of the body, so the ETag only changes with the data.
+- `POST /api/refresh` at execute level. The existing `POST /api/providers/spinupwp/sync` stays at edit level for the web UI's sync button, but it, the new endpoint and the scheduler's fast tick all share one in-flight fetch.
+- The version headers, `webUrl` in `GET /api/health`, and the manual-over-SpinupWP override by domain.
 
 None of this changes existing behaviour, so it can ship on its own.
 
