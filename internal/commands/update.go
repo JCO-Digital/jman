@@ -17,8 +17,13 @@ import (
 // response (the user just pressing Enter) defaults to "yes", but a true EOF
 // — no input available at all, e.g. stdin closed or redirected from
 // /dev/null in a cron job or script — is treated as "no" rather than
-// silently defaulting to yes, since nothing was actually confirmed.
+// silently defaulting to yes, since nothing was actually confirmed. With
+// --yes, it doesn't ask.
 func confirmPrompt() (bool, error) {
+	if flagYes {
+		fmt.Println("y")
+		return true, nil
+	}
 	var response string
 	n, err := fmt.Scanln(&response)
 	if n == 0 && errors.Is(err, io.EOF) {

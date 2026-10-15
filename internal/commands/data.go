@@ -2,6 +2,7 @@ package commands
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/client"
 	"github.com/JCO-Digital/jman/internal/config"
@@ -9,6 +10,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/mirror"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
+	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
 
@@ -16,8 +18,13 @@ import (
 // the local copy.
 var flagFresh bool
 
+// flagYes answers every confirmation with yes: a command runs on all the
+// sites matching its target without asking.
+var flagYes bool
+
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&flagFresh, "fresh", false, "check jman-api for new data first, however recent the local copy is")
+	rootCmd.PersistentFlags().BoolVarP(&flagYes, "yes", "y", false, "don't ask for confirmation; run on every matching site")
 }
 
 // loadMirror returns the local copy of the jman-api data, refreshed first
@@ -69,6 +76,21 @@ func promptSites(cmd *cobra.Command, target string, access siteAccess) ([]models
 	m, err := loadMirror(cmd)
 	if err != nil {
 		return nil, nil, err
+	}
+	if flagYes {
+		sites := search.SearchSites(m.CliSites(), target)
+		if len(sites) == 0 {
+			return nil, nil, fmt.Errorf("no sites found")
+		}
+		// Still show what --yes picked, as a broad target may match more
+		// sites than intended.
+		if access == changesSite || len(sites) > 1 {
+			verb.PrintErrorf(verb.Normal, "Running on %d site(s):\n", len(sites))
+			for _, site := range sites {
+				verb.PrintErrorf(verb.Normal, "  %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+			}
+		}
+		return sites, m, nil
 	}
 	sites, err := search.PromptSearch(m.CliSites(), target, bool(access))
 	if err != nil {

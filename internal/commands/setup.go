@@ -184,7 +184,12 @@ var setupCompatCmd = &cobra.Command{
 
 		// Prompt user for confirmation before deploying
 		reader := bufio.NewReader(os.Stdin)
-		if len(targetSites) == 1 {
+		if flagYes {
+			verb.Printf(verb.Normal, "Installing on %d site(s) with plugin %q installed:\n", len(targetSites), slug)
+			for _, site := range targetSites {
+				verb.Printf(verb.Normal, "  %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+			}
+		} else if len(targetSites) == 1 {
 			site := targetSites[0]
 			verb.Printf(verb.Normal, "Found 1 site with plugin %q installed: %s %s\n", slug, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 			verb.Printf(verb.Normal, "Do you want to install the compatibility plugin on this site? [Y/n]: ")
