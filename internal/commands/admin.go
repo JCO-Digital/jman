@@ -23,7 +23,7 @@ var adminCmd = &cobra.Command{
 		username := args[1]
 		email := args[2]
 
-		sites, _, err := promptSites(cmd, target)
+		sites, _, err := promptSites(cmd, target, changesSite)
 		if err != nil {
 			return err
 		}

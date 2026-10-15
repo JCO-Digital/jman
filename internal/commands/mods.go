@@ -35,7 +35,7 @@ var modsCmd = &cobra.Command{
 		}
 		target := args[1]
 
-		sites, _, err := promptSites(cmd, target)
+		sites, _, err := promptSites(cmd, target, changesSite)
 		if err != nil {
 			return err
 		}

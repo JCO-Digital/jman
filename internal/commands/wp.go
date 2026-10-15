@@ -84,7 +84,7 @@ var wpCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target := args[0]
 
-		sites, _, err := promptSites(cmd, target)
+		sites, _, err := promptSites(cmd, target, changesSite)
 		if err != nil {
 			return err
 		}

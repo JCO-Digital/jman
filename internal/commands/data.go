@@ -52,14 +52,25 @@ func apiClient() (*client.Client, error) {
 	return client.New(apiURL, token), nil
 }
 
-// promptSites finds the sites matching target and asks the user to confirm
-// or pick from them. It returns the mirror too, for further lookups.
-func promptSites(cmd *cobra.Command, target string) ([]models.CliSite, *mirror.Mirror, error) {
+// siteAccess says whether a command only reads from the sites it targets.
+type siteAccess bool
+
+const (
+	// readOnly commands run on a single matching site without asking.
+	readOnly siteAccess = false
+	// changesSite commands ask the user to confirm even a single match.
+	changesSite siteAccess = true
+)
+
+// promptSites finds the sites matching target and asks the user to pick
+// from them, or to confirm a single match unless the command is readOnly.
+// It returns the mirror too, for further lookups.
+func promptSites(cmd *cobra.Command, target string, access siteAccess) ([]models.CliSite, *mirror.Mirror, error) {
 	m, err := loadMirror(cmd)
 	if err != nil {
 		return nil, nil, err
 	}
-	sites, err := search.PromptSearch(m.CliSites(), target)
+	sites, err := search.PromptSearch(m.CliSites(), target, bool(access))
 	if err != nil {
 		return nil, nil, err
 	}

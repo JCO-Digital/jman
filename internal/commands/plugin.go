@@ -48,7 +48,7 @@ With --live, the plugins are read from the sites over SSH instead.`,
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sites, m, err := promptSites(cmd, args[0])
+		sites, m, err := promptSites(cmd, args[0], readOnly)
 		if err != nil {
 			return err
 		}
@@ -90,7 +90,7 @@ var installPluginCmd = &cobra.Command{
 		pluginName := args[1]
 		resolvePluginAlias(&pluginName)
 
-		sites, _, err := promptSites(cmd, args[0])
+		sites, _, err := promptSites(cmd, args[0], changesSite)
 		if err != nil {
 			return err
 		}
@@ -176,7 +176,7 @@ var removePluginCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pluginName := args[1]
-		sites, m, err := promptSites(cmd, args[0])
+		sites, m, err := promptSites(cmd, args[0], changesSite)
 		if err != nil {
 			return err
 		}
@@ -224,7 +224,7 @@ Without a plugin name, it shows every plugin on each site.`,
 		if len(args) > 1 {
 			pluginName = args[1]
 		}
-		sites, _, err := promptSites(cmd, args[0])
+		sites, _, err := promptSites(cmd, args[0], readOnly)
 		if err != nil {
 			return err
 		}
@@ -285,7 +285,7 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		pluginName = args[1]
 	}
-	sites, m, err := promptSites(cmd, args[0])
+	sites, m, err := promptSites(cmd, args[0], changesSite)
 	if err != nil {
 		return err
 	}

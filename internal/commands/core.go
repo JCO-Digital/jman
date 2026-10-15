@@ -48,7 +48,11 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid operation: %s. Use 'check', 'update', or 'version'", operation)
 	}
 
-	sites, m, err := promptSites(cmd, target)
+	access := readOnly
+	if operation == "update" {
+		access = changesSite
+	}
+	sites, m, err := promptSites(cmd, target, access)
 	if err != nil {
 		return err
 	}
