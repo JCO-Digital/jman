@@ -1,14 +1,14 @@
 # jman
 
-`jman` is a command-line utility designed to manage WordPress sites hosted on SpinupWP. It provides a streamlined way to fetch site data, run remote `wp-cli` commands, manage plugins, and create administrative users across multiple sites.
+`jman` is a command-line utility for managing the WordPress sites in [jman-api](README_API.md): sites hosted on SpinupWP and sites added manually. It runs remote `wp-cli` commands, manages plugins and WordPress core, and creates administrative users across multiple sites.
 
 ## Features
 
-- **SpinupWP Integration**: Fetch and cache site/server data directly from the SpinupWP API.
+- **jman-api backend**: Site, server and plugin data comes from jman-api, so every user sees the same sites, including manually added ones, and the same update locks.
 - **Remote WP-CLI**: Execute `wp-cli` commands on remote sites via SSH.
-- **Bulk Operations**: Perform actions like disabling file modifications or installing plugins across multiple sites.
+- **Bulk Operations**: Update, install or remove plugins and update WordPress core across multiple sites, as jman-api jobs that respect update locks.
 - **Site Aliases**: Generate YAML-based alias files for SSH and WP-CLI, supporting both individual sites and server-based groups.
-- **Local Caching**: Optimized performance by caching site and server metadata locally.
+- **Works offline**: A local copy of the jman-api data keeps read-only commands working when jman-api can't be reached.
 
 ## Installation
 
@@ -84,27 +84,29 @@ This prevents unauthorized or tampered binaries from being installed via the upd
 
 ### Prerequisites
 
-- SSH access configured for your SpinupWP servers.
+- A user account in jman-api. Changing plugins and WordPress core needs the execute level.
+- SSH access to the sites, for `wp`, `admin`, `mods`, `setup` and `plugin list --live`/`plugin info`.
 - `wp-cli` available locally and on the target servers.
 - Go (needed if building from source, v1.25 or later recommended)
 
 ## Configuration
 
-`jman` uses a TOML configuration file located in your XDG config directory (typically `~/.config/jman/config.toml` on Linux and macOS).
+`jman` uses a TOML configuration file located in your XDG config directory (typically `~/.config/jman/config.toml` on Linux and macOS). It must not be readable by other users (`chmod 600`).
 
-Create the file and add your credentials:
+The only required setting is the jman-api URL, which `jman login` saves for you (see [Logging in](#logging-in)). Everything else is optional:
 
 ```toml
-tokenSpinup = "your_spinupwp_api_token"
+apiUrl = "https://jman.example.com" # set by `jman login <url>`
 
-# Slack notifications for vulnerabilities
-slackToken = "xoxb-your-slack-bot-token" # (optional)
-slackChannel = "#alerts" # (optional, defaults to #testing)
+# How the local copy of the jman-api data is kept fresh (Go durations)
+cacheTTL = "2m"        # how old it can get before a command checks jman-api
+apiTimeout = "3s"      # how long to wait for that check
+offlineBackoff = "15m" # after a failed check, how long to work offline before trying again
+staleWarning = "168h"  # warn when working from data older than this
 
-# Vulnerability scanning thresholds
-cvssThreshold = 7.0 # (optional, alerts for vulnerabilities with CVSS >= this value)
-vulnThreshold = 7.0 # (optional, alerts for sites with total vulnerabilities >= this value)
-vulnReportTime = "10:00" # (optional, jman-api: local time of the daily per-site Slack vulnerability report)
+# Thresholds for `jman vuln sites`
+cvssThreshold = 7.0 # sites with a vulnerability of at least this CVSS
+vulnThreshold = 7.0 # sites with at least this many vulnerabilities
 
 # Port knocking for SSH connections (optional)
 # knockdPorts = "7000,8000:udp,9000" # Port sequence before SSH/remote connections
@@ -121,25 +123,42 @@ host = "*.ssh.wpengine.net"
 minutes = 5
 ```
 
+The SpinupWP and Slack tokens are jman-api settings; the CLI no longer uses them.
+
 ## Usage
 
 ```bash
 jman <command> [target] [args...]
 ```
 
-### Local Caching
+### Logging in
 
-To speed up operations, `jman` caches site and server data from SpinupWP. If you add new sites or servers, you should run the `fetch` command to update your local cache:
+Log in once per device. `jman login` opens the jman web UI in your browser, where you approve the login; the token for this device is stored in the system keyring (or in a file only you can read if there is no keyring):
 
 ```bash
-jman fetch
+jman login https://jman.example.com   # the first time
+jman login                            # later, e.g. after the token expired
+```
+
+A token expires after 90 days without use. Your tokens are listed, and can be revoked, under Settings → CLI Tokens in the web UI. `jman logout` revokes this device's token.
+
+### Local copy of the data
+
+Commands read sites, servers and plugins from a local copy of the jman-api data, which is checked for changes when it is older than `cacheTTL` (2 minutes). When jman-api can't be reached, commands keep working from the local copy and say so. Vulnerability reports and changes to plugins and core always need jman-api.
+
+To pick up a site that was just created in SpinupWP, refresh explicitly:
+
+```bash
+jman refresh        # with the execute level, jman-api also refreshes from SpinupWP first
+jman --fresh search mysite   # or check jman-api before any one command
 ```
 
 ### Available Commands
 
 | Command  | Description                                                           |
 | :------- | :-------------------------------------------------------------------- |
-| `fetch`  | Fetch latest data from SpinupWP and update local cache.               |
+| `login`  | Log in to jman-api through the browser (`logout` to log out).         |
+| `refresh` | Download the latest data from jman-api.                              |
 | `wp`     | Run a `wp-cli` command on a target site.                              |
 | `core`   | Manage WordPress core (check, update, version) on target sites.       |
 | `search` | Search for sites or plugins matching a query.                         |
@@ -147,7 +166,7 @@ jman fetch
 | `plugin` | Plugin actions (list, install, update, remove, info) on target sites. |
 | `mods`   | Set `DISALLOW_FILE_MODS` to true on target sites.                     |
 | `alias`  | Create SSH/WP-CLI alias files for all sites or a filtered collection. |
-| `vuln`   | Scan for plugin vulnerabilities across all sites.                     |
+| `vuln`   | Show plugin and core vulnerabilities found by jman-api.               |
 | `ignore` | Manage unified ignore list for monitoring and vulnerabilities.        |
 | `update` | Check for and install updates for `jman` or its sidecar binaries.     |
 
@@ -162,7 +181,7 @@ jman wp mysite.com plugin list --status=active
 **Install a plugin on a site:**
 
 ```bash
-jman plugin mysite.com install akismet
+jman plugin install mysite.com akismet
 ```
 
 **Create an admin user:**
@@ -177,8 +196,11 @@ jman admin mysite.com myusername user@example.com
 # Check for core updates
 jman core check mysite.com
 
-# Update core to latest version
+# Update core to the latest minor version
 jman core update mysite.com
+
+# Update to a new major version (and confirm it on update-locked sites)
+jman core update mysite.com --major --allow-major
 ```
 
 **Generate WP-CLI aliases for a server group:**
@@ -200,20 +222,17 @@ jman vuln sites
 # Filter by CVSS score (only show vulnerabilities with score >= 7.0)
 jman vuln list --cvss 7.0
 
-# Send vulnerability reports to Slack (requires Slack configuration)
-jman vuln list --slack
-
 # List backport rules (vulnerabilities fixed in releases the database doesn't list)
 jman vuln backports
 ```
 
-The `vuln` command checks all cached plugins against known vulnerability databases and reports:
+The `vuln` command shows what jman-api found when checking every site's plugins and WordPress core against known vulnerability databases:
 
 - Plugin name and affected versions
 - Vulnerability details and CVSS scores
 - List of sites running vulnerable plugin versions
 
-When using the `--slack` flag, the command tracks sent messages to avoid duplicates and only resends for high-severity vulnerabilities (based on configured CVSS threshold).
+jman-api sends new vulnerabilities and a daily per-site summary to Slack itself.
 
 When a vendor backports a fix to an older branch (e.g. WooCommerce 11.1.2 fixing a vulnerability the database lists as fixed in 11.2.0), add a backport rule with "Mark patched…" on the affected version in the web UI. Sites on a matching version are then not reported as affected; `jman vuln list` shows them under "Patched (backport)" while other sites are still affected.
 

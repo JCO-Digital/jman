@@ -3,15 +3,12 @@ package commands
 import (
 	"fmt"
 	"os"
-	"os/user"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 
-	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/mirror"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -24,6 +21,7 @@ var (
 var ignoreCmd = &cobra.Command{
 	Use:   "ignore",
 	Short: "Manage unified ignore list for monitoring and vulnerabilities",
+	Long:  "Lists and changes jman-api's ignore list. Adding and removing entries needs the edit level.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ignoreListCmd.RunE(ignoreListCmd, args)
 	},
@@ -33,8 +31,12 @@ var ignoreListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all ignore entries",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		entries, err := db.GetAllIgnoreEntries("")
+		c, err := apiClient()
 		if err != nil {
+			return err
+		}
+		var entries []models.IgnoreEntry
+		if err := c.Get(cmd.Context(), "/ignore", &entries); err != nil {
 			return err
 		}
 
@@ -43,8 +45,8 @@ var ignoreListCmd = &cobra.Command{
 			return nil
 		}
 
-		// Pre-fetch sites and servers (by UUID) for name resolution
-		siteMap, serverMap := ignoreTargetNames()
+		// Sites and servers (by UUID) for name resolution
+		siteMap, serverMap := ignoreTargetNames(completionMirror())
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
 		fmt.Fprintln(w, "ID\tTYPE\tTARGET\tMONITOR\tVULN\tREASON\tNEGATED")
@@ -105,8 +107,17 @@ Identifier:
 		target := identifier
 		var negatedIDs []string
 
+		m, err := loadMirror(cmd)
+		if err != nil {
+			return err
+		}
+		c, err := apiClient()
+		if err != nil {
+			return err
+		}
+
 		// Resolve names to UUIDs for sites and servers
-		siteMap, serverMap := ignoreTargetNames()
+		siteMap, serverMap := ignoreTargetNames(m)
 		if entryType == "site" {
 			id, ok := findIDByName(siteMap, identifier)
 			if !ok {
@@ -139,12 +150,7 @@ Identifier:
 			NegatedSiteIDs: negatedIDs,
 		}
 
-		username := "cli"
-		if u, err := user.Current(); err == nil {
-			username = u.Username
-		}
-
-		if err := db.SaveIgnoreEntry(entry, username); err != nil {
+		if err := c.Post(cmd.Context(), "/ignore", entry, entry); err != nil {
 			return err
 		}
 
@@ -163,7 +169,11 @@ var ignoreRemoveCmd = &cobra.Command{
 			return fmt.Errorf("invalid ID: %w", err)
 		}
 
-		if err := db.DeleteIgnoreEntry(id); err != nil {
+		c, err := apiClient()
+		if err != nil {
+			return err
+		}
+		if err := c.Delete(cmd.Context(), fmt.Sprintf("/ignore/%d", id)); err != nil {
 			return err
 		}
 
@@ -183,31 +193,16 @@ func init() {
 	rootCmd.AddCommand(ignoreCmd)
 }
 
-// ignoreTargetNames returns site UUID -> domain and server UUID -> name maps
-// from the inventory, plus the SpinupWP cache for entities not yet synced.
-func ignoreTargetNames() (sites, servers map[string]string) {
+// ignoreTargetNames returns site UUID -> domain and server UUID -> name
+// maps from the local copy of the jman-api data.
+func ignoreTargetNames(m *mirror.Mirror) (sites, servers map[string]string) {
 	sites = make(map[string]string)
 	servers = make(map[string]string)
-
-	if cached, err := cache.GetCachedSites(); err == nil {
-		for _, s := range cached {
-			sites[utils.SpinupWPSiteUUID(s.ID)] = s.Domain
-		}
+	for _, s := range m.Sites() {
+		sites[s.ID] = s.Domain
 	}
-	if cached, err := cache.GetCachedServers(); err == nil {
-		for _, s := range cached {
-			servers[utils.SpinupWPServerUUID(s.ID)] = s.Name
-		}
-	}
-	if managed, err := db.ListManagedSites(); err == nil {
-		for _, s := range managed {
-			sites[s.ID] = s.Domain
-		}
-	}
-	if managed, err := db.ListManagedServers(); err == nil {
-		for _, s := range managed {
-			servers[s.ID] = s.Name
-		}
+	for _, s := range m.Servers() {
+		servers[s.ID] = s.Name
 	}
 	return sites, servers
 }

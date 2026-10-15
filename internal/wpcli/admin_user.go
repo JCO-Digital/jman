@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
@@ -69,17 +68,38 @@ func parseLowestAdminUserID(output string) (int, error) {
 	return lowest, nil
 }
 
+// AdminUserCache stores each site's administrator user ID between calls.
+type AdminUserCache interface {
+	// GetSiteAdminUser returns the cached ID and when it was stored
+	// (a SQLite DATETIME string), and whether there is one.
+	GetSiteAdminUser(siteID string) (userID int, updatedAt string, found bool, err error)
+	SaveSiteAdminUser(siteID string, userID int) error
+}
+
+// AdminUsers is where administrator user IDs are cached. jman-api sets it
+// to its database; when it is nil (the CLI, jman-agent), the ID is looked
+// up on every call that needs it.
+var AdminUsers AdminUserCache
+
 // resolveAdminUser returns a cached administrator user ID for the site,
 // refreshing it via wp-cli if missing or older than adminUserTTL. It never
 // fails the caller: any error fetching or caching the admin user is logged
 // and 0 is returned, meaning callers should omit --user (today's behavior).
 func resolveAdminUser(site models.CliSite) int {
-	userID, updatedAt, found, err := db.GetSiteAdminUser(site.ID)
-	if err != nil {
-		verb.Printf(verb.Verbose, "Failed to read cached admin user for site %s: %v\n", site.Name, err)
-	} else if found {
-		if lu, err := parseCacheTimestamp(updatedAt); err == nil && time.Now().UTC().Sub(lu) < adminUserTTL {
-			return userID
+	var (
+		userID    int
+		updatedAt string
+		found     bool
+		err       error
+	)
+	if AdminUsers != nil {
+		userID, updatedAt, found, err = AdminUsers.GetSiteAdminUser(site.ID)
+		if err != nil {
+			verb.Printf(verb.Verbose, "Failed to read cached admin user for site %s: %v\n", site.Name, err)
+		} else if found {
+			if lu, err := parseCacheTimestamp(updatedAt); err == nil && time.Now().UTC().Sub(lu) < adminUserTTL {
+				return userID
+			}
 		}
 	}
 
@@ -92,8 +112,10 @@ func resolveAdminUser(site models.CliSite) int {
 		return 0
 	}
 
-	if err := db.SaveSiteAdminUser(site.ID, fresh); err != nil {
-		verb.Printf(verb.Verbose, "Failed to cache admin user for site %s: %v\n", site.Name, err)
+	if AdminUsers != nil {
+		if err := AdminUsers.SaveSiteAdminUser(site.ID, fresh); err != nil {
+			verb.Printf(verb.Verbose, "Failed to cache admin user for site %s: %v\n", site.Name, err)
+		}
 	}
 
 	return fresh

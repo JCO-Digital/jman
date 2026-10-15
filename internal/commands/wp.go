@@ -8,7 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
@@ -87,7 +86,7 @@ var wpCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target := args[0]
 
-		sites, err := search.PromptSearch(target)
+		sites, _, err := promptSites(cmd, target)
 		if err != nil {
 			return err
 		}

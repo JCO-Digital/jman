@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
@@ -20,15 +19,12 @@ var searchCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query := args[0]
 
-		matchedSites, err := search.SearchSites(query)
+		m, err := loadMirror(cmd)
 		if err != nil {
-			return fmt.Errorf("error searching sites: %w", err)
+			return err
 		}
-
-		matchedPlugins, err := search.SearchPlugins(query)
-		if err != nil {
-			return fmt.Errorf("error searching plugins: %w", err)
-		}
+		matchedSites := search.SearchSites(m.CliSites(), query)
+		matchedPlugins := search.SearchPlugins(m.PluginData(), query)
 
 		if len(matchedSites) == 0 && len(matchedPlugins) == 0 {
 			verb.Printf(verb.Normal, "No sites or plugins found matching '%s'.\n", query)
@@ -46,25 +42,16 @@ var searchCmd = &cobra.Command{
 		}
 
 		if len(matchedPlugins) > 0 {
-			allSites, err := cache.GetSiteList()
-			if err != nil {
-				return fmt.Errorf("error getting site list: %w", err)
-			}
-			siteMap := make(map[string]string)
-			for _, s := range allSites {
-				siteMap[s.ID] = s.Name
-			}
-
 			verb.Printf(verb.Normal, "Found %d plugins matching '%s':\n", len(matchedPlugins), query)
 			for _, plugin := range matchedPlugins {
 				verb.Printf(verb.Quiet, "- %s\n", plugin.Name)
 
 				sort.Slice(plugin.Sites, func(i, j int) bool {
-					return siteMap[plugin.Sites[i].SiteID] < siteMap[plugin.Sites[j].SiteID]
+					return plugin.Sites[i].SiteName < plugin.Sites[j].SiteName
 				})
 
 				for _, site := range plugin.Sites {
-					siteName := siteMap[site.SiteID]
+					siteName := site.SiteName
 					if siteName == "" {
 						siteName = fmt.Sprintf("Unknown Site (ID: %s)", site.SiteID)
 					}

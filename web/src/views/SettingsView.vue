@@ -11,13 +11,14 @@ import AccountSettings from "../components/settings/AccountSettings.vue";
 import UserManagement from "../components/settings/UserManagement.vue";
 import AgentTokenManagement from "../components/settings/AgentTokenManagement.vue";
 import SiteManagement from "../components/settings/SiteManagement.vue";
+import CliTokenManagement from "../components/settings/CliTokenManagement.vue";
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
 const validTabs = computed(() => {
-	const tabs = ["account", "general"];
+	const tabs = ["account", "general", "cli-tokens"];
 	if (authStore.canEdit) tabs.push("ignored", "backports", "sites");
 	if (authStore.canAdmin) tabs.push("users", "agent-tokens");
 	return tabs;
@@ -63,6 +64,7 @@ watch(
 
 			<div class="settings-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
+				<CliTokenManagement v-else-if="activeTab === 'cli-tokens'" />
 				<IgnoreManager v-else-if="activeTab === 'ignored'" />
 				<BackportManager
 					v-else-if="activeTab === 'backports' && authStore.canEdit"

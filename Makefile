@@ -1,4 +1,4 @@
-.PHONY: build build-pkg dev dev-api prepare install clean test format completions dev-ui build-ui install-ui clean-ui
+.PHONY: build dev dev-api prepare install clean test format completions dev-ui build-ui install-ui clean-ui
 
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
@@ -7,10 +7,6 @@ LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(she
 AIR ?= $(or $(shell command -v air 2>/dev/null),$(or $(shell go env GOBIN),$(shell go env GOPATH)/bin)/air)
 
 build: clean prepare bin/jman bin/jman-api bin/jman-agent completions
-
-# Build without the built-in update command (for use with external package managers)
-build-pkg: clean prepare
-	go build -tags noupdate -ldflags="$(LDFLAGS)" -o bin/jman ./cmd/jman
 
 bin/jman:
 	go build -ldflags="$(LDFLAGS)" -o bin/jman ./cmd/jman

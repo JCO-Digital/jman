@@ -8,30 +8,18 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// SearchSites filters the site list based on the provided query string
-func SearchSites(query string) ([]models.CliSite, error) {
-	sites, err := cache.GetSiteList()
-	if err != nil {
-		return []models.CliSite{}, err
-	}
+// SearchSites returns the sites whose domain or server name matches query
+// (case-insensitively). Exact matches win: if any site or server name
+// equals query, only those sites are returned.
+func SearchSites(sites []models.CliSite, query string) []models.CliSite {
 	return filterSites(sites, query)
 }
 
-// SearchSitesFast filters the site list from cache without checking expiry or refreshing
-func SearchSitesFast(query string) ([]models.CliSite, error) {
-	sites, err := cache.GetFastSiteList()
-	if err != nil {
-		return []models.CliSite{}, err
-	}
-	return filterSites(sites, query)
-}
-
-func filterSites(sites []models.CliSite, query string) ([]models.CliSite, error) {
+func filterSites(sites []models.CliSite, query string) []models.CliSite {
 	matched := []models.CliSite{}
 	exact := []models.CliSite{}
 	query = strings.ToLower(query)
@@ -48,31 +36,19 @@ func filterSites(sites []models.CliSite, query string) ([]models.CliSite, error)
 	}
 
 	if len(exact) > 0 {
-		return exact, nil
+		return exact
 	}
 
-	return matched, nil
+	return matched
 }
 
-// SearchPlugins filters the plugin list based on the provided query string
-func SearchPlugins(query string) ([]models.WPPluginData, error) {
-	plugins, err := cache.GetCachedPluginData()
-	if err != nil {
-		return []models.WPPluginData{}, err
-	}
+// SearchPlugins returns the plugins whose slug contains query
+// (case-insensitively), sorted by slug.
+func SearchPlugins(plugins []models.WPPluginData, query string) []models.WPPluginData {
 	return filterPlugins(plugins, query)
 }
 
-// SearchPluginsFast filters the plugin list from cache without checking expiry or refreshing
-func SearchPluginsFast(query string) ([]models.WPPluginData, error) {
-	plugins, err := cache.GetFastCachedPluginData()
-	if err != nil {
-		return []models.WPPluginData{}, err
-	}
-	return filterPlugins(plugins, query)
-}
-
-func filterPlugins(plugins []models.WPPluginData, query string) ([]models.WPPluginData, error) {
+func filterPlugins(plugins []models.WPPluginData, query string) []models.WPPluginData {
 	matched := []models.WPPluginData{}
 	query = strings.ToLower(query)
 
@@ -86,19 +62,17 @@ func filterPlugins(plugins []models.WPPluginData, query string) ([]models.WPPlug
 		return matched[i].Name < matched[j].Name
 	})
 
-	return matched, nil
+	return matched
 }
 
-// PromptSearch asks the user to confirm the list of filtered sites
-func PromptSearch(query string) ([]models.CliSite, error) {
+// PromptSearch finds the sites matching query among sites and asks the
+// user to confirm or pick from them.
+func PromptSearch(all []models.CliSite, query string) ([]models.CliSite, error) {
 	if query == "" {
 		return []models.CliSite{}, fmt.Errorf("no query provided")
 	}
 
-	sites, err := SearchSites(query)
-	if err != nil {
-		return []models.CliSite{}, err
-	}
+	sites := SearchSites(all, query)
 
 	if len(sites) == 0 {
 		return []models.CliSite{}, fmt.Errorf("no sites found")

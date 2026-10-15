@@ -20,6 +20,7 @@ const emit = defineEmits<{
 const tabs: Tab[] = [
 	{ id: "account", label: "My Account" },
 	{ id: "general", label: "General" },
+	{ id: "cli-tokens", label: "CLI Tokens" },
 	{ id: "ignored", label: "Ignore List" },
 	{ id: "backports", label: "Backports" },
 	{ id: "sites", label: "Sites" },

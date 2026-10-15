@@ -12,6 +12,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
+	"github.com/JCO-Digital/jman/internal/vulnview"
 )
 
 // newVulnAlert is one vulnerability, and the non-ignored sites it is
@@ -118,7 +119,7 @@ func collectNewVulnAlerts(reports []models.VulnReport, siteMeta map[string]model
 			if v.Suppressed || v.Uuid == "" {
 				continue
 			}
-			cvss := getVulnCvss(v)
+			cvss := vulnview.VulnCvss(v)
 			if cvss < cvssThreshold {
 				continue
 			}
@@ -183,7 +184,7 @@ func formatNewVulnAlert(a newVulnAlert) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "%s %s\n", verb.Bold("New vulnerability:"), verb.Yellow(utils.CleanHTML(vName)))
 	fmt.Fprintf(&sb, "  %s %s %s\n", verb.Gray("Plugin:"), utils.CleanHTML(pluginName), verb.Gray("("+a.PluginSlug+")"))
-	fmt.Fprintf(&sb, "  %s %s\n", verb.Gray("CVSS:"), colorCvss(a.Cvss))
+	fmt.Fprintf(&sb, "  %s %s\n", verb.Gray("CVSS:"), vulnview.ColorCvss(a.Cvss))
 	if link != "" {
 		fmt.Fprintf(&sb, "  %s %s\n", verb.Gray("Link:"), verb.Cyan(link))
 	}

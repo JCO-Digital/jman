@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/mirror"
 	"github.com/JCO-Digital/jman/internal/search"
-	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -29,18 +27,16 @@ var aliasCmd = &cobra.Command{
 			searchQuery = args[0]
 		}
 
-		aliasRegistry := make(map[string]any)
+		m, err := loadMirror(cmd)
+		if err != nil {
+			return err
+		}
 
+		aliasRegistry := make(map[string]any)
 		if searchQuery != "" {
-			err := createSearchAliases(searchQuery, aliasRegistry)
-			if err != nil {
-				return err
-			}
+			createSearchAliases(m, searchQuery, aliasRegistry)
 		} else {
-			err := createAllAliases(aliasRegistry)
-			if err != nil {
-				return err
-			}
+			createAllAliases(m, aliasRegistry)
 		}
 
 		yamlData, err := yaml.Marshal(&aliasRegistry)
@@ -54,16 +50,9 @@ var aliasCmd = &cobra.Command{
 	},
 }
 
-func createSearchAliases(query string, registry map[string]any) error {
-	sites, err := search.SearchSites(query)
-	if err != nil {
-		return err
-	}
-
+func createSearchAliases(m *mirror.Mirror, query string, registry map[string]any) {
 	var siteAliases []string
-	groupAlias := fmt.Sprintf("@%s", query)
-
-	for _, site := range sites {
+	for _, site := range search.SearchSites(m.CliSites(), query) {
 		alias := fmt.Sprintf("@%s", site.Name)
 		registry[alias] = SiteAlias{
 			SSH:  site.SSH,
@@ -71,91 +60,41 @@ func createSearchAliases(query string, registry map[string]any) error {
 		}
 		siteAliases = append(siteAliases, alias)
 	}
-
-	registry[groupAlias] = siteAliases
-	return nil
+	registry[fmt.Sprintf("@%s", query)] = siteAliases
 }
 
-func createAllAliases(registry map[string]any) error {
-	servers, err := cache.GetCachedServers()
-	if err != nil {
-		return fmt.Errorf("failed to get cached servers: %w", err)
-	}
-
-	type ServerInfo struct {
-		Alias    string
-		Hostname string
-	}
-	serverInfoMap := make(map[int]ServerInfo)
+// createAllAliases adds an alias for every site jman can reach over SSH,
+// and a group alias per server (by its short name) listing its sites.
+// SpinupWP sites are included even when they aren't WordPress, so the
+// aliases also work for plain SSH access.
+func createAllAliases(m *mirror.Mirror, registry map[string]any) {
 	serverAliasLists := make(map[string][]string)
-
-	for _, server := range servers {
-		serverNameParts := strings.Split(server.Name, ".")
-		serverAlias := fmt.Sprintf("@%s", serverNameParts[0])
-		serverInfoMap[server.ID] = ServerInfo{
-			Alias:    serverAlias,
-			Hostname: server.Name,
+	for _, server := range m.Servers() {
+		if server.Provider == "spinupwp" {
+			serverAliasLists[fmt.Sprintf("@%s", strings.Split(server.Name, ".")[0])] = []string{}
 		}
-		serverAliasLists[serverAlias] = []string{}
 	}
 
-	sites, err := cache.GetCachedSites()
-	if err != nil {
-		return fmt.Errorf("failed to get cached sites: %w", err)
-	}
-
-	for _, site := range sites {
-		serverInfo, ok := serverInfoMap[site.ServerID]
-		if !ok {
-			verb.Printf(verb.Verbose, "Warning: Server not found for site %s (server_id: %d)\n", site.Domain, site.ServerID)
+	for _, site := range m.Sites() {
+		if site.SSHHost == "" || (site.Provider != "spinupwp" && (!site.IsWordpress || !site.CanWPCLI)) {
 			continue
 		}
-
 		siteAlias := fmt.Sprintf("@%s", site.Domain)
-		registry[siteAlias] = SiteAlias{
-			SSH:  fmt.Sprintf("%s@%s", site.SiteUser, serverInfo.Hostname),
-			Path: "files",
+		if _, exists := registry[siteAlias]; exists {
+			continue
 		}
+		cli := mirror.ToCliSite(site)
+		registry[siteAlias] = SiteAlias{SSH: cli.SSH, Path: cli.Path}
 
-		serverAliasLists[serverInfo.Alias] = append(serverAliasLists[serverInfo.Alias], siteAlias)
-	}
-
-	// Also include external managed sites from inventory.db
-	if managedSites, err := db.ListManagedSites(); err == nil {
-		for _, ms := range managedSites {
-			if !ms.IsWordpress || !ms.CanWPCLI {
-				continue
-			}
-			siteAlias := fmt.Sprintf("@%s", ms.Domain)
-			if _, exists := registry[siteAlias]; exists {
-				continue
-			}
-
-			sshSpec := ms.SSHHost
-			if ms.SSHUser != "" {
-				sshSpec = fmt.Sprintf("%s@%s", ms.SSHUser, ms.SSHHost)
-			}
-			if ms.SSHPort > 0 && ms.SSHPort != 22 {
-				sshSpec = fmt.Sprintf("%s:%d", sshSpec, ms.SSHPort)
-			}
-
-			registry[siteAlias] = SiteAlias{
-				SSH:  sshSpec,
-				Path: ms.SitePath,
-			}
-
-			if ms.ServerName != "" {
-				srvAlias := fmt.Sprintf("@%s", ms.ServerName)
-				serverAliasLists[srvAlias] = append(serverAliasLists[srvAlias], siteAlias)
-			}
+		if cli.ServerName != "" {
+			srvAlias := fmt.Sprintf("@%s", cli.ServerName)
+			serverAliasLists[srvAlias] = append(serverAliasLists[srvAlias], siteAlias)
 		}
 	}
 
 	for serverAlias, siteList := range serverAliasLists {
 		registry[serverAlias] = siteList
 	}
-
-	return nil
 }
 
 func init() {

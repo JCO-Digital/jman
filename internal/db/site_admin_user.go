@@ -46,3 +46,16 @@ func GetSiteAdminUser(siteID string) (userID int, updatedAt string, found bool, 
 
 	return userID, ua.String, true, nil
 }
+
+// AdminUserCache is the database-backed wpcli.AdminUserCache.
+type AdminUserCache struct{}
+
+// GetSiteAdminUser implements wpcli.AdminUserCache.
+func (AdminUserCache) GetSiteAdminUser(siteID string) (int, string, bool, error) {
+	return GetSiteAdminUser(siteID)
+}
+
+// SaveSiteAdminUser implements wpcli.AdminUserCache.
+func (AdminUserCache) SaveSiteAdminUser(siteID string, userID int) error {
+	return SaveSiteAdminUser(siteID, userID)
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/refresh"
 	"github.com/JCO-Digital/jman/internal/tasks"
 	"github.com/JCO-Digital/jman/internal/updatejobs"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
 
@@ -34,6 +35,8 @@ Use subcommands (useradd, hashpw, totp-setup) to manage users and credentials.`,
 		if err := db.InitInventory(); err != nil {
 			return err
 		}
+		// Cache sites' admin user IDs for WP-CLI calls in inventory.db.
+		wpcli.AdminUsers = db.AdminUserCache{}
 		return db.InitAPI()
 	},
 	RunE: runServe,
