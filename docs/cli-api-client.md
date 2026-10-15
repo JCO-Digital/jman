@@ -1,6 +1,6 @@
 # Making the jman CLI a client of jman-api
 
-Status: **in progress** (design agreed 2026-10-15). Phases 1 and 2 are done; Phases 3–5 are still to do.
+Status: **in progress** (design agreed 2026-10-15). Phases 1–3 are done; Phases 4 and 5 are still to do.
 
 ## Why
 
@@ -113,14 +113,15 @@ The values go in headers because a `304` has no body, and because headers stay r
 | `alias` | Cache + `db.ListManagedSites` | Mirror |
 | `wp`, `admin`, `mods` | SSH using cached site data | Unchanged, with SSH details from the mirror |
 | `setup mu` / `setup compat` | SSH, plus `db.GetSitesWithPlugin` | SSH, with the plugin lookup from the mirror |
-| `plugin list` / `info` | SSH, then writes the local plugin cache | Mirror. `--live` keeps the SSH read but no longer writes a cache |
+| `plugin list` | SSH | Mirror. `--live` reads the site over SSH |
+| `plugin info` | SSH | Unchanged (SSH) |
 | `plugin update` | SSH via `wpcli.UpdatePlugin` | `POST /api/plugin-update-jobs`, then poll `GET /api/update-jobs/{id}` |
 | `plugin install` | SSH | `POST /api/sites/{id}/plugin-install`. A local ZIP is uploaded as multipart, a slug or URL is sent as JSON |
-| `plugin remove` | SSH | `POST /api/sites/{id}/plugin-actions` (`delete`/`uninstall`) |
+| `plugin remove` | SSH | `POST /api/sites/{id}/plugin-actions`: `deactivate` if active, then `uninstall` |
 | `core version` | SSH | Mirror |
 | `core check` | SSH | `GET /api/sites/{id}/core-update` |
 | `core update` | SSH | `POST /api/sites/{id}/core-update` |
-| `vuln list/sites/core/backports` | Local scan via `internal/vuln` | `GET /api/vulns`, `/api/vulns/core`, `/api/vuln-backports`. Slack reporting stays server-side |
+| `vuln list/sites/core/backports` | Local scan via `internal/vuln` | `GET /api/vulns`, `/api/vulns/core`, `/api/vuln-backports`, formatted by `internal/vulnview`. `--slack` removed |
 | `ignore list/add/remove` | `db.*` directly | `/api/ignore` endpoints, which already exist |
 | `migrate-db` | Local `db.MigrateSplitDB` | Removed from the CLI. jman-api has its own |
 | `update` | GitHub release + minisign | Unchanged. The `build-pkg` variant is removed |
@@ -147,16 +148,22 @@ None of this changes existing behaviour, so it can ship on its own.
 - `jman login [api-url]`, `jman logout` and `jman refresh`, and the timing keys in `config.toml`. The version gate runs before every command except `update`, `login`, `logout`, `help` and completion.
 - The snapshot now also leaves out SpinupWP sites that are no longer in SpinupWP. The inventory sync only adds and updates, so it can still hold deleted sites; the old CLI handled this the same way.
 
-Existing commands don't use any of this yet. The CLI still opens `inventory.db` and fetches from SpinupWP until Phase 3.
+### Phase 3: command migration (done)
 
-### Phase 3: command migration
-
-- Move commands to the mirror and API following the table above, one command group at a time, starting with read-only (search, alias, completions, then vuln and ignore).
-- The plugin and core commands come last, because their behaviour changes: they become asynchronous API jobs that the CLI waits on and reports, and updates start respecting locks.
+- All commands read sites, servers and plugins from the local copy (`internal/mirror`). A global `--fresh` flag checks jman-api first however recent the copy is. Shell completion only reads the local copy.
+- `plugin install`, `update` and `remove` and `core check` and `update` go through jman-api. Installs, updates and removals are queued as jobs, and jman waits for them and prints the results; Ctrl-C stops the waiting but not the jobs.
+  - `plugin update` shows locked plugins and has `--allow-major` for one plugin on one site.
+  - `plugin remove` deactivates an active plugin first, then uninstalls it, as `wp plugin uninstall --deactivate` did.
+  - `core update --major` on an update-locked site also needs `--allow-major`.
+- `plugin list` reads the local copy and marks locked plugins; `--live` reads the site over SSH instead. `plugin info` stays a live SSH read, since the local copy has no plugin details such as the author.
+- `vuln list/sites/core/backports` format jman-api's reports with the new `internal/vulnview` package, which jman-api's daily Slack site report uses too. `--slack` was removed (a hidden flag explains why); jman-api already sends the reports.
+- `ignore` reads and writes jman-api's ignore list. It used to write to the laptop's own `inventory.db`, so entries added with the CLI never reached jman-api.
+- `wp`, `admin`, `mods` and `setup mu/compat` still run over SSH, with their sites from the local copy.
 
 ### Phase 4: dependency cleanup
 
 - Remove `db.InitInventory` from `cmd/jman/main.go`, and delete `fetch` and `migrate-db`.
+- `internal/wpcli` caches each site's admin user ID in `inventory.db` (`resolveAdminUser`). Make that cache pluggable so jman-api keeps it and the CLI looks the ID up live or skips it.
 - Split shared packages so `go list -deps ./cmd/jman` contains no `internal/db`, `internal/fetch/*`, `internal/cache` (the API-side parts), `internal/sitestate` or `modernc.org/sqlite`. `internal/vuln` and `internal/slack` should also drop out.
 - Add a CI check that fails if `./cmd/jman` depends on `internal/db`.
 - Remove `tokenSpinup` and the other fetch-only keys from the CLI config docs. Leftover keys in old config files are ignored.

@@ -9,10 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/update"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -44,7 +41,7 @@ var setupMuCmd = &cobra.Command{
 			inputSource = args[1]
 		}
 
-		sites, err := search.PromptSearch(target)
+		sites, _, err := promptSites(cmd, target)
 		if err != nil {
 			return err
 		}
@@ -158,29 +155,24 @@ var setupCompatCmd = &cobra.Command{
 		verb.Printf(verb.Normal, "%s Compatibility file found!\n", verb.Green("✓"))
 
 		// 2. Find all sites that have the plugin installed
-		siteIDs, err := db.GetSitesWithPlugin(slug)
+		m, err := loadMirror(cmd)
 		if err != nil {
-			return fmt.Errorf("failed to query sites with plugin %q: %w", slug, err)
+			return err
 		}
-
-		if len(siteIDs) == 0 {
-			verb.Printf(verb.Normal, "No sites found in the cache with plugin %q installed.\n", slug)
+		withPlugin := make(map[string]bool)
+		for _, p := range m.Plugins() {
+			if p.Name == slug && p.Status != "must-use" && p.Status != "dropin" {
+				withPlugin[p.SiteID] = true
+			}
+		}
+		if len(withPlugin) == 0 {
+			verb.Printf(verb.Normal, "No sites found with plugin %q installed.\n", slug)
 			return nil
 		}
 
-		siteIDMap := make(map[string]bool)
-		for _, id := range siteIDs {
-			siteIDMap[id] = true
-		}
-
-		allSites, err := cache.GetSiteList()
-		if err != nil {
-			return fmt.Errorf("failed to retrieve site list: %w", err)
-		}
-
 		var targetSites []models.CliSite
-		for _, site := range allSites {
-			if siteIDMap[site.ID] {
+		for _, site := range m.CliSites() {
+			if withPlugin[site.ID] {
 				targetSites = append(targetSites, site)
 			}
 		}

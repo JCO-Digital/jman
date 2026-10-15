@@ -8,13 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cliproto"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/hashicorp/go-version"
 )
 
@@ -95,23 +99,28 @@ func (c *Client) Versions() (min, latest string, ok bool) {
 // when the CLI is below the minimum version, and turns error statuses
 // other than 304 into errors.
 func (c *Client) do(ctx context.Context, method, path string, body any, header http.Header) (*http.Response, error) {
-	var reader io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
-			return nil, err
-		}
-		reader = bytes.NewReader(b)
+	if body == nil {
+		return c.doRaw(ctx, method, path, nil, header)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+"/api"+path, reader)
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	if header == nil {
+		header = http.Header{}
+	}
+	header.Set("Content-Type", "application/json")
+	return c.doRaw(ctx, method, path, bytes.NewReader(b), header)
+}
+
+// doRaw is do with the request body given as a reader.
+func (c *Client) doRaw(ctx context.Context, method, path string, body io.Reader, header http.Header) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+"/api"+path, body)
 	if err != nil {
 		return nil, err
 	}
 	for k, v := range header {
 		req.Header[k] = v
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
 	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
@@ -267,4 +276,96 @@ func isOlder(current, other string) (bool, bool) {
 		return false, false
 	}
 	return c.LessThan(o), true
+}
+
+// Get sends a GET to path (under /api) and decodes the JSON response into
+// out.
+func (c *Client) Get(ctx context.Context, path string, out any) error {
+	return c.doJSON(ctx, http.MethodGet, path, nil, out)
+}
+
+// Post sends body as JSON to path (under /api) and decodes the JSON
+// response into out, if out isn't nil.
+func (c *Client) Post(ctx context.Context, path string, body, out any) error {
+	return c.doJSON(ctx, http.MethodPost, path, body, out)
+}
+
+// Delete sends a DELETE to path (under /api).
+func (c *Client) Delete(ctx context.Context, path string) error {
+	return c.doJSON(ctx, http.MethodDelete, path, nil, nil)
+}
+
+// PostFile uploads a local file as multipart/form-data to path (under
+// /api), in the form field "file", along with fields, and decodes the JSON
+// response into out.
+func (c *Client) PostFile(ctx context.Context, path, filePath string, fields map[string]string, out any) error {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	go func() {
+		for k, v := range fields {
+			if err := mw.WriteField(k, v); err != nil {
+				pw.CloseWithError(err)
+				return
+			}
+		}
+		part, err := mw.CreateFormFile("file", filepath.Base(filePath))
+		if err == nil {
+			_, err = io.Copy(part, f)
+		}
+		if err == nil {
+			err = mw.Close()
+		}
+		pw.CloseWithError(err)
+	}()
+
+	header := http.Header{}
+	header.Set("Content-Type", mw.FormDataContentType())
+	resp, err := c.doRaw(ctx, http.MethodPost, path, pr, header)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if out == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(out)
+}
+
+// jobPollInterval is how often WaitForJobs checks on queued jobs.
+var jobPollInterval = 2 * time.Second
+
+// WaitForJobs polls the given update jobs until each has finished, calling
+// done once per job, in the order they finish.
+func (c *Client) WaitForJobs(ctx context.Context, jobs []models.UpdateJob, done func(models.UpdateJob)) error {
+	pending := make(map[int64]bool, len(jobs))
+	for _, j := range jobs {
+		pending[j.ID] = true
+	}
+	for len(pending) > 0 {
+		for id := range pending {
+			var job models.UpdateJob
+			if err := c.Get(ctx, fmt.Sprintf("/update-jobs/%d", id), &job); err != nil {
+				return err
+			}
+			if !job.Active() {
+				delete(pending, id)
+				done(job)
+			}
+		}
+		if len(pending) == 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(jobPollInterval):
+		}
+	}
+	return nil
 }

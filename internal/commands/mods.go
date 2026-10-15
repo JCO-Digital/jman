@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 
-	"github.com/JCO-Digital/jman/internal/search"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
@@ -38,7 +37,7 @@ var modsCmd = &cobra.Command{
 		}
 		target := args[1]
 
-		sites, err := search.PromptSearch(target)
+		sites, _, err := promptSites(cmd, target)
 		if err != nil {
 			return err
 		}

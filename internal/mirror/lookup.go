@@ -1,10 +1,13 @@
 package mirror
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/JCO-Digital/jman/internal/cliproto"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // The lookups below replace the cache.Get* functions the commands use.
@@ -37,9 +40,15 @@ func (m *Mirror) CliSites() []models.CliSite {
 		if !s.IsWordpress || !s.CanWPCLI || s.SSHHost == "" {
 			continue
 		}
-		out = append(out, toManagedSite(s).ToCliSite())
+		out = append(out, ToCliSite(s))
 	}
 	return out
+}
+
+// ToCliSite returns a site's WP-CLI connection details: the --ssh target,
+// path, and short server name.
+func ToCliSite(s cliproto.Site) models.CliSite {
+	return toManagedSite(s).ToCliSite()
 }
 
 // Servers returns every server, sorted by name.
@@ -141,4 +150,77 @@ func toManagedSite(s cliproto.Site) models.ManagedSite {
 		ms.ServerID = &id
 	}
 	return ms
+}
+
+// PluginData groups the active plugins by slug, with the sites (and their
+// installed versions) each is active on.
+func (m *Mirror) PluginData() []models.WPPluginData {
+	names := map[string]string{}
+	for _, s := range m.Sites() {
+		names[s.ID] = s.Domain
+	}
+	bySlug := map[string]*models.WPPluginData{}
+	var order []string
+	for _, p := range m.Plugins() {
+		if p.Status != "active" {
+			continue
+		}
+		d, ok := bySlug[p.Name]
+		if !ok {
+			d = &models.WPPluginData{Name: p.Name, Sites: []models.PluginSite{}}
+			bySlug[p.Name] = d
+			order = append(order, p.Name)
+		}
+		d.Sites = append(d.Sites, models.PluginSite{SiteID: p.SiteID, SiteName: names[p.SiteID], Version: p.Version})
+	}
+	sort.Strings(order)
+	out := make([]models.WPPluginData, 0, len(order))
+	for _, slug := range order {
+		out = append(out, *bySlug[slug])
+	}
+	return out
+}
+
+// SiteName returns a site's domain, or "" if the site is unknown.
+func (m *Mirror) SiteName(id string) string {
+	if s, ok := m.Site(id); ok {
+		return s.Domain
+	}
+	return ""
+}
+
+// DisplayPluginName formats a plugin for display as "Name (slug)", or just
+// the slug if its name is unknown. truncate shortens long names; color
+// highlights the parts.
+func (m *Mirror) DisplayPluginName(slug string, truncate, color bool) string {
+	name := m.PluginName(slug)
+	if name == slug {
+		if color {
+			return verb.Yellow(slug)
+		}
+		return slug
+	}
+	name = utils.CleanHTML(name)
+	if truncate {
+		name = utils.ShowFirstPart(name)
+	}
+	if color {
+		name, slug = verb.Yellow(name), verb.Cyan(slug)
+	}
+	return fmt.Sprintf("%s (%s)", name, slug)
+}
+
+// IsCoreLocked reports whether a site's WordPress core updates are limited
+// to minor releases, which only a lock on the whole site does.
+func (m *Mirror) IsCoreLocked(siteID string) bool {
+	s, ok := m.Site(siteID)
+	if !ok {
+		return false
+	}
+	for _, l := range s.UpdateLocks {
+		if l.Plugin == "" {
+			return true
+		}
+	}
+	return false
 }

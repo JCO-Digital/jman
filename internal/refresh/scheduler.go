@@ -152,7 +152,7 @@ func runDailySiteReport(now time.Time) {
 		return
 	}
 
-	if err := vuln.ScanVulnerabilities(vuln.ScanOptions{Mode: "sites", Slack: true}); err != nil {
+	if err := vuln.SendSiteReports(); err != nil {
 		log.Printf("Refresh scheduler: vuln Slack report failed: %v", err)
 		return
 	}
