@@ -90,6 +90,22 @@ type AppConfig struct {
 	// LatestCLIVersion is the newest jman CLI release; older CLIs print an
 	// update notice. Defaults to jman-api's own version.
 	LatestCLIVersion string `toml:"latestCliVersion" mapstructure:"latestCliVersion"`
+
+	// APIURL is the jman-api base URL the CLI uses, e.g.
+	// "https://jman.example.com". `jman login <url>` sets it.
+	APIURL string `toml:"apiUrl" mapstructure:"apiUrl"`
+	// CacheTTL is how old the CLI's local copy of the API data can get
+	// before a command checks the API for changes.
+	CacheTTL time.Duration `toml:"cacheTTL" mapstructure:"cacheTTL"`
+	// APITimeout bounds that check, so commands don't hang when the API is
+	// unreachable.
+	APITimeout time.Duration `toml:"apiTimeout" mapstructure:"apiTimeout"`
+	// OfflineBackoff is how long the CLI waits after a failed check before
+	// trying the API again, working from its local copy meanwhile.
+	OfflineBackoff time.Duration `toml:"offlineBackoff" mapstructure:"offlineBackoff"`
+	// StaleWarning is how old the local copy can get before the CLI warns
+	// that it is working from outdated data.
+	StaleWarning time.Duration `toml:"staleWarning" mapstructure:"staleWarning"`
 }
 
 // WPCLIHostTimeout sets a minimum WP-CLI timeout, in minutes, for every SSH
@@ -160,6 +176,10 @@ func loadConfig() error {
 	viper.SetDefault("allowedOrigins", []string{})
 	viper.SetDefault("ignoreSites", []string{})
 	viper.SetDefault("pluginAliases", map[string]string{})
+	viper.SetDefault("cacheTTL", "2m")
+	viper.SetDefault("apiTimeout", "3s")
+	viper.SetDefault("offlineBackoff", "15m")
+	viper.SetDefault("staleWarning", "168h")
 
 	// Viper configuration
 	viper.SetConfigName("config")
@@ -200,6 +220,7 @@ func loadConfig() error {
 		"webUrl":                     "WEBURL",
 		"minCliVersion":              "MINCLIVERSION",
 		"latestCliVersion":           "LATESTCLIVERSION",
+		"apiUrl":                     "APIURL",
 	}
 
 	for key, envVar := range envBindings {

@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/cliproto"
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
 // CLITokenPrefix starts every jman CLI token, so AuthMiddleware can tell
 // one apart from a JWT.
-const CLITokenPrefix = "jman_cli_"
+const CLITokenPrefix = cliproto.TokenPrefix
 
 // CLITokenIdleLifetime is how long a CLI token stays valid without being
 // used. Each use extends it; the token itself never changes.

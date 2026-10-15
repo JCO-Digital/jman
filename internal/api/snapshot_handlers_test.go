@@ -6,12 +6,17 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/cliproto"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 func seedSnapshotSites(t *testing.T) {
@@ -61,15 +66,15 @@ func TestCLISnapshotHandler(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
-	var snap cliSnapshot
+	var snap cliproto.Snapshot
 	if err := json.Unmarshal(w.Body.Bytes(), &snap); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if snap.SchemaVersion != SnapshotSchemaVersion {
+	if snap.SchemaVersion != cliproto.SnapshotSchemaVersion {
 		t.Errorf("schema_version = %d", snap.SchemaVersion)
 	}
 
-	ids := map[string]snapshotSite{}
+	ids := map[string]cliproto.Site{}
 	for _, s := range snap.Sites {
 		ids[s.ID] = s
 	}
@@ -123,9 +128,35 @@ func TestCLISnapshotHandler(t *testing.T) {
 			t.Fatal(err)
 		}
 		body, _ := io.ReadAll(gz)
-		var snap cliSnapshot
+		var snap cliproto.Snapshot
 		if err := json.Unmarshal(body, &snap); err != nil || len(snap.Sites) != 2 {
 			t.Errorf("gzipped body: %v %+v", err, snap.Sites)
+		}
+	})
+
+	t.Run("SpinupWP sites missing from the SpinupWP cache are dropped", func(t *testing.T) {
+		// The SpinupWP list knows only site 2; spinup-1 was deleted there.
+		if err := cache.WriteJSONCache("sites", []models.Site{{ID: 2, Domain: "blog.example.com", IsWordpress: true}}); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Remove(filepath.Join(config.RunData.CacheDir, "sites.json")) })
+		if err := db.SaveManagedSite(models.ManagedSite{ID: utils.SpinupWPSiteUUID(3), Provider: "spinupwp", ProviderSiteID: "3", Domain: "gone.example.com", Status: "active"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.SaveManagedSite(models.ManagedSite{ID: utils.SpinupWPSiteUUID(2), Provider: "spinupwp", ProviderSiteID: "2", Domain: "blog.example.com", Status: "active"}); err != nil {
+			t.Fatal(err)
+		}
+
+		snap, err := buildCLISnapshot()
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids := map[string]bool{}
+		for _, s := range snap.Sites {
+			ids[s.ID] = true
+		}
+		if ids[utils.SpinupWPSiteUUID(3)] || !ids[utils.SpinupWPSiteUUID(2)] || !ids["manual-1"] {
+			t.Errorf("unexpected sites: %+v", snap.Sites)
 		}
 	})
 }
@@ -146,14 +177,14 @@ func TestVersionMiddlewareCLIHeaders(t *testing.T) {
 	config.Cfg.MinCLIVersion = ""
 	config.Cfg.LatestCLIVersion = ""
 	h := serve()
-	if h.Get(MinCLIVersionHeader) != "" || h.Get(LatestCLIVersionHeader) != "6.12.0" {
-		t.Errorf("defaults: min=%q latest=%q", h.Get(MinCLIVersionHeader), h.Get(LatestCLIVersionHeader))
+	if h.Get(cliproto.MinCLIVersionHeader) != "" || h.Get(cliproto.LatestCLIVersionHeader) != "6.12.0" {
+		t.Errorf("defaults: min=%q latest=%q", h.Get(cliproto.MinCLIVersionHeader), h.Get(cliproto.LatestCLIVersionHeader))
 	}
 
 	config.Cfg.MinCLIVersion = "6.12.0"
 	config.Cfg.LatestCLIVersion = "6.13.0"
 	h = serve()
-	if h.Get(MinCLIVersionHeader) != "6.12.0" || h.Get(LatestCLIVersionHeader) != "6.13.0" {
-		t.Errorf("configured: min=%q latest=%q", h.Get(MinCLIVersionHeader), h.Get(LatestCLIVersionHeader))
+	if h.Get(cliproto.MinCLIVersionHeader) != "6.12.0" || h.Get(cliproto.LatestCLIVersionHeader) != "6.13.0" {
+		t.Errorf("configured: min=%q latest=%q", h.Get(cliproto.MinCLIVersionHeader), h.Get(cliproto.LatestCLIVersionHeader))
 	}
 }

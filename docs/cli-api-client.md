@@ -1,6 +1,6 @@
 # Making the jman CLI a client of jman-api
 
-Status: **in progress** (design agreed 2026-10-15). Phase 1 is done; Phases 2–5 are still to do.
+Status: **in progress** (design agreed 2026-10-15). Phases 1 and 2 are done; Phases 3–5 are still to do.
 
 ## Why
 
@@ -138,12 +138,16 @@ The values go in headers because a `304` has no body, and because headers stay r
 
 None of this changes existing behaviour, so it can ship on its own.
 
-### Phase 2: CLI client layer
+### Phase 2: CLI client layer (done)
 
-- Add `internal/client`: an HTTP client with the token, the version-header checks and a typed snapshot model.
-- Add `internal/mirror`: snapshot storage, the freshness rules and the backoff, plus in-memory lookups that replace the `cache.Get*` functions the commands use.
-- Add `jman login [api-url]`, `jman logout` and `jman refresh`.
-- Add the timing keys to the config, with the defaults above.
+- `internal/cliproto`: the snapshot types, request and response bodies and header names, shared by jman-api and the CLI without pulling in the database.
+- `internal/client`: the HTTP client. It reads the version headers on every response and refuses to continue below the minimum version.
+- `internal/credentials`: the token store, using the OS keyring (`zalando/go-keyring`, pure Go) with a mode-0600 `credentials.json` fallback, one token per API URL.
+- `internal/mirror`: the local copy under `<data dir>/mirror/` with the freshness rules, backoff and stale warning, the offline version gate, the daily update notice, and lookups (`CliSites`, `Plugins`, `SitePlugins`, `CoreVersions`, `PluginName`, `IsUpdateLocked`, …) for Phase 3. Switching to another API URL deletes the old copy.
+- `jman login [api-url]`, `jman logout` and `jman refresh`, and the timing keys in `config.toml`. The version gate runs before every command except `update`, `login`, `logout`, `help` and completion.
+- The snapshot now also leaves out SpinupWP sites that are no longer in SpinupWP. The inventory sync only adds and updates, so it can still hold deleted sites; the old CLI handled this the same way.
+
+Existing commands don't use any of this yet. The CLI still opens `inventory.db` and fetches from SpinupWP until Phase 3.
 
 ### Phase 3: command migration
 

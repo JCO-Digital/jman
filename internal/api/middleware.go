@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/cliproto"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
@@ -63,28 +64,19 @@ func SecurityHeadersMiddleware(next http.Handler) http.Handler {
 // version. The web UI reloads itself when it changes, i.e. after a deploy.
 const VersionHeader = "X-Jman-Version"
 
-// MinCLIVersionHeader and LatestCLIVersionHeader tell the jman CLI the
-// oldest version it may run as and the newest release. They are sent on
-// every response, including 304s and errors, so an old CLI can read them
-// whatever the body format.
-const (
-	MinCLIVersionHeader    = "X-Jman-Min-CLI-Version"
-	LatestCLIVersionHeader = "X-Jman-Latest-CLI-Version"
-)
-
-// VersionMiddleware adds the VersionHeader and the CLI version headers to
-// every response.
+// VersionMiddleware adds the VersionHeader and the CLI version headers
+// (see cliproto) to every response.
 func VersionMiddleware(version string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set(VersionHeader, version)
 		if v := config.Cfg.MinCLIVersion; v != "" {
-			w.Header().Set(MinCLIVersionHeader, v)
+			w.Header().Set(cliproto.MinCLIVersionHeader, v)
 		}
 		latest := config.Cfg.LatestCLIVersion
 		if latest == "" {
 			latest = version
 		}
-		w.Header().Set(LatestCLIVersionHeader, latest)
+		w.Header().Set(cliproto.LatestCLIVersionHeader, latest)
 		next.ServeHTTP(w, r)
 	})
 }

@@ -12,70 +12,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/cliproto"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/refresh"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// SnapshotSchemaVersion is the format version of the CLI snapshot. Bump it
-// when a change would break an older CLI's reading of the snapshot.
-const SnapshotSchemaVersion = 1
-
-// RefreshedAtHeader carries when servers and sites were last refreshed from
-// SpinupWP. It is a header rather than part of the snapshot so that the
-// snapshot, and so its ETag, only changes when the data does.
-const RefreshedAtHeader = "X-Jman-Refreshed-At"
-
-// cliSnapshot is everything the jman CLI mirrors locally. It is the same for
-// every user, so one ETag covers everyone.
-type cliSnapshot struct {
-	SchemaVersion int                  `json:"schema_version"`
-	Servers       []snapshotServer     `json:"servers"`
-	Sites         []snapshotSite       `json:"sites"`
-	Plugins       []models.WPPlugin    `json:"plugins"`
-	PluginInfo    []snapshotPluginInfo `json:"plugin_info"`
-}
-
-type snapshotServer struct {
-	ID        string `json:"id"`
-	Provider  string `json:"provider"`
-	Name      string `json:"name"`
-	IsLogical bool   `json:"is_logical"`
-	IPAddress string `json:"ip_address"`
-	SSHPort   int    `json:"ssh_port"`
-}
-
-type snapshotSite struct {
-	ID             string                     `json:"id"`
-	Provider       string                     `json:"provider"`
-	Domain         string                     `json:"domain"`
-	ServerID       string                     `json:"server_id,omitempty"`
-	ServerName     string                     `json:"server_name"`
-	Environment    models.SiteEnvironmentType `json:"environment,omitempty"`
-	Status         string                     `json:"status"`
-	IsWordpress    bool                       `json:"is_wordpress"`
-	ConnectionType string                     `json:"connection_type"`
-	SSHHost        string                     `json:"ssh_host"`
-	SSHPort        int                        `json:"ssh_port"`
-	SSHUser        string                     `json:"ssh_user"`
-	// SSH is the WP-CLI --ssh target ("user@host" or "user@host:port").
-	SSH         string              `json:"ssh,omitempty"`
-	SitePath    string              `json:"site_path"`
-	CanWPCLI    bool                `json:"can_wp_cli"`
-	WPCore      *models.SiteCore    `json:"wp_core,omitempty"`
-	UpdateLocks []models.UpdateLock `json:"update_locks,omitempty"`
-}
-
-type snapshotPluginInfo struct {
-	Slug   string `json:"slug"`
-	Name   string `json:"name"`
-	Latest string `json:"latest,omitempty"`
-}
-
 // buildCLISnapshot assembles the snapshot. Every list is sorted so that the
 // same data always serializes to the same bytes.
-func buildCLISnapshot() (*cliSnapshot, error) {
+func buildCLISnapshot() (*cliproto.Snapshot, error) {
 	managedServers, err := db.ListManagedServers()
 	if err != nil {
 		return nil, fmt.Errorf("servers: %w", err)
@@ -93,16 +41,16 @@ func buildCLISnapshot() (*cliSnapshot, error) {
 		return nil, fmt.Errorf("plugin info: %w", err)
 	}
 
-	snap := &cliSnapshot{
-		SchemaVersion: SnapshotSchemaVersion,
-		Servers:       []snapshotServer{},
-		Sites:         []snapshotSite{},
+	snap := &cliproto.Snapshot{
+		SchemaVersion: cliproto.SnapshotSchemaVersion,
+		Servers:       []cliproto.Server{},
+		Sites:         []cliproto.Site{},
 		Plugins:       []models.WPPlugin{},
-		PluginInfo:    []snapshotPluginInfo{},
+		PluginInfo:    []cliproto.PluginInfo{},
 	}
 
 	for _, s := range newAPIServers(managedServers) {
-		snap.Servers = append(snap.Servers, snapshotServer{
+		snap.Servers = append(snap.Servers, cliproto.Server{
 			ID:        s.ID,
 			Provider:  s.Provider,
 			Name:      s.Name,
@@ -113,9 +61,9 @@ func buildCLISnapshot() (*cliSnapshot, error) {
 	}
 
 	included := map[string]bool{}
-	for _, s := range overrideSpinupWPSites(sites) {
+	for _, s := range overrideSpinupWPSites(dropDeletedSpinupWPSites(sites)) {
 		included[s.ID] = true
-		site := snapshotSite{
+		site := cliproto.Site{
 			ID:             s.ID,
 			Provider:       s.Provider,
 			Domain:         s.Domain,
@@ -153,11 +101,35 @@ func buildCLISnapshot() (*cliSnapshot, error) {
 	})
 
 	for _, info := range infos {
-		snap.PluginInfo = append(snap.PluginInfo, snapshotPluginInfo{Slug: info.Slug, Name: info.Name, Latest: info.Version})
+		snap.PluginInfo = append(snap.PluginInfo, cliproto.PluginInfo{Slug: info.Slug, Name: info.Name, Latest: info.Version})
 	}
 	sort.Slice(snap.PluginInfo, func(i, j int) bool { return snap.PluginInfo[i].Slug < snap.PluginInfo[j].Slug })
 
 	return snap, nil
+}
+
+// dropDeletedSpinupWPSites drops SpinupWP sites that are no longer in the
+// cached SpinupWP site list. The SpinupWP sync only adds and updates
+// inventory rows, so the inventory can still hold sites deleted in
+// SpinupWP; the cached list is the source of truth for which exist. Without
+// a cached list (SpinupWP not configured), the inventory is used as is.
+func dropDeletedSpinupWPSites(sites []apiSite) []apiSite {
+	cached := []models.Site{}
+	if err := cache.ReadJSONCache("sites", &cached, -1); err != nil {
+		return sites
+	}
+	current := make(map[string]bool, len(cached))
+	for _, c := range cached {
+		current[utils.SpinupWPSiteUUID(c.ID)] = true
+	}
+	out := make([]apiSite, 0, len(sites))
+	for _, s := range sites {
+		if s.Provider == "spinupwp" && !current[s.ID] {
+			continue
+		}
+		out = append(out, s)
+	}
+	return out
 }
 
 // overrideSpinupWPSites drops SpinupWP sites whose domain also belongs to a
@@ -204,7 +176,7 @@ func CLISnapshotHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Add("Vary", "Accept-Encoding")
 	if t := refresh.LastRefresh(); !t.IsZero() {
-		w.Header().Set(RefreshedAtHeader, t.Format(time.RFC3339))
+		w.Header().Set(cliproto.RefreshedAtHeader, t.Format(time.RFC3339))
 	}
 
 	if etagMatches(r.Header.Get("If-None-Match"), etag) {

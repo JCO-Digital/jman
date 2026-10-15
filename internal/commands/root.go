@@ -2,6 +2,7 @@ package commands
 
 import (
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/mirror"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/spf13/cobra"
 )
@@ -32,8 +33,37 @@ var rootCmd = &cobra.Command{
 
 		verb.PrintErrorf(verb.Verbose, "Version: %s\n", config.RunData.Version)
 		verb.PrintErrorf(verb.Debug, "Verbosity: %s\n", verb.Get())
+
+		if !versionGateExempt[topLevelName(cmd)] {
+			if err := mirror.CheckVersion(); err != nil {
+				// main prints the error.
+				cmd.SilenceUsage, cmd.SilenceErrors = true, true
+				return err
+			}
+			mirror.UpdateNotice()
+		}
 		return nil
 	},
+}
+
+// versionGateExempt are the commands that still run when jman-api requires
+// a newer CLI: the ones needed to update, log in and out, and get help.
+var versionGateExempt = map[string]bool{
+	"update":                        true,
+	"login":                         true,
+	"logout":                        true,
+	"help":                          true,
+	"completion":                    true,
+	cobra.ShellCompRequestCmd:       true,
+	cobra.ShellCompNoDescRequestCmd: true,
+}
+
+// topLevelName returns the name of the top-level command cmd belongs to.
+func topLevelName(cmd *cobra.Command) string {
+	for cmd.HasParent() && cmd.Parent().HasParent() {
+		cmd = cmd.Parent()
+	}
+	return cmd.Name()
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
