@@ -1,6 +1,6 @@
 # Making the jman CLI a client of jman-api
 
-Status: **in progress** (design agreed 2026-10-15). Phases 1–4 are done; Phase 5 is still to do.
+Status: **in progress** (design agreed 2026-10-15). Phases 1–4 and the code part of Phase 5 are done; the release and the minimum-version bump are still to do.
 
 ## Why
 
@@ -124,7 +124,7 @@ The values go in headers because a `304` has no body, and because headers stay r
 | `vuln list/sites/core/backports` | Local scan via `internal/vuln` | `GET /api/vulns`, `/api/vulns/core`, `/api/vuln-backports`, formatted by `internal/vulnview`. `--slack` removed |
 | `ignore list/add/remove` | `db.*` directly | `/api/ignore` endpoints, which already exist |
 | `migrate-db` | Local `db.MigrateSplitDB` | Removed from the CLI. jman-api has its own |
-| `update` | GitHub release + minisign | Unchanged. The `build-pkg` variant is removed |
+| `update` | GitHub release + minisign | Unchanged, and in every build now that the `build-pkg` variant is removed |
 
 ## Phases
 
@@ -169,8 +169,9 @@ None of this changes existing behaviour, so it can ship on its own.
 
 ### Phase 5: distribution and rollout
 
-- Delete `aur/` and the `build-pkg` Makefile target, along with the build tag that excludes `update`.
-- Release, then raise `min_cli_version` to that release once internal users have moved to the GitHub build. The last AUR version keeps working against SpinupWP for anyone outside the team.
+- Done: deleted `aur/`, `scripts/update-aur.sh`, the AUR steps of the release workflow, the `build-pkg` Makefile target and the `noupdate` build tag, so every build has `jman update`.
+- To do: release, then raise `minCliVersion` in jman-api's config to that release once internal users have moved to the GitHub build. The last AUR version keeps working against SpinupWP for anyone outside the team.
+- To do: remove the `AUR_USERNAME`, `AUR_EMAIL` and `AUR_SSH_PRIVATE_KEY` secrets from the GitHub repository, which nothing uses any more.
 
 ## Risks
 

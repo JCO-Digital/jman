@@ -16,7 +16,6 @@
   - `vuln/`: Logic for scanning and reporting plugin vulnerabilities.
   - `api/`: Implementation of the REST API.
   - `monitor/`: Implementation of the uptime monitoring service.
-- `aur/`: Arch User Repository packaging files.
 - `docs/`: Supplemental documentation.
 
 ## Key Technologies
@@ -52,7 +51,7 @@
 
 ### Build System
 
-- **Makefile**: Provides targets for building all binaries (`build`), building for package managers without the update command (`build-pkg`), testing (`test`), and generating shell completions.
+- **Makefile**: Provides targets for building all binaries (`build`), testing (`test`), and generating shell completions. Releases are distributed only through GitHub, and `jman update` installs them.
 - **LDFlags**: Used during build to inject the application version into `internal/config.AppVersion`.
 
 ### Configuration
