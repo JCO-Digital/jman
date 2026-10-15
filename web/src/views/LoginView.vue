@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 
@@ -12,6 +13,21 @@ const password = ref("");
 const totp = ref("");
 const error = ref<string | null>(null);
 const isLoading = ref(false);
+
+// redirectTarget is where to go after logging in: the page that sent the
+// user here, if it is a path within the app.
+const redirectTarget = () => {
+	const r = route.query.redirect;
+	if (
+		typeof r === "string" &&
+		r.startsWith("/") &&
+		!r.startsWith("//") &&
+		!r.startsWith("/\\")
+	) {
+		return r;
+	}
+	return "/";
+};
 
 const handleLogin = async () => {
 	isLoading.value = true;
@@ -23,7 +39,7 @@ const handleLogin = async () => {
 			password.value,
 			totp.value || undefined,
 		);
-		router.push("/");
+		router.push(redirectTarget());
 	} catch (err: unknown) {
 		let message: string;
 		if (err instanceof Error && err.message) {

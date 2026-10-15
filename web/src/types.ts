@@ -762,6 +762,20 @@ export interface AgentToken {
 	created_by: string;
 }
 
+// A jman CLI token, issued to one device through the browser login.
+export interface CliToken {
+	id: number;
+	username: string;
+	device_name: string;
+	token_prefix: string;
+	created_at: string;
+	last_used_at: string;
+	// When the token expires unless it is used before then.
+	expires_at: string;
+	// True for the token the request was made with (never in the web UI).
+	current: boolean;
+}
+
 export interface CreateAgentTokenPayload {
 	server_id: string;
 	server_name: string;

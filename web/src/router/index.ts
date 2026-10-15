@@ -113,6 +113,11 @@ const router = createRouter({
 			name: "settings",
 			component: () => import("../views/SettingsView.vue"),
 		},
+		{
+			path: "/cli-login",
+			name: "cli-login",
+			component: () => import("../views/CliLoginView.vue"),
+		},
 	],
 });
 
@@ -132,7 +137,9 @@ router.beforeEach(async (to) => {
 	// Protected route: only authentication is checked here; role-based access
 	// control is enforced inside each view via canEdit/canExecute/canAdmin.
 	if (!authStore.isAuthenticated) {
-		return { name: "login" };
+		// Come back here after logging in, e.g. to approve a CLI login.
+		const query = to.fullPath === "/" ? {} : { redirect: to.fullPath };
+		return { name: "login", query };
 	}
 
 	return true;
