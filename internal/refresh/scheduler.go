@@ -93,7 +93,7 @@ func slowInterval() time.Duration {
 // site list, the slow tick's per-site work), so it's the one failure mode
 // in this package worth alerting on.
 func runFastTick() {
-	if _, _, err := cache.RefreshServersAndSites(fastTTL()); err != nil {
+	if _, err := RefreshServersAndSites(); err != nil {
 		msg := "🚨 jman-api failed to refresh servers/sites from SpinupWP: " + err.Error()
 		log.Println(msg)
 		_ = slack.SendMessage(msg, true)
@@ -178,15 +178,12 @@ func siteReportDue(now time.Time, lastDate, reportTime string) bool {
 	return !now.Before(due)
 }
 
-// fastTTL/slowTTL are the TTLs passed to the cache layer's refresh
-// functions. A TTL of 0 forces a fetch (see cache.ReadJSONCache), which is
-// what a scheduler wants: the tick interval itself already governs how
-// often data is refreshed, so each tick should unconditionally fetch
-// rather than be skipped by the cache's own TTL check.
-func fastTTL() time.Duration {
-	return 0
-}
-
+// slowTTL is the TTL passed to the cache layer's refresh functions. A TTL
+// of 0 forces a fetch (see cache.ReadJSONCache), which is what a scheduler
+// wants: the tick interval itself already governs how often data is
+// refreshed, so each tick should unconditionally fetch rather than be
+// skipped by the cache's own TTL check. The fast tick always fetches too
+// (see RefreshServersAndSites).
 func slowTTL() time.Duration {
 	return 0
 }

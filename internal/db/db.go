@@ -642,6 +642,23 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// cli_tokens are the jman CLI's per-device API tokens, issued
+			// through the browser login. Only a SHA-256 hash of each token
+			// is stored. A token expires after a period without use (see
+			// cli_token_repo.go).
+			Name: "cli_tokens",
+			Columns: map[string]string{
+				"id":            "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"username":      "TEXT NOT NULL",
+				"token_hash":    "TEXT NOT NULL",
+				"token_prefix":  "TEXT NOT NULL",
+				"device_name":   "TEXT NOT NULL",
+				"token_version": "INTEGER NOT NULL",
+				"created_at":    "DATETIME NOT NULL",
+				"last_used_at":  "DATETIME NOT NULL",
+			},
+		},
+		{
 			Name: "site_disk_usage",
 			Columns: map[string]string{
 				"site_id":     "TEXT NOT NULL",
@@ -906,6 +923,14 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_refresh_tokens_family_id ON refresh_tokens(family_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_cli_tokens_token_hash ON cli_tokens(token_hash);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_cli_tokens_username ON cli_tokens(username);")
 	if err != nil {
 		return err
 	}

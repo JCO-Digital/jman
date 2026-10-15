@@ -17,6 +17,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.HandleFunc("POST /api/auth/login", LoginHandler(&usersCfg, limiter))
 	mux.HandleFunc("POST /api/auth/refresh", RefreshHandler(&usersCfg))
 	mux.HandleFunc("POST /api/auth/logout", LogoutHandler)
+	mux.HandleFunc("POST /api/cli/token", CLITokenHandler(&usersCfg, limiter))
 
 	// --- Protected routes (JWT required with level check) ---
 	basic := func(h http.HandlerFunc) http.Handler {
@@ -31,6 +32,14 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	execute := func(h http.HandlerFunc) http.Handler {
 		return AuthMiddleware(&usersCfg, RequireLevel(config.LevelExecute)(h))
 	}
+	// --- jman CLI ---
+	mux.Handle("POST /api/cli/authorize", basic(CLIAuthorizeHandler))
+	mux.Handle("GET /api/cli/tokens", basic(ListCLITokensHandler))
+	mux.Handle("DELETE /api/cli/tokens/{id}", basic(DeleteCLITokenHandler))
+	mux.Handle("DELETE /api/cli/token", basic(RevokeCurrentCLITokenHandler))
+	mux.Handle("GET /api/cli/snapshot", basic(CLISnapshotHandler))
+	mux.Handle("POST /api/refresh", execute(RefreshDataHandler))
+
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
 	mux.Handle("GET /api/plugininfo", basic(PluginInfoHandler))
 	mux.Handle("GET /api/servers", basic(ServersHandler))
@@ -200,6 +209,7 @@ func HealthHandler(version string) http.HandlerFunc {
 		WriteJSON(w, http.StatusOK, map[string]string{
 			"status":  "ok",
 			"version": version,
+			"webUrl":  config.Cfg.WebURL,
 		})
 	}
 }

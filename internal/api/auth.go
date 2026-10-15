@@ -23,11 +23,15 @@ type contextKey string
 
 const authClaimsKey contextKey = "authClaims"
 
-// AuthClaims holds the authenticated user's identity extracted from a valid JWT.
+// AuthClaims holds the authenticated user's identity extracted from a valid
+// JWT or CLI token.
 type AuthClaims struct {
 	Username    string
 	DisplayName string
 	Level       config.UserLevel
+	// CLITokenID is the CLI token the request was made with, or 0 for a
+	// web session (JWT).
+	CLITokenID int64
 }
 
 // GetAuthClaims retrieves the AuthClaims from the request context.
@@ -411,6 +415,11 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 			return
 		}
 
+		if strings.HasPrefix(rawToken, db.CLITokenPrefix) {
+			authenticateCLIToken(usersCfg, rawToken, next, w, r)
+			return
+		}
+
 		claims, err := parseToken(usersCfg, rawToken)
 		if err != nil {
 			// Distinguish expired tokens for a friendlier client experience.
@@ -448,4 +457,50 @@ func AuthMiddleware(usersCfg *config.UsersConfig, next http.Handler) http.Handle
 		ctx := contextWithClaims(r.Context(), authClaims)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// authenticateCLIToken validates a jman CLI token and serves the request as
+// its user. The user's level, including the 2FA downgrade, is looked up on
+// every request rather than stored with the token, so role changes apply
+// at once. A credential change (TokenVersion) revokes CLI tokens like it
+// revokes web sessions.
+func authenticateCLIToken(usersCfg *config.UsersConfig, rawToken string, next http.Handler, w http.ResponseWriter, r *http.Request) {
+	t, err := db.GetCLIToken(rawToken)
+	if err != nil {
+		if err != db.ErrCLITokenInvalid {
+			verb.LogPrintf(verb.Normal, "CLI token lookup failed: %v", err)
+		}
+		WriteError(w, http.StatusUnauthorized, "Invalid or expired CLI token")
+		return
+	}
+
+	usersCfg.LockRead()
+	user := config.FindUser(usersCfg, t.Username)
+	var authClaims *AuthClaims
+	revoked := false
+	if user != nil {
+		revoked = t.TokenVersion != user.TokenVersion
+		authClaims = &AuthClaims{
+			Username:    user.Username,
+			DisplayName: user.DisplayName,
+			Level:       effectiveLevel(user),
+			CLITokenID:  t.ID,
+		}
+	}
+	usersCfg.UnlockRead()
+
+	if user == nil {
+		WriteError(w, http.StatusUnauthorized, "User no longer exists")
+		return
+	}
+	if revoked {
+		WriteError(w, http.StatusUnauthorized, "Token revoked")
+		return
+	}
+
+	if err := db.TouchCLIToken(t); err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+	}
+
+	next.ServeHTTP(w, r.WithContext(contextWithClaims(r.Context(), authClaims)))
 }

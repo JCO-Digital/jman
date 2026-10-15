@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/refresh"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
@@ -471,13 +471,14 @@ func DeleteServerHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SyncSpinupWPHandler manually triggers a sync of SpinupWP servers and sites.
+// A sync already in progress (e.g. the scheduler's) is joined, not repeated.
 func SyncSpinupWPHandler(w http.ResponseWriter, r *http.Request) {
 	if config.Cfg.TokenSpinup == "" {
 		WriteError(w, http.StatusBadRequest, "SpinupWP API token is not configured")
 		return
 	}
 
-	servers, sites, err := cache.RefreshServersAndSites(0)
+	result, err := refresh.RefreshServersAndSites()
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SyncSpinupWPHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Sync failed: %v", err))
@@ -486,8 +487,24 @@ func SyncSpinupWPHandler(w http.ResponseWriter, r *http.Request) {
 
 	WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
-		"servers": len(servers),
-		"sites":   len(sites),
-		"message": fmt.Sprintf("Successfully synced %d servers and %d sites from SpinupWP", len(servers), len(sites)),
+		"servers": result.Servers,
+		"sites":   result.Sites,
+		"message": fmt.Sprintf("Successfully synced %d servers and %d sites from SpinupWP", result.Servers, result.Sites),
 	})
+}
+
+// RefreshDataHandler refreshes servers and sites from SpinupWP for the CLI and
+// returns when it has finished. A refresh already in progress is joined, and
+// one that finished less than refresh.ManualRefreshMinInterval ago is
+// reused (skipped: true) instead of fetching again.
+//
+//	POST /api/refresh
+func RefreshDataHandler(w http.ResponseWriter, r *http.Request) {
+	result, err := refresh.RequestRefresh()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "RefreshDataHandler error: %v", err)
+		WriteError(w, http.StatusBadGateway, fmt.Sprintf("Refresh failed: %v", err))
+		return
+	}
+	WriteJSON(w, http.StatusOK, result)
 }

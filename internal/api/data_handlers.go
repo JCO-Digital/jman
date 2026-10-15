@@ -101,6 +101,13 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	WriteJSON(w, http.StatusOK, newAPIServers(managedServers))
+}
+
+// newAPIServers builds the /api/servers list from the inventory servers,
+// enriched with the SpinupWP cache details for SpinupWP servers, plus
+// SpinupWP servers not yet synced into the inventory, sorted by name.
+func newAPIServers(managedServers []models.ManagedServer) []apiServer {
 	cached := []models.Server{}
 	_ = cache.ReadJSONCache("servers", &cached, -1)
 	cachedByUUID := make(map[string]*models.Server, len(cached))
@@ -149,7 +156,7 @@ func ServersHandler(w http.ResponseWriter, r *http.Request) {
 		return servers[i].ID < servers[j].ID
 	})
 
-	WriteJSON(w, http.StatusOK, servers)
+	return servers
 }
 
 // apiSite is the /api/sites representation of a site: the inventory record

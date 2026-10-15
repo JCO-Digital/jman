@@ -79,6 +79,17 @@ type AppConfig struct {
 	// WPCLIHostTimeouts raises the WP-CLI timeout for slow SSH hosts, such
 	// as WP Engine's SSH gateway. See WPCLIHostTimeout.
 	WPCLIHostTimeouts []WPCLIHostTimeout `toml:"wpcliHostTimeouts" mapstructure:"wpcliHostTimeouts"`
+
+	// WebURL is the web UI's base URL, e.g. "https://jman.example.com".
+	// jman-api reports it in GET /api/health so the CLI can open the
+	// browser login with only the API URL configured.
+	WebURL string `toml:"webUrl" mapstructure:"webUrl"`
+	// MinCLIVersion is the oldest jman CLI version jman-api serves. Older
+	// CLIs refuse to run until updated. Empty means no minimum.
+	MinCLIVersion string `toml:"minCliVersion" mapstructure:"minCliVersion"`
+	// LatestCLIVersion is the newest jman CLI release; older CLIs print an
+	// update notice. Defaults to jman-api's own version.
+	LatestCLIVersion string `toml:"latestCliVersion" mapstructure:"latestCliVersion"`
 }
 
 // WPCLIHostTimeout sets a minimum WP-CLI timeout, in minutes, for every SSH
@@ -186,6 +197,9 @@ func loadConfig() error {
 		"allowedOrigins":             "ALLOWEDORIGINS",
 		"trustedProxies":             "TRUSTEDPROXIES",
 		"ignoreSites":                "IGNORESITES",
+		"webUrl":                     "WEBURL",
+		"minCliVersion":              "MINCLIVERSION",
+		"latestCliVersion":           "LATESTCLIVERSION",
 	}
 
 	for key, envVar := range envBindings {
