@@ -805,7 +805,12 @@ export interface ReportColumn {
 	type: ReportColumnType;
 }
 
-export type ReportParamType = "daterange" | "enddate";
+export type ReportParamType = "daterange" | "enddate" | "select";
+
+export interface ReportParamOption {
+	value: string;
+	label: string;
+}
 
 export interface ReportParamDef {
 	key: string;
@@ -813,6 +818,7 @@ export interface ReportParamDef {
 	label: string;
 	required: boolean;
 	default?: string;
+	options?: ReportParamOption[];
 }
 
 export interface ReportMeta {

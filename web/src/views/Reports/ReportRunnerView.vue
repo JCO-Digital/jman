@@ -36,6 +36,14 @@ const hasDateRange = computed(
 const endDateParam = computed(() =>
 	report.value?.params.find((p) => p.type === "enddate"),
 );
+const selectParams = computed(
+	() => report.value?.params.filter((p) => p.type === "select") ?? [],
+);
+// Values of the report's select params, keyed by param key.
+const selectValues = ref<Record<string, string>>({});
+const missingRequired = computed(() =>
+	selectParams.value.some((p) => p.required && !selectValues.value[p.key]),
+);
 
 // Defaults depend on which param type the report declares, so they can only
 // be set once its metadata has loaded — mirrors the backend's own defaults
@@ -73,6 +81,7 @@ const runReport = async () => {
 		result.value = await reportsStore.runReport(props.id, {
 			start: start.value,
 			end: end.value,
+			...selectValues.value,
 		});
 		sortKey.value = null;
 		currentPage.value = 1;
@@ -135,11 +144,17 @@ const handleRowsPerPageUpdate = (newRowsPerPage: number) => {
 
 const handleExport = () => {
 	if (!result.value) return;
-	const dateSuffix = start.value ? `${start.value}-${end.value}` : end.value;
+	const suffix = [
+		...selectParams.value.map((p) => selectValues.value[p.key]),
+		start.value,
+		end.value,
+	]
+		.filter(Boolean)
+		.join("-");
 	exportReportToCsv(
 		result.value.columns,
 		result.value.rows,
-		`${props.id}-${dateSuffix}.csv`,
+		suffix ? `${props.id}-${suffix}.csv` : `${props.id}.csv`,
 	);
 };
 
@@ -181,6 +196,30 @@ const goBack = () => {
 			</p>
 
 			<div class="controls-row items-center">
+				<div
+					v-for="param in selectParams"
+					:key="param.key"
+					class="form-group"
+				>
+					<label :for="`report-param-${param.key}`">{{
+						param.label
+					}}</label>
+					<select
+						:id="`report-param-${param.key}`"
+						v-model="selectValues[param.key]"
+					>
+						<option value="" disabled>
+							Select {{ param.label.toLowerCase() }}…
+						</option>
+						<option
+							v-for="option in param.options ?? []"
+							:key="option.value"
+							:value="option.value"
+						>
+							{{ option.label }}
+						</option>
+					</select>
+				</div>
 				<template v-if="hasDateRange">
 					<div class="form-group">
 						<label for="report-start">Start date</label>
@@ -199,7 +238,7 @@ const goBack = () => {
 				</div>
 				<button
 					class="btn btn-primary"
-					:disabled="isRunning"
+					:disabled="isRunning || missingRequired"
 					@click="runReport"
 				>
 					Run Report
@@ -242,7 +281,11 @@ const goBack = () => {
 								:colspan="result.columns.length"
 								class="empty-state"
 							>
-								No data for the selected range.
+								{{
+									selectParams.length > 0
+										? "No matching results."
+										: "No data for the selected range."
+								}}
 							</td>
 						</tr>
 						<tr v-for="(row, index) in paginatedRows" :key="index">

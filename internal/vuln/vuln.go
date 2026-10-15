@@ -445,11 +445,21 @@ func PluginFixedInOnSite(siteID, plugin, version string, matcher *db.VulnIgnoreM
 	if report == nil {
 		return ""
 	}
-	fixedIn := ""
+	var vulns []models.Vulnerability
 	for _, v := range report.Vulnerabilities {
-		if v.Suppressed {
-			continue
+		if !v.Suppressed {
+			vulns = append(vulns, v)
 		}
+	}
+	return FixedIn(vulns)
+}
+
+// FixedIn returns the lowest version that fixes every given vulnerability,
+// as recorded by the vulnerability database. It returns "" if the list is
+// empty or if some vulnerability has no recorded fix.
+func FixedIn(vulns []models.Vulnerability) string {
+	fixedIn := ""
+	for _, v := range vulns {
 		op := v.Operator
 		if op.MaxVersion == nil || op.MaxOperator == nil || *op.MaxOperator != "lt" {
 			return ""
