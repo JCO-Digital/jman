@@ -1,6 +1,28 @@
 # Changelog
 
-## 6.12.0 (2026-10-15)
+## 7.0.0 (2026-10-15)
+
+#### Features
+
+- cli: run commands on jman-api data and jobs (BREAKING CHANGE) (89aeac1)
+- cli: API client layer, local mirror and jman login/logout/refresh (0ec44a7)
+- web: approve jman CLI logins and manage CLI tokens (66fb86d)
+- api: groundwork for the jman CLI as an API client (8382e30)
+
+#### Refactor
+
+- cli: drop the database from the jman CLI (BREAKING CHANGE) (c894fe6)
+
+#### Documentation
+
+- mark phase 1 of the CLI API client plan done (3ed2160)
+- plan for making the jman CLI a client of jman-api (11699af)
+
+#### Maintenance
+
+- drop the AUR package and the build without `jman update` (BREAKING CHANGE) (4ad74bb)
+
+## v6.12.0 (2026-10-15)
 
 #### Features
 
