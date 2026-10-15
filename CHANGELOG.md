@@ -1,6 +1,12 @@
 # Changelog
 
-## 6.11.0 (2026-10-14)
+## 6.12.0 (2026-10-15)
+
+#### Features
+
+- reports: plugin vulnerability report (23b0f62)
+
+## v6.11.0 (2026-10-14)
 
 #### Features
 
