@@ -32,8 +32,6 @@ var vulnCmd = &cobra.Command{
 			return err
 		}
 		if vulnSlack {
-			// main prints the error.
-			cmd.SilenceUsage, cmd.SilenceErrors = true, true
 			return errVulnSlack
 		}
 		return nil

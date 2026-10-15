@@ -1,6 +1,11 @@
 package wpcli
 
-import "testing"
+import (
+	"testing"
+	"time"
+
+	"github.com/JCO-Digital/jman/internal/models"
+)
 
 func TestParseLowestAdminUserID(t *testing.T) {
 	cases := []struct {
@@ -52,5 +57,33 @@ func TestParseLowestAdminUserID(t *testing.T) {
 				t.Fatalf("expected %d, got %d", tc.want, got)
 			}
 		})
+	}
+}
+
+type fakeAdminUsers struct {
+	id        int
+	updatedAt string
+	saved     int
+}
+
+func (f *fakeAdminUsers) GetSiteAdminUser(string) (int, string, bool, error) {
+	return f.id, f.updatedAt, f.id != 0, nil
+}
+
+func (f *fakeAdminUsers) SaveSiteAdminUser(_ string, id int) error {
+	f.saved = id
+	return nil
+}
+
+func TestResolveAdminUserUsesCache(t *testing.T) {
+	old := AdminUsers
+	t.Cleanup(func() { AdminUsers = old })
+
+	cache := &fakeAdminUsers{id: 7, updatedAt: time.Now().UTC().Format(time.RFC3339)}
+	AdminUsers = cache
+	// A fresh cached ID is used without running WP-CLI (the site has no
+	// SSH target, so a lookup would fail and return 0).
+	if got := resolveAdminUser(models.CliSite{ID: "s", Name: "s", SSH: "invalid host"}); got != 7 {
+		t.Errorf("resolveAdminUser = %d, want the cached 7", got)
 	}
 }

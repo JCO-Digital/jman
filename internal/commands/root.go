@@ -16,9 +16,13 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "jman",
 	Short: "A CLI tool for managing WordPress projects",
-	Long:  `jman is a command-line utility designed to manage WordPress sites hosted on SpinupWP.`,
+	Long:  `jman is a command-line utility for managing the WordPress sites in jman-api. Run "jman login <api-url>" to get started.`,
 	Args:  cobra.NoArgs,
+	// main prints errors, once.
+	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		// The arguments were valid, so a later error isn't a usage mistake.
+		cmd.SilenceUsage = true
 
 		switch {
 		case flagDebug:
@@ -36,8 +40,6 @@ var rootCmd = &cobra.Command{
 
 		if !versionGateExempt[topLevelName(cmd)] {
 			if err := mirror.CheckVersion(); err != nil {
-				// main prints the error.
-				cmd.SilenceUsage, cmd.SilenceErrors = true, true
 				return err
 			}
 			mirror.UpdateNotice()

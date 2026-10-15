@@ -1,6 +1,6 @@
 # Making the jman CLI a client of jman-api
 
-Status: **in progress** (design agreed 2026-10-15). Phases 1–3 are done; Phases 4 and 5 are still to do.
+Status: **in progress** (design agreed 2026-10-15). Phases 1–4 are done; Phase 5 is still to do.
 
 ## Why
 
@@ -160,13 +160,12 @@ None of this changes existing behaviour, so it can ship on its own.
 - `ignore` reads and writes jman-api's ignore list. It used to write to the laptop's own `inventory.db`, so entries added with the CLI never reached jman-api.
 - `wp`, `admin`, `mods` and `setup mu/compat` still run over SSH, with their sites from the local copy.
 
-### Phase 4: dependency cleanup
+### Phase 4: dependency cleanup (done)
 
-- Remove `db.InitInventory` from `cmd/jman/main.go`, and delete `fetch` and `migrate-db`.
-- `internal/wpcli` caches each site's admin user ID in `inventory.db` (`resolveAdminUser`). Make that cache pluggable so jman-api keeps it and the CLI looks the ID up live or skips it.
-- Split shared packages so `go list -deps ./cmd/jman` contains no `internal/db`, `internal/fetch/*`, `internal/cache` (the API-side parts), `internal/sitestate` or `modernc.org/sqlite`. `internal/vuln` and `internal/slack` should also drop out.
-- Add a CI check that fails if `./cmd/jman` depends on `internal/db`.
-- Remove `tokenSpinup` and the other fetch-only keys from the CLI config docs. Leftover keys in old config files are ignored.
+- `fetch` and `migrate-db` are gone, and the CLI no longer opens `inventory.db` or migrates a legacy `jman.db`. Old local data (`inventory.db`, the JSON caches) is left where it is on laptops; nothing reads it any more.
+- `internal/wpcli` caches each site's admin user ID through an `AdminUserCache` interface. jman-api plugs in `db.AdminUserCache`; the CLI and jman-agent leave it unset and look the ID up live, as jman-agent effectively did already.
+- `go list -deps ./cmd/jman` no longer contains `internal/db`, `internal/cache`, `internal/fetch/*`, `internal/sitestate`, `internal/vuln`, `internal/slack` or `modernc.org/sqlite`. `cmd/jman/deps_test.go` fails `make test` (and so CI) if any of them, or `internal/api`, comes back.
+- `README.md`, `README_API.md` and `AGENTS.md` describe the login, the local copy, the new settings and endpoints, and drop `tokenSpinup` and `jman fetch` from the CLI docs.
 
 ### Phase 5: distribution and rollout
 
@@ -182,7 +181,7 @@ None of this changes existing behaviour, so it can ship on its own.
 
 ## Verification
 
-- `go list -deps ./cmd/jman | grep -E 'internal/db|sqlite'` is empty.
+- `go list -deps ./cmd/jman | grep -E 'internal/db|sqlite'` is empty (`cmd/jman/deps_test.go`).
 - With the API stopped, read-only commands work from the mirror with a stale-data warning, and API-only commands fail with a clear message without hanging.
 - Two concurrent `jman refresh` calls cause one SpinupWP fetch, and a third within 60s causes none.
 - A token unused for 90 days is rejected, and a revoked token is rejected on the next request.

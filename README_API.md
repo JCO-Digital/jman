@@ -1,6 +1,6 @@
 # jman-api
 
-`jman-api` is a lightweight REST API that serves the data cached by the `jman` CLI and provides management endpoints for site monitoring. This is useful for building dashboards or exposing your SpinupWP/Plugin data to other local services without needing to re-fetch from external APIs.
+`jman-api` is the backend of jman: it keeps the SpinupWP, plugin and vulnerability data, runs plugin and core updates as jobs, monitors uptime, and serves all of it to the web UI and the `jman` CLI over a REST API.
 
 All data endpoints require JWT authentication. The API will refuse to start unless a valid `users.toml` configuration file is present.
 
@@ -245,6 +245,28 @@ Authorization: Bearer <token>
 - `PATCH /api/ignore/{id}` — Updates an existing ignore entry.
 - `DELETE /api/ignore/{id}` — Removes an ignore entry.
 
+### jman CLI Endpoints
+
+The jman CLI authenticates with a per-device token (`Authorization: Bearer jman_cli_…`) instead of a JWT. It is issued through the browser: `jman login` opens `<webUrl>/cli-login`, the logged-in user approves it, and the CLI exchanges the resulting one-time code (with a PKCE verifier) for the token. A CLI token has its user's current level, including the downgrade without 2FA, and expires after 90 days without use.
+
+- `POST /api/cli/authorize` — Approves a CLI login for the logged-in web user and returns a one-time code. Web sessions only. Body: `{"challenge": "<S256 PKCE challenge>", "device_name": "..."}`.
+- `POST /api/cli/token` — Public. Exchanges `{"code", "verifier"}` for a CLI token.
+- `GET /api/cli/tokens` — The user's CLI tokens; `?all=true` lists everyone's (admin).
+- `DELETE /api/cli/tokens/{id}` — Revokes one of the user's tokens (admins: anyone's).
+- `DELETE /api/cli/token` — Revokes the token the request is made with (`jman logout`).
+- `GET /api/cli/snapshot` — Servers, sites (with SSH details, core version and update locks), plugins and plugin names in one document, for the CLI's local copy. Supports `If-None-Match` and gzip. A manually added site replaces a SpinupWP site with the same domain.
+- `POST /api/refresh` — Execute level. Refreshes servers and sites from SpinupWP and returns when done; a refresh that finished less than a minute ago is reused (`"skipped": true`).
+
+Every response carries `X-Jman-Latest-CLI-Version` and, if configured, `X-Jman-Min-CLI-Version`. The CLI refuses to run below the minimum and suggests `jman update` when a newer release exists.
+
+Related settings in jman-api's `config.toml`:
+
+```toml
+webUrl = "https://jman.example.com"  # the web UI's address, where CLI logins are approved (required for `jman login`)
+minCliVersion = "6.12.0"             # oldest CLI allowed (optional)
+latestCliVersion = "6.12.0"          # newest CLI release (optional, defaults to jman-api's version)
+```
+
 ### Monitoring & Incident Endpoints
 
 - `GET /api/monitor/history?hours=48` — Returns aggregated status history for all sites.
@@ -266,7 +288,7 @@ Authorization: Bearer <token>
 
 These endpoints do not require authentication:
 
-- `GET /api/health` — API health status and version.
+- `GET /api/health` — API health status, version and `webUrl`.
 
 Every response also carries the running version in an `X-Jman-Version` header. The web UI reloads itself when it changes, so open tabs pick up a new deploy.
 - `POST /api/auth/login` — Authentication.
@@ -318,10 +340,8 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
   report is identical to one already sent are skipped.
 
 If you have an external cron or systemd-timer job running `jman fetch` or
-`jman vuln sites --slack` against this host, remove it — `jman-api` now performs both of
-these internally. Leaving the old jobs in place is harmless but redundant (they'd compete
-for the same limited SSH/wp-cli concurrency, and would send Slack messages without the
-cross-run dedup `jman-api` gets from having `api.db` open).
+`jman vuln sites --slack` against this host, remove it: `jman-api` does both itself, and
+current `jman` versions no longer have either.
 
 Configuration (in `config.toml` or as `JMAN_*` environment variables):
 
@@ -359,8 +379,8 @@ a daily reminder while it lasts and a message when it recovers.
 | `agentServerStaleMinutes` | `JMAN_AGENTSERVERSTALEMINUTES` | `30`    | Warn when a server's agent hasn't called in for this long.                                        |
 | `agentSiteStaleMinutes`   | `JMAN_AGENTSITESTALEMINUTES`   | `180`   | Warn when an agent site's WordPress data hasn't been collected successfully for this long.        |
 
-The `jman fetch` CLI command still works exactly as before for manual/ad-hoc refreshes —
-only the automatic external-cron dependency has been removed.
+For an ad-hoc refresh of servers and sites, use `jman refresh` (execute level) or the
+SpinupWP sync in the web UI.
 
 ## Plugin Management and Core Updates
 

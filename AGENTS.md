@@ -5,7 +5,7 @@
 ## Project Structure
 
 - `cmd/`: Entry points for various binaries.
-  - `jman/`: The main CLI tool.
+  - `jman/`: The main CLI tool, a client of `jman-api`.
   - `jman-api/`: A REST API server for accessing cached data, in-process uptime monitoring, and incident management.
   - `jman-agent/`: An agent running on managed servers for disk and config reporting.
   - `gen-keys/` & `sign-binaries/`: Internal tools for release signing and security.
@@ -31,8 +31,8 @@
 
 ### 1. Centralized Management (`jman`)
 
-- Fetches and caches server/site data from SpinupWP.
-- Executes commands across multiple sites (bulk operations).
+- Gets server/site/plugin data from `jman-api` (`internal/client`, `internal/mirror`) and keeps a local JSON copy; logs in through the browser (`jman login`). It must not link the database code (`cmd/jman/deps_test.go`).
+- Executes commands across multiple sites (bulk operations); plugin and core changes run as `jman-api` jobs.
 - Manages plugins, WordPress core updates, and admin users.
 - Generates WP-CLI and SSH alias files.
 
@@ -57,7 +57,7 @@
 
 ### Configuration
 
-- **Main Config**: `jman` uses a TOML file (typically `~/.config/jman/config.toml`) managed via `viper`. Supports `slackChannel`, `slackMonitorChannel`, and `slackTasksChannel`.
+- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`.
 - **API Users**: `jman-api` uses a separate `users.toml` for authentication, storing bcrypt-hashed passwords and TOTP secrets.
 - **XDG Support**: Follows XDG Base Directory Specification for configuration and data storage.
 
