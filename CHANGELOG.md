@@ -1,6 +1,14 @@
 # Changelog
 
-## 7.0.0 (2026-10-15)
+## 7.1.0 (2026-10-15)
+
+#### Features
+
+- cli: add --yes to skip confirmations (4b44ed4)
+- cli: skip the site confirmation for read-only commands (3ab8670)
+- cli: clearer usage errors, and plugin info for all plugins (6a85132)
+
+## v7.0.0 (2026-10-15)
 
 #### Features
 
