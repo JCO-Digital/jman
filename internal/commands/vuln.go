@@ -46,6 +46,7 @@ var vulnCmd = &cobra.Command{
 var vulnListCmd = &cobra.Command{
 	Use:   "list [site-search]",
 	Short: "List vulnerabilities (vulnerability-centric)",
+	Args:  usageArgs,
 	Long:  `Lists vulnerabilities and the sites they affect. If site-search is provided, only sites whose domain contains it are shown, and --cvss is ignored.`,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {

@@ -404,3 +404,42 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 		Author:  info.Author,
 	}, nil
 }
+
+// PluginDetails is a plugin as `wp plugin list` describes it.
+type PluginDetails struct {
+	Slug          string `json:"name"`
+	Title         string `json:"title"`
+	Version       string `json:"version"`
+	Status        string `json:"status"`
+	Author        string `json:"author"`
+	UpdateVersion string `json:"update_version"`
+}
+
+// GetPluginDetails returns the details of every plugin on a site with one
+// `wp plugin list` call. WP-CLI versions without the author field are
+// retried without it.
+func GetPluginDetails(site models.CliSite) ([]PluginDetails, error) {
+	fields := "name,title,version,status,author,update_version"
+	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}
+	res, err := RunWP(opts, "plugin", "list", "--fields="+fields, "--format=json")
+	if err != nil && strings.Contains(res.Error, "Invalid field") {
+		res, err = RunWP(opts, "plugin", "list", "--fields=name,title,version,status,update_version", "--format=json")
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to list plugins: %w (stderr: %s)", err, res.Error)
+	}
+	return parsePluginDetails(res.Output)
+}
+
+func parsePluginDetails(output string) ([]PluginDetails, error) {
+	output = strings.TrimSpace(output)
+	idx := strings.Index(output, "[")
+	if idx == -1 {
+		return nil, fmt.Errorf("no valid JSON array found in output")
+	}
+	var details []PluginDetails
+	if err := json.NewDecoder(strings.NewReader(output[idx:])).Decode(&details); err != nil {
+		return nil, fmt.Errorf("failed to parse plugin list JSON: %w", err)
+	}
+	return details, nil
+}

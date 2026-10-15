@@ -66,8 +66,10 @@ func filterPlugins(plugins []models.WPPluginData, query string) []models.WPPlugi
 }
 
 // PromptSearch finds the sites matching query among sites and asks the
-// user to confirm or pick from them.
-func PromptSearch(all []models.CliSite, query string) ([]models.CliSite, error) {
+// user to pick from them, or, for a single match, to confirm it. With
+// confirmSingle false (for read-only commands), a single match is used
+// without asking.
+func PromptSearch(all []models.CliSite, query string, confirmSingle bool) ([]models.CliSite, error) {
 	if query == "" {
 		return []models.CliSite{}, fmt.Errorf("no query provided")
 	}
@@ -82,6 +84,10 @@ func PromptSearch(all []models.CliSite, query string) ([]models.CliSite, error) 
 
 	if len(sites) == 1 {
 		site := sites[0]
+		if !confirmSingle {
+			verb.PrintErrorf(verb.Verbose, "Found site: %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+			return sites, nil
+		}
 		verb.PrintErrorf(verb.Quiet, "Found site: %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 		verb.PrintErrorf(verb.Quiet, "Do you want to run the command on this site? [Y/n]: ")
 		response, err := reader.ReadString('\n')

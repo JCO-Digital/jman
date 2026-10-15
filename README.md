@@ -170,6 +170,12 @@ jman --fresh search mysite   # or check jman-api before any one command
 | `ignore` | Manage unified ignore list for monitoring and vulnerabilities.        |
 | `update` | Check for and install updates for `jman` or its sidecar binaries.     |
 
+When a target matches one site, read-only commands (`plugin list`, `plugin info`, `core version`, `core check`) run on it straight away, and commands that change sites ask you to confirm. When it matches several sites, you choose which ones. `--yes` (`-y`) skips all of this and runs on every matching site, which is useful in scripts:
+
+```bash
+jman -y plugin update prod-server akismet
+```
+
 ### Examples
 
 **Run WP-CLI on a site:**
@@ -182,6 +188,13 @@ jman wp mysite.com plugin list --status=active
 
 ```bash
 jman plugin install mysite.com akismet
+```
+
+**Show plugin details (name, version, status, author, available update):**
+
+```bash
+jman plugin info mysite.com akismet   # one plugin
+jman plugin info mysite.com           # every plugin on the site
 ```
 
 **Create an admin user:**

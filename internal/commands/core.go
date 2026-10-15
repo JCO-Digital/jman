@@ -15,16 +15,14 @@ var (
 )
 
 var coreCmd = &cobra.Command{
-	Use:   "core [check|update|version] <target>",
+	Use:   "core <check|update|version> <target>",
 	Short: "Manage WordPress core.",
 	Long: `Check for core updates, update core, or show the installed core version on target sites.
 
 'check' and 'update' go through jman-api and need the execute level; updates run as jman-api jobs that jman waits for. 'version' shows the version jman-api last recorded.
 
 Updates go to the latest minor release unless --major is given. A major update on an update-locked site also needs --allow-major.`,
-	Args:          cobra.ExactArgs(2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Args: usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return []string{"check", "update", "version"}, cobra.ShellCompDirectiveNoFileComp
@@ -50,7 +48,11 @@ func coreCommand(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("invalid operation: %s. Use 'check', 'update', or 'version'", operation)
 	}
 
-	sites, m, err := promptSites(cmd, target)
+	access := readOnly
+	if operation == "update" {
+		access = changesSite
+	}
+	sites, m, err := promptSites(cmd, target, access)
 	if err != nil {
 		return err
 	}

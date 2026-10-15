@@ -41,20 +41,16 @@ in the system keyring (or a private file if there is no keyring).
 
 The API URL is saved in the config file. It is required the first time and
 optional afterwards; passing a different URL switches to that API.`,
-	Args:          cobra.MaximumNArgs(1),
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	RunE:          runLogin,
+	Args: usageArgs,
+	RunE: runLogin,
 }
 
 var logoutCmd = &cobra.Command{
-	Use:           "logout",
-	Short:         "Log out of jman-api on this device",
-	Long:          `Revokes this device's token in jman-api and deletes it and the local copy of the API data.`,
-	Args:          cobra.NoArgs,
-	SilenceUsage:  true,
-	SilenceErrors: true,
-	RunE:          runLogout,
+	Use:   "logout",
+	Short: "Log out of jman-api on this device",
+	Long:  `Revokes this device's token in jman-api and deletes it and the local copy of the API data.`,
+	Args:  usageArgs,
+	RunE:  runLogout,
 }
 
 func init() {

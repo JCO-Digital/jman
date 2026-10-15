@@ -192,11 +192,17 @@ func jsonID(id int64) string {
 // prompt and returns the write requests the fake API received.
 func runJman(t *testing.T, srv *httptest.Server, args ...string) []string {
 	t.Helper()
+	return runJmanWithInput(t, srv, "y\n", args...)
+}
+
+// runJmanWithInput is runJman with input on stdin instead of "y".
+func runJmanWithInput(t *testing.T, srv *httptest.Server, input string, args ...string) []string {
+	t.Helper()
 	r, w, err := os.Pipe()
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = w.WriteString("y\n")
+	_, _ = w.WriteString(input)
 	w.Close()
 	oldStdin := os.Stdin
 	os.Stdin = r
@@ -278,5 +284,16 @@ func TestCoreUpdate(t *testing.T) {
 	calls = runJman(t, srv, "core", "update", "a.example.com", "--major", "--allow-major")
 	if len(calls) != 1 || calls[0] != `POST /sites/site-a/core-update {"allow_major":true,"target":"major"}` {
 		t.Errorf("major: %v", calls)
+	}
+}
+
+func TestYesSkipsConfirmation(t *testing.T) {
+	srv := newFakeJmanAPI(t)
+	t.Cleanup(func() { flagYes = false })
+
+	// No input at all: without --yes the confirmation can't be read.
+	calls := runJmanWithInput(t, srv, "", "--yes", "core", "update", "a.example.com")
+	if len(calls) != 1 || !strings.HasPrefix(calls[0], "POST /sites/site-a/core-update") {
+		t.Errorf("calls: %v", calls)
 	}
 }

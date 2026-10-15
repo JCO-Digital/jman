@@ -18,6 +18,7 @@ type SiteAlias struct {
 var aliasCmd = &cobra.Command{
 	Use:   "alias [target]",
 	Short: "Create alias file for all sites, or a custom collection.",
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},

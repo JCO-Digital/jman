@@ -9,11 +9,13 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/JCO-Digital/jman/internal/client"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/mirror"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
@@ -38,9 +40,7 @@ var listPluginCmd = &cobra.Command{
 	Long: `Lists the plugins on target sites from jman-api's data. Plugins whose updates are limited to fix releases by an update lock are marked as locked.
 
 With --live, the plugins are read from the sites over SSH instead.`,
-	Args:          cobra.ExactArgs(1),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Args: usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -48,7 +48,7 @@ With --live, the plugins are read from the sites over SSH instead.`,
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		sites, m, err := promptSites(cmd, args[0])
+		sites, m, err := promptSites(cmd, args[0], readOnly)
 		if err != nil {
 			return err
 		}
@@ -73,12 +73,10 @@ With --live, the plugins are read from the sites over SSH instead.`,
 }
 
 var installPluginCmd = &cobra.Command{
-	Use:           "install <target> <plugin-name>",
-	Short:         "Install a plugin on target sites.",
-	Long:          "Installs and activates a plugin on target sites. Supports WordPress.org slugs, ZIP URLs, local ZIP files, or aliases defined in config.",
-	Args:          cobra.ExactArgs(2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Use:   "install <target> <plugin-name>",
+	Short: "Install a plugin on target sites.",
+	Long:  "Installs and activates a plugin on target sites. Supports WordPress.org slugs, ZIP URLs, local ZIP files, or aliases defined in config.",
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -92,7 +90,7 @@ var installPluginCmd = &cobra.Command{
 		pluginName := args[1]
 		resolvePluginAlias(&pluginName)
 
-		sites, _, err := promptSites(cmd, args[0])
+		sites, _, err := promptSites(cmd, args[0], changesSite)
 		if err != nil {
 			return err
 		}
@@ -149,9 +147,7 @@ var updatePluginCmd = &cobra.Command{
 	Long: `Updates a specific plugin, or all plugins if no plugin name is given.
 
 Update-locked plugins only get fix releases. To update one locked plugin on one site past that, pass --allow-major.`,
-	Args:          cobra.RangeArgs(1, 2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Args: usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -165,12 +161,10 @@ Update-locked plugins only get fix releases. To update one locked plugin on one 
 }
 
 var removePluginCmd = &cobra.Command{
-	Use:           "remove <target> <plugin-name>",
-	Short:         "Remove a plugin from target sites.",
-	Long:          "Deactivates a plugin if it is active, then uninstalls it: its uninstall routine runs, which usually removes its data, and its files are deleted.",
-	Args:          cobra.ExactArgs(2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Use:   "remove <target> <plugin-name>",
+	Short: "Remove a plugin from target sites.",
+	Long:  "Deactivates a plugin if it is active, then uninstalls it: its uninstall routine runs, which usually removes its data, and its files are deleted.",
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -182,7 +176,7 @@ var removePluginCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		pluginName := args[1]
-		sites, m, err := promptSites(cmd, args[0])
+		sites, m, err := promptSites(cmd, args[0], changesSite)
 		if err != nil {
 			return err
 		}
@@ -210,12 +204,12 @@ var removePluginCmd = &cobra.Command{
 }
 
 var infoPluginCmd = &cobra.Command{
-	Use:           "info <target> <plugin-name>",
-	Short:         "Get info for a plugin on target sites.",
-	Long:          "Reads a plugin's details from target sites over SSH.",
-	Args:          cobra.ExactArgs(2),
-	SilenceErrors: true,
-	SilenceUsage:  true,
+	Use:   "info <target> [plugin-name]",
+	Short: "Get info for a plugin, or all plugins, on target sites.",
+	Long: `Reads plugin details from target sites over SSH: name, version, status, author and any available update.
+
+Without a plugin name, it shows every plugin on each site.`,
+	Args: usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -226,8 +220,11 @@ var infoPluginCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		pluginName := args[1]
-		sites, _, err := promptSites(cmd, args[0])
+		pluginName := ""
+		if len(args) > 1 {
+			pluginName = args[1]
+		}
+		sites, _, err := promptSites(cmd, args[0], readOnly)
 		if err != nil {
 			return err
 		}
@@ -237,7 +234,12 @@ var infoPluginCmd = &cobra.Command{
 		}
 
 		for _, site := range sites {
-			if err := pluginInfo(site, pluginName); err != nil {
+			if pluginName == "" {
+				err = allPluginsInfo(site)
+			} else {
+				err = pluginInfo(site, pluginName)
+			}
+			if err != nil {
 				verb.Printf(verb.Normal, "Error fetching plugin info on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 			}
 		}
@@ -283,7 +285,7 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		pluginName = args[1]
 	}
-	sites, m, err := promptSites(cmd, args[0])
+	sites, m, err := promptSites(cmd, args[0], changesSite)
 	if err != nil {
 		return err
 	}
@@ -505,6 +507,32 @@ func pluginInfo(site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Normal, "- Version: %s\n", info.Version)
 	verb.Printf(verb.Normal, "- Author: %s\n", info.Author)
 	return nil
+}
+
+// allPluginsInfo prints the details of every plugin on a site as a table.
+func allPluginsInfo(site models.CliSite) error {
+	verb.Printf(verb.Verbose, "Fetching plugin details on %s (%s)...\n", verb.Blue(site.Name), site.ServerName)
+	plugins, err := wpcli.GetPluginDetails(site)
+	if err != nil {
+		return err
+	}
+	if len(plugins) == 0 {
+		verb.Printf(verb.Normal, "No plugins found on %s.\n", verb.Blue(site.Name))
+		return nil
+	}
+
+	verb.Printf(verb.Normal, "Plugins on %s:\n", verb.Blue(site.Name))
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "  NAME\tSLUG\tVERSION\tSTATUS\tUPDATE\tAUTHOR")
+	for _, p := range plugins {
+		update := p.UpdateVersion
+		if update == "" {
+			update = "-"
+		}
+		fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\t%s\n",
+			utils.ShowFirstPart(utils.CleanHTML(p.Title)), p.Slug, p.Version, p.Status, update, utils.CleanHTML(p.Author))
+	}
+	return w.Flush()
 }
 
 // jobContext returns the context jman waits for jobs in, cancelled on

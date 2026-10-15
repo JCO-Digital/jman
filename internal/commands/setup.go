@@ -27,7 +27,7 @@ var setupMuCmd = &cobra.Command{
 	Use:   "mu <target> [path-or-url]",
 	Short: "Install or update the bojaco mu-plugin",
 	Long:  `Ensures the bojaco mu-plugin is installed and updated to the latest version. Accepts an optional local file path or URL.`,
-	Args:  cobra.MinimumNArgs(1),
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getSiteCompletions()
@@ -41,7 +41,7 @@ var setupMuCmd = &cobra.Command{
 			inputSource = args[1]
 		}
 
-		sites, _, err := promptSites(cmd, target)
+		sites, _, err := promptSites(cmd, target, changesSite)
 		if err != nil {
 			return err
 		}
@@ -110,7 +110,7 @@ var setupCompatCmd = &cobra.Command{
 	Use:   "compat <slug>",
 	Short: "Install or update a compatibility plugin",
 	Long:  `Checks for a compatibility mu-plugin for the specified slug in the JCO-Digital/bojaco-compat repository and installs/updates it on all sites that have the plugin installed.`,
-	Args:  cobra.ExactArgs(1),
+	Args:  usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
 			return getPluginCompletions(toComplete, false)
@@ -184,7 +184,12 @@ var setupCompatCmd = &cobra.Command{
 
 		// Prompt user for confirmation before deploying
 		reader := bufio.NewReader(os.Stdin)
-		if len(targetSites) == 1 {
+		if flagYes {
+			verb.Printf(verb.Normal, "Installing on %d site(s) with plugin %q installed:\n", len(targetSites), slug)
+			for _, site := range targetSites {
+				verb.Printf(verb.Normal, "  %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+			}
+		} else if len(targetSites) == 1 {
 			site := targetSites[0]
 			verb.Printf(verb.Normal, "Found 1 site with plugin %q installed: %s %s\n", slug, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
 			verb.Printf(verb.Normal, "Do you want to install the compatibility plugin on this site? [Y/n]: ")
