@@ -84,8 +84,16 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/monitor/history", basic(MonitorHistoryHandler))
 	mux.Handle("GET /api/monitor/status", basic(MonitorStatusHandler))
 	mux.Handle("GET /api/monitor/checks", basic(ListMonitorChecksHandler))
+	mux.Handle("POST /api/monitor/checks", edit(CreateMonitorCheckHandler))
+	mux.Handle("POST /api/monitor/checks/test", edit(TestMonitorCheckHandler))
+	mux.Handle("GET /api/monitor/checks/{id}", basic(GetMonitorCheckHandler))
+	mux.Handle("PATCH /api/monitor/checks/{id}", edit(UpdateMonitorCheckHandler))
+	mux.Handle("DELETE /api/monitor/checks/{id}", edit(DeleteMonitorCheckHandler))
 	mux.Handle("POST /api/monitor/checks/{id}/pause", edit(PauseMonitorCheckHandler))
 	mux.Handle("POST /api/monitor/checks/{id}/resume", edit(ResumeMonitorCheckHandler))
+	mux.Handle("POST /api/monitor/checks/{id}/reset", edit(ResetMonitorCheckHandler))
+	mux.Handle("PUT /api/monitor/checks/{id}/secrets/{header}", edit(SetMonitorCheckSecretHandler))
+	mux.Handle("DELETE /api/monitor/checks/{id}/secrets/{header}", edit(DeleteMonitorCheckSecretHandler))
 
 	// --- Incident routes ---
 	mux.Handle("GET /api/incidents", basic(ListIncidentsHandler))

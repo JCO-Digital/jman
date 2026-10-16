@@ -17,12 +17,13 @@ const (
 	StopPaused   StopReason = iota // a user paused the check
 	StopEdited                     // a user changed what the check probes
 	StopOrphaned                   // the check's site is gone
+	StopDeleted                    // a user deleted the check
 )
 
 // CloseOutCheck ends a check's current outage because the check stopped
-// running as it was: it was paused, edited or orphaned. The check's monitor
-// state is dropped, so it starts afresh if it runs again, and a result
-// still in flight is discarded. An active incident is resolved (by `by`),
+// running as it was: it was paused, edited, orphaned or deleted. The
+// check's monitor state is dropped, so it starts afresh if it runs again,
+// and a result still in flight is discarded. An active incident is resolved (by `by`),
 // its PagerDuty alert resolved, and Slack told why, so the channel never
 // reads it as a recovery. Without an active incident nothing is posted.
 //
@@ -68,6 +69,8 @@ func closeOutMessage(label string, reason StopReason, by, note string, incidentI
 	switch reason {
 	case StopEdited:
 		msg = fmt.Sprintf("✏️ Check %s was EDITED by %s; incident #%d closed. It will be re-checked with the new settings.", label, by, incidentID)
+	case StopDeleted:
+		msg = fmt.Sprintf("🗑️ Check %s was DELETED by %s; incident #%d closed.", label, by, incidentID)
 	case StopOrphaned:
 		msg = fmt.Sprintf("⏸️ Monitoring for %s STOPPED: its site was removed; incident #%d closed.", label, incidentID)
 	default:

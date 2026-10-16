@@ -325,7 +325,13 @@ export interface MonitorCheck {
 	name?: string;
 	host?: string;
 	path: string;
-	expect: string;
+	expect: "html" | "json";
+	assert_path?: string;
+	assert_op?: "equals" | "exists";
+	/** JSON value the assert_path must equal. */
+	assert_value?: unknown;
+	/** Overrides the global cache bypass setting; absent follows it. */
+	cache_bypass?: boolean;
 	enabled: boolean;
 	orphaned_at?: string;
 	created_at: string;
@@ -333,6 +339,14 @@ export interface MonitorCheck {
 	/** The checked host: the site's domain for default checks. */
 	domain: string;
 	url?: string;
+	/** Secret headers sent with the check; values are never returned. */
+	secret_headers: MonitorCheckSecret[];
+}
+
+export interface MonitorCheckSecret {
+	name: string;
+	updated_at: string;
+	updated_by?: string;
 }
 
 export interface MonitorStatus {

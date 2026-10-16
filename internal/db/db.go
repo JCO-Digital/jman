@@ -452,21 +452,42 @@ func initAPISchema() error {
 			// is a soft reference) and takes its host from the site.
 			Name: "monitor_checks",
 			Columns: map[string]string{
-				"id":          "TEXT PRIMARY KEY",
-				"site_id":     "TEXT",
-				"is_default":  "BOOLEAN NOT NULL DEFAULT 0",
-				"type":        "TEXT NOT NULL DEFAULT 'http'",
-				"name":        "TEXT NOT NULL DEFAULT ''",
-				"host":        "TEXT NOT NULL DEFAULT ''",
-				"path":        "TEXT NOT NULL DEFAULT '/'",
-				"expect":      "TEXT NOT NULL DEFAULT 'html'",
-				"enabled":     "BOOLEAN NOT NULL DEFAULT 1",
-				"orphaned_at": "DATETIME",
-				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":  "TEXT",
+				"id":         "TEXT PRIMARY KEY",
+				"site_id":    "TEXT",
+				"is_default": "BOOLEAN NOT NULL DEFAULT 0",
+				"type":       "TEXT NOT NULL DEFAULT 'http'",
+				"name":       "TEXT NOT NULL DEFAULT ''",
+				"host":       "TEXT NOT NULL DEFAULT ''",
+				"path":       "TEXT NOT NULL DEFAULT '/'",
+				"expect":     "TEXT NOT NULL DEFAULT 'html'",
+				// One optional assertion on a JSON body: a dotted path, an
+				// operator ('equals' or 'exists') and, for equals, the
+				// JSON-encoded expected value.
+				"assert_path":  "TEXT NOT NULL DEFAULT ''",
+				"assert_op":    "TEXT NOT NULL DEFAULT ''",
+				"assert_value": "TEXT NOT NULL DEFAULT ''",
+				// NULL follows the global monitorCacheBypass setting.
+				"cache_bypass": "BOOLEAN",
+				"enabled":      "BOOLEAN NOT NULL DEFAULT 1",
+				"orphaned_at":  "DATETIME",
+				"created_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":   "TEXT",
+				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":   "TEXT",
+			},
+		},
+		{
+			// monitor_check_secrets holds header values sent with a check's
+			// requests. The API only ever writes them, never returns them.
+			Name: "monitor_check_secrets",
+			Columns: map[string]string{
+				"check_id":    "TEXT NOT NULL",
+				"header_name": "TEXT NOT NULL",
+				"value":       "TEXT NOT NULL",
 				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"updated_by":  "TEXT",
 			},
+			PrimaryKey: []string{"check_id", "header_name"},
 		},
 		{
 			// monitor_check_status is the monitor's persisted per-check

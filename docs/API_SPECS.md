@@ -502,7 +502,35 @@ report ID.
 
 `GET /monitor/history` (Protected: `basic`)
 `GET /monitor/status` (Protected: `basic`)
-`GET /monitor/checks` (Protected: `basic`): every monitor check, with the `domain` and `url` it checks. Optional `?site_id=` filter.
+`GET /monitor/checks` (Protected: `basic`): every monitor check, with the `domain` and `url` it checks and the names of its secret headers. Optional `?site_id=` filter.
+`GET /monitor/checks/{id}` (Protected: `basic`)
+`POST /monitor/checks` (Protected: `edit`): creates a check of its own (not a site's default check). Body below.
+`PATCH /monitor/checks/{id}` (Protected: `edit`): edits a check; absent fields are kept. Changing anything the check probes (host, path, expectation, assertion, cache bypass) resolves its active incident with an "edited" Slack message and restarts its state. `site_id` can't change; a default check's host is its site's domain.
+`POST /monitor/checks/{id}/reset` (Protected: `edit`): puts a site's default check back to `/`, expecting HTML, no assertion, global cache bypass.
+`DELETE /monitor/checks/{id}` (Protected: `edit`): deletes a check with its history, incidents and secrets. A site's default check can only be deleted once orphaned.
+`PUT /monitor/checks/{id}/secrets/{header}` (Protected: `edit`): body `{"value": "..."}`. Sets a header sent with the check's requests. Values are never returned; headers are dropped on redirects to another host.
+`DELETE /monitor/checks/{id}/secrets/{header}` (Protected: `edit`)
+`POST /monitor/checks/test` (Protected: `edit`): runs a check once and returns `{"up", "message", "status_code", "url", "duration_ms"}`, recording nothing. Takes the check body; with `"id"` it tests that stored check (with its secrets) with the body's fields applied on top. `"secret_headers": {"Name": "value"}` adds headers for this run only.
+
+**Check body**
+
+```json
+{
+	"name": "MCP health",
+	"host": "mcp.example.com",
+	"path": "/healthz",
+	"expect": "json",
+	"assert_path": "ok",
+	"assert_op": "equals",
+	"assert_value": true,
+	"cache_bypass": null
+}
+```
+
+- `expect`: `html` (default; the body must look like HTML) or `json` (the body must parse as JSON).
+- One optional assertion on a JSON body: `assert_path` is dot-separated (`items.0.state`); `assert_op` is `equals` (with `assert_value`, compared as JSON, so `true` and `"true"` differ) or `exists`.
+- `cache_bypass`: `true`/`false` override the global `monitorCacheBypass` setting; `null` follows it.
+- A 2xx response is always required.
 `POST /monitor/checks/{id}/pause` (Protected: `edit`): pauses a check. An active incident is resolved, its PagerDuty alert resolved, and a "paused" message posted to Slack. Optional body `{"reason": "..."}`.
 `POST /monitor/checks/{id}/resume` (Protected: `edit`)
 `POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check, resolving the incident.

@@ -50,13 +50,13 @@ func (e *Engine) Check(status *CheckStatus) error {
 	checkID := status.CheckID
 	domain := status.Domain
 	label := status.label()
-	url := status.requestURL()
+	probe := status.probe()
 	currentMode := status.CurrentMode
 	status.Mu.Unlock()
 
 	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", label, currentMode)
 
-	result := e.probeHTTP(url)
+	result := e.probeHTTP(probe)
 	RecordHistory(checkID, domain, result.Up, result.Message, result.Code)
 
 	status.Mu.Lock()

@@ -19,8 +19,8 @@ const systemUser = "system"
 type Target struct {
 	CheckID string
 	Domain  string // the checked host
-	URL     string
-	Label   string // name used in alerts: the host, plus the path if not "/"
+	Probe   HTTPProbe
+	Label   string // name used in alerts: the check's name, else host plus path
 }
 
 // monitoredSite is a site that has (or should have) a default check.
@@ -44,9 +44,14 @@ func LoadTargets() ([]Target, error) {
 
 	checks = reconcileDefaultChecks(checks, sites, spinupListed)
 
+	secrets, err := db.GetMonitorCheckSecretValues()
+	if err != nil {
+		return nil, err
+	}
+
 	targets := make([]Target, 0, len(checks))
 	for _, c := range checks {
-		if t, ok := targetFor(c, sites); ok {
+		if t, ok := targetFor(c, sites, secrets[c.ID]); ok {
 			targets = append(targets, t)
 		}
 	}
@@ -163,8 +168,8 @@ func inventorySpinupSiteIDs() map[string]bool {
 
 // targetFor returns the target for a check, or false if the check
 // shouldn't run now: it's paused, orphaned, its site is inactive, or it
-// has no host to check.
-func targetFor(c models.MonitorCheck, sites map[string]monitoredSite) (Target, bool) {
+// has no host to check. headers are the check's secret header values.
+func targetFor(c models.MonitorCheck, sites map[string]monitoredSite, headers map[string]string) (Target, bool) {
 	if !c.Enabled || c.OrphanedAt != nil || c.Type != models.MonitorCheckTypeHTTP {
 		return Target{}, false
 	}
@@ -184,22 +189,22 @@ func targetFor(c models.MonitorCheck, sites map[string]monitoredSite) (Target, b
 		return Target{}, false
 	}
 
-	path := c.Path
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
-	}
-	label := host
-	if path != "/" {
-		label += path
-	}
-	if c.Name != "" {
-		label = c.Name
-	}
-
 	return Target{
 		CheckID: c.ID,
 		Domain:  host,
-		URL:     "https://" + host + path,
-		Label:   label,
+		Probe:   NewHTTPProbe(c, host, headers),
+		Label:   CheckLabel(c, host),
 	}, true
+}
+
+// CheckLabel names a check in messages: its name, else the host it checks
+// plus its path when that isn't "/".
+func CheckLabel(c models.MonitorCheck, host string) string {
+	if c.Name != "" {
+		return c.Name
+	}
+	if c.Path != "" && c.Path != "/" {
+		return host + c.Path
+	}
+	return host
 }
