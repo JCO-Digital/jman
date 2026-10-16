@@ -85,8 +85,8 @@ func loadMonitoredSites() (map[string]monitoredSite, bool, error) {
 }
 
 // reconcileDefaultChecks gives every site without one a default check and
-// marks checks whose site is gone as orphaned (or clears the mark when the
-// site is back). It never changes what users set on a check, and never
+// marks checks whose site is gone as orphaned, closing out any outage (or
+// clears the mark when the site is back). It never changes what users set on a check, and never
 // deletes one. It returns checks with these changes applied.
 //
 // While spinupListed is false, checks on SpinupWP sites aren't orphaned:
@@ -124,6 +124,9 @@ func reconcileDefaultChecks(checks []models.MonitorCheck, sites map[string]monit
 			orphanedAt := now
 			c.OrphanedAt = &orphanedAt
 			verb.LogPrintf(verb.Verbose, "Check %s orphaned: site %s is gone\n", c.ID, c.SiteID)
+			if err := CloseOutCheck(c.ID, c.Name, StopOrphaned, systemUser, ""); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to close out orphaned check %s: %v\n", c.ID, err)
+			}
 		}
 	}
 

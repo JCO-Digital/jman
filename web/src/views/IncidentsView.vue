@@ -181,7 +181,7 @@ async function submitPause() {
 			pauseReason.value,
 		);
 		toastStore.addToast(
-			`Paused monitoring for ${selectedIncident.value.domain} and closed incident`,
+			`Paused monitoring for ${selectedIncident.value.domain} and resolved incident`,
 			"success",
 		);
 		closePauseModal();
@@ -470,7 +470,7 @@ const canEdit = computed(() => authStore.canEdit);
 					<div class="modal-body">
 						<p class="sub-text">
 							Pausing this check stops it running and immediately
-							closes this incident. Resume it from the site's
+							resolves this incident. Resume it from the site's
 							uptime history.
 						</p>
 

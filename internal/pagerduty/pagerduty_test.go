@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -45,15 +46,15 @@ func TestTriggerEventSendsExpectedPayload(t *testing.T) {
 				w.WriteHeader(http.StatusAccepted)
 			})
 
-			if err := TriggerEvent("example.com", "Site example.com is down", tc.severity); err != nil {
+			if err := TriggerEvent("check-1", "example.com", "Site example.com is down", tc.severity); err != nil {
 				t.Fatalf("TriggerEvent returned error: %v", err)
 			}
 
 			if got.EventAction != "trigger" {
 				t.Errorf("event_action = %q, want %q", got.EventAction, "trigger")
 			}
-			if got.DedupKey != DedupKey("example.com") {
-				t.Errorf("dedup_key = %q, want %q", got.DedupKey, DedupKey("example.com"))
+			if got.DedupKey != DedupKey("check-1") {
+				t.Errorf("dedup_key = %q, want %q", got.DedupKey, DedupKey("check-1"))
 			}
 			if got.Payload == nil {
 				t.Fatal("payload is nil, want non-nil for trigger events")
@@ -77,15 +78,15 @@ func TestResolveEventOmitsPayload(t *testing.T) {
 		w.WriteHeader(http.StatusAccepted)
 	})
 
-	if err := ResolveEvent("example.com"); err != nil {
+	if err := ResolveEvent("check-1"); err != nil {
 		t.Fatalf("ResolveEvent returned error: %v", err)
 	}
 
 	if raw["event_action"] != "resolve" {
 		t.Errorf("event_action = %v, want %q", raw["event_action"], "resolve")
 	}
-	if raw["dedup_key"] != DedupKey("example.com") {
-		t.Errorf("dedup_key = %v, want %q", raw["dedup_key"], DedupKey("example.com"))
+	if raw["dedup_key"] != DedupKey("check-1") {
+		t.Errorf("dedup_key = %v, want %q", raw["dedup_key"], DedupKey("check-1"))
 	}
 	if _, ok := raw["payload"]; ok {
 		t.Error("resolve event body should omit payload entirely")
@@ -98,7 +99,7 @@ func TestSendEventErrorsOnNon2xx(t *testing.T) {
 		_, _ = w.Write([]byte(`{"status":"invalid event","message":"Event object is invalid"}`))
 	})
 
-	err := TriggerEvent("example.com", "summary", SeverityWarning)
+	err := TriggerEvent("check-1", "example.com", "summary", SeverityWarning)
 	if err == nil {
 		t.Fatal("expected an error for a non-2xx response, got nil")
 	}
@@ -121,7 +122,7 @@ func TestSendEventErrorsWhenNotConfigured(t *testing.T) {
 		config.Cfg.TokenPagerDuty = originalKey
 	}()
 
-	if err := TriggerEvent("example.com", "summary", SeverityWarning); err == nil {
+	if err := TriggerEvent("check-1", "example.com", "summary", SeverityWarning); err == nil {
 		t.Fatal("expected an error when no routing key is configured, got nil")
 	}
 	if called {
@@ -150,10 +151,11 @@ func TestEventsURLSelectsRegion(t *testing.T) {
 }
 
 func TestDedupKeyIsStableAndCaseInsensitive(t *testing.T) {
-	if DedupKey("Example.com") != DedupKey("example.com") {
-		t.Errorf("DedupKey should be case-insensitive: %q != %q", DedupKey("Example.com"), DedupKey("example.com"))
+	id := "0192F3A4-7B2C-7D3E-8F90-123456789ABC"
+	if DedupKey(id) != DedupKey(strings.ToLower(id)) {
+		t.Errorf("DedupKey should be case-insensitive: %q != %q", DedupKey(id), DedupKey(strings.ToLower(id)))
 	}
-	if DedupKey("example.com") != "jman-monitor:example.com" {
-		t.Errorf("DedupKey(%q) = %q, want %q", "example.com", DedupKey("example.com"), "jman-monitor:example.com")
+	if want := "jman-monitor:check:" + strings.ToLower(id); DedupKey(id) != want {
+		t.Errorf("DedupKey(%q) = %q, want %q", id, DedupKey(id), want)
 	}
 }

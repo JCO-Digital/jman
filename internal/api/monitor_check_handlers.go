@@ -2,13 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/monitor"
-	"github.com/JCO-Digital/jman/internal/pagerduty"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -102,32 +100,14 @@ func ResumeMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, desc)
 }
 
-// pauseMonitorCheck pauses a check: it closes the check's active incident
-// (resolving its PagerDuty alert), tells Slack if the check was alerting,
-// and resets its monitor state. label names the check in the Slack message.
+// pauseMonitorCheck pauses a check and closes out its outage: an active
+// incident is resolved, its PagerDuty alert resolved and Slack told the
+// check was paused. label names the check in the Slack message.
 func pauseMonitorCheck(check *models.MonitorCheck, label, username, reason string) error {
-	// Notify before resetting: the notice is only sent while in alert mode.
-	monitor.NotifyIfAlertingCheckPaused(check.ID, label, reason)
-
 	if err := db.SetMonitorCheckEnabled(check.ID, false, username); err != nil {
 		return err
 	}
-
-	active, err := db.GetActiveIncidentByCheck(check.ID)
-	if err != nil {
-		return err
-	}
-	if active != nil {
-		if _, err := db.CloseIncident(active.ID, username); err != nil {
-			return fmt.Errorf("failed to close incident %d: %w", active.ID, err)
-		}
-		if active.PDTriggered && pagerduty.Enabled() {
-			_ = pagerduty.ResolveEvent(active.Domain)
-		}
-	}
-
-	monitor.ResetCheckStatus(check.ID)
-	return nil
+	return monitor.CloseOutCheck(check.ID, label, monitor.StopPaused, username, reason)
 }
 
 // loadMonitorCheckForRequest loads the check named by the {id} path value,

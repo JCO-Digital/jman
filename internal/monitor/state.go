@@ -27,6 +27,9 @@ var (
 type CheckStatus struct {
 	Mu       sync.Mutex `json:"-"`
 	InFlight bool       `json:"-"`
+	// Stopped is set when the check's outage was closed out (it was
+	// paused, edited or orphaned) while this status was still referenced.
+	Stopped bool `json:"-"`
 
 	CheckID string `json:"check_id"`
 	// Domain is the checked host, URL the address requested and Label the

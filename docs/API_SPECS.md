@@ -503,11 +503,11 @@ report ID.
 `GET /monitor/history` (Protected: `basic`)
 `GET /monitor/status` (Protected: `basic`)
 `GET /monitor/checks` (Protected: `basic`): every monitor check, with the `domain` and `url` it checks. Optional `?site_id=` filter.
-`POST /monitor/checks/{id}/pause` (Protected: `edit`): pauses a check, closing its active incident. Optional body `{"reason": "..."}`.
+`POST /monitor/checks/{id}/pause` (Protected: `edit`): pauses a check. An active incident is resolved, its PagerDuty alert resolved, and a "paused" message posted to Slack. Optional body `{"reason": "..."}`.
 `POST /monitor/checks/{id}/resume` (Protected: `edit`)
-`POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check and closes the incident.
+`POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check, resolving the incident.
 
-Monitor history, statuses and incidents carry the `check_id` they belong to. Every site has a default check (path `/`, expecting HTML), created automatically; a check whose site is gone is marked `orphaned_at` and no longer runs.
+Monitor history, statuses and incidents carry the `check_id` they belong to. Every site has a default check (path `/`, expecting HTML), created automatically; a check whose site is gone is marked `orphaned_at` and no longer runs (its active incident is resolved, as when pausing). PagerDuty alerts are keyed by check ID (`jman-monitor:check:<id>`).
 
 ---
 

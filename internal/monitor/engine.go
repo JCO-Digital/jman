@@ -1,54 +1,16 @@
 package monitor
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
-	"github.com/JCO-Digital/jman/internal/db"
-	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/pagerduty"
-	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// htmlSniffSize is how much of a response body we read to sanity-check that
-// a 2xx response actually contains HTML, rather than an empty or blank page.
-const htmlSniffSize = 4096
-
-// htmlMarkers are byte sequences we expect to find somewhere near the start
-// of a genuine HTML document.
-var htmlMarkers = [][]byte{
-	[]byte("<!doctype html"),
-	[]byte("<html"),
-	[]byte("<head"),
-	[]byte("<body"),
-}
-
-// looksLikeHTML performs a lightweight sanity check on the start of a
-// response body, so a 200 response with an empty or blank page isn't
-// mistaken for a healthy site.
-func looksLikeHTML(body []byte) bool {
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		return false
-	}
-	lower := bytes.ToLower(trimmed)
-	for _, marker := range htmlMarkers {
-		if bytes.Contains(lower, marker) {
-			return true
-		}
-	}
-	return false
-}
-
-// Engine handles the execution of health checks for sites.
+// Engine runs monitor checks.
 type Engine struct {
 	client                *http.Client
 	slackChannel          string
@@ -63,11 +25,6 @@ func NewEngine() *Engine {
 		timeout = config.Cfg.MonitorTimeout
 	}
 
-	slackChannel := config.Cfg.SlackMonitorChannel
-	if slackChannel == "" {
-		slackChannel = config.Cfg.SlackChannel
-	}
-
 	pdEscalationMinutes := 10
 	if config.Cfg.PagerDutyEscalationMinutes > 0 {
 		pdEscalationMinutes = config.Cfg.PagerDutyEscalationMinutes
@@ -75,15 +32,21 @@ func NewEngine() *Engine {
 
 	return &Engine{
 		client:                utils.NewHTTPClient(time.Duration(timeout) * time.Second),
-		slackChannel:          slackChannel,
+		slackChannel:          monitorSlackChannel(),
 		pagerDutyEnabled:      pagerduty.Enabled(),
 		pdEscalationThreshold: time.Duration(pdEscalationMinutes) * time.Minute,
 	}
 }
 
-// Check performs a single run of a monitor check and updates its status based on the state machine logic.
+// Check runs a monitor check once. The check's type decides, from the
+// probe result, whether an outage started, continues or ended
+// (confirmHTTP); what follows is the same for every type (handleOutcome).
 func (e *Engine) Check(status *CheckStatus) error {
 	status.Mu.Lock()
+	if status.Stopped {
+		status.Mu.Unlock()
+		return nil
+	}
 	checkID := status.CheckID
 	domain := status.Domain
 	label := status.label()
@@ -93,201 +56,35 @@ func (e *Engine) Check(status *CheckStatus) error {
 
 	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", label, currentMode)
 
-	isUp := false
-	statusMsg := ""
-	errorCode := 0
+	result := e.probeHTTP(url)
+	RecordHistory(checkID, domain, result.Up, result.Message, result.Code)
 
-	if config.Cfg.MonitorCacheBypass {
-		sep := "?"
-		if strings.Contains(url, "?") {
-			sep = "&"
-		}
-		url += fmt.Sprintf("%sjman_cache_bypass=%d", sep, time.Now().UnixNano())
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err == nil {
-		utils.SetStandardHeaders(req)
-		resp, errDo := e.client.Do(req)
-		if errDo == nil {
-			errorCode = resp.StatusCode
-			if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-				buf := make([]byte, htmlSniffSize)
-				n, readErr := io.ReadFull(resp.Body, buf)
-				if readErr != nil && !errors.Is(readErr, io.ErrUnexpectedEOF) && !errors.Is(readErr, io.EOF) {
-					statusMsg = fmt.Sprintf("Body read error: %v", readErr)
-				} else if !looksLikeHTML(buf[:n]) {
-					statusMsg = "Empty or non-HTML response body"
-				} else {
-					isUp = true
-				}
-			} else {
-				statusMsg = fmt.Sprintf("HTTP %d", resp.StatusCode)
-			}
-			resp.Body.Close()
-		} else {
-			statusMsg = fmt.Sprintf("Error: %v", errDo)
-		}
-	} else {
-		statusMsg = fmt.Sprintf("Request Error: %v", err)
-	}
-
-	// Record check in history
-	RecordHistory(checkID, domain, isUp, statusMsg, errorCode)
-
-	// State transition logic
 	status.Mu.Lock()
+	// A check paused, edited or orphaned while probing: its outage was
+	// closed out, so this result no longer counts.
+	if status.Stopped {
+		status.Mu.Unlock()
+		return nil
+	}
 	oldMode := status.CurrentMode
 	status.LastChecked = time.Now()
-
-	if isUp {
-		status.ConsecutiveSuccesses++
-		status.FailureCount = 0
-	} else {
-		status.FailureCount++
-		status.ConsecutiveSuccesses = 0
-	}
-
-	var msgToSend string
-	var nextInterval time.Duration
-	var pdSeverity string // "" = no PagerDuty trigger this tick
-	var pdResolve bool
-
-	switch status.CurrentMode {
-	case ModeNormal:
-		if !isUp {
-			status.CurrentMode = ModeInvestigation
-			nextInterval = 1 * time.Minute
-		} else {
-			nextInterval = 5 * time.Minute
-		}
-
-	case ModeInvestigation:
-		if isUp {
-			if status.ConsecutiveSuccesses >= 3 {
-				status.CurrentMode = ModeNormal
-				nextInterval = 5 * time.Minute
-			} else {
-				nextInterval = 1 * time.Minute
-			}
-		} else {
-			if status.FailureCount >= 3 {
-				status.CurrentMode = ModeAlert
-				status.IsDown = true
-				status.DownSince = time.Now()
-				msgToSend = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", label, statusMsg)
-				if _, err := db.CreateIncident(checkID, domain, statusMsg, errorCode, status.DownSince); err != nil {
-					verb.LogPrintf(verb.Normal, "Failed to create incident for %s: %v\n", label, err)
-				}
-				nextInterval = 1 * time.Minute
-			} else {
-				nextInterval = 1 * time.Minute
-			}
-		}
-
-	case ModeAlert:
-		if isUp {
-			status.CurrentMode = ModeNormal
-			status.IsDown = false
-			msgToSend = fmt.Sprintf("✅ Site %s is back up.", label)
-			if _, err := db.ResolveActiveIncidentByCheck(checkID, ""); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to auto-resolve incident for %s: %v\n", label, err)
-			}
-			if e.pagerDutyEnabled && status.PDTriggered {
-				pdResolve = true
-			}
-			status.DownSince = time.Time{}
-			status.PDTriggered = false
-			status.PDEscalated = false
-			nextInterval = 5 * time.Minute
-		} else {
-			nextInterval = 1 * time.Minute
-			activeInc, _ := db.GetActiveIncidentByCheck(checkID)
-			isAcked := activeInc != nil && activeInc.Status == models.IncidentStatusAcknowledged
-
-			// Repeat alert based on error type intervals if not acknowledged
-			if !isAcked && e.shouldRepeatAlert(status, errorCode) {
-				msgToSend = fmt.Sprintf("🚨 Site %s is STILL DOWN (Status: %s)", label, statusMsg)
-			}
-			// Trigger the PagerDuty incident with critical severity once the site
-			// has been down longer than the configured threshold, provided the incident
-			// has NOT been acknowledged or resolved in jman.
-			if e.pagerDutyEnabled && activeInc != nil && activeInc.Status == models.IncidentStatusOpen &&
-				!status.PDTriggered && !status.DownSince.IsZero() &&
-				time.Since(status.DownSince) >= e.pdEscalationThreshold {
-				pdSeverity = pagerduty.SeverityCritical
-			}
-		}
-
-	default:
-		// Fallback for unknown modes
-		status.CurrentMode = ModeNormal
-		nextInterval = 5 * time.Minute
-	}
-
+	oc, nextInterval := confirmHTTP(status, result.Up)
+	n := e.handleOutcome(status, oc, result)
 	status.NextCheckAt = time.Now().Add(nextInterval)
 	newMode := status.CurrentMode
 	status.Mu.Unlock()
 
-	if msgToSend != "" {
-		verb.LogPrintf(verb.Normal, "%s\n", msgToSend)
-		err := slack.SendMessageToChannel(msgToSend, e.slackChannel, true)
-		if err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", label, err)
-		} else if !isUp {
-			// Update alert time if we sent an alert message and site is down
-			status.Mu.Lock()
-			status.LastAlertTime = time.Now()
-			status.Mu.Unlock()
-		}
-	}
-
-	if pdSeverity != "" {
-		summary := fmt.Sprintf("Site %s is down (Status: %s)", label, statusMsg)
-		if err := pagerduty.TriggerEvent(domain, summary, pdSeverity); err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to send PagerDuty trigger for %s: %v\n", domain, err)
-		} else {
-			status.Mu.Lock()
-			status.PDTriggered = true
-			if pdSeverity == pagerduty.SeverityCritical {
-				status.PDEscalated = true
-			}
-			status.Mu.Unlock()
-			if activeInc, err := db.GetActiveIncidentByCheck(checkID); err == nil && activeInc != nil {
-				_ = db.SetIncidentPDTriggered(activeInc.ID, true)
-			}
-		}
-	}
-
-	if pdResolve {
-		if err := pagerduty.ResolveEvent(domain); err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to send PagerDuty resolve for %s: %v\n", domain, err)
-		}
-	}
+	e.notify(status, n)
 
 	if oldMode != newMode {
 		verb.LogPrintf(verb.Verbose, "Check %s transitioned from %s to %s\n", label, oldMode, newMode)
 	}
 
+	status.Mu.Lock()
+	stopped := status.Stopped
+	status.Mu.Unlock()
+	if stopped {
+		return nil
+	}
 	return SaveCheckStatus(status)
-}
-
-// shouldRepeatAlert determines if enough time has passed to send another alert for a down site.
-// Note: This is called within Check while status.Mu is held.
-func (e *Engine) shouldRepeatAlert(status *CheckStatus, errorCode int) bool {
-	if status.LastAlertTime.IsZero() {
-		return true
-	}
-
-	var interval time.Duration
-	switch {
-	case errorCode >= 500:
-		interval = 30 * time.Minute
-	case errorCode >= 400:
-		interval = 60 * time.Minute
-	default:
-		interval = 120 * time.Minute
-	}
-
-	return time.Since(status.LastAlertTime) >= interval
 }

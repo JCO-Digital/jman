@@ -2,32 +2,10 @@ package monitor
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
-	"github.com/JCO-Digital/jman/internal/config"
-	"github.com/JCO-Digital/jman/internal/db"
-	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
-
-// NotifyIfAlertingCheckPaused sends a Slack message if a check that is in Alert Mode was paused.
-func NotifyIfAlertingCheckPaused(checkID, label, reason string) {
-	inAlert, err := db.IsCheckInAlertMode(checkID)
-	if err != nil || !inAlert {
-		return
-	}
-
-	slackChannel := config.Cfg.SlackMonitorChannel
-	if slackChannel == "" {
-		slackChannel = config.Cfg.SlackChannel
-	}
-
-	msg := fmt.Sprintf("⏸️ Monitoring for %s has been PAUSED (it was in Alert Mode). Reason: %s", label, reason)
-	if err := slack.SendMessageToChannel(msg, slackChannel, true); err != nil {
-		verb.LogPrintf(verb.Debug, "Failed to send paused alerting check notification for %s to Slack channel %s: %v\n", label, slackChannel, err)
-	}
-}
 
 // Run is the legacy entry point that performs a one-off check.
 // In the future, this might be changed to start the service depending on flags.
