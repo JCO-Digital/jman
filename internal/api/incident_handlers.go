@@ -5,10 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
-	"time"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -177,21 +174,22 @@ func CloseIncidentHandler(w http.ResponseWriter, r *http.Request) {
 		_ = pagerduty.ResolveEvent(existing.Domain)
 	}
 
-	// Reset monitor status so if site is still down, it will re-investigate and alert again
-	monitor.ResetDomainStatus(existing.Domain)
+	// Reset monitor status so if the check still fails, it will re-investigate and alert again
+	if existing.CheckID != "" {
+		monitor.ResetCheckStatus(existing.CheckID)
+	}
 
 	WriteJSON(w, http.StatusOK, inc)
 }
 
-// IgnoreIncidentRequest represents the optional payload when ignoring from an incident.
-type IgnoreIncidentRequest struct {
-	Reason        string `json:"reason"`
-	UseForMonitor bool   `json:"use_for_monitor"`
-	UseForVuln    bool   `json:"use_for_vuln"`
+// PauseIncidentCheckRequest is the optional payload when pausing a check from an incident.
+type PauseIncidentCheckRequest struct {
+	Reason string `json:"reason"`
 }
 
-// IgnoreIncidentHandler handles POST /api/incidents/{id}/ignore.
-func IgnoreIncidentHandler(w http.ResponseWriter, r *http.Request) {
+// PauseIncidentCheckHandler handles POST /api/incidents/{id}/pause: it
+// pauses the incident's monitor check and closes the incident.
+func PauseIncidentCheckHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", "POST")
 		WriteError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -207,7 +205,7 @@ func IgnoreIncidentHandler(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := db.GetIncidentByID(id)
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "IgnoreIncidentHandler: %v", err)
+		verb.LogPrintf(verb.Normal, "PauseIncidentCheckHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
@@ -215,14 +213,27 @@ func IgnoreIncidentHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Incident not found")
 		return
 	}
+	if existing.CheckID == "" {
+		WriteError(w, http.StatusConflict, "Incident has no monitor check")
+		return
+	}
+	check, err := db.GetMonitorCheck(existing.CheckID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "PauseIncidentCheckHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if check == nil {
+		WriteError(w, http.StatusNotFound, "Monitor check not found")
+		return
+	}
 
-	var req IgnoreIncidentRequest
-	req.UseForMonitor = true // default true
+	var req PauseIncidentCheckRequest
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&req)
 	}
 	if req.Reason == "" {
-		req.Reason = fmt.Sprintf("Ignored from incident #%d (%s)", existing.ID, existing.Domain)
+		req.Reason = fmt.Sprintf("Paused from incident #%d (%s)", existing.ID, existing.Domain)
 	}
 
 	claims := GetAuthClaims(r.Context())
@@ -231,50 +242,15 @@ func IgnoreIncidentHandler(w http.ResponseWriter, r *http.Request) {
 		username = claims.Username
 	}
 
-	// Look up the site UUID among the monitored sites for a site-level ignore
-	target := existing.Domain
-	entryType := "site"
-	if monitored, err := cache.GetMonitorTargets(); err == nil {
-		for _, s := range monitored {
-			if strings.EqualFold(s.Domain, existing.Domain) {
-				target = s.SiteID
-				break
-			}
-		}
-	}
-
-	ignoreEntry := &models.IgnoreEntry{
-		Type:          entryType,
-		Target:        target,
-		Reason:        req.Reason,
-		UseForMonitor: req.UseForMonitor,
-		UseForVuln:    req.UseForVuln,
-		CreatedAt:     time.Now(),
-		CreatedBy:     username,
-		UpdatedAt:     time.Now(),
-		UpdatedBy:     username,
-	}
-
-	if err := db.SaveIgnoreEntry(ignoreEntry, username); err != nil {
-		verb.LogPrintf(verb.Normal, "IgnoreIncidentHandler: failed to save ignore entry: %v", err)
+	if err := pauseMonitorCheck(check, existing.Domain, username, req.Reason); err != nil {
+		verb.LogPrintf(verb.Normal, "PauseIncidentCheckHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	// Close incident
-	inc, err := db.CloseIncident(id, username)
+	inc, err := db.GetIncidentByID(id)
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "IgnoreIncidentHandler: failed to close incident: %v", err)
+		verb.LogPrintf(verb.Normal, "PauseIncidentCheckHandler: %v", err)
 	}
-
-	// Resolve in PagerDuty if triggered
-	if existing.PDTriggered && pagerduty.Enabled() {
-		_ = pagerduty.ResolveEvent(existing.Domain)
-	}
-
-	// Reset monitor status and notify
-	monitor.ResetDomainStatus(existing.Domain)
-	monitor.NotifyIfAlertingSiteIgnored(existing.Domain, req.Reason)
-
 	WriteJSON(w, http.StatusOK, inc)
 }

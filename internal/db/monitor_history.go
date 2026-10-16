@@ -17,7 +17,7 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 	}
 
 	query := `
-		SELECT id, domain, status, error_code, first_seen, last_seen, count
+		SELECT id, COALESCE(check_id, ''), domain, status, error_code, first_seen, last_seen, count
 		FROM monitor_history
 		WHERE last_seen >= ?
 		ORDER BY first_seen DESC
@@ -33,6 +33,7 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 		var h models.MonitorHistory
 		err := rows.Scan(
 			&h.ID,
+			&h.CheckID,
 			&h.Domain,
 			&h.Status,
 			&h.ErrorCode,
@@ -52,7 +53,8 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 	return history, nil
 }
 
-// GetMonitorStatus returns the current monitoring status for a specific domain.
+// GetMonitorStatus returns the current monitoring status for a domain.
+// When several checks share the domain, the one that is down (if any) wins.
 func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
 	domain = strings.ToLower(domain)
 	db := GetAPIDB()
@@ -61,14 +63,17 @@ func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
 	}
 
 	query := `
-		SELECT domain, is_down, failure_count, last_alert_time, last_checked
-		FROM monitor_status
+		SELECT check_id, domain, is_down, failure_count, last_alert_time, last_checked
+		FROM monitor_check_status
 		WHERE domain = ?
+		ORDER BY is_down DESC, check_id ASC
+		LIMIT 1
 	`
 	var s models.MonitorStatus
 	var lastAlertTime sql.NullTime
 
 	err := db.QueryRow(query, domain).Scan(
+		&s.CheckID,
 		&s.Domain,
 		&s.IsDown,
 		&s.FailureCount,
@@ -90,7 +95,7 @@ func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
 	return &s, nil
 }
 
-// GetAllMonitorStatuses returns the current monitoring status for all sites.
+// GetAllMonitorStatuses returns the current monitoring status of every check.
 func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 	db := GetAPIDB()
 	if db == nil {
@@ -98,9 +103,9 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 	}
 
 	query := `
-		SELECT domain, is_down, failure_count, last_alert_time, last_checked
-		FROM monitor_status
-		ORDER BY domain ASC
+		SELECT check_id, domain, is_down, failure_count, last_alert_time, last_checked
+		FROM monitor_check_status
+		ORDER BY domain ASC, check_id ASC
 	`
 	rows, err := db.Query(query)
 	if err != nil {
@@ -113,6 +118,7 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 		var s models.MonitorStatus
 		var lastAlertTime sql.NullTime
 		err := rows.Scan(
+			&s.CheckID,
 			&s.Domain,
 			&s.IsDown,
 			&s.FailureCount,
@@ -135,9 +141,10 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 }
 
 // RecordMonitorHistory extends the latest monitor_history entry for a
-// domain if its status is unchanged, or starts a new entry otherwise.
-// The read and the write are not atomic; the monitor serializes calls.
-func RecordMonitorHistory(domain, status string, errorCode int) error {
+// check if its status is unchanged, or starts a new entry otherwise.
+// domain is the checked host, stored for display. The read and the write
+// are not atomic; the monitor serializes calls.
+func RecordMonitorHistory(checkID, domain, status string, errorCode int) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
@@ -146,14 +153,14 @@ func RecordMonitorHistory(domain, status string, errorCode int) error {
 
 	var lastID int
 	var lastStatus string
-	err := db.QueryRow(`SELECT id, status FROM monitor_history WHERE domain = ? ORDER BY id DESC LIMIT 1`, domain).Scan(&lastID, &lastStatus)
+	err := db.QueryRow(`SELECT id, status FROM monitor_history WHERE check_id = ? ORDER BY id DESC LIMIT 1`, checkID).Scan(&lastID, &lastStatus)
 	if err == nil && lastStatus == status {
 		if _, err := db.Exec(`UPDATE monitor_history SET last_seen = CURRENT_TIMESTAMP, count = count + 1 WHERE id = ?`, lastID); err != nil {
 			return fmt.Errorf("failed to update monitor history for %s: %w", domain, err)
 		}
 		return nil
 	}
-	if _, err := db.Exec(`INSERT INTO monitor_history (domain, status, error_code) VALUES (?, ?, ?)`, domain, status, errorCode); err != nil {
+	if _, err := db.Exec(`INSERT INTO monitor_history (check_id, domain, status, error_code) VALUES (?, ?, ?, ?)`, checkID, domain, status, errorCode); err != nil {
 		return fmt.Errorf("failed to insert monitor history for %s: %w", domain, err)
 	}
 	return nil

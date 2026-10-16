@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -80,22 +81,28 @@ func NewEngine() *Engine {
 	}
 }
 
-// CheckSite performs a health check on a single site and updates its status based on the state machine logic.
-func (e *Engine) CheckSite(status *SiteStatus) error {
+// Check performs a single run of a monitor check and updates its status based on the state machine logic.
+func (e *Engine) Check(status *CheckStatus) error {
 	status.Mu.Lock()
+	checkID := status.CheckID
 	domain := status.Domain
+	label := status.label()
+	url := status.requestURL()
 	currentMode := status.CurrentMode
 	status.Mu.Unlock()
 
-	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", domain, currentMode)
+	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", label, currentMode)
 
 	isUp := false
 	statusMsg := ""
 	errorCode := 0
 
-	url := "https://" + domain
 	if config.Cfg.MonitorCacheBypass {
-		url += fmt.Sprintf("?jman_cache_bypass=%d", time.Now().UnixNano())
+		sep := "?"
+		if strings.Contains(url, "?") {
+			sep = "&"
+		}
+		url += fmt.Sprintf("%sjman_cache_bypass=%d", sep, time.Now().UnixNano())
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -126,7 +133,7 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 	}
 
 	// Record check in history
-	RecordHistory(domain, isUp, statusMsg, errorCode)
+	RecordHistory(checkID, domain, isUp, statusMsg, errorCode)
 
 	// State transition logic
 	status.Mu.Lock()
@@ -168,9 +175,9 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 				status.CurrentMode = ModeAlert
 				status.IsDown = true
 				status.DownSince = time.Now()
-				msgToSend = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", domain, statusMsg)
-				if _, err := db.CreateIncident(domain, statusMsg, errorCode, status.DownSince); err != nil {
-					verb.LogPrintf(verb.Normal, "Failed to create incident for %s: %v\n", domain, err)
+				msgToSend = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", label, statusMsg)
+				if _, err := db.CreateIncident(checkID, domain, statusMsg, errorCode, status.DownSince); err != nil {
+					verb.LogPrintf(verb.Normal, "Failed to create incident for %s: %v\n", label, err)
 				}
 				nextInterval = 1 * time.Minute
 			} else {
@@ -182,9 +189,9 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 		if isUp {
 			status.CurrentMode = ModeNormal
 			status.IsDown = false
-			msgToSend = fmt.Sprintf("✅ Site %s is back up.", domain)
-			if _, err := db.ResolveActiveIncidentByDomain(domain, ""); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to auto-resolve incident for %s: %v\n", domain, err)
+			msgToSend = fmt.Sprintf("✅ Site %s is back up.", label)
+			if _, err := db.ResolveActiveIncidentByCheck(checkID, ""); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to auto-resolve incident for %s: %v\n", label, err)
 			}
 			if e.pagerDutyEnabled && status.PDTriggered {
 				pdResolve = true
@@ -195,12 +202,12 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 			nextInterval = 5 * time.Minute
 		} else {
 			nextInterval = 1 * time.Minute
-			activeInc, _ := db.GetActiveIncidentByDomain(domain)
+			activeInc, _ := db.GetActiveIncidentByCheck(checkID)
 			isAcked := activeInc != nil && activeInc.Status == models.IncidentStatusAcknowledged
 
 			// Repeat alert based on error type intervals if not acknowledged
 			if !isAcked && e.shouldRepeatAlert(status, errorCode) {
-				msgToSend = fmt.Sprintf("🚨 Site %s is STILL DOWN (Status: %s)", domain, statusMsg)
+				msgToSend = fmt.Sprintf("🚨 Site %s is STILL DOWN (Status: %s)", label, statusMsg)
 			}
 			// Trigger the PagerDuty incident with critical severity once the site
 			// has been down longer than the configured threshold, provided the incident
@@ -226,7 +233,7 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 		verb.LogPrintf(verb.Normal, "%s\n", msgToSend)
 		err := slack.SendMessageToChannel(msgToSend, e.slackChannel, true)
 		if err != nil {
-			verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", domain, err)
+			verb.LogPrintf(verb.Normal, "Failed to send Slack alert for %s: %v\n", label, err)
 		} else if !isUp {
 			// Update alert time if we sent an alert message and site is down
 			status.Mu.Lock()
@@ -236,7 +243,7 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 	}
 
 	if pdSeverity != "" {
-		summary := fmt.Sprintf("Site %s is down (Status: %s)", domain, statusMsg)
+		summary := fmt.Sprintf("Site %s is down (Status: %s)", label, statusMsg)
 		if err := pagerduty.TriggerEvent(domain, summary, pdSeverity); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to send PagerDuty trigger for %s: %v\n", domain, err)
 		} else {
@@ -246,7 +253,7 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 				status.PDEscalated = true
 			}
 			status.Mu.Unlock()
-			if activeInc, err := db.GetActiveIncidentByDomain(domain); err == nil && activeInc != nil {
+			if activeInc, err := db.GetActiveIncidentByCheck(checkID); err == nil && activeInc != nil {
 				_ = db.SetIncidentPDTriggered(activeInc.ID, true)
 			}
 		}
@@ -259,15 +266,15 @@ func (e *Engine) CheckSite(status *SiteStatus) error {
 	}
 
 	if oldMode != newMode {
-		verb.LogPrintf(verb.Verbose, "Site %s transitioned from %s to %s\n", domain, oldMode, newMode)
+		verb.LogPrintf(verb.Verbose, "Check %s transitioned from %s to %s\n", label, oldMode, newMode)
 	}
 
-	return SaveSiteStatus(status)
+	return SaveCheckStatus(status)
 }
 
 // shouldRepeatAlert determines if enough time has passed to send another alert for a down site.
-// Note: This is called within CheckSite while status.Mu is held.
-func (e *Engine) shouldRepeatAlert(status *SiteStatus, errorCode int) bool {
+// Note: This is called within Check while status.Mu is held.
+func (e *Engine) shouldRepeatAlert(status *CheckStatus, errorCode int) bool {
 	if status.LastAlertTime.IsZero() {
 		return true
 	}

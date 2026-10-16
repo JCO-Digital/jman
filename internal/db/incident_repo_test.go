@@ -48,7 +48,7 @@ func TestIncidentLifecycle(t *testing.T) {
 	downSince := time.Now().Add(-5 * time.Minute)
 
 	// 1. Create incident
-	inc, err := CreateIncident(domain, "HTTP 500 Internal Server Error", 500, downSince)
+	inc, err := CreateIncident("check-1", domain, "HTTP 500 Internal Server Error", 500, downSince)
 	if err != nil {
 		t.Fatalf("CreateIncident failed: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestIncidentLifecycle(t *testing.T) {
 	}
 
 	// 6. Test Close
-	inc2, err := CreateIncident("test2.com", "Timeout", 0, time.Now())
+	inc2, err := CreateIncident("check-2", "test2.com", "Timeout", 0, time.Now())
 	if err != nil {
 		t.Fatalf("CreateIncident 2 failed: %v", err)
 	}

@@ -63,7 +63,6 @@ func SyncSpinupWPIntoInventory(servers []models.Server, sites []models.Site) err
 			SitePath:       "files",
 			CanWPCLI:       true,
 			HasAgent:       true,
-			HasMonitoring:  true,
 			Status:         site.Status,
 		}
 		if err := SaveManagedSite(managedSite); err != nil {

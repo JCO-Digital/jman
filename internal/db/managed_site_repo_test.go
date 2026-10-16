@@ -98,7 +98,6 @@ func TestManagedSiteCRUD(t *testing.T) {
 		SitePath:       "sites/example",
 		CanWPCLI:       true,
 		HasAgent:       false,
-		HasMonitoring:  true,
 		Status:         "active",
 	}
 

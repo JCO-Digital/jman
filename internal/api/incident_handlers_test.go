@@ -63,7 +63,7 @@ func TestIncidentsAPI(t *testing.T) {
 	}
 
 	// 2. Create an incident in DB
-	inc, err := db.CreateIncident("api-site.com", "HTTP 502 Bad Gateway", 502, time.Now())
+	inc, err := db.CreateIncident("check-api", "api-site.com", "HTTP 502 Bad Gateway", 502, time.Now())
 	if err != nil {
 		t.Fatalf("Failed to create incident: %v", err)
 	}

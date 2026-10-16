@@ -83,6 +83,13 @@ func NormalizeAPITimestamps(dbConn *sql.DB, tables []TableDefinition) error {
 			}
 		}
 		for _, table := range []string{"monitor_status", "monitor_history", "incidents"} {
+			// monitor_status is gone from databases created after the
+			// monitor_checks migration replaced it.
+			if exists, err := tableExists(tx, table); err != nil {
+				return err
+			} else if !exists {
+				continue
+			}
 			// COLLATE BINARY: these columns are NOCASE, under which every
 			// value already "equals" its lowercase form.
 			if _, err := tx.Exec(fmt.Sprintf(

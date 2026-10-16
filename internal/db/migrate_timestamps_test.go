@@ -65,7 +65,7 @@ func TestNormalizeAPITimestamps(t *testing.T) {
 		`INSERT INTO site_disk_usage (site_id, bytes_used, measured_at) VALUES
 			('s1', 10, '2026-09-28T13:30:40Z'),
 			('s1', 11, '2026-09-28 13:30:40+00:00')`,
-		`INSERT INTO monitor_status (domain) VALUES ('Example.COM')`,
+		`INSERT INTO monitor_history (domain, status) VALUES ('Example.COM', 'UP')`,
 		`INSERT INTO incidents (domain, error_message, error_code, down_since, status) VALUES ('Mixed.Example', 'x', 500, '2026-10-02T05:00:00Z', 'open')`,
 	}
 	for _, q := range seed {
@@ -84,7 +84,7 @@ func TestNormalizeAPITimestamps(t *testing.T) {
 		// Unparseable values are left untouched rather than failing startup.
 		{`SELECT CAST(updated_at AS TEXT) FROM organizations WHERE id = 2`, "garbage"},
 		{`SELECT CAST(down_since AS TEXT) FROM incidents`, "2026-10-02 05:00:00+00:00"},
-		{`SELECT domain FROM monitor_status`, "example.com"},
+		{`SELECT domain FROM monitor_history`, "example.com"},
 		{`SELECT domain FROM incidents`, "mixed.example"},
 	}
 	for _, c := range checks {

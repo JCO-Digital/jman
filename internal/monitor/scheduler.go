@@ -6,12 +6,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// Scheduler manages the continuous monitoring of sites.
+// Scheduler manages the continuous running of monitor checks.
 type Scheduler struct {
 	engine *Engine
 	state  *State
@@ -35,7 +33,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	verb.LogPrintf(verb.Normal, "Starting monitor scheduler...\n")
 
 	// Initial population and jittering of check times to spread load.
-	if err := s.refreshSites(true); err != nil {
+	if err := s.refreshChecks(true); err != nil {
 		return err
 	}
 
@@ -44,7 +42,7 @@ func (s *Scheduler) Run(ctx context.Context) error {
 
 	// Worker pool settings
 	const maxWorkers = 24
-	jobs := make(chan *SiteStatus, maxWorkers)
+	jobs := make(chan *CheckStatus, maxWorkers)
 	var wg sync.WaitGroup
 
 	// Start worker pool
@@ -60,9 +58,9 @@ func (s *Scheduler) Run(ctx context.Context) error {
 					if !ok {
 						return
 					}
-					// CheckSite handles its own state persistence and Slack notifications
-					if err := s.engine.CheckSite(status); err != nil {
-						verb.LogPrintf(verb.Normal, "Error checking site %s: %v\n", status.Domain, err)
+					// Check handles its own state persistence and Slack notifications
+					if err := s.engine.Check(status); err != nil {
+						verb.LogPrintf(verb.Normal, "Error running check %s: %v\n", status.CheckID, err)
 					}
 
 					// Clear in-flight status after processing
@@ -84,25 +82,15 @@ func (s *Scheduler) Run(ctx context.Context) error {
 			return ctx.Err()
 
 		case <-ticker.C:
-			// Refresh site list from cache in case new sites were added
-			if err := s.refreshSites(false); err != nil {
-				verb.LogPrintf(verb.Normal, "Error refreshing sites: %v\n", err)
+			// Refresh the checks in case they or their sites changed
+			if err := s.refreshChecks(false); err != nil {
+				verb.LogPrintf(verb.Normal, "Error refreshing checks: %v\n", err)
 				continue
-			}
-
-			// Load ignore list once per tick for efficient O(n) checks
-			ignoreMatcher, err := db.NewMonitorIgnoreMatcher()
-			if err != nil {
-				verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
 			}
 
 			now := time.Now()
 			s.state.Mu.RLock()
-			for _, status := range s.state.Sites {
-				if ignoreMatcher != nil && ignoreMatcher.IsIgnored(status.ID, status.ServerID) {
-					continue
-				}
-
+			for _, status := range s.state.Checks {
 				status.Mu.Lock()
 				isDue := now.After(status.NextCheckAt)
 				alreadyInFlight := status.InFlight
@@ -115,13 +103,13 @@ func (s *Scheduler) Run(ctx context.Context) error {
 					// Queue the check if the worker pool is not full
 					select {
 					case jobs <- status:
-						// Site queued for check
+						// Check queued
 					default:
 						// Pool is busy; reset in-flight status so it can be tried again
 						status.Mu.Lock()
 						status.InFlight = false
 						status.Mu.Unlock()
-						verb.LogPrintf(verb.Debug, "Worker pool full, skipping %s for this tick\n", status.Domain)
+						verb.LogPrintf(verb.Debug, "Worker pool full, skipping %s for this tick\n", status.CheckID)
 					}
 				}
 			}
@@ -130,20 +118,21 @@ func (s *Scheduler) Run(ctx context.Context) error {
 	}
 }
 
-// refreshSites syncs the internal state with the current site list from the cache.
-// If applyJitter is true, it staggers the next check times for all sites.
-func (s *Scheduler) refreshSites(applyJitter bool) error {
-	sites, err := cache.GetMonitorTargets()
+// refreshChecks syncs the internal state with the checks that should run
+// now: new ones are added and the rest (removed, paused, orphaned) dropped.
+// If applyJitter is true, it staggers the next check times for all checks.
+func (s *Scheduler) refreshChecks(applyJitter bool) error {
+	targets, err := LoadTargets()
 	if err != nil {
 		return err
 	}
 
-	activeDomains := make(map[string]bool)
-	for _, site := range sites {
-		activeDomains[site.Domain] = true
-		status := s.state.GetStatus(site.Domain)
+	active := make(map[string]bool, len(targets))
+	for _, t := range targets {
+		active[t.CheckID] = true
+		status := s.state.GetStatus(t)
 
-		// Jitter check times on startup or for new sites
+		// Jitter check times on startup or for new checks
 		status.Mu.Lock()
 		if applyJitter || status.NextCheckAt.IsZero() {
 			// Spread initial checks over a 5-minute window
@@ -153,19 +142,19 @@ func (s *Scheduler) refreshSites(applyJitter bool) error {
 		status.Mu.Unlock()
 	}
 
-	// Cleanup stale sites (those in status state but no longer in the cache)
+	// Drop stale checks (those in the state but no longer to be run)
 	s.state.Mu.RLock()
-	var staleDomains []string
-	for domain := range s.state.Sites {
-		if !activeDomains[domain] {
-			staleDomains = append(staleDomains, domain)
+	var stale []string
+	for checkID := range s.state.Checks {
+		if !active[checkID] {
+			stale = append(stale, checkID)
 		}
 	}
 	s.state.Mu.RUnlock()
 
-	for _, domain := range staleDomains {
-		verb.LogPrintf(verb.Debug, "Removing stale site status: %s\n", domain)
-		s.state.RemoveStatus(domain)
+	for _, checkID := range stale {
+		verb.LogPrintf(verb.Debug, "Removing stale check status: %s\n", checkID)
+		s.state.RemoveStatus(checkID)
 	}
 
 	return nil

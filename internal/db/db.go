@@ -325,12 +325,14 @@ func initInventorySchema() error {
 				"target":           "TEXT NOT NULL",
 				"reason":           "TEXT",
 				"negated_site_ids": "TEXT",
-				"use_for_monitor":  "BOOLEAN DEFAULT 0",
-				"use_for_vuln":     "BOOLEAN DEFAULT 0",
-				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":       "TEXT",
-				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by":       "TEXT",
+				// Legacy: monitor ignores became paused monitor checks. Kept
+				// only so the monitor_checks migration can read it.
+				"use_for_monitor": "BOOLEAN DEFAULT 0",
+				"use_for_vuln":    "BOOLEAN DEFAULT 0",
+				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":      "TEXT",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":      "TEXT",
 			},
 		},
 		{
@@ -383,10 +385,12 @@ func initInventorySchema() error {
 				"site_path":        "TEXT DEFAULT 'files'",
 				"can_wp_cli":       "BOOLEAN DEFAULT 1",
 				"has_agent":        "BOOLEAN DEFAULT 0",
-				"has_monitoring":   "BOOLEAN DEFAULT 1",
-				"status":           "TEXT DEFAULT 'active'",
-				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				// Legacy: replaced by monitor_checks.enabled. Kept only so the
+				// monitor_checks migration can read it; no code writes it.
+				"has_monitoring": "BOOLEAN DEFAULT 1",
+				"status":         "TEXT DEFAULT 'active'",
+				"created_at":     "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at":     "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
 	}
@@ -443,9 +447,34 @@ func initAPISchema() error {
 			},
 		},
 		{
-			Name: "monitor_status",
+			// monitor_checks holds everything the uptime monitor checks. A
+			// default check belongs to a site (in inventory.db, so site_id
+			// is a soft reference) and takes its host from the site.
+			Name: "monitor_checks",
 			Columns: map[string]string{
-				"domain":                "TEXT PRIMARY KEY COLLATE NOCASE",
+				"id":          "TEXT PRIMARY KEY",
+				"site_id":     "TEXT",
+				"is_default":  "BOOLEAN NOT NULL DEFAULT 0",
+				"type":        "TEXT NOT NULL DEFAULT 'http'",
+				"name":        "TEXT NOT NULL DEFAULT ''",
+				"host":        "TEXT NOT NULL DEFAULT ''",
+				"path":        "TEXT NOT NULL DEFAULT '/'",
+				"expect":      "TEXT NOT NULL DEFAULT 'html'",
+				"enabled":     "BOOLEAN NOT NULL DEFAULT 1",
+				"orphaned_at": "DATETIME",
+				"created_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":  "TEXT",
+				"updated_at":  "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":  "TEXT",
+			},
+		},
+		{
+			// monitor_check_status is the monitor's persisted per-check
+			// state; domain is the checked host, kept for display.
+			Name: "monitor_check_status",
+			Columns: map[string]string{
+				"check_id":              "TEXT PRIMARY KEY",
+				"domain":                "TEXT NOT NULL DEFAULT '' COLLATE NOCASE",
 				"is_down":               "BOOLEAN DEFAULT 0",
 				"failure_count":         "INTEGER DEFAULT 0",
 				"consecutive_successes": "INTEGER DEFAULT 0",
@@ -462,6 +491,7 @@ func initAPISchema() error {
 			Name: "monitor_history",
 			Columns: map[string]string{
 				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"check_id":   "TEXT",
 				"domain":     "TEXT COLLATE NOCASE",
 				"status":     "TEXT",
 				"error_code": "INTEGER",
@@ -846,6 +876,7 @@ func initAPISchema() error {
 			Name: "incidents",
 			Columns: map[string]string{
 				"id":              "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"check_id":        "TEXT",
 				"domain":          "TEXT NOT NULL COLLATE NOCASE",
 				"status":          "TEXT NOT NULL DEFAULT 'open'",
 				"error_message":   "TEXT",
@@ -870,6 +901,14 @@ func initAPISchema() error {
 
 	// Manual index management
 	_, err := apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_domain ON monitor_history(domain);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_check_id ON monitor_history(check_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_checks_site_id ON monitor_checks(site_id);")
 	if err != nil {
 		return err
 	}
@@ -968,6 +1007,10 @@ func initAPISchema() error {
 	if err != nil {
 		return err
 	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_incidents_check_id ON incidents(check_id);")
+	if err != nil {
+		return err
+	}
 
 	if err := MigrateLegacyAPIIDs(apiDB.DB); err != nil {
 		return fmt.Errorf("failed to migrate legacy API IDs to UUIDs: %w", err)
@@ -975,6 +1018,10 @@ func initAPISchema() error {
 
 	if err := NormalizeAPITimestamps(apiDB.DB, tables); err != nil {
 		return fmt.Errorf("failed to normalize API timestamps: %w", err)
+	}
+
+	if err := MigrateMonitorChecks(apiDB.DB, inventoryDB); err != nil {
+		return fmt.Errorf("failed to migrate monitoring to checks: %w", err)
 	}
 
 	return nil

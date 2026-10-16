@@ -105,7 +105,7 @@ func TestInsertsReturnIDs(t *testing.T) {
 		t.Errorf("organization ids %v are not distinct non-zero values", ids)
 	}
 
-	inc, err := CreateIncident("example.com", "down", 500, time.Now())
+	inc, err := CreateIncident("check-1", "example.com", "down", 500, time.Now())
 	if err != nil {
 		t.Fatalf("CreateIncident: %v", err)
 	}
@@ -133,19 +133,15 @@ func TestCaseInsensitiveLookups(t *testing.T) {
 		t.Errorf("search ACME found %d organizations, want 1", len(found))
 	}
 
-	inc, err := CreateIncident("Shop.Example.COM", "down", 500, time.Now())
+	inc, err := CreateIncident("check-shop", "Shop.Example.COM", "down", 500, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if inc.Domain != "shop.example.com" {
 		t.Errorf("incident domain stored as %q, want lowercase", inc.Domain)
 	}
-	active, err := GetActiveIncidentByDomain("SHOP.example.com")
-	if err != nil || active == nil || active.ID != inc.ID {
-		t.Errorf("mixed-case lookup found %+v, err %v; want incident %d", active, err, inc.ID)
-	}
 
-	if _, err := GetAPIDB().Exec(`INSERT INTO monitor_status (domain) VALUES ('shop.example.com')`); err != nil {
+	if _, err := GetAPIDB().Exec(`INSERT INTO monitor_check_status (check_id, domain) VALUES ('check-shop', 'shop.example.com')`); err != nil {
 		t.Fatal(err)
 	}
 	status, err := GetMonitorStatus("Shop.Example.com")

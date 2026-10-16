@@ -37,7 +37,7 @@ func setupEngineTest(t *testing.T) {
 }
 
 // redirectTransport rewrites every outgoing request to point at a test
-// server, regardless of the scheme/host CheckSite hardcodes.
+// server, regardless of the scheme/host Check requests.
 type redirectTransport struct {
 	target *url.URL
 }
@@ -77,16 +77,16 @@ func lastHistoryStatus(t *testing.T, domain string) string {
 	return status
 }
 
-func TestCheckSiteMarksEmptyBodyAsDown(t *testing.T) {
+func TestCheckMarksEmptyBodyAsDown(t *testing.T) {
 	setupEngineTest(t)
 
 	engine := newTestEngine(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	status := &SiteStatus{Domain: "example.com", CurrentMode: ModeNormal}
-	if err := engine.CheckSite(status); err != nil {
-		t.Fatalf("CheckSite returned error: %v", err)
+	status := &CheckStatus{CheckID: "check-example", Domain: "example.com", CurrentMode: ModeNormal}
+	if err := engine.Check(status); err != nil {
+		t.Fatalf("Check returned error: %v", err)
 	}
 
 	if status.CurrentMode != ModeInvestigation {
@@ -100,7 +100,7 @@ func TestCheckSiteMarksEmptyBodyAsDown(t *testing.T) {
 	}
 }
 
-func TestCheckSiteMarksNonHTMLBodyAsDown(t *testing.T) {
+func TestCheckMarksNonHTMLBodyAsDown(t *testing.T) {
 	setupEngineTest(t)
 
 	engine := newTestEngine(t, func(w http.ResponseWriter, r *http.Request) {
@@ -108,9 +108,9 @@ func TestCheckSiteMarksNonHTMLBodyAsDown(t *testing.T) {
 		_, _ = w.Write([]byte(`{"error":"upstream misconfigured"}`))
 	})
 
-	status := &SiteStatus{Domain: "example.com", CurrentMode: ModeNormal}
-	if err := engine.CheckSite(status); err != nil {
-		t.Fatalf("CheckSite returned error: %v", err)
+	status := &CheckStatus{CheckID: "check-example", Domain: "example.com", CurrentMode: ModeNormal}
+	if err := engine.Check(status); err != nil {
+		t.Fatalf("Check returned error: %v", err)
 	}
 
 	if status.CurrentMode != ModeInvestigation {
@@ -118,7 +118,7 @@ func TestCheckSiteMarksNonHTMLBodyAsDown(t *testing.T) {
 	}
 }
 
-func TestCheckSiteMarksValidHTMLAsUp(t *testing.T) {
+func TestCheckMarksValidHTMLAsUp(t *testing.T) {
 	setupEngineTest(t)
 
 	engine := newTestEngine(t, func(w http.ResponseWriter, r *http.Request) {
@@ -126,9 +126,9 @@ func TestCheckSiteMarksValidHTMLAsUp(t *testing.T) {
 		_, _ = w.Write([]byte("<!DOCTYPE html><html><head><title>Home</title></head><body>Hi</body></html>"))
 	})
 
-	status := &SiteStatus{Domain: "example.com", CurrentMode: ModeNormal}
-	if err := engine.CheckSite(status); err != nil {
-		t.Fatalf("CheckSite returned error: %v", err)
+	status := &CheckStatus{CheckID: "check-example", Domain: "example.com", CurrentMode: ModeNormal}
+	if err := engine.Check(status); err != nil {
+		t.Fatalf("Check returned error: %v", err)
 	}
 
 	if status.CurrentMode != ModeNormal {
@@ -185,23 +185,23 @@ func TestIncidentCreationAndResolution(t *testing.T) {
 		_, _ = w.Write([]byte("500 Internal Server Error"))
 	})
 
-	status := &SiteStatus{Domain: "incident-test.com", CurrentMode: ModeNormal}
+	status := &CheckStatus{CheckID: "check-incident", Domain: "incident-test.com", CurrentMode: ModeNormal}
 
 	// 1st failure -> ModeInvestigation
-	_ = downEngine.CheckSite(status)
+	_ = downEngine.Check(status)
 	if status.CurrentMode != ModeInvestigation {
 		t.Fatalf("expected Investigation, got %s", status.CurrentMode)
 	}
 
 	// 2nd failure
-	_ = downEngine.CheckSite(status)
+	_ = downEngine.Check(status)
 	// 3rd failure -> ModeAlert & incident creation
-	_ = downEngine.CheckSite(status)
+	_ = downEngine.Check(status)
 	if status.CurrentMode != ModeAlert {
 		t.Fatalf("expected Alert, got %s", status.CurrentMode)
 	}
 
-	inc, err := db.GetActiveIncidentByDomain("incident-test.com")
+	inc, err := db.GetActiveIncidentByCheck("check-incident")
 	if err != nil || inc == nil {
 		t.Fatalf("expected active incident in DB, got %v (err: %v)", inc, err)
 	}
@@ -210,12 +210,12 @@ func TestIncidentCreationAndResolution(t *testing.T) {
 	}
 
 	// Recovery -> ModeNormal & incident auto-resolve
-	_ = upEngine.CheckSite(status)
+	_ = upEngine.Check(status)
 	if status.CurrentMode != ModeNormal {
 		t.Fatalf("expected Normal after recovery, got %s", status.CurrentMode)
 	}
 
-	activeAfter, err := db.GetActiveIncidentByDomain("incident-test.com")
+	activeAfter, err := db.GetActiveIncidentByCheck("check-incident")
 	if err != nil {
 		t.Fatalf("error checking active incident: %v", err)
 	}

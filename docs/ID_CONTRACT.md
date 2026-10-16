@@ -45,7 +45,6 @@ Built from the authoritative `sites` table, enriched with SpinupWP cache details
   "connection_type": "agent",    // "agent" | "ssh" | "none"
   "can_wp_cli": true,
   "has_agent": true,
-  "has_monitoring": true,
   // SpinupWP-only detail fields (https, nginx, backups, page_cache, database, basic_auth,
   // additional_domains, public_folder, user_auth, wp_*_update(s), created_at) are present only
   // when provider == "spinupwp" (omitted otherwise).

@@ -108,26 +108,18 @@ export const useIncidentStore = defineStore("incidents", () => {
 		return updated;
 	}
 
-	async function ignoreIncident(
-		id: number,
-		reason: string,
-		useForMonitor: boolean = true,
-		useForVuln: boolean = false,
-	) {
-		const res = await apiFetch(`${BASE_URL}/incidents/${id}/ignore`, {
+	/** Pauses the incident's monitor check and closes the incident. */
+	async function pauseIncidentCheck(id: number, reason: string) {
+		const res = await apiFetch(`${BASE_URL}/incidents/${id}/pause`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
-			body: JSON.stringify({
-				reason,
-				use_for_monitor: useForMonitor,
-				use_for_vuln: useForVuln,
-			}),
+			body: JSON.stringify({ reason }),
 		});
 		if (!res.ok) {
-			const err = await res.json().catch(() => ({ error: "Failed to ignore site" }));
-			throw new Error(err.error || "Failed to ignore site from incident");
+			const err = await res.json().catch(() => ({ error: "Failed to pause check" }));
+			throw new Error(err.error || "Failed to pause check from incident");
 		}
 		const updated: Incident = await res.json();
 		activeIncidents.value = activeIncidents.value.filter((i) => i.id !== id);
@@ -146,6 +138,6 @@ export const useIncidentStore = defineStore("incidents", () => {
 		fetchActiveCount,
 		acknowledgeIncident,
 		closeIncident,
-		ignoreIncident,
+		pauseIncidentCheck,
 	};
 });

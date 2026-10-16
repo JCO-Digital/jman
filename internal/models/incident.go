@@ -13,6 +13,7 @@ const (
 // Incident represents an outage incident for a monitored site.
 type Incident struct {
 	ID             int64      `json:"id"`
+	CheckID        string     `json:"check_id"`
 	Domain         string     `json:"domain"`
 	Status         string     `json:"status"` // open, acknowledged, resolved, closed
 	ErrorMessage   string     `json:"error_message"`

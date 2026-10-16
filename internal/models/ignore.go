@@ -9,7 +9,6 @@ type IgnoreEntry struct {
 	Target         string    `json:"target"`           // site/server UUID, plugin slug, or vulnerability UUID
 	Reason         string    `json:"reason"`           // Freetext explanation
 	NegatedSiteIDs []string  `json:"negated_site_ids"` // Site UUIDs to exclude from a server-wide ignore
-	UseForMonitor  bool      `json:"use_for_monitor"`  // Applies to uptime monitoring
 	UseForVuln     bool      `json:"use_for_vuln"`     // Applies to vulnerability scanning
 	CreatedAt      time.Time `json:"created_at"`
 	CreatedBy      string    `json:"created_by"`

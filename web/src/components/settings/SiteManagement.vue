@@ -91,7 +91,6 @@ function capabilityLabel(site: ManagedSite): string {
 	const caps: string[] = [];
 	if (site.can_wp_cli) caps.push("WP-CLI");
 	if (site.has_agent) caps.push("Agent");
-	if (site.has_monitoring) caps.push("Monitor");
 	return caps.join(", ");
 }
 

@@ -39,7 +39,6 @@ const sitePath = ref("files");
 const isWordpress = ref(true);
 const canWPCLI = ref(true);
 const hasAgent = ref(false);
-const hasMonitoring = ref(true);
 const status = ref<ManagedSiteStatus>("active");
 const isSubmitting = ref(false);
 const errorMessage = ref<string | null>(null);
@@ -79,7 +78,6 @@ watch(
 		isWordpress.value = s?.is_wordpress ?? true;
 		canWPCLI.value = s?.can_wp_cli ?? true;
 		hasAgent.value = s?.has_agent ?? false;
-		hasMonitoring.value = s?.has_monitoring ?? true;
 		status.value = s?.status ?? "active";
 	},
 );
@@ -110,7 +108,6 @@ async function handleSubmit() {
 		site_path: sitePath.value.trim(),
 		can_wp_cli: canWPCLI.value,
 		has_agent: hasAgent.value,
-		has_monitoring: hasMonitoring.value,
 		status: status.value,
 	};
 
@@ -318,13 +315,6 @@ async function handleSubmit() {
 								<label class="checkbox-label">
 									<input v-model="hasAgent" type="checkbox" />
 									jman-agent installed
-								</label>
-								<label class="checkbox-label">
-									<input
-										v-model="hasMonitoring"
-										type="checkbox"
-									/>
-									Uptime monitoring
 								</label>
 							</div>
 

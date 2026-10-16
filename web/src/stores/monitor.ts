@@ -1,7 +1,7 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
-import type { MonitorHistory, MonitorStatus } from "../types";
+import type { MonitorCheck, MonitorHistory, MonitorStatus } from "../types";
 import { BASE_URL, apiFetch } from "../utils/api";
 
 export const useMonitorStore = defineStore("monitor", () => {
@@ -11,6 +11,18 @@ export const useMonitorStore = defineStore("monitor", () => {
 	const currentStatus = ref<Record<string, MonitorStatus>>({});
 	const isLoadingHistory = ref(false);
 	const historyFetched = ref(false);
+	const checks = ref<MonitorCheck[]>([]);
+	const checksFetched = ref(false);
+
+	/** Default checks by site ID. */
+	const defaultCheckBySite = computed(() => {
+		const map = new Map<string, MonitorCheck>();
+		for (const check of checks.value) {
+			if (check.is_default && check.site_id)
+				map.set(check.site_id, check);
+		}
+		return map;
+	});
 
 	const historyByDomain = computed(() => {
 		const map = new Map<string, MonitorHistory[]>();
@@ -84,7 +96,62 @@ export const useMonitorStore = defineStore("monitor", () => {
 		}
 	}
 
+	/**
+	 * GET /api/monitor/checks
+	 * Returns every monitor check.
+	 */
+	async function fetchChecks() {
+		const res = await apiFetch(`${BASE_URL}/monitor/checks`);
+		if (!res.ok) {
+			if (res.status === 401) {
+				authStore.logout();
+				return;
+			}
+			throw new Error("Failed to fetch monitor checks");
+		}
+		checks.value = (await res.json()) || [];
+		checksFetched.value = true;
+		return checks.value;
+	}
+
+	async function ensureChecks() {
+		if (!checksFetched.value) {
+			await fetchChecks();
+		}
+	}
+
+	/** POST /api/monitor/checks/{id}/pause or /resume */
+	async function setCheckPaused(
+		id: string,
+		paused: boolean,
+		reason?: string,
+	) {
+		const res = await apiFetch(
+			`${BASE_URL}/monitor/checks/${encodeURIComponent(id)}/${paused ? "pause" : "resume"}`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(reason ? { reason } : {}),
+			},
+		);
+		if (!res.ok) {
+			const err = await res.json().catch(() => ({}));
+			throw new Error(
+				err.error || `Failed to ${paused ? "pause" : "resume"} check`,
+			);
+		}
+		const updated: MonitorCheck = await res.json();
+		const idx = checks.value.findIndex((c) => c.id === id);
+		if (idx >= 0) checks.value[idx] = updated;
+		return updated;
+	}
+
 	return {
+		checks,
+		defaultCheckBySite,
+		fetchChecks,
+		ensureChecks,
+		setCheckPaused,
 		history,
 		historyFetched,
 		historyByDomain,

@@ -1,4 +1,4 @@
-import { ref, computed } from "vue";
+import { ref } from "vue";
 import { defineStore } from "pinia";
 import type {
 	IgnoreEntry,
@@ -13,27 +13,6 @@ export const useIgnoreStore = defineStore("ignore", () => {
 	const ignoreEntries = ref<IgnoreEntry[]>([]);
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
-
-	const ignoreLookups = computed(() => {
-		const monitor = {
-			sites: new Set<string>(),
-			servers: new Map<string, Set<string>>(),
-		};
-
-		for (const entry of ignoreEntries.value) {
-			if (entry.use_for_monitor) {
-				if (entry.type === "site") monitor.sites.add(entry.target);
-				else if (entry.type === "server") {
-					monitor.servers.set(
-						entry.target,
-						new Set(entry.negated_site_ids || []),
-					);
-				}
-			}
-		}
-
-		return { monitor };
-	});
 
 	async function fetchIgnoreEntries(type?: string) {
 		isLoading.value = true;
@@ -133,32 +112,6 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		}
 	}
 
-	/**
-	 * Returns true if monitoring is ignored for a site.
-	 */
-	function isMonitoringIgnored(
-		siteId?: string | null,
-		serverId?: string | null,
-	): boolean {
-		const lookups = ignoreLookups.value.monitor;
-
-		if (siteId != null && lookups.sites.has(siteId)) {
-			return true;
-		}
-
-		if (serverId != null) {
-			const negatedSites = lookups.servers.get(serverId);
-			if (negatedSites) {
-				if (siteId != null && negatedSites.has(siteId)) {
-					return false;
-				}
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	return {
 		ignoreEntries,
 		isLoading,
@@ -167,6 +120,5 @@ export const useIgnoreStore = defineStore("ignore", () => {
 		addIgnoreEntry,
 		updateIgnoreEntry,
 		deleteIgnoreEntry,
-		isMonitoringIgnored,
 	};
 });

@@ -30,15 +30,12 @@ const newEntry = ref<CreateIgnorePayload>({
 	type: "site",
 	target: "",
 	reason: "",
-	use_for_monitor: true,
 	use_for_vuln: true,
 	negated_site_ids: [],
 });
 
 const isSubmitDisabled = computed(() => {
 	if (!newEntry.value.target) return true;
-	if (!newEntry.value.use_for_monitor && !newEntry.value.use_for_vuln)
-		return true;
 	return isSubmitting.value;
 });
 
@@ -112,7 +109,6 @@ const resetForm = () => {
 		type: "site",
 		target: "",
 		reason: "",
-		use_for_monitor: true,
 		use_for_vuln: true,
 		negated_site_ids: [],
 	};
@@ -137,14 +133,6 @@ watch(
 
 		newEntry.value.negated_site_ids = [];
 		negatedSitesSearch.value = "";
-
-		// Disable monitor if type is plugin or vulnerability
-		if (
-			newEntry.value.type === "plugin" ||
-			newEntry.value.type === "vulnerability"
-		) {
-			newEntry.value.use_for_monitor = false;
-		}
 	},
 );
 
@@ -190,8 +178,7 @@ const handleEditEntry = (entry: IgnoreEntry) => {
 		type: entry.type,
 		target: entry.target,
 		reason: entry.reason,
-		use_for_monitor: entry.use_for_monitor,
-		use_for_vuln: entry.use_for_vuln,
+		use_for_vuln: true,
 		negated_site_ids: entry.negated_site_ids
 			? [...entry.negated_site_ids]
 			: [],
@@ -245,7 +232,9 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 			</button>
 		</div>
 		<p class="sub-text mb-4">
-			Manage exclusions for uptime monitoring and vulnerability scanning.
+			Manage exclusions for vulnerability scanning. To stop uptime
+			monitoring for a site, pause its check from the site's uptime
+			history.
 		</p>
 
 		<!-- Add form -->
@@ -384,43 +373,6 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 							of the server is ignored.
 						</p>
 					</div>
-
-					<div class="form-group col-span-2">
-						<label>Apply logic to:</label>
-						<div class="flex-row gap-6 mt-2">
-							<label
-								class="flex-row items-center gap-2 cursor-pointer"
-								:class="{
-									'opacity-50 cursor-not-allowed':
-										newEntry.type === 'plugin' ||
-										newEntry.type === 'vulnerability',
-								}"
-							>
-								<input
-									v-model="newEntry.use_for_monitor"
-									type="checkbox"
-									:disabled="
-										newEntry.type === 'plugin' ||
-										newEntry.type === 'vulnerability'
-									"
-								/>
-								<span class="font-sm"
-									>Ignore when monitoring sites</span
-								>
-							</label>
-							<label
-								class="flex-row items-center gap-2 cursor-pointer"
-							>
-								<input
-									v-model="newEntry.use_for_vuln"
-									type="checkbox"
-								/>
-								<span class="font-sm"
-									>Ignore when reporting vulnerabilities</span
-								>
-							</label>
-						</div>
-					</div>
 				</div>
 
 				<div class="mt-6 flex-row justify-end gap-3">
@@ -504,12 +456,6 @@ const resolveTargetName = (type: IgnoreType, target: string) => {
 						</td>
 						<td>
 							<div class="flex-row gap-1">
-								<span
-									v-if="entry.use_for_monitor"
-									class="status-badge badge-sm"
-									title="Uptime Monitoring"
-									>Monitor</span
-								>
 								<span
 									v-if="entry.use_for_vuln"
 									class="status-badge badge-sm"
