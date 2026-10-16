@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.4.2 (2026-10-16)
+### 7.4.3 (2026-10-16)
+
+#### Bug Fixes
+
+- web: show check conditions on hover in the checks table (567f760)
+
+### v7.4.2 (2026-10-16)
 
 #### Bug Fixes
 
