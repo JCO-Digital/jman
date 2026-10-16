@@ -1,6 +1,13 @@
 # Changelog
 
-## 7.3.0 (2026-10-16)
+## 7.4.0 (2026-10-16)
+
+#### Features
+
+- web: manage check-ins on the Monitoring page (e15d2bd)
+- monitor: heartbeat checks and the check-in endpoint (9e9fa76)
+
+## v7.3.0 (2026-10-16)
 
 #### Features
 
