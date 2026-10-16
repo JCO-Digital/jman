@@ -153,6 +153,9 @@ async function rotateToken() {
 	) {
 		return;
 	}
+	// The new token is only ever shown here: never issue one the form can't
+	// show because it was closed meanwhile.
+	if (!props.visible || !current.value) return;
 	try {
 		const updated = await monitorStore.issueCheckToken(current.value.id);
 		current.value = updated;

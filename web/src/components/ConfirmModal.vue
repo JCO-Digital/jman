@@ -8,7 +8,7 @@ const { confirmState, handleConfirm, handleCancel } = useConfirm();
 	<Teleport to="body">
 		<div
 			v-if="confirmState.visible"
-			class="modal-overlay"
+			class="modal-overlay confirm-overlay"
 			@click.self="handleCancel"
 		>
 			<div class="modal-content card">
@@ -49,3 +49,13 @@ const { confirmState, handleConfirm, handleCancel } = useConfirm();
 		</div>
 	</Teleport>
 </template>
+
+<style scoped>
+/*
+ * Modals that teleport to <body> after this one was mounted would cover it
+ * at the same z-index, hiding a confirmation asked from inside them.
+ */
+.confirm-overlay {
+	z-index: var(--z-confirm);
+}
+</style>
