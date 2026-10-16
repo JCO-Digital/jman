@@ -109,18 +109,26 @@ function checkLabel(c: MonitorCheck): string {
 }
 
 function expectationLabel(c: MonitorCheck): string {
+	if (c.type === "heartbeat") return "Check-in";
+	return c.expect === "json" ? "JSON" : "HTML";
+}
+
+/**
+ * The condition behind an expectation, shown on hover so a long assertion
+ * doesn't widen the table.
+ */
+function expectationDetail(c: MonitorCheck): string | undefined {
 	if (c.type === "heartbeat") {
 		const threshold = c.fail_threshold ?? 1;
 		return threshold > 1
-			? `Check-in, alert after ${threshold} fails`
-			: "Check-in";
+			? `Alerts after ${threshold} failed check-ins in a row`
+			: undefined;
 	}
-	if (c.expect !== "json") return "HTML";
-	if (c.assert_op === "exists") return `JSON: ${c.assert_path} exists`;
+	if (c.assert_op === "exists") return `${c.assert_path} exists`;
 	if (c.assert_op === "equals") {
-		return `JSON: ${c.assert_path} = ${JSON.stringify(c.assert_value)}`;
+		return `${c.assert_path} = ${JSON.stringify(c.assert_value)}`;
 	}
-	return "JSON";
+	return undefined;
 }
 
 /** "1 day", "90 minutes": a duration in its largest even unit. */
@@ -401,9 +409,14 @@ async function remove(c: MonitorCheck) {
 							</span>
 						</td>
 						<td>
-							<code class="expect-badge">{{
-								expectationLabel(row.check)
-							}}</code>
+							<code
+								class="expect-badge"
+								:class="{
+									'has-detail': expectationDetail(row.check),
+								}"
+								:title="expectationDetail(row.check)"
+								>{{ expectationLabel(row.check) }}</code
+							>
 						</td>
 						<td>
 							<span
@@ -534,6 +547,13 @@ async function remove(c: MonitorCheck) {
 	border-radius: 4px;
 	padding: 2px 6px;
 	white-space: nowrap;
+}
+
+/* A condition is waiting on hover. */
+.expect-badge.has-detail {
+	cursor: help;
+	text-decoration: underline dotted;
+	text-underline-offset: 3px;
 }
 
 .state-pill {
