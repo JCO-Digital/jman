@@ -1,6 +1,14 @@
 # Changelog
 
-## 7.2.0 (2026-10-16)
+## 7.3.0 (2026-10-16)
+
+#### Features
+
+- web: Monitoring page with check management (ae729dd)
+- monitor: JSON checks, secret headers and check management API (25b16a3)
+- monitor: split check engine and close out outages on pause (2af0f7f)
+
+## v7.2.0 (2026-10-16)
 
 #### Features
 
