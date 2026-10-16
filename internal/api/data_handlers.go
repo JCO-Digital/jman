@@ -235,9 +235,10 @@ func newAPISite(ms models.ManagedSite) apiSite {
 }
 
 // loadAPISites builds the /api/sites list: every inventory site (enriched
-// with SpinupWP cache details for SpinupWP sites), plus SpinupWP sites not
-// yet synced into the inventory, with environment, disk usage, WP flags,
-// latest update and core version attached.
+// with SpinupWP cache details for SpinupWP sites) except SpinupWP sites
+// marked removed, plus SpinupWP sites not yet synced into the inventory,
+// with environment, disk usage, WP flags, latest update and core version
+// attached.
 func loadAPISites() ([]apiSite, error) {
 	managedSites, err := db.ListManagedSites()
 	if err != nil {
@@ -255,6 +256,9 @@ func loadAPISites() ([]apiSite, error) {
 	known := make(map[string]bool, len(managedSites))
 	for _, ms := range managedSites {
 		known[ms.ID] = true
+		if ms.Provider == "spinupwp" && ms.Status == db.SiteStatusRemoved {
+			continue
+		}
 		site := newAPISite(ms)
 		if ms.Provider == "spinupwp" {
 			site.Site = cachedByUUID[ms.ID]

@@ -97,7 +97,8 @@ function capabilityLabel(site: ManagedSite): string {
 function statusBadgeClass(status: string): string {
 	// SpinupWP reports "deployed" for live sites.
 	if (status === "active" || status === "deployed") return "active";
-	if (status === "archived") return "archived";
+	// "removed": SpinupWP no longer lists the site.
+	if (status === "archived" || status === "removed") return "archived";
 	return "warning";
 }
 

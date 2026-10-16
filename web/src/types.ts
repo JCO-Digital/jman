@@ -952,7 +952,8 @@ export interface IncidentsResponse {
 // ---------------------------------------------------------------------------
 
 export type ManagedConnectionType = "ssh" | "agent" | "none";
-export type ManagedSiteStatus = "active" | "paused" | "archived";
+/** "removed": a SpinupWP site that SpinupWP no longer lists. */
+export type ManagedSiteStatus = "active" | "paused" | "archived" | "removed";
 
 export interface ManagedServer {
 	id: string;

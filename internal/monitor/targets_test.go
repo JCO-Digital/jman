@@ -5,8 +5,11 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/utils"
 )
 
 func createCheck(t *testing.T, c models.MonitorCheck) models.MonitorCheck {
@@ -114,5 +117,51 @@ func TestReconcileKeepsSpinupWPChecksWithoutList(t *testing.T) {
 	}
 	if c, _ := db.GetMonitorCheck(manual.ID); c == nil || c.OrphanedAt == nil {
 		t.Errorf("manual site's check not orphaned: %+v", c)
+	}
+}
+
+func TestLoadMonitoredSites(t *testing.T) {
+	setupEngineTest(t)
+	oldCacheDir := config.RunData.CacheDir
+	config.RunData.CacheDir = t.TempDir()
+	t.Cleanup(func() { config.RunData.CacheDir = oldCacheDir })
+
+	if err := cache.WriteJSONCache("sites", []models.Site{
+		{ID: 1, Domain: "live.example", Status: "deployed"},
+		{ID: 2, Domain: "failed.example", Status: "failed"},
+		{ID: 3, Domain: "deploying.example", Status: "deploying"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, ms := range []models.ManagedSite{
+		{ID: "m-active", Provider: "manual", Domain: "active.example", Status: "active"},
+		{ID: "m-paused", Provider: "manual", Domain: "paused.example", Status: "paused"},
+		{ID: "m-archived", Provider: "manual", Domain: "archived.example", Status: "archived"},
+		// A SpinupWP row the list no longer has: monitoring follows the list.
+		{ID: utils.SpinupWPSiteUUID(9), Provider: "spinupwp", Domain: "gone.example", Status: "deployed"},
+	} {
+		if err := db.SaveManagedSite(ms); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sites, listed, err := loadMonitoredSites()
+	if err != nil || !listed {
+		t.Fatalf("loadMonitoredSites: listed %v, %v", listed, err)
+	}
+	want := map[string]bool{
+		utils.SpinupWPSiteUUID(1): true,
+		utils.SpinupWPSiteUUID(2): false,
+		utils.SpinupWPSiteUUID(3): false,
+		"m-active":                true,
+		"m-paused":                false,
+	}
+	if len(sites) != len(want) {
+		t.Errorf("got %d sites, want %d (archived and unlisted ones are gone): %+v", len(sites), len(want), sites)
+	}
+	for id, active := range want {
+		if s, ok := sites[id]; !ok || s.active != active {
+			t.Errorf("site %s: %+v (present %v), want active=%v", id, s, ok, active)
+		}
 	}
 }
