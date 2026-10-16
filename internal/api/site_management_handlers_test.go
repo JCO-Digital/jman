@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -395,5 +396,31 @@ func TestSiteServerAssignment(t *testing.T) {
 	DeleteServerHandler(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSitesListHidesRemovedSpinupWPSites(t *testing.T) {
+	setupSiteManagementTest(t)
+
+	for _, ms := range []models.ManagedSite{
+		{ID: "spin-live", Provider: "spinupwp", Domain: "live.example", Status: "deployed"},
+		{ID: "spin-gone", Provider: "spinupwp", Domain: "gone.example", Status: db.SiteStatusRemoved},
+	} {
+		if err := db.SaveManagedSite(ms); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	w := httptest.NewRecorder()
+	SitesHandler(w, httptest.NewRequest("GET", "/api/sites", nil))
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "live.example") || strings.Contains(w.Body.String(), "gone.example") {
+		t.Errorf("site list: %d %s", w.Code, w.Body.String())
+	}
+
+	// Site management still lists it, marked removed.
+	w = httptest.NewRecorder()
+	SitesHandler(w, httptest.NewRequest("GET", "/api/sites?format=managed", nil))
+	if !strings.Contains(w.Body.String(), "gone.example") {
+		t.Errorf("managed list lacks the removed site: %s", w.Body.String())
 	}
 }

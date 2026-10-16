@@ -62,10 +62,11 @@ func LoadTargets() ([]Target, error) {
 }
 
 // loadMonitoredSites returns every site that gets a default check, keyed
-// by site UUID: the SpinupWP sites in the cached list (all of them run, as
-// SpinupWP decides which exist) and the other managed sites (run while
-// active). spinupListed is false when the cached SpinupWP list is empty,
-// which more likely means a failed refresh than no sites at all.
+// by site UUID: the SpinupWP sites in the cached list (SpinupWP decides
+// which exist; they run once deployed) and the other managed sites except
+// archived ones (they run while active). spinupListed is false when the
+// cached SpinupWP list is empty, which more likely means a failed refresh
+// than no sites at all.
 func loadMonitoredSites() (map[string]monitoredSite, bool, error) {
 	spinupSites, err := cache.GetCachedSites()
 	if err != nil {
@@ -78,12 +79,17 @@ func loadMonitoredSites() (map[string]monitoredSite, bool, error) {
 
 	sites := make(map[string]monitoredSite, len(spinupSites)+len(managed))
 	for _, s := range spinupSites {
-		sites[utils.SpinupWPSiteUUID(s.ID)] = monitoredSite{domain: s.Domain, active: true}
+		// A site still deploying, or whose deploy failed, has nothing to check.
+		sites[utils.SpinupWPSiteUUID(s.ID)] = monitoredSite{domain: s.Domain, active: s.Status == "deployed"}
 	}
 	for _, ms := range managed {
 		// SyncSpinupWPIntoInventory only upserts, so inventory can still hold
 		// SpinupWP sites since deleted there: the cached list decides.
 		if ms.Provider == "spinupwp" {
+			continue
+		}
+		// An archived site counts as gone: its checks are orphaned.
+		if ms.Status == "archived" {
 			continue
 		}
 		sites[ms.ID] = monitoredSite{domain: ms.Domain, active: ms.Status == "active"}

@@ -58,3 +58,58 @@ func TestSyncSpinupWPIntoInventory(t *testing.T) {
 		t.Errorf("expected server_id %s, got %v", expectedServerUUID, site.ServerID)
 	}
 }
+
+func TestSyncMarksRemovedSpinupWPSites(t *testing.T) {
+	setupTaskRepoTest(t)
+
+	servers := []models.Server{{ID: 101, Name: "lon1.spinupwp.com"}}
+	site := func(id int, domain string) models.Site {
+		return models.Site{ID: id, ServerID: 101, Domain: domain, Status: "deployed"}
+	}
+	status := func(id int) string {
+		t.Helper()
+		ms, err := GetManagedSite(utils.SpinupWPSiteUUID(id))
+		if err != nil || ms == nil {
+			t.Fatalf("site %d: %+v, %v", id, ms, err)
+		}
+		return ms.Status
+	}
+	manual := models.ManagedSite{ID: "manual-1", Provider: "manual", Domain: "manual.example", Status: "active"}
+	if err := SaveManagedSite(manual); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := SyncSpinupWPIntoInventory(servers, []models.Site{site(1, "a.example"), site(2, "b.example")}); err != nil {
+		t.Fatal(err)
+	}
+
+	// b.example is gone from SpinupWP.
+	if err := SyncSpinupWPIntoInventory(servers, []models.Site{site(1, "a.example")}); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(1); s != "deployed" {
+		t.Errorf("listed site status = %q", s)
+	}
+	if s := status(2); s != SiteStatusRemoved {
+		t.Errorf("unlisted site status = %q, want removed", s)
+	}
+	if ms, _ := GetManagedSite("manual-1"); ms == nil || ms.Status != "active" {
+		t.Errorf("manual site touched: %+v", ms)
+	}
+
+	// An empty list (a failed fetch) removes nothing.
+	if err := SyncSpinupWPIntoInventory(servers, nil); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(1); s != "deployed" {
+		t.Errorf("empty list marked a site: %q", s)
+	}
+
+	// A site SpinupWP lists again gets its status back.
+	if err := SyncSpinupWPIntoInventory(servers, []models.Site{site(1, "a.example"), site(2, "b.example")}); err != nil {
+		t.Fatal(err)
+	}
+	if s := status(2); s != "deployed" {
+		t.Errorf("relisted site status = %q", s)
+	}
+}
