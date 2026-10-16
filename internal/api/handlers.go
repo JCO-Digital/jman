@@ -18,6 +18,11 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.HandleFunc("POST /api/auth/refresh", RefreshHandler(&usersCfg))
 	mux.HandleFunc("POST /api/auth/logout", LogoutHandler)
 	mux.HandleFunc("POST /api/cli/token", CLITokenHandler(&usersCfg, limiter))
+	// Heartbeat check-ins authenticate with their check's token. They get a
+	// limiter of their own so invalid check-ins can't lock out logins.
+	checkInLimiter := NewLoginRateLimiter(behindProxy)
+	mux.HandleFunc("POST /api/checkin", CheckInHandler(checkInLimiter))
+	mux.HandleFunc("POST /api/checkin/{signal}", CheckInHandler(checkInLimiter))
 
 	// --- Protected routes (JWT required with level check) ---
 	basic := func(h http.HandlerFunc) http.Handler {
@@ -92,6 +97,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/monitor/checks/{id}/pause", edit(PauseMonitorCheckHandler))
 	mux.Handle("POST /api/monitor/checks/{id}/resume", edit(ResumeMonitorCheckHandler))
 	mux.Handle("POST /api/monitor/checks/{id}/reset", edit(ResetMonitorCheckHandler))
+	mux.Handle("POST /api/monitor/checks/{id}/token", edit(IssueMonitorCheckTokenHandler))
 	mux.Handle("PUT /api/monitor/checks/{id}/secrets/{header}", edit(SetMonitorCheckSecretHandler))
 	mux.Handle("DELETE /api/monitor/checks/{id}/secrets/{header}", edit(DeleteMonitorCheckSecretHandler))
 

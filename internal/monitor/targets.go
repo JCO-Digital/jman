@@ -18,9 +18,12 @@ const systemUser = "system"
 // Target is a monitor check ready to run.
 type Target struct {
 	CheckID string
-	Domain  string // the checked host
+	Type    string // models.MonitorCheckTypeHTTP or MonitorCheckTypeHeartbeat
+	Domain  string // the checked host; a heartbeat check's label
 	Probe   HTTPProbe
-	Label   string // name used in alerts: the check's name, else host plus path
+	// Heartbeat configures a heartbeat check; zero for HTTP checks.
+	Heartbeat HeartbeatSettings
+	Label     string // name used in alerts: the check's name, else host plus path
 }
 
 // monitoredSite is a site that has (or should have) a default check.
@@ -170,7 +173,19 @@ func inventorySpinupSiteIDs() map[string]bool {
 // shouldn't run now: it's paused, orphaned, its site is inactive, or it
 // has no host to check. headers are the check's secret header values.
 func targetFor(c models.MonitorCheck, sites map[string]monitoredSite, headers map[string]string) (Target, bool) {
-	if !c.Enabled || c.OrphanedAt != nil || c.Type != models.MonitorCheckTypeHTTP {
+	if !c.Enabled || c.OrphanedAt != nil {
+		return Target{}, false
+	}
+	switch c.Type {
+	case models.MonitorCheckTypeHTTP:
+	case models.MonitorCheckTypeHeartbeat:
+		if c.SiteID != "" {
+			if site, ok := sites[c.SiteID]; !ok || !site.active {
+				return Target{}, false
+			}
+		}
+		return heartbeatTarget(c), true
+	default:
 		return Target{}, false
 	}
 
@@ -191,6 +206,7 @@ func targetFor(c models.MonitorCheck, sites map[string]monitoredSite, headers ma
 
 	return Target{
 		CheckID: c.ID,
+		Type:    models.MonitorCheckTypeHTTP,
 		Domain:  host,
 		Probe:   NewHTTPProbe(c, host, headers),
 		Label:   CheckLabel(c, host),
@@ -202,6 +218,9 @@ func targetFor(c models.MonitorCheck, sites map[string]monitoredSite, headers ma
 func CheckLabel(c models.MonitorCheck, host string) string {
 	if c.Name != "" {
 		return c.Name
+	}
+	if c.Type == models.MonitorCheckTypeHeartbeat {
+		return "check-in " + c.ID
 	}
 	if c.Path != "" && c.Path != "/" {
 		return host + c.Path

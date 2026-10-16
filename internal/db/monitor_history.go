@@ -103,7 +103,7 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 	}
 
 	query := `
-		SELECT check_id, domain, is_down, failure_count, last_alert_time, last_checked
+		SELECT check_id, domain, is_down, failure_count, last_alert_time, last_checked, next_check_at, last_started_at
 		FROM monitor_check_status
 		ORDER BY domain ASC, check_id ASC
 	`
@@ -116,20 +116,27 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 	statuses := []models.MonitorStatus{}
 	for rows.Next() {
 		var s models.MonitorStatus
-		var lastAlertTime sql.NullTime
+		var lastAlertTime, lastChecked, nextCheckAt, lastStartedAt sql.NullTime
 		err := rows.Scan(
 			&s.CheckID,
 			&s.Domain,
 			&s.IsDown,
 			&s.FailureCount,
 			&lastAlertTime,
-			&s.LastChecked,
+			&lastChecked,
+			&nextCheckAt,
+			&lastStartedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
 		}
 		if lastAlertTime.Valid {
 			s.LastAlertTime = &lastAlertTime.Time
+		}
+		s.LastChecked = lastChecked.Time
+		s.NextCheckAt = nextCheckAt.Time
+		if lastStartedAt.Valid {
+			s.LastStartedAt = &lastStartedAt.Time
 		}
 		statuses = append(statuses, s)
 	}
@@ -149,8 +156,6 @@ func RecordMonitorHistory(checkID, domain, status string, errorCode int) error {
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	domain = strings.ToLower(domain)
-
 	var lastID int
 	var lastStatus string
 	err := db.QueryRow(`SELECT id, status FROM monitor_history WHERE check_id = ? ORDER BY id DESC LIMIT 1`, checkID).Scan(&lastID, &lastStatus)

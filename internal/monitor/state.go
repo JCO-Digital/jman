@@ -39,6 +39,13 @@ type CheckStatus struct {
 	Domain string    `json:"domain"`
 	Probe  HTTPProbe `json:"-"`
 	Label  string    `json:"label"`
+	// Type and Heartbeat come from the Target too.
+	Type      string            `json:"type"`
+	Heartbeat HeartbeatSettings `json:"-"`
+	// LastStartedAt is when a heartbeat check's job last reported starting;
+	// LastMessage what its last failed check-in said.
+	LastStartedAt time.Time `json:"last_started_at"`
+	LastMessage   string    `json:"-"`
 
 	IsDown               bool      `json:"is_down"`
 	FailureCount         int       `json:"failure_count"`
@@ -63,6 +70,14 @@ func (s *CheckStatus) probe() HTTPProbe {
 		return s.Probe
 	}
 	return HTTPProbe{URL: "https://" + s.Domain, Expect: models.MonitorExpectHTML}
+}
+
+// subject says what kind of thing the check watches, for alerts.
+func (s *CheckStatus) subject() string {
+	if s.Type == models.MonitorCheckTypeHeartbeat {
+		return "Check-in"
+	}
+	return "Site"
 }
 
 // label returns the check's name for alerts, falling back to its domain.
@@ -104,6 +119,7 @@ func LoadState() (*State, error) {
 			DownSince:            r.DownSince,
 			PDTriggered:          r.PDTriggered,
 			PDEscalated:          r.PDEscalated,
+			LastStartedAt:        r.LastStartedAt,
 		}
 
 		// Normalize mode based on is_down status to ensure continuity after migration.
@@ -149,6 +165,7 @@ func SaveCheckStatus(status *CheckStatus) error {
 		DownSince:            status.DownSince,
 		PDTriggered:          status.PDTriggered,
 		PDEscalated:          status.PDEscalated,
+		LastStartedAt:        status.LastStartedAt,
 	}
 	status.Mu.Unlock()
 
@@ -179,6 +196,8 @@ func (s *State) GetStatus(t Target) *CheckStatus {
 	status.Domain = t.Domain
 	status.Probe = t.Probe
 	status.Label = t.Label
+	status.Type = t.Type
+	status.Heartbeat = t.Heartbeat
 	status.Mu.Unlock()
 
 	return status

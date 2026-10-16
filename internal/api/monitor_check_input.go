@@ -15,6 +15,8 @@ import (
 // MonitorCheckRequest is the body for creating, editing or testing a
 // monitor check. On edit, absent fields keep their current value.
 type MonitorCheckRequest struct {
+	// Type is "http" (the default) or "heartbeat"; create only.
+	Type *string `json:"type"`
 	// SiteID links a new check to a site; create and test only.
 	SiteID *string  `json:"site_id"`
 	Name   *string  `json:"name"`
@@ -26,6 +28,11 @@ type MonitorCheckRequest struct {
 	Value  rawField `json:"assert_value"`
 	// CacheBypass is true, false, or null to follow the global setting.
 	CacheBypass rawField `json:"cache_bypass"`
+	// Heartbeat checks: expected check-in interval, grace on top of it, and
+	// failed check-ins in a row before alerting.
+	IntervalSeconds *int `json:"interval_seconds"`
+	GraceSeconds    *int `json:"grace_seconds"`
+	FailThreshold   *int `json:"fail_threshold"`
 
 	// ID names a stored check to test: the request's fields override its
 	// settings and its secret headers are sent. Test only.
@@ -51,7 +58,8 @@ func (f rawField) isNull() bool {
 // opposed to only its name.
 func (req MonitorCheckRequest) probeFields() bool {
 	return req.Host != nil || req.Path != nil || req.Expect != nil || req.Assert != nil ||
-		req.Op != nil || req.Value != nil || req.CacheBypass != nil
+		req.Op != nil || req.Value != nil || req.CacheBypass != nil ||
+		req.IntervalSeconds != nil || req.GraceSeconds != nil || req.FailThreshold != nil
 }
 
 // applyTo copies the request's fields onto c and validates the result.
@@ -94,6 +102,21 @@ func (req MonitorCheckRequest) applyTo(c *models.MonitorCheck) error {
 			c.CacheBypass = &b
 		}
 	}
+	if req.IntervalSeconds != nil {
+		c.IntervalSeconds = *req.IntervalSeconds
+	}
+	if req.GraceSeconds != nil {
+		c.GraceSeconds = *req.GraceSeconds
+	}
+	if req.FailThreshold != nil {
+		c.FailThreshold = *req.FailThreshold
+	}
+	if c.Type == models.MonitorCheckTypeHeartbeat {
+		if c.FailThreshold == 0 {
+			c.FailThreshold = 1
+		}
+		return validateHeartbeatCheck(c)
+	}
 	if c.Path == "" {
 		c.Path = "/"
 	}
@@ -106,6 +129,9 @@ func (req MonitorCheckRequest) applyTo(c *models.MonitorCheck) error {
 func validateMonitorCheck(c *models.MonitorCheck) error {
 	if c.Type != models.MonitorCheckTypeHTTP {
 		return fmt.Errorf("unsupported check type %q", c.Type)
+	}
+	if c.IntervalSeconds != 0 || c.GraceSeconds != 0 {
+		return fmt.Errorf("interval_seconds and grace_seconds only apply to heartbeat checks")
 	}
 	if len(c.Name) > 200 {
 		return fmt.Errorf("name is longer than 200 characters")
@@ -154,6 +180,34 @@ func validateMonitorCheck(c *models.MonitorCheck) error {
 	}
 	if c.AssertPath == "" || strings.HasPrefix(c.AssertPath, ".") || strings.HasSuffix(c.AssertPath, ".") || strings.Contains(c.AssertPath, "..") {
 		return fmt.Errorf("assert_path must be a dotted path such as status or items.0.state")
+	}
+	return nil
+}
+
+// maxHeartbeatSeconds caps a heartbeat check's interval and grace.
+const maxHeartbeatSeconds = 366 * 24 * 60 * 60
+
+func validateHeartbeatCheck(c *models.MonitorCheck) error {
+	if c.IsDefault {
+		return fmt.Errorf("a site's default check can't be a heartbeat check")
+	}
+	if c.Name == "" {
+		return fmt.Errorf("a heartbeat check needs a name")
+	}
+	if len(c.Name) > 200 {
+		return fmt.Errorf("name is longer than 200 characters")
+	}
+	if c.Host != "" || c.Expect != "" || c.AssertOp != "" || c.AssertPath != "" || len(c.AssertValue) > 0 || c.CacheBypass != nil {
+		return fmt.Errorf("host, expect, assertions and cache_bypass don't apply to a heartbeat check")
+	}
+	if c.IntervalSeconds < 60 || c.IntervalSeconds > maxHeartbeatSeconds {
+		return fmt.Errorf("interval_seconds must be between 60 and %d", maxHeartbeatSeconds)
+	}
+	if c.GraceSeconds < 0 || c.GraceSeconds > maxHeartbeatSeconds {
+		return fmt.Errorf("grace_seconds must be between 0 and %d", maxHeartbeatSeconds)
+	}
+	if c.FailThreshold < 1 || c.FailThreshold > 100 {
+		return fmt.Errorf("fail_threshold must be between 1 and 100")
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -132,8 +133,15 @@ func (s *Scheduler) refreshChecks(applyJitter bool) error {
 		active[t.CheckID] = true
 		status := s.state.GetStatus(t)
 
-		// Jitter check times on startup or for new checks
 		status.Mu.Lock()
+		// A heartbeat check runs when its check-in deadline passes, never
+		// on a jittered schedule.
+		if t.Type == models.MonitorCheckTypeHeartbeat {
+			status.NextCheckAt = heartbeatNextCheck(status, time.Now())
+			status.Mu.Unlock()
+			continue
+		}
+		// Jitter check times on startup or for new checks
 		if applyJitter || status.NextCheckAt.IsZero() {
 			// Spread initial checks over a 5-minute window
 			jitter := time.Duration(rand.Intn(300)) * time.Second

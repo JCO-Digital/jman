@@ -531,6 +531,34 @@ report ID.
 - One optional assertion on a JSON body: `assert_path` is dot-separated (`items.0.state`); `assert_op` is `equals` (with `assert_value`, compared as JSON, so `true` and `"true"` differ) or `exists`.
 - `cache_bypass`: `true`/`false` override the global `monitorCacheBypass` setting; `null` follows it.
 - A 2xx response is always required.
+
+**Heartbeat checks (check-ins)**
+
+A check with `"type": "heartbeat"` is told a job ran rather than probing anything. Create it with:
+
+```json
+{ "type": "heartbeat", "name": "Nightly backup", "interval_seconds": 86400, "grace_seconds": 3600, "fail_threshold": 1 }
+```
+
+- It goes down when no check-in finished within `interval_seconds` + `grace_seconds` of the last one, or after `fail_threshold` failed check-ins in a row (default 1). The next OK check-in brings it back up.
+- A new check waits for its first check-in before it can alert.
+- The create response includes `token`, the check-in token, shown this once. Other responses only carry `token_prefix` and `token_created_at`.
+- `POST /monitor/checks/{id}/token` (Protected: `edit`) issues a new token, replacing the old one, and returns it once.
+- `name` is required. Host, path, expectation, assertion and cache bypass don't apply, and `type` can't be changed later.
+
+### Check-ins (public)
+
+`POST /checkin` or `POST /checkin/ok`: the job finished OK.
+`POST /checkin/fail`: the job finished with an error. A plain-text body (up to 500 characters) becomes the incident and history message.
+`POST /checkin/start`: the job started. Recorded as `last_started_at` in the check's status; it doesn't move the deadline.
+
+Authenticate with `Authorization: Bearer <token>`; the token names the check. Responses are `{"ok": true, "accepted": true}`, with `accepted: false` for a paused or orphaned check. An invalid token returns 401, and repeated invalid tokens from one client return 429 for 15 minutes.
+
+```sh
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" https://jman.example.com/api/checkin/start
+run-backup && s=ok || s=fail
+curl -fsS -X POST -H "Authorization: Bearer $TOKEN" https://jman.example.com/api/checkin/$s --data "exit $?"
+```
 `POST /monitor/checks/{id}/pause` (Protected: `edit`): pauses a check. An active incident is resolved, its PagerDuty alert resolved, and a "paused" message posted to Slack. Optional body `{"reason": "..."}`.
 `POST /monitor/checks/{id}/resume` (Protected: `edit`)
 `POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check, resolving the incident.

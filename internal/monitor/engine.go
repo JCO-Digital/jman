@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/pagerduty"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -52,9 +53,14 @@ func (e *Engine) Check(status *CheckStatus) error {
 	label := status.label()
 	probe := status.probe()
 	currentMode := status.CurrentMode
+	isHeartbeat := status.Type == models.MonitorCheckTypeHeartbeat
 	status.Mu.Unlock()
 
 	verb.LogPrintf(verb.Debug, "Checking %s (Mode: %s)...\n", label, currentMode)
+
+	if isHeartbeat {
+		return e.sweepHeartbeat(status)
+	}
 
 	result := e.probeHTTP(probe)
 	RecordHistory(checkID, domain, result.Up, result.Message, result.Code)
