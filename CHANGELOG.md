@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.1.0 (2026-10-15)
+## 7.2.0 (2026-10-16)
+
+#### Features
+
+- monitor: run monitor checks instead of sites (a529149)
+
+## v7.1.0 (2026-10-15)
 
 #### Features
 
