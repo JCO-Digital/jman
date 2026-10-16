@@ -200,7 +200,11 @@ export const useMonitorStore = defineStore("monitor", () => {
 			"POST",
 			payload,
 		);
-		return upsertCheck(await res.json());
+		// A new heartbeat check's token comes back this once: return it, but
+		// don't keep it in the list.
+		const check: MonitorCheck = await res.json();
+		upsertCheck({ ...check, token: undefined });
+		return check;
 	}
 
 	/** PATCH /api/monitor/checks/{id} */
@@ -240,6 +244,17 @@ export const useMonitorStore = defineStore("monitor", () => {
 		return upsertCheck(await res.json());
 	}
 
+	/**
+	 * POST /api/monitor/checks/{id}/token: issues a new check-in token for a
+	 * heartbeat check. The returned check carries the token this once.
+	 */
+	async function issueCheckToken(id: string) {
+		const res = await sendJSON(checkURL(id, "/token"), "POST");
+		const check: MonitorCheck = await res.json();
+		upsertCheck({ ...check, token: undefined });
+		return check;
+	}
+
 	/** POST /api/monitor/checks/test: runs a check once, recording nothing. */
 	async function testCheck(
 		payload: MonitorCheckPayload & {
@@ -268,6 +283,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 		deleteCheck,
 		setCheckSecret,
 		deleteCheckSecret,
+		issueCheckToken,
 		testCheck,
 		setCheckPaused,
 		history,

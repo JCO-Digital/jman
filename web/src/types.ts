@@ -321,17 +321,28 @@ export interface MonitorCheck {
 	id: string;
 	site_id?: string;
 	is_default: boolean;
-	type: string;
+	type: "http" | "heartbeat";
 	name?: string;
 	host?: string;
 	path: string;
-	expect: "html" | "json";
+	/** HTTP checks only. */
+	expect?: "html" | "json";
 	assert_path?: string;
 	assert_op?: "equals" | "exists";
 	/** JSON value the assert_path must equal. */
 	assert_value?: unknown;
 	/** Overrides the global cache bypass setting; absent follows it. */
 	cache_bypass?: boolean;
+	/** Heartbeat checks: expected check-in interval and grace. */
+	interval_seconds?: number;
+	grace_seconds?: number;
+	/** Heartbeat checks: failed check-ins in a row before alerting. */
+	fail_threshold?: number;
+	/** Heartbeat checks: start of the check-in token, and when it was issued. */
+	token_prefix?: string;
+	token_created_at?: string;
+	/** The check-in token itself, only right after it was issued. */
+	token?: string;
 	enabled: boolean;
 	orphaned_at?: string;
 	created_at: string;
@@ -345,6 +356,8 @@ export interface MonitorCheck {
 
 /** Body for creating or editing a check; absent fields are kept on edit. */
 export interface MonitorCheckPayload {
+	/** Create only. */
+	type?: "http" | "heartbeat";
 	site_id?: string;
 	name?: string;
 	host?: string;
@@ -355,6 +368,9 @@ export interface MonitorCheckPayload {
 	assert_value?: unknown;
 	/** null follows the global setting. */
 	cache_bypass?: boolean | null;
+	interval_seconds?: number;
+	grace_seconds?: number;
+	fail_threshold?: number;
 }
 
 export interface MonitorCheckTestResult {
@@ -378,6 +394,10 @@ export interface MonitorStatus {
 	failure_count: number;
 	last_alert_time?: string;
 	last_checked: string | null;
+	/** When the check runs next; for a heartbeat check, its deadline. */
+	next_check_at?: string;
+	/** Heartbeat checks: when the job last reported starting. */
+	last_started_at?: string;
 	status_message?: string;
 }
 

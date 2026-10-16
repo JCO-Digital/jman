@@ -9,6 +9,7 @@ import { useConfirm } from "../../composables/useConfirm";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import MonitorCheckFormModal from "./MonitorCheckFormModal.vue";
+import HeartbeatCheckFormModal from "./HeartbeatCheckFormModal.vue";
 import type { MonitorCheck } from "../../types";
 
 const props = defineProps<{
@@ -32,7 +33,8 @@ type CheckState =
 	| "down"
 	| "investigating"
 	| "up"
-	| "pending";
+	| "pending"
+	| "waiting";
 
 const stateLabels: Record<CheckState, string> = {
 	orphaned: "Orphaned",
@@ -41,6 +43,7 @@ const stateLabels: Record<CheckState, string> = {
 	investigating: "Investigating",
 	up: "Up",
 	pending: "Pending",
+	waiting: "Waiting",
 };
 
 // Order in the table: what needs attention first.
@@ -48,15 +51,17 @@ const stateOrder: Record<CheckState, number> = {
 	down: 0,
 	investigating: 1,
 	pending: 2,
-	up: 3,
-	paused: 4,
-	orphaned: 5,
+	waiting: 3,
+	up: 4,
+	paused: 5,
+	orphaned: 6,
 };
 
 const isLoading = ref(false);
 const search = ref("");
 const stateFilter = ref<"" | CheckState>("");
 const formVisible = ref(false);
+const heartbeatFormVisible = ref(false);
 const editing = ref<MonitorCheck | null>(null);
 const busyId = ref<string | null>(null);
 
@@ -88,7 +93,9 @@ function checkState(c: MonitorCheck): CheckState {
 	if (c.orphaned_at) return "orphaned";
 	if (!c.enabled) return "paused";
 	const st = monitorStore.statusByCheck[c.id];
-	if (!st || !st.last_checked) return "pending";
+	if (!st || !st.last_checked) {
+		return c.type === "heartbeat" ? "waiting" : "pending";
+	}
 	if (st.is_down) return "down";
 	if (st.failure_count > 0) return "investigating";
 	return "up";
@@ -96,17 +103,72 @@ function checkState(c: MonitorCheck): CheckState {
 
 function checkLabel(c: MonitorCheck): string {
 	if (c.name) return c.name;
+	if (c.type === "heartbeat") return "Check-in";
 	if (!c.domain) return "(unknown site)";
 	return c.path && c.path !== "/" ? c.domain + c.path : c.domain;
 }
 
 function expectationLabel(c: MonitorCheck): string {
+	if (c.type === "heartbeat") {
+		const threshold = c.fail_threshold ?? 1;
+		return threshold > 1
+			? `Check-in, alert after ${threshold} fails`
+			: "Check-in";
+	}
 	if (c.expect !== "json") return "HTML";
 	if (c.assert_op === "exists") return `JSON: ${c.assert_path} exists`;
 	if (c.assert_op === "equals") {
 		return `JSON: ${c.assert_path} = ${JSON.stringify(c.assert_value)}`;
 	}
 	return "JSON";
+}
+
+/** "1 day", "90 minutes": a duration in its largest even unit. */
+function formatSeconds(seconds: number): string {
+	const units: [number, string][] = [
+		[86400, "day"],
+		[3600, "hour"],
+		[60, "minute"],
+	];
+	for (const [size, unit] of units) {
+		if (seconds >= size && seconds % size === 0) {
+			const n = seconds / size;
+			return `${n} ${unit}${n === 1 ? "" : "s"}`;
+		}
+	}
+	return `${seconds} seconds`;
+}
+
+/** The schedule line under a heartbeat check's name. */
+function heartbeatSchedule(c: MonitorCheck): string {
+	let text = `Every ${formatSeconds(c.interval_seconds ?? 0)}`;
+	if (c.grace_seconds) text += ` + ${formatSeconds(c.grace_seconds)} grace`;
+	return text;
+}
+
+function formatShort(iso: string): string {
+	return new Date(iso).toLocaleString(undefined, {
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+	});
+}
+
+/** "Running since …" while a heartbeat check's job has started but not finished. */
+function runningSince(c: MonitorCheck): string | null {
+	const st = monitorStore.statusByCheck[c.id];
+	if (!st?.last_started_at) return null;
+	if (st.last_checked && st.last_checked >= st.last_started_at) return null;
+	return formatShort(st.last_started_at);
+}
+
+/** When a heartbeat check misses its next check-in, if it has a deadline. */
+function dueBy(c: MonitorCheck): string | null {
+	const st = monitorStore.statusByCheck[c.id];
+	if (!st?.next_check_at || !st.last_checked || st.is_down) return null;
+	if (st.next_check_at.startsWith("9999")) return null;
+	return formatShort(st.next_check_at);
 }
 
 function siteDomain(siteId?: string): string | undefined {
@@ -147,23 +209,19 @@ const counts = computed(() => {
 
 function lastChecked(c: MonitorCheck): string {
 	const iso = monitorStore.statusByCheck[c.id]?.last_checked;
-	if (!iso) return "-";
-	return new Date(iso).toLocaleString(undefined, {
-		month: "short",
-		day: "numeric",
-		hour: "2-digit",
-		minute: "2-digit",
-	});
+	return iso ? formatShort(iso) : "-";
 }
 
-function openCreate() {
+function openCreate(type: "http" | "heartbeat") {
 	editing.value = null;
-	formVisible.value = true;
+	if (type === "heartbeat") heartbeatFormVisible.value = true;
+	else formVisible.value = true;
 }
 
 function openEdit(c: MonitorCheck) {
 	editing.value = c;
-	formVisible.value = true;
+	if (c.type === "heartbeat") heartbeatFormVisible.value = true;
+	else formVisible.value = true;
 }
 
 async function togglePaused(c: MonitorCheck) {
@@ -238,13 +296,21 @@ async function remove(c: MonitorCheck) {
 				</button>
 			</span>
 			<span class="spacer"></span>
-			<button
-				v-if="authStore.canEdit"
-				class="btn btn-primary btn-sm"
-				@click="openCreate"
-			>
-				Add Check
-			</button>
+			<template v-if="authStore.canEdit">
+				<button
+					class="btn btn-outline btn-sm"
+					title="A job reports in; alerts when it fails or doesn't"
+					@click="openCreate('heartbeat')"
+				>
+					Add Check-in
+				</button>
+				<button
+					class="btn btn-primary btn-sm"
+					@click="openCreate('http')"
+				>
+					Add Check
+				</button>
+			</template>
 		</div>
 
 		<div
@@ -281,6 +347,21 @@ async function remove(c: MonitorCheck) {
 								<span class="font-medium">{{ row.label }}</span>
 								<span v-if="row.check.url" class="check-url">
 									{{ row.check.url }}
+								</span>
+								<span
+									v-if="row.check.type === 'heartbeat'"
+									class="check-url"
+								>
+									{{ heartbeatSchedule(row.check) }}
+									<template v-if="dueBy(row.check)">
+										· due by {{ dueBy(row.check) }}
+									</template>
+								</span>
+								<span
+									v-if="runningSince(row.check)"
+									class="sub-text text-xs"
+								>
+									Running since {{ runningSince(row.check) }}
 								</span>
 								<span
 									v-if="row.check.secret_headers.length"
@@ -393,6 +474,12 @@ async function remove(c: MonitorCheck) {
 			@close="formVisible = false"
 			@saved="monitorStore.fetchCheckStatuses()"
 		/>
+		<HeartbeatCheckFormModal
+			:visible="heartbeatFormVisible"
+			:edit-check="editing"
+			@close="heartbeatFormVisible = false"
+			@saved="monitorStore.fetchCheckStatuses()"
+		/>
 	</div>
 </template>
 
@@ -475,6 +562,7 @@ async function remove(c: MonitorCheck) {
 }
 
 .state-pending,
+.state-waiting,
 .state-paused,
 .state-orphaned {
 	background: var(--bg-body);
