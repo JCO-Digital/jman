@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.4.1 (2026-10-16)
+### 7.4.2 (2026-10-16)
+
+#### Bug Fixes
+
+- web: show confirmations above other modals (417c8f0)
+
+### v7.4.1 (2026-10-16)
 
 #### Bug Fixes
 
