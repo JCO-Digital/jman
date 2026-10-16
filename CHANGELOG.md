@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.4.0 (2026-10-16)
+### 7.4.1 (2026-10-16)
+
+#### Bug Fixes
+
+- mark SpinupWP sites deleted upstream as removed (2576436)
+
+## v7.4.0 (2026-10-16)
 
 #### Features
 
