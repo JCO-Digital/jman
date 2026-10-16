@@ -2,11 +2,9 @@ package monitor
 
 import (
 	"log"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 )
 
@@ -25,14 +23,19 @@ var (
 	globalWriteMu sync.Mutex
 )
 
-// SiteStatus tracks the monitoring state for an individual site.
-type SiteStatus struct {
+// CheckStatus tracks the monitoring state of one monitor check.
+type CheckStatus struct {
 	Mu       sync.Mutex `json:"-"`
 	InFlight bool       `json:"-"`
 
-	ID                   string    `json:"id"`        // site UUID
-	ServerID             string    `json:"server_id"` // server UUID
-	Domain               string    `json:"domain"`
+	CheckID string `json:"check_id"`
+	// Domain is the checked host, URL the address requested and Label the
+	// name used in alerts. All three come from the check's Target and are
+	// refreshed on every scheduler tick.
+	Domain string `json:"domain"`
+	URL    string `json:"url"`
+	Label  string `json:"label"`
+
 	IsDown               bool      `json:"is_down"`
 	FailureCount         int       `json:"failure_count"`
 	ConsecutiveSuccesses int       `json:"consecutive_successes"`
@@ -42,17 +45,34 @@ type SiteStatus struct {
 	NextCheckAt          time.Time `json:"next_check_at"`
 
 	// DownSince, PDTriggered and PDEscalated track the PagerDuty escalation
-	// timer for the current outage. DownSince is set once, when the site
+	// timer for the current outage. DownSince is set once, when the check
 	// transitions into ModeAlert, and cleared on recovery.
 	DownSince   time.Time `json:"down_since"`
 	PDTriggered bool      `json:"pd_triggered"`
 	PDEscalated bool      `json:"pd_escalated"`
 }
 
-// State represents the overall monitoring state for all sites.
+// requestURL returns the address to check, falling back to the domain's
+// home page for a status that has no target applied yet.
+func (s *CheckStatus) requestURL() string {
+	if s.URL != "" {
+		return s.URL
+	}
+	return "https://" + s.Domain
+}
+
+// label returns the check's name for alerts, falling back to its domain.
+func (s *CheckStatus) label() string {
+	if s.Label != "" {
+		return s.Label
+	}
+	return s.Domain
+}
+
+// State represents the overall monitoring state for all checks.
 type State struct {
-	Mu    sync.RWMutex
-	Sites map[string]*SiteStatus `json:"sites"`
+	Mu     sync.RWMutex
+	Checks map[string]*CheckStatus `json:"checks"`
 }
 
 // LoadState reads the monitor state from the database.
@@ -63,18 +83,12 @@ func LoadState() (*State, error) {
 	}
 
 	state := &State{
-		Sites: make(map[string]*SiteStatus),
-	}
-
-	// Fetch monitor targets to populate IDs
-	targets, _ := cache.GetMonitorTargets()
-	siteMap := make(map[string]cache.MonitorTarget)
-	for _, t := range targets {
-		siteMap[strings.ToLower(t.Domain)] = t
+		Checks: make(map[string]*CheckStatus),
 	}
 
 	for _, r := range records {
-		status := &SiteStatus{
+		status := &CheckStatus{
+			CheckID:              r.CheckID,
 			Domain:               r.Domain,
 			IsDown:               r.IsDown,
 			FailureCount:         r.FailureCount,
@@ -88,18 +102,13 @@ func LoadState() (*State, error) {
 			PDEscalated:          r.PDEscalated,
 		}
 
-		if t, ok := siteMap[strings.ToLower(r.Domain)]; ok {
-			status.ID = t.SiteID
-			status.ServerID = t.ServerID
-		}
-
 		// Normalize mode based on is_down status to ensure continuity after migration.
-		// If a site is marked as down, it must be in Alert mode.
+		// If a check is marked as down, it must be in Alert mode.
 		if status.IsDown && status.CurrentMode != ModeAlert {
 			status.CurrentMode = ModeAlert
 		}
 
-		state.Sites[r.Domain] = status
+		state.Checks[r.CheckID] = status
 	}
 
 	return state, nil
@@ -110,20 +119,21 @@ func (s *State) SaveState() error {
 	s.Mu.RLock()
 	defer s.Mu.RUnlock()
 
-	for _, status := range s.Sites {
-		if err := SaveSiteStatus(status); err != nil {
+	for _, status := range s.Checks {
+		if err := SaveCheckStatus(status); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// SaveSiteStatus updates or inserts the status for a single site in the database.
-// It handles its own synchronization for both the SiteStatus object and the database.
-func SaveSiteStatus(status *SiteStatus) error {
+// SaveCheckStatus updates or inserts the status for a single check in the database.
+// It handles its own synchronization for both the CheckStatus object and the database.
+func SaveCheckStatus(status *CheckStatus) error {
 	// Lock the status to get a consistent snapshot of the data
 	status.Mu.Lock()
 	record := db.MonitorStatusRecord{
+		CheckID:              status.CheckID,
 		Domain:               status.Domain,
 		IsDown:               status.IsDown,
 		FailureCount:         status.FailureCount,
@@ -145,54 +155,47 @@ func SaveSiteStatus(status *SiteStatus) error {
 	return db.SaveMonitorStatusRecord(record)
 }
 
-// GetStatus returns the status for a given domain, creating it if it doesn't exist.
-func (s *State) GetStatus(domain string) *SiteStatus {
-	domain = strings.ToLower(domain)
+// GetStatus returns the status for a target's check, creating it if it
+// doesn't exist, and applies the target's current domain, URL and label.
+func (s *State) GetStatus(t Target) *CheckStatus {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
-	if status, ok := s.Sites[domain]; ok {
-		return status
-	}
-
-	status := &SiteStatus{
-		Domain:      domain,
-		CurrentMode: ModeNormal,
-		NextCheckAt: time.Now(),
-	}
-
-	// Try to populate IDs from the monitor targets
-	if targets, err := cache.GetMonitorTargets(); err == nil {
-		for _, t := range targets {
-			if strings.ToLower(t.Domain) == domain {
-				status.ID = t.SiteID
-				status.ServerID = t.ServerID
-				break
-			}
+	status, ok := s.Checks[t.CheckID]
+	if !ok {
+		status = &CheckStatus{
+			CheckID:     t.CheckID,
+			CurrentMode: ModeNormal,
+			NextCheckAt: time.Now(),
 		}
+		s.Checks[t.CheckID] = status
 	}
 
-	s.Sites[domain] = status
+	status.Mu.Lock()
+	status.Domain = t.Domain
+	status.URL = t.URL
+	status.Label = t.Label
+	status.Mu.Unlock()
+
 	return status
 }
 
-// RemoveStatus deletes the status for a given domain from both the state map and database.
-func (s *State) RemoveStatus(domain string) {
-	domain = strings.ToLower(domain)
+// RemoveStatus deletes the status for a check from both the state map and database.
+func (s *State) RemoveStatus(checkID string) {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
-	delete(s.Sites, domain)
+	delete(s.Checks, checkID)
 
 	if db.GetAPIDB() != nil {
 		globalWriteMu.Lock()
 		defer globalWriteMu.Unlock()
-		_ = db.DeleteMonitorStatus(domain)
+		_ = db.DeleteMonitorStatus(checkID)
 	}
 }
 
 // RecordHistory updates the history table with the current check result.
-func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
+func RecordHistory(checkID, domain string, isUp bool, statusMsg string, errorCode int) {
 	if db.GetAPIDB() == nil {
 		return
 	}
@@ -209,7 +212,7 @@ func RecordHistory(domain string, isUp bool, statusMsg string, errorCode int) {
 	globalWriteMu.Lock()
 	defer globalWriteMu.Unlock()
 
-	if err := db.RecordMonitorHistory(domain, statusText, errorCode); err != nil {
+	if err := db.RecordMonitorHistory(checkID, domain, statusText, errorCode); err != nil {
 		log.Printf("Warning: %v\n", err)
 	}
 }

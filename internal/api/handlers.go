@@ -83,12 +83,15 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Monitoring routes ---
 	mux.Handle("GET /api/monitor/history", basic(MonitorHistoryHandler))
 	mux.Handle("GET /api/monitor/status", basic(MonitorStatusHandler))
+	mux.Handle("GET /api/monitor/checks", basic(ListMonitorChecksHandler))
+	mux.Handle("POST /api/monitor/checks/{id}/pause", edit(PauseMonitorCheckHandler))
+	mux.Handle("POST /api/monitor/checks/{id}/resume", edit(ResumeMonitorCheckHandler))
 
 	// --- Incident routes ---
 	mux.Handle("GET /api/incidents", basic(ListIncidentsHandler))
 	mux.Handle("POST /api/incidents/{id}/acknowledge", basic(AcknowledgeIncidentHandler))
 	mux.Handle("POST /api/incidents/{id}/close", basic(CloseIncidentHandler))
-	mux.Handle("POST /api/incidents/{id}/ignore", edit(IgnoreIncidentHandler))
+	mux.Handle("POST /api/incidents/{id}/pause", edit(PauseIncidentCheckHandler))
 
 	// --- Ignore routes ---
 	mux.Handle("GET /api/ignore", basic(ListIgnoreEntriesHandler))

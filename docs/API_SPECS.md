@@ -490,7 +490,6 @@ report ID.
 	"target": "123",
 	"reason": "Maintenance",
 	"negated_site_ids": [456],
-	"use_for_monitor": true,
 	"use_for_vuln": true,
 	"created_at": "datetime",
 	"created_by": "username",
@@ -503,6 +502,12 @@ report ID.
 
 `GET /monitor/history` (Protected: `basic`)
 `GET /monitor/status` (Protected: `basic`)
+`GET /monitor/checks` (Protected: `basic`): every monitor check, with the `domain` and `url` it checks. Optional `?site_id=` filter.
+`POST /monitor/checks/{id}/pause` (Protected: `edit`): pauses a check, closing its active incident. Optional body `{"reason": "..."}`.
+`POST /monitor/checks/{id}/resume` (Protected: `edit`)
+`POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check and closes the incident.
+
+Monitor history, statuses and incidents carry the `check_id` they belong to. Every site has a default check (path `/`, expecting HTML), created automatically; a check whose site is gone is marked `orphaned_at` and no longer runs.
 
 ---
 

@@ -24,7 +24,8 @@ var (
 	}
 	APITables = []string{
 		"slack_messages",
-		"monitor_status",
+		// monitor_status isn't copied: monitor_checks replaced it, and the
+		// monitor rebuilds its state from scratch.
 		"monitor_history",
 		"organizations",
 		"contacts",

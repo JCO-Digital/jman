@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { RouterLink } from "vue-router";
+import { computed, onMounted, ref } from "vue";
 import type { MonitorHistory } from "../types";
 import { useMonitorStore } from "../stores/monitor";
-import { useIgnoreStore } from "../stores/ignore";
+import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
+import { useToastStore } from "../stores/toast";
 import LoadingSpinner from "./LoadingSpinner.vue";
 
 const props = defineProps<{
@@ -15,31 +15,55 @@ const props = defineProps<{
 }>();
 
 const monitorStore = useMonitorStore();
-const ignoreStore = useIgnoreStore();
+const authStore = useAuthStore();
 const dataStore = useDataStore();
+const toast = useToastStore();
 
 const TOTAL_MINUTES = 1440; // 24 hours
 const MS_PER_MINUTE = 60000;
 
-const effectiveIds = computed(() => {
-	let sId: string | null | undefined = props.siteId;
-	let srvId: string | null | undefined = props.serverId;
-
-	// Fallback to domain-based lookup if IDs are missing
-	if ((sId == null || srvId === undefined) && props.domain) {
-		const site = dataStore.sites.find((s) => s.domain === props.domain);
-		if (site) {
-			sId = sId ?? site.id;
-			srvId = srvId ?? site.server_id;
-		}
-	}
-
-	return { siteId: sId, serverId: srvId };
+const effectiveSiteId = computed(() => {
+	if (props.siteId) return props.siteId;
+	// Fallback to domain-based lookup if the ID is missing
+	return props.domain
+		? dataStore.sites.find((s) => s.domain === props.domain)?.id
+		: undefined;
 });
 
-const isIgnored = computed(() => {
-	const ids = effectiveIds.value;
-	return ignoreStore.isMonitoringIgnored(ids.siteId, ids.serverId);
+/** The site's default monitor check, once checks are loaded. */
+const defaultCheck = computed(() =>
+	effectiveSiteId.value
+		? monitorStore.defaultCheckBySite.get(effectiveSiteId.value)
+		: undefined,
+);
+
+const isPaused = computed(() => defaultCheck.value?.enabled === false);
+const isToggling = ref(false);
+
+async function togglePaused() {
+	const check = defaultCheck.value;
+	if (!check) return;
+	isToggling.value = true;
+	try {
+		await monitorStore.setCheckPaused(check.id, check.enabled);
+		toast.addToast(
+			check.enabled ? "Monitoring paused" : "Monitoring resumed",
+			"success",
+		);
+	} catch (err) {
+		toast.addToast(
+			err instanceof Error ? err.message : "Failed to update check",
+			"error",
+		);
+	} finally {
+		isToggling.value = false;
+	}
+}
+
+onMounted(() => {
+	monitorStore.ensureChecks().catch((err) => {
+		console.error("Failed to load monitor checks:", err);
+	});
 });
 
 const liveStatus = computed(() =>
@@ -136,7 +160,7 @@ const startTimeLabel = computed(() => {
 		<div class="card-header">
 			<div class="flex-row gap-3">
 				<h2>Uptime History</h2>
-				<div v-if="isIgnored" class="ignored-badge">Ignored</div>
+				<div v-if="isPaused" class="ignored-badge">Paused</div>
 				<div
 					v-else-if="liveStatus"
 					class="live-status-indicator"
@@ -159,7 +183,7 @@ const startTimeLabel = computed(() => {
 					{{ liveStatus.last_checked ? "Live" : "Pending" }}
 				</div>
 			</div>
-			<div v-if="!isIgnored" class="flex-row gap-2 font-sm">
+			<div v-if="!isPaused" class="flex-row gap-2 font-sm">
 				<span class="text-muted font-medium">Uptime (24h)</span>
 				<span
 					class="font-weight-700"
@@ -180,11 +204,16 @@ const startTimeLabel = computed(() => {
 			<LoadingSpinner message="Loading history..." />
 		</div>
 
-		<div v-else-if="isIgnored" class="loading-state">
-			<p>Monitoring is disabled for this domain.</p>
-			<RouterLink to="/settings" class="btn btn-text font-sm mt-2">
-				Manage ignored sites in Settings
-			</RouterLink>
+		<div v-else-if="isPaused" class="loading-state">
+			<p>Monitoring is paused for this site.</p>
+			<button
+				v-if="authStore.canEdit"
+				class="btn btn-text font-sm mt-2"
+				:disabled="isToggling"
+				@click="togglePaused"
+			>
+				Resume monitoring
+			</button>
 		</div>
 
 		<div v-else-if="timelineData.length > 0" class="mt-2">

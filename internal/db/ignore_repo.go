@@ -24,10 +24,10 @@ func SaveIgnoreEntry(entry *models.IgnoreEntry, username string) error {
 	now := time.Now()
 	if entry.ID == 0 {
 		query := `
-		INSERT INTO ignore_entries (type, target, reason, negated_site_ids, use_for_monitor, use_for_vuln, created_at, created_by, updated_at, updated_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO ignore_entries (type, target, reason, negated_site_ids, use_for_vuln, created_at, created_by, updated_at, updated_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		`
-		result, err := db.Exec(query, entry.Type, entry.Target, entry.Reason, string(negatedJSON), entry.UseForMonitor, entry.UseForVuln, now, username, now, username)
+		result, err := db.Exec(query, entry.Type, entry.Target, entry.Reason, string(negatedJSON), entry.UseForVuln, now, username, now, username)
 		if err != nil {
 			return fmt.Errorf("failed to insert ignore entry: %w", err)
 		}
@@ -39,10 +39,10 @@ func SaveIgnoreEntry(entry *models.IgnoreEntry, username string) error {
 		entry.UpdatedBy = username
 	} else {
 		query := `
-		UPDATE ignore_entries SET type = ?, target = ?, reason = ?, negated_site_ids = ?, use_for_monitor = ?, use_for_vuln = ?, updated_at = ?, updated_by = ?
+		UPDATE ignore_entries SET type = ?, target = ?, reason = ?, negated_site_ids = ?, use_for_vuln = ?, updated_at = ?, updated_by = ?
 		WHERE id = ?
 		`
-		_, err := db.Exec(query, entry.Type, entry.Target, entry.Reason, string(negatedJSON), entry.UseForMonitor, entry.UseForVuln, now, username, entry.ID)
+		_, err := db.Exec(query, entry.Type, entry.Target, entry.Reason, string(negatedJSON), entry.UseForVuln, now, username, entry.ID)
 		if err != nil {
 			return fmt.Errorf("failed to update ignore entry: %w", err)
 		}
@@ -59,11 +59,11 @@ func GetIgnoreEntry(id int) (*models.IgnoreEntry, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, type, target, reason, negated_site_ids, use_for_monitor, use_for_vuln, created_at, created_by, updated_at, updated_by FROM ignore_entries WHERE id = ?`
+	query := `SELECT id, type, target, reason, negated_site_ids, use_for_vuln, created_at, created_by, updated_at, updated_by FROM ignore_entries WHERE id = ?`
 	var e models.IgnoreEntry
 	var negatedJSON string
 	err := db.QueryRow(query, id).Scan(
-		&e.ID, &e.Type, &e.Target, &e.Reason, &negatedJSON, &e.UseForMonitor, &e.UseForVuln, &e.CreatedAt, &e.CreatedBy, &e.UpdatedAt, &e.UpdatedBy,
+		&e.ID, &e.Type, &e.Target, &e.Reason, &negatedJSON, &e.UseForVuln, &e.CreatedAt, &e.CreatedBy, &e.UpdatedAt, &e.UpdatedBy,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -87,7 +87,7 @@ func GetAllIgnoreEntries(entryType string) ([]models.IgnoreEntry, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT id, type, target, reason, negated_site_ids, use_for_monitor, use_for_vuln, created_at, created_by, updated_at, updated_by FROM ignore_entries`
+	query := `SELECT id, type, target, reason, negated_site_ids, use_for_vuln, created_at, created_by, updated_at, updated_by FROM ignore_entries`
 	var args []interface{}
 	if entryType != "" {
 		query += " WHERE type = ?"
@@ -105,7 +105,7 @@ func GetAllIgnoreEntries(entryType string) ([]models.IgnoreEntry, error) {
 	for rows.Next() {
 		var e models.IgnoreEntry
 		var negatedJSON string
-		if err := rows.Scan(&e.ID, &e.Type, &e.Target, &e.Reason, &negatedJSON, &e.UseForMonitor, &e.UseForVuln, &e.CreatedAt, &e.CreatedBy, &e.UpdatedAt, &e.UpdatedBy); err != nil {
+		if err := rows.Scan(&e.ID, &e.Type, &e.Target, &e.Reason, &negatedJSON, &e.UseForVuln, &e.CreatedAt, &e.CreatedBy, &e.UpdatedAt, &e.UpdatedBy); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal([]byte(negatedJSON), &e.NegatedSiteIDs); err != nil {
@@ -127,7 +127,8 @@ func DeleteIgnoreEntry(id int) error {
 }
 
 // siteServerIgnores holds site- and server-scoped ignore rules keyed by
-// site/server UUID, shared by the monitor and vulnerability matchers.
+// site/server UUID, used by the vulnerability matcher (and the
+// monitor_checks migration, for the former monitor ignore rules).
 type siteServerIgnores struct {
 	sites   map[string]bool
 	servers map[string][]string // server UUID -> negated site UUIDs
@@ -165,33 +166,6 @@ func (ig siteServerIgnores) isIgnored(siteID, serverID string) bool {
 		}
 	}
 	return true
-}
-
-// MonitorIgnoreMatcher provides efficient in-memory matching for monitor ignores.
-type MonitorIgnoreMatcher struct {
-	siteServerIgnores
-}
-
-// NewMonitorIgnoreMatcher fetches all monitor ignore entries and returns a matcher.
-func NewMonitorIgnoreMatcher() (*MonitorIgnoreMatcher, error) {
-	entries, err := GetAllIgnoreEntries("")
-	if err != nil {
-		return nil, err
-	}
-
-	matcher := &MonitorIgnoreMatcher{siteServerIgnores: newSiteServerIgnores()}
-	for _, e := range entries {
-		if e.UseForMonitor {
-			matcher.add(e)
-		}
-	}
-
-	return matcher, nil
-}
-
-// IsIgnored checks if a site (by site and server UUID) is ignored for monitoring.
-func (m *MonitorIgnoreMatcher) IsIgnored(siteID, serverID string) bool {
-	return m.isIgnored(siteID, serverID)
 }
 
 // VulnIgnoreMatcher provides efficient in-memory matching for vulnerability ignores.

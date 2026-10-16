@@ -10,16 +10,16 @@ import (
 )
 
 // CreateIncident creates a new incident if there is not already an active (open or acknowledged)
-// incident for the specified domain. If an active incident already exists, it updates its error message/code
-// and returns the existing incident.
-func CreateIncident(domain, errorMessage string, errorCode int, downSince time.Time) (*models.Incident, error) {
+// incident for the check. If an active incident already exists, it updates its error message/code
+// and returns the existing incident. domain is the checked host, stored for display.
+func CreateIncident(checkID, domain, errorMessage string, errorCode int, downSince time.Time) (*models.Incident, error) {
 	domain = strings.ToLower(domain)
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	existing, err := GetActiveIncidentByDomain(domain)
+	existing, err := GetActiveIncidentByCheck(checkID)
 	if err != nil {
 		return nil, err
 	}
@@ -46,18 +46,19 @@ func CreateIncident(domain, errorMessage string, errorCode int, downSince time.T
 	}
 
 	query := `
-		INSERT INTO incidents (domain, status, error_message, error_code, down_since, pd_triggered, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, FALSE, ?, ?)
+		INSERT INTO incidents (check_id, domain, status, error_message, error_code, down_since, pd_triggered, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, FALSE, ?, ?)
 		RETURNING id
 	`
 	var id int64
-	err = db.QueryRow(query, domain, models.IncidentStatusOpen, errorMessage, errorCode, downSince, now, now).Scan(&id)
+	err = db.QueryRow(query, checkID, domain, models.IncidentStatusOpen, errorMessage, errorCode, downSince, now, now).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create incident: %w", err)
 	}
 
 	return &models.Incident{
 		ID:           id,
+		CheckID:      checkID,
 		Domain:       domain,
 		Status:       models.IncidentStatusOpen,
 		ErrorMessage: errorMessage,
@@ -69,28 +70,28 @@ func CreateIncident(domain, errorMessage string, errorCode int, downSince time.T
 	}, nil
 }
 
-// GetActiveIncidentByDomain returns the currently active (open or acknowledged) incident for domain, or nil if none.
-func GetActiveIncidentByDomain(domain string) (*models.Incident, error) {
+// GetActiveIncidentByCheck returns the currently active (open or acknowledged) incident for a check, or nil if none.
+func GetActiveIncidentByCheck(checkID string) (*models.Incident, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
 	query := `
-		SELECT id, domain, status, error_message, error_code, down_since,
+		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
 		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
 		       pd_triggered, created_at, updated_at
 		FROM incidents
-		WHERE domain = LOWER(?) AND status IN ('open', 'acknowledged')
+		WHERE check_id = ? AND status IN ('open', 'acknowledged')
 		ORDER BY id DESC LIMIT 1
 	`
-	row := db.QueryRow(query, domain)
+	row := db.QueryRow(query, checkID)
 	inc, err := scanIncident(row)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to query active incident for %s: %w", domain, err)
+		return nil, fmt.Errorf("failed to query active incident for check %s: %w", checkID, err)
 	}
 	return inc, nil
 }
@@ -103,7 +104,7 @@ func GetIncidentByID(id int64) (*models.Incident, error) {
 	}
 
 	query := `
-		SELECT id, domain, status, error_message, error_code, down_since,
+		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
 		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
 		       pd_triggered, created_at, updated_at
 		FROM incidents
@@ -128,7 +129,7 @@ func GetActiveIncidents() ([]models.Incident, error) {
 	}
 
 	query := `
-		SELECT id, domain, status, error_message, error_code, down_since,
+		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
 		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
 		       pd_triggered, created_at, updated_at
 		FROM incidents
@@ -191,7 +192,7 @@ func GetIncidents(filter string, limit, offset int) ([]models.Incident, int, err
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, domain, status, error_message, error_code, down_since,
+		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
 		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
 		       pd_triggered, created_at, updated_at
 		FROM incidents
@@ -261,14 +262,14 @@ func AcknowledgeIncident(id int64, username string) (*models.Incident, error) {
 	return GetIncidentByID(id)
 }
 
-// ResolveActiveIncidentByDomain resolves any active incident for domain.
-func ResolveActiveIncidentByDomain(domain string, username string) (*models.Incident, error) {
+// ResolveActiveIncidentByCheck resolves any active incident for a check.
+func ResolveActiveIncidentByCheck(checkID string, username string) (*models.Incident, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	active, err := GetActiveIncidentByDomain(domain)
+	active, err := GetActiveIncidentByCheck(checkID)
 	if err != nil || active == nil {
 		return nil, err
 	}
@@ -358,6 +359,7 @@ func scanIncident(row *sql.Row) (*models.Incident, error) {
 
 	err := row.Scan(
 		&inc.ID,
+		&inc.CheckID,
 		&inc.Domain,
 		&inc.Status,
 		&inc.ErrorMessage,
@@ -408,6 +410,7 @@ func scanIncidentRows(rows *sql.Rows) (*models.Incident, error) {
 
 	err := rows.Scan(
 		&inc.ID,
+		&inc.CheckID,
 		&inc.Domain,
 		&inc.Status,
 		&inc.ErrorMessage,

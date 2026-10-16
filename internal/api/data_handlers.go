@@ -181,11 +181,10 @@ type apiSite struct {
 	SSHPort        int                        `json:"ssh_port"`
 	// SSH is the target jman actually connects to for WP-CLI, in WP-CLI's
 	// --ssh form ("user@host", or "user@host:port" for non-default ports).
-	SSH           string `json:"ssh,omitempty"`
-	SitePath      string `json:"site_path"`
-	CanWPCLI      bool   `json:"can_wp_cli"`
-	HasAgent      bool   `json:"has_agent"`
-	HasMonitoring bool   `json:"has_monitoring"`
+	SSH      string `json:"ssh,omitempty"`
+	SitePath string `json:"site_path"`
+	CanWPCLI bool   `json:"can_wp_cli"`
+	HasAgent bool   `json:"has_agent"`
 
 	DiskUsage  *models.SiteDiskUsage         `json:"disk_usage,omitempty"`
 	WpFlags    *models.SiteWpFlags           `json:"wp_flags,omitempty"`
@@ -228,7 +227,6 @@ func newAPISite(ms models.ManagedSite) apiSite {
 		SitePath:       ms.SitePath,
 		CanWPCLI:       ms.CanWPCLI,
 		HasAgent:       ms.HasAgent,
-		HasMonitoring:  ms.HasMonitoring,
 	}
 	if ms.SSHHost != "" {
 		site.SSH = ms.ToCliSite().SSH
@@ -294,7 +292,6 @@ func loadAPISites() ([]apiSite, error) {
 				SitePath:       "files",
 				CanWPCLI:       true,
 				HasAgent:       true,
-				HasMonitoring:  true,
 			})
 		}
 	}

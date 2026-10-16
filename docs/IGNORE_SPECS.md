@@ -1,6 +1,8 @@
 # Unified Ignore List Specification
 
-The `jman` suite uses a unified ignore system to suppress alerts and reports for specific assets across monitoring and vulnerability scanning.
+The `jman` suite uses an ignore system to suppress vulnerability reports for specific assets.
+
+Uptime monitoring doesn't use the ignore list: it runs monitor checks, and a check is paused instead (`POST /api/monitor/checks/{id}/pause`, or "Pause Check" on an incident). The `monitor_checks` migration turned the former monitor ignore rules into paused checks.
 
 ## Database Schema
 
@@ -15,19 +17,12 @@ Ignore rules are stored in the `ignore_entries` table.
   - `vulnerability`: Vulnerability UUID.
 - **`reason`** (TEXT): A free-text description of why the item is ignored.
 - **`negated_site_ids`** (TEXT): A JSON array of SpinupWP Site IDs. Used for `server` ignores to keep specific sites active while the rest of the server is ignored.
-- **`use_for_monitor`** (BOOLEAN): If true, this rule applies to uptime monitoring (`jman-api`).
-- **`use_for_vuln`** (BOOLEAN): If true, this rule applies to vulnerability scanning (`jman vuln`).
+- **`use_for_monitor`** (BOOLEAN): Legacy, always false. Kept only for the `monitor_checks` migration.
+- **`use_for_vuln`** (BOOLEAN): Must be true; the API rejects entries without it.
 - **`created_at` / `updated_at`** (DATETIME): Audit timestamps.
 - **`created_by` / `updated_by`** (TEXT): The user who created or last modified the entry.
 
 ## Logic & Hierarchy
-
-### Uptime Monitoring
-
-A site check is skipped if **any** of the following match with `use_for_monitor = true`:
-
-1.  **Site Match**: A `site` entry exists for the site's ID.
-2.  **Server Match**: A `server` entry exists for the site's server ID, **and** the site ID is **not** present in the `negated_site_ids` list.
 
 ### Vulnerability Reporting
 
@@ -56,10 +51,10 @@ Displays all entries. Site and Server IDs are automatically resolved to domains 
 jman ignore add <type> <identifier> [reason] [flags]
 ```
 
-- **Site**: `jman ignore add site example.com "Maintenance" --monitor`
-- **Server**: `jman ignore add server "Production Node 1" --monitor --negate mysite.com`
-- **Plugin**: `jman ignore add plugin akismet "Internal fork" --vuln`
-- **Vulnerability**: `jman ignore add vuln <uuid> "False positive" --vuln` (Type `vuln` is mapped to `vulnerability`)
+- **Site**: `jman ignore add site example.com "Maintenance"`
+- **Server**: `jman ignore add server "Production Node 1" --negate mysite.com`
+- **Plugin**: `jman ignore add plugin akismet "Internal fork"`
+- **Vulnerability**: `jman ignore add vuln <uuid> "False positive"` (Type `vuln` is mapped to `vulnerability`)
 
 ### Removing Entries
 

@@ -19,13 +19,11 @@ const activeTab = ref<"active" | "history">("active");
 const historyPage = ref(1);
 const historyLimit = ref(20);
 
-// Ignore modal state
-const showIgnoreModal = ref(false);
+// Pause modal state
+const showPauseModal = ref(false);
 const selectedIncident = ref<Incident | null>(null);
-const ignoreReason = ref("");
-const ignoreMonitor = ref(true);
-const ignoreVuln = ref(false);
-const isSubmittingIgnore = ref(false);
+const pauseReason = ref("");
+const isSubmittingPause = ref(false);
 
 onMounted(() => {
 	loadData();
@@ -162,41 +160,37 @@ async function handleClose(incident: Incident) {
 	}
 }
 
-function openIgnoreModal(incident: Incident) {
+function openPauseModal(incident: Incident) {
 	selectedIncident.value = incident;
-	ignoreReason.value = `Site down: ${incident.error_message || "Manual ignore from incident"}`;
-	ignoreMonitor.value = true;
-	ignoreVuln.value = false;
-	showIgnoreModal.value = true;
+	pauseReason.value = `Site down: ${incident.error_message || "Paused from incident"}`;
+	showPauseModal.value = true;
 }
 
-function closeIgnoreModal() {
-	showIgnoreModal.value = false;
+function closePauseModal() {
+	showPauseModal.value = false;
 	selectedIncident.value = null;
-	ignoreReason.value = "";
+	pauseReason.value = "";
 }
 
-async function submitIgnore() {
+async function submitPause() {
 	if (!selectedIncident.value) return;
-	isSubmittingIgnore.value = true;
+	isSubmittingPause.value = true;
 	try {
-		await incidentStore.ignoreIncident(
+		await incidentStore.pauseIncidentCheck(
 			selectedIncident.value.id,
-			ignoreReason.value,
-			ignoreMonitor.value,
-			ignoreVuln.value,
+			pauseReason.value,
 		);
 		toastStore.addToast(
-			`Added ${selectedIncident.value.domain} to ignore list and closed incident`,
+			`Paused monitoring for ${selectedIncident.value.domain} and closed incident`,
 			"success",
 		);
-		closeIgnoreModal();
+		closePauseModal();
 	} catch (err: unknown) {
 		const message =
-			err instanceof Error ? err.message : "Failed to ignore site";
+			err instanceof Error ? err.message : "Failed to pause check";
 		toastStore.addToast(message, "error");
 	} finally {
-		isSubmittingIgnore.value = false;
+		isSubmittingPause.value = false;
 	}
 }
 
@@ -347,12 +341,12 @@ const canEdit = computed(() => authStore.canEdit);
 										Acknowledge
 									</button>
 									<button
-										v-if="canEdit"
+										v-if="canEdit && inc.check_id"
 										class="btn btn-sm btn-outline"
-										title="Add to monitor ignore list"
-										@click="openIgnoreModal(inc)"
+										title="Pause this monitor check"
+										@click="openPauseModal(inc)"
 									>
-										Ignore Site
+										Pause Check
 									</button>
 									<button
 										class="btn btn-sm btn-outline"
@@ -459,68 +453,55 @@ const canEdit = computed(() => authStore.canEdit);
 			</div>
 		</div>
 
-		<!-- Ignore Modal -->
+		<!-- Pause Modal -->
 		<div
-			v-if="showIgnoreModal"
+			v-if="showPauseModal"
 			class="modal-overlay"
-			@click.self="closeIgnoreModal"
+			@click.self="closePauseModal"
 		>
 			<div class="modal-content card">
 				<div class="modal-header">
-					<h2>Ignore Site {{ selectedIncident?.domain }}</h2>
-					<button class="icon-btn" @click="closeIgnoreModal">
+					<h2>Pause monitoring for {{ selectedIncident?.domain }}</h2>
+					<button class="icon-btn" @click="closePauseModal">
 						<AppIcon name="x" size="18" />
 					</button>
 				</div>
-				<form @submit.prevent="submitIgnore">
+				<form @submit.prevent="submitPause">
 					<div class="modal-body">
 						<p class="sub-text">
-							Adding this site to the ignore list will suppress
-							alerts and immediately close this incident.
+							Pausing this check stops it running and immediately
+							closes this incident. Resume it from the site's
+							uptime history.
 						</p>
 
 						<div class="form-group">
-							<label for="ignoreReason">Reason</label>
+							<label for="pauseReason">Reason</label>
 							<input
-								id="ignoreReason"
-								v-model="ignoreReason"
+								id="pauseReason"
+								v-model="pauseReason"
 								type="text"
 								class="input-field"
 								required
 								placeholder="e.g. Planned maintenance, site decommissioned"
 							/>
 						</div>
-
-						<div class="form-checkbox-group">
-							<label class="checkbox-label">
-								<input
-									v-model="ignoreMonitor"
-									type="checkbox"
-								/>
-								<span>Ignore in Uptime Monitoring</span>
-							</label>
-							<label class="checkbox-label">
-								<input v-model="ignoreVuln" type="checkbox" />
-								<span>Ignore in Vulnerability Scanning</span>
-							</label>
-						</div>
 					</div>
 					<div class="modal-footer">
 						<button
 							type="button"
 							class="btn btn-outline"
-							:disabled="isSubmittingIgnore"
-							@click="closeIgnoreModal"
+							:disabled="isSubmittingPause"
+							@click="closePauseModal"
 						>
 							Cancel
 						</button>
 						<button
 							type="submit"
 							class="btn btn-primary"
-							:disabled="isSubmittingIgnore"
+							:disabled="isSubmittingPause"
 						>
-							<LoadingSpinner v-if="isSubmittingIgnore" small />
-							<span v-else>Confirm & Ignore</span>
+							<LoadingSpinner v-if="isSubmittingPause" small />
+							<span v-else>Confirm & Pause</span>
 						</button>
 					</div>
 				</form>

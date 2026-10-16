@@ -10,6 +10,7 @@ func TestMonitorStatusRecordRoundTrip(t *testing.T) {
 
 	checked := time.Date(2026, 10, 2, 6, 0, 0, 0, time.UTC)
 	in := MonitorStatusRecord{
+		CheckID:      "check-1",
 		Domain:       "Example.com",
 		IsDown:       true,
 		FailureCount: 3,
@@ -32,7 +33,7 @@ func TestMonitorStatusRecordRoundTrip(t *testing.T) {
 		t.Fatalf("got %d records, err %v; want 1", len(records), err)
 	}
 	got := records[0]
-	if got.Domain != "example.com" || got.FailureCount != 4 || !got.IsDown || !got.PDTriggered || got.CurrentMode != "alert" {
+	if got.CheckID != "check-1" || got.Domain != "example.com" || got.FailureCount != 4 || !got.IsDown || !got.PDTriggered || got.CurrentMode != "alert" {
 		t.Errorf("unexpected record %+v", got)
 	}
 	if !got.LastChecked.Equal(in.LastChecked) || !got.DownSince.Equal(in.DownSince) {
@@ -42,7 +43,7 @@ func TestMonitorStatusRecordRoundTrip(t *testing.T) {
 		t.Errorf("zero LastAlertTime came back as %v", got.LastAlertTime)
 	}
 
-	if err := ResetMonitorStatus("EXAMPLE.com"); err != nil {
+	if err := ResetMonitorStatus("check-1"); err != nil {
 		t.Fatal(err)
 	}
 	records, _ = GetAllMonitorStatusRecords()
@@ -50,7 +51,7 @@ func TestMonitorStatusRecordRoundTrip(t *testing.T) {
 		t.Errorf("reset left %+v", r)
 	}
 
-	if err := DeleteMonitorStatus("Example.COM"); err != nil {
+	if err := DeleteMonitorStatus("check-1"); err != nil {
 		t.Fatal(err)
 	}
 	if records, _ = GetAllMonitorStatusRecords(); len(records) != 0 {
@@ -62,7 +63,7 @@ func TestRecordMonitorHistory(t *testing.T) {
 	setupTestAPIDB(t)
 
 	for _, s := range []string{"UP", "UP", "HTTP 500", "UP"} {
-		if err := RecordMonitorHistory("Example.com", s, 0); err != nil {
+		if err := RecordMonitorHistory("check-1", "Example.com", s, 0); err != nil {
 			t.Fatal(err)
 		}
 	}

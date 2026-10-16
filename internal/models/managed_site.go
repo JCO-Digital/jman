@@ -40,9 +40,8 @@ type ManagedSite struct {
 	SitePath       string `json:"site_path"`
 
 	// Capabilities
-	CanWPCLI      bool `json:"can_wp_cli"`
-	HasAgent      bool `json:"has_agent"`
-	HasMonitoring bool `json:"has_monitoring"`
+	CanWPCLI bool `json:"can_wp_cli"`
+	HasAgent bool `json:"has_agent"`
 
 	Status    string `json:"status"` // 'active', 'paused', 'archived'
 	CreatedAt string `json:"created_at,omitempty"`

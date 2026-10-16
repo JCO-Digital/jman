@@ -36,7 +36,6 @@ type CreateSiteRequest struct {
 	SitePath       string                     `json:"site_path"`
 	CanWPCLI       *bool                      `json:"can_wp_cli"`
 	HasAgent       *bool                      `json:"has_agent"`
-	HasMonitoring  *bool                      `json:"has_monitoring"`
 	Status         string                     `json:"status"`
 }
 
@@ -111,11 +110,6 @@ func CreateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		hasAgent = *req.HasAgent
 	}
 
-	hasMonitoring := true
-	if req.HasMonitoring != nil {
-		hasMonitoring = *req.HasMonitoring
-	}
-
 	serverID := req.ServerID
 	if serverID != nil && strings.TrimSpace(*serverID) == "" {
 		serverID = nil
@@ -136,7 +130,6 @@ func CreateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		SitePath:       sitePath,
 		CanWPCLI:       canWPCLI,
 		HasAgent:       hasAgent,
-		HasMonitoring:  hasMonitoring,
 		Status:         status,
 	}
 
@@ -255,9 +248,6 @@ func UpdateSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.HasAgent != nil {
 		site.HasAgent = *req.HasAgent
-	}
-	if req.HasMonitoring != nil {
-		site.HasMonitoring = *req.HasMonitoring
 	}
 	if req.Status != "" {
 		site.Status = strings.TrimSpace(req.Status)

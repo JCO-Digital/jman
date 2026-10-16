@@ -7,38 +7,39 @@ import (
 	"time"
 )
 
-// GetSiteMode returns the current monitoring mode for a given domain from the database.
-func GetSiteMode(domain string) (string, error) {
+// GetCheckMode returns the current monitoring mode of a check.
+func GetCheckMode(checkID string) (string, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return "", fmt.Errorf("database not initialized")
 	}
 
 	var mode string
-	query := `SELECT current_mode FROM monitor_status WHERE domain = LOWER(?)`
-	err := db.QueryRow(query, domain).Scan(&mode)
+	query := `SELECT current_mode FROM monitor_check_status WHERE check_id = ?`
+	err := db.QueryRow(query, checkID).Scan(&mode)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return "normal", nil // Default mode if site has never been checked
+			return "normal", nil // Default mode if the check has never run
 		}
-		return "", fmt.Errorf("failed to get site mode for %s: %w", domain, err)
+		return "", fmt.Errorf("failed to get mode for check %s: %w", checkID, err)
 	}
 	return mode, nil
 }
 
-// IsSiteInAlertMode checks if a domain is currently in alert mode.
-func IsSiteInAlertMode(domain string) (bool, error) {
-	mode, err := GetSiteMode(domain)
+// IsCheckInAlertMode reports whether a check is currently in alert mode.
+func IsCheckInAlertMode(checkID string) (bool, error) {
+	mode, err := GetCheckMode(checkID)
 	if err != nil {
 		return false, err
 	}
 	return mode == "alert", nil
 }
 
-// MonitorStatusRecord is one monitor_status row as the monitor scheduler
+// MonitorStatusRecord is one monitor_check_status row as the monitor scheduler
 // persists it. Zero LastAlertTime and DownSince are stored as NULL and
 // read back as zero.
 type MonitorStatusRecord struct {
+	CheckID              string
 	Domain               string
 	IsDown               bool
 	FailureCount         int
@@ -52,16 +53,16 @@ type MonitorStatusRecord struct {
 	PDEscalated          bool
 }
 
-// GetAllMonitorStatusRecords returns every persisted monitor_status row.
+// GetAllMonitorStatusRecords returns every persisted monitor_check_status row.
 func GetAllMonitorStatusRecords() ([]MonitorStatusRecord, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	rows, err := db.Query(`SELECT domain, is_down, failure_count, consecutive_successes, current_mode,
+	rows, err := db.Query(`SELECT check_id, domain, is_down, failure_count, consecutive_successes, current_mode,
 		last_alert_time, last_checked, next_check_at, down_since, pd_triggered, pd_escalated
-		FROM monitor_status`)
+		FROM monitor_check_status`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load monitor status: %w", err)
 	}
@@ -72,7 +73,7 @@ func GetAllMonitorStatusRecords() ([]MonitorStatusRecord, error) {
 		var r MonitorStatusRecord
 		var lastAlertTime, lastChecked, nextCheckAt, downSince sql.NullTime
 		if err := rows.Scan(
-			&r.Domain, &r.IsDown, &r.FailureCount, &r.ConsecutiveSuccesses, &r.CurrentMode,
+			&r.CheckID, &r.Domain, &r.IsDown, &r.FailureCount, &r.ConsecutiveSuccesses, &r.CurrentMode,
 			&lastAlertTime, &lastChecked, &nextCheckAt, &downSince, &r.PDTriggered, &r.PDEscalated,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
@@ -89,8 +90,8 @@ func GetAllMonitorStatusRecords() ([]MonitorStatusRecord, error) {
 	return records, nil
 }
 
-// SaveMonitorStatusRecord inserts or updates the monitor_status row for
-// r.Domain (lowercased).
+// SaveMonitorStatusRecord inserts or updates the monitor_check_status row
+// for r.CheckID.
 func SaveMonitorStatusRecord(r MonitorStatusRecord) error {
 	db := GetAPIDB()
 	if db == nil {
@@ -106,12 +107,13 @@ func SaveMonitorStatusRecord(r MonitorStatusRecord) error {
 	}
 
 	_, err := db.Exec(`
-		INSERT INTO monitor_status (
-			domain, is_down, failure_count, consecutive_successes,
+		INSERT INTO monitor_check_status (
+			check_id, domain, is_down, failure_count, consecutive_successes,
 			current_mode, last_alert_time, last_checked, next_check_at,
 			down_since, pd_triggered, pd_escalated
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT(domain) DO UPDATE SET
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(check_id) DO UPDATE SET
+			domain = excluded.domain,
 			is_down = excluded.is_down,
 			failure_count = excluded.failure_count,
 			consecutive_successes = excluded.consecutive_successes,
@@ -123,35 +125,35 @@ func SaveMonitorStatusRecord(r MonitorStatusRecord) error {
 			pd_triggered = excluded.pd_triggered,
 			pd_escalated = excluded.pd_escalated
 	`,
-		strings.ToLower(r.Domain), r.IsDown, r.FailureCount, r.ConsecutiveSuccesses,
+		r.CheckID, strings.ToLower(r.Domain), r.IsDown, r.FailureCount, r.ConsecutiveSuccesses,
 		r.CurrentMode, lastAlertTime, r.LastChecked, r.NextCheckAt,
 		downSince, r.PDTriggered, r.PDEscalated,
 	)
 	return err
 }
 
-// DeleteMonitorStatus removes the monitor_status row for a domain.
-func DeleteMonitorStatus(domain string) error {
+// DeleteMonitorStatus removes the monitor_check_status row for a check.
+func DeleteMonitorStatus(checkID string) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	_, err := db.Exec(`DELETE FROM monitor_status WHERE domain = ?`, strings.ToLower(domain))
+	_, err := db.Exec(`DELETE FROM monitor_check_status WHERE check_id = ?`, checkID)
 	return err
 }
 
-// ResetMonitorStatus puts a domain's persisted status back to normal,
+// ResetMonitorStatus puts a check's persisted status back to normal,
 // clearing its down/PagerDuty state and scheduling an immediate check.
-func ResetMonitorStatus(domain string) error {
+func ResetMonitorStatus(checkID string) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 	_, err := db.Exec(`
-		UPDATE monitor_status
+		UPDATE monitor_check_status
 		SET current_mode = 'normal', is_down = FALSE, failure_count = 0, consecutive_successes = 0,
 		    down_since = NULL, pd_triggered = FALSE, pd_escalated = FALSE, next_check_at = CURRENT_TIMESTAMP
-		WHERE domain = ?
-	`, strings.ToLower(domain))
+		WHERE check_id = ?
+	`, checkID)
 	return err
 }

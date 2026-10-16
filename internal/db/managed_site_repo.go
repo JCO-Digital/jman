@@ -211,9 +211,9 @@ func SaveManagedSite(site models.ManagedSite) error {
 	INSERT INTO sites (
 		id, server_id, provider, provider_site_id, domain, environment, is_wordpress, php_version,
 		connection_type, ssh_host, ssh_port, ssh_user, site_path,
-		can_wp_cli, has_agent, has_monitoring, status, updated_at
+		can_wp_cli, has_agent, status, updated_at
 	)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	ON CONFLICT(id) DO UPDATE SET
 		server_id = excluded.server_id,
 		provider = excluded.provider,
@@ -229,7 +229,6 @@ func SaveManagedSite(site models.ManagedSite) error {
 		site_path = excluded.site_path,
 		can_wp_cli = excluded.can_wp_cli,
 		has_agent = excluded.has_agent,
-		has_monitoring = excluded.has_monitoring,
 		status = excluded.status,
 		updated_at = CURRENT_TIMESTAMP
 	`
@@ -250,7 +249,6 @@ func SaveManagedSite(site models.ManagedSite) error {
 		site.SitePath,
 		site.CanWPCLI,
 		site.HasAgent,
-		site.HasMonitoring,
 		site.Status,
 	)
 	if err != nil {
@@ -270,7 +268,7 @@ func GetManagedSite(id string) (*models.ManagedSite, error) {
 	query := `
 	SELECT s.id, s.server_id, s.provider, s.provider_site_id, s.domain, s.environment, s.is_wordpress, s.php_version,
 	       s.connection_type, s.ssh_host, s.ssh_port, s.ssh_user, s.site_path,
-	       s.can_wp_cli, s.has_agent, s.has_monitoring, s.status, s.created_at, s.updated_at,
+	       s.can_wp_cli, s.has_agent, s.status, s.created_at, s.updated_at,
 	       COALESCE(srv.name, '')
 	FROM sites s
 	LEFT JOIN servers srv ON s.server_id = srv.id
@@ -299,7 +297,6 @@ func GetManagedSite(id string) (*models.ManagedSite, error) {
 		&site.SitePath,
 		&site.CanWPCLI,
 		&site.HasAgent,
-		&site.HasMonitoring,
 		&site.Status,
 		&site.CreatedAt,
 		&site.UpdatedAt,
@@ -333,7 +330,7 @@ func GetManagedSiteByDomain(domain string) (*models.ManagedSite, error) {
 	query := `
 	SELECT s.id, s.server_id, s.provider, s.provider_site_id, s.domain, s.environment, s.is_wordpress, s.php_version,
 	       s.connection_type, s.ssh_host, s.ssh_port, s.ssh_user, s.site_path,
-	       s.can_wp_cli, s.has_agent, s.has_monitoring, s.status, s.created_at, s.updated_at,
+	       s.can_wp_cli, s.has_agent, s.status, s.created_at, s.updated_at,
 	       COALESCE(srv.name, '')
 	FROM sites s
 	LEFT JOIN servers srv ON s.server_id = srv.id
@@ -362,7 +359,6 @@ func GetManagedSiteByDomain(domain string) (*models.ManagedSite, error) {
 		&site.SitePath,
 		&site.CanWPCLI,
 		&site.HasAgent,
-		&site.HasMonitoring,
 		&site.Status,
 		&site.CreatedAt,
 		&site.UpdatedAt,
@@ -396,7 +392,7 @@ func GetManagedSiteByProviderID(provider, providerSiteID string) (*models.Manage
 	query := `
 	SELECT s.id, s.server_id, s.provider, s.provider_site_id, s.domain, s.environment, s.is_wordpress, s.php_version,
 	       s.connection_type, s.ssh_host, s.ssh_port, s.ssh_user, s.site_path,
-	       s.can_wp_cli, s.has_agent, s.has_monitoring, s.status, s.created_at, s.updated_at,
+	       s.can_wp_cli, s.has_agent, s.status, s.created_at, s.updated_at,
 	       COALESCE(srv.name, '')
 	FROM sites s
 	LEFT JOIN servers srv ON s.server_id = srv.id
@@ -425,7 +421,6 @@ func GetManagedSiteByProviderID(provider, providerSiteID string) (*models.Manage
 		&site.SitePath,
 		&site.CanWPCLI,
 		&site.HasAgent,
-		&site.HasMonitoring,
 		&site.Status,
 		&site.CreatedAt,
 		&site.UpdatedAt,
@@ -459,7 +454,7 @@ func ListManagedSites(providerFilter ...string) ([]models.ManagedSite, error) {
 	query := `
 	SELECT s.id, s.server_id, s.provider, s.provider_site_id, s.domain, s.environment, s.is_wordpress, s.php_version,
 	       s.connection_type, s.ssh_host, s.ssh_port, s.ssh_user, s.site_path,
-	       s.can_wp_cli, s.has_agent, s.has_monitoring, s.status, s.created_at, s.updated_at,
+	       s.can_wp_cli, s.has_agent, s.status, s.created_at, s.updated_at,
 	       COALESCE(srv.name, '')
 	FROM sites s
 	LEFT JOIN servers srv ON s.server_id = srv.id
@@ -501,7 +496,6 @@ func ListManagedSites(providerFilter ...string) ([]models.ManagedSite, error) {
 			&site.SitePath,
 			&site.CanWPCLI,
 			&site.HasAgent,
-			&site.HasMonitoring,
 			&site.Status,
 			&site.CreatedAt,
 			&site.UpdatedAt,

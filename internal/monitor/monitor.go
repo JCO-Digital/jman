@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
-// NotifyIfAlertingSiteIgnored sends a Slack message if a site that is in Alert Mode is ignored.
-func NotifyIfAlertingSiteIgnored(domain, reason string) {
-	inAlert, err := db.IsSiteInAlertMode(domain)
+// NotifyIfAlertingCheckPaused sends a Slack message if a check that is in Alert Mode was paused.
+func NotifyIfAlertingCheckPaused(checkID, label, reason string) {
+	inAlert, err := db.IsCheckInAlertMode(checkID)
 	if err != nil || !inAlert {
 		return
 	}
@@ -24,9 +23,9 @@ func NotifyIfAlertingSiteIgnored(domain, reason string) {
 		slackChannel = config.Cfg.SlackChannel
 	}
 
-	msg := fmt.Sprintf("⏸️ Monitoring for site %s has been PAUSED (site was in Alert Mode). Reason: %s", domain, reason)
+	msg := fmt.Sprintf("⏸️ Monitoring for %s has been PAUSED (it was in Alert Mode). Reason: %s", label, reason)
 	if err := slack.SendMessageToChannel(msg, slackChannel, true); err != nil {
-		verb.LogPrintf(verb.Debug, "Failed to send ignored alerting site notification for %s to Slack channel %s: %v\n", domain, slackChannel, err)
+		verb.LogPrintf(verb.Debug, "Failed to send paused alerting check notification for %s to Slack channel %s: %v\n", label, slackChannel, err)
 	}
 }
 
@@ -46,7 +45,7 @@ func RunService(ctx context.Context) error {
 	return scheduler.Run(ctx)
 }
 
-// RunOnce performs a single check of all configured sites and updates their states.
+// RunOnce runs every check once and updates their states.
 // This is suitable for cron-based execution or manual troubleshooting.
 func RunOnce() error {
 	state, err := LoadState()
@@ -55,62 +54,50 @@ func RunOnce() error {
 	}
 
 	engine := NewEngine()
-	sites, err := cache.GetMonitorTargets()
+	targets, err := LoadTargets()
 	if err != nil {
 		return err
 	}
 
-	// Fetch ignored domains
-	ignoreMatcher, err := db.NewMonitorIgnoreMatcher()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Warning: failed to fetch ignored sites from database: %v\n", err)
-	}
-
-	verb.LogPrintf(verb.Normal, "Monitoring %d sites (one-off mode)...\n", len(sites))
+	verb.LogPrintf(verb.Normal, "Running %d checks (one-off mode)...\n", len(targets))
 
 	var wg sync.WaitGroup
 	semaphore := make(chan struct{}, 24)
 
-	// Keep track of domains currently in cache
-	activeDomains := make(map[string]bool)
+	// Keep track of the checks that should run
+	active := make(map[string]bool)
 
-	for _, site := range sites {
-		activeDomains[site.Domain] = true
-
-		if ignoreMatcher != nil && ignoreMatcher.IsIgnored(site.SiteID, site.ServerID) {
-			verb.LogPrintf(verb.Debug, "Skipping ignored site: %s\n", site.Domain)
-			continue
-		}
-
-		status := state.GetStatus(site.Domain)
+	for _, t := range targets {
+		active[t.CheckID] = true
+		status := state.GetStatus(t)
 
 		wg.Add(1)
-		go func(s *SiteStatus) {
+		go func(s *CheckStatus) {
 			defer wg.Done()
 			semaphore <- struct{}{}
 			defer func() { <-semaphore }()
 
-			if err := engine.CheckSite(s); err != nil {
-				verb.LogPrintf(verb.Normal, "Error checking site %s: %v\n", s.Domain, err)
+			if err := engine.Check(s); err != nil {
+				verb.LogPrintf(verb.Normal, "Error running check %s: %v\n", s.CheckID, err)
 			}
 		}(status)
 	}
 
 	wg.Wait()
 
-	// Cleanup stale sites (those in database but no longer in the cache)
+	// Drop stale checks (those in the database but no longer to be run)
 	state.Mu.RLock()
-	var staleDomains []string
-	for domain := range state.Sites {
-		if !activeDomains[domain] {
-			staleDomains = append(staleDomains, domain)
+	var stale []string
+	for checkID := range state.Checks {
+		if !active[checkID] {
+			stale = append(stale, checkID)
 		}
 	}
 	state.Mu.RUnlock()
 
-	for _, domain := range staleDomains {
-		verb.LogPrintf(verb.Debug, "Removing stale site status: %s\n", domain)
-		state.RemoveStatus(domain)
+	for _, checkID := range stale {
+		verb.LogPrintf(verb.Debug, "Removing stale check status: %s\n", checkID)
+		state.RemoveStatus(checkID)
 	}
 
 	return nil

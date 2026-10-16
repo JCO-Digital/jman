@@ -13,15 +13,16 @@ import (
 )
 
 var (
-	ignoreMonitor bool
-	ignoreVuln    bool
-	ignoreNegate  []string
+	ignoreVuln   bool
+	ignoreNegate []string
 )
 
 var ignoreCmd = &cobra.Command{
 	Use:   "ignore",
-	Short: "Manage unified ignore list for monitoring and vulnerabilities",
-	Long:  "Lists and changes jman-api's ignore list. Adding and removing entries needs the edit level.",
+	Short: "Manage the vulnerability ignore list",
+	Long: `Lists and changes jman-api's vulnerability ignore list. Adding and removing entries needs the edit level.
+
+Uptime monitoring no longer uses the ignore list: pause a monitor check instead.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return ignoreListCmd.RunE(ignoreListCmd, args)
 	},
@@ -49,7 +50,7 @@ var ignoreListCmd = &cobra.Command{
 		siteMap, serverMap := ignoreTargetNames(completionMirror())
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-		fmt.Fprintln(w, "ID\tTYPE\tTARGET\tMONITOR\tVULN\tREASON\tNEGATED")
+		fmt.Fprintln(w, "ID\tTYPE\tTARGET\tREASON\tNEGATED")
 		for _, e := range entries {
 			targetDisplay := e.Target
 			if e.Type == "site" {
@@ -75,7 +76,7 @@ var ignoreListCmd = &cobra.Command{
 				negatedDisplay = strings.Join(names, ", ")
 			}
 
-			fmt.Fprintf(w, "%d\t%s\t%s\t%v\t%v\t%s\t%s\n", e.ID, e.Type, targetDisplay, e.UseForMonitor, e.UseForVuln, e.Reason, negatedDisplay)
+			fmt.Fprintf(w, "%d\t%s\t%s\t%s\t%s\n", e.ID, e.Type, targetDisplay, e.Reason, negatedDisplay)
 		}
 		w.Flush()
 		return nil
@@ -145,8 +146,7 @@ Identifier:
 			Type:           entryType,
 			Target:         target,
 			Reason:         reason,
-			UseForMonitor:  ignoreMonitor,
-			UseForVuln:     ignoreVuln,
+			UseForVuln:     true,
 			NegatedSiteIDs: negatedIDs,
 		}
 
@@ -183,8 +183,10 @@ var ignoreRemoveCmd = &cobra.Command{
 }
 
 func init() {
-	ignoreAddCmd.Flags().BoolVarP(&ignoreMonitor, "monitor", "m", false, "Apply to uptime monitoring")
-	ignoreAddCmd.Flags().BoolVar(&ignoreVuln, "vuln", false, "Apply to vulnerability scanning")
+	// --vuln predates entries being vulnerability-only; kept so existing
+	// scripts don't break.
+	ignoreAddCmd.Flags().BoolVar(&ignoreVuln, "vuln", false, "Apply to vulnerability scanning (always on)")
+	_ = ignoreAddCmd.Flags().MarkHidden("vuln")
 	ignoreAddCmd.Flags().StringSliceVarP(&ignoreNegate, "negate", "n", []string{}, "Sites to negate (for server type)")
 
 	ignoreCmd.AddCommand(ignoreListCmd)

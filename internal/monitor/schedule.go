@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
@@ -52,18 +51,16 @@ func StartScheduler(ctx context.Context) error {
 	return nil
 }
 
-// ResetDomainStatus resets the monitoring status of a domain back to normal,
+// ResetCheckStatus resets the monitoring status of a check back to normal,
 // clearing down state so that subsequent checks will re-evaluate from scratch.
-func ResetDomainStatus(domain string) {
-	domain = strings.ToLower(domain)
-
+func ResetCheckStatus(checkID string) {
 	activeSchedulerMu.RLock()
 	scheduler := activeScheduler
 	activeSchedulerMu.RUnlock()
 
 	if scheduler != nil && scheduler.state != nil {
 		scheduler.state.Mu.Lock()
-		if st, ok := scheduler.state.Sites[domain]; ok {
+		if st, ok := scheduler.state.Checks[checkID]; ok {
 			st.Mu.Lock()
 			st.CurrentMode = ModeNormal
 			st.IsDown = false
@@ -74,12 +71,12 @@ func ResetDomainStatus(domain string) {
 			st.PDEscalated = false
 			st.NextCheckAt = time.Now()
 			st.Mu.Unlock()
-			_ = SaveSiteStatus(st)
+			_ = SaveCheckStatus(st)
 		}
 		scheduler.state.Mu.Unlock()
 	} else {
 		if db.GetAPIDB() != nil {
-			_ = db.ResetMonitorStatus(domain)
+			_ = db.ResetMonitorStatus(checkID)
 		}
 	}
 }

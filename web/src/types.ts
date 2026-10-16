@@ -150,7 +150,6 @@ export interface Site {
 	connection_type: ManagedConnectionType;
 	can_wp_cli: boolean;
 	has_agent: boolean;
-	has_monitoring: boolean;
 	// SpinupWP-only
 	additional_domains?: AdditionalDomain[];
 	user_auth?: string;
@@ -308,6 +307,7 @@ export interface EnrichedCoreVulnerability extends Vulnerability {
 
 export interface MonitorHistory {
 	id: number;
+	check_id: string;
 	domain: string;
 	status: string;
 	error_code: number;
@@ -316,7 +316,27 @@ export interface MonitorHistory {
 	count: number;
 }
 
+/** One thing the uptime monitor checks; default checks belong to a site. */
+export interface MonitorCheck {
+	id: string;
+	site_id?: string;
+	is_default: boolean;
+	type: string;
+	name?: string;
+	host?: string;
+	path: string;
+	expect: string;
+	enabled: boolean;
+	orphaned_at?: string;
+	created_at: string;
+	updated_at: string;
+	/** The checked host: the site's domain for default checks. */
+	domain: string;
+	url?: string;
+}
+
 export interface MonitorStatus {
+	check_id?: string;
 	domain: string;
 	is_down: boolean;
 	failure_count: number;
@@ -360,7 +380,6 @@ export interface IgnoreEntry {
 	target: string;
 	reason: string;
 	negated_site_ids: string[] | null;
-	use_for_monitor: boolean;
 	use_for_vuln: boolean;
 	created_at: string;
 	created_by: string;
@@ -373,7 +392,6 @@ export interface CreateIgnorePayload {
 	target: string;
 	reason?: string;
 	negated_site_ids?: string[];
-	use_for_monitor?: boolean;
 	use_for_vuln?: boolean;
 }
 
@@ -851,6 +869,7 @@ export type IncidentStatus = "open" | "acknowledged" | "resolved" | "closed";
 
 export interface Incident {
 	id: number;
+	check_id: string;
 	domain: string;
 	status: IncidentStatus;
 	error_message: string;
@@ -907,7 +926,6 @@ export interface ManagedSite {
 	site_path: string;
 	can_wp_cli: boolean;
 	has_agent: boolean;
-	has_monitoring: boolean;
 	status: ManagedSiteStatus;
 	created_at?: string;
 	updated_at?: string;
@@ -928,7 +946,6 @@ export interface ManagedSitePayload {
 	site_path?: string;
 	can_wp_cli?: boolean;
 	has_agent?: boolean;
-	has_monitoring?: boolean;
 	status?: ManagedSiteStatus;
 }
 

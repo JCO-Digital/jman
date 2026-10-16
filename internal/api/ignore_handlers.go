@@ -48,6 +48,12 @@ func CreateIgnoreEntryHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Type and target are required")
 		return
 	}
+	// Ignore entries only apply to vulnerability scanning; uptime
+	// monitoring is paused per check instead.
+	if !entry.UseForVuln {
+		WriteError(w, http.StatusBadRequest, "use_for_vuln is required: ignore entries only apply to vulnerability scanning; pause a monitor check to stop monitoring")
+		return
+	}
 
 	// Force creation of a new entry by ignoring any ID provided in the body.
 	entry.ID = 0
@@ -107,9 +113,6 @@ func UpdateIgnoreEntryHandler(w http.ResponseWriter, r *http.Request) {
 	// Apply updates
 	if val, ok := updates["reason"].(string); ok {
 		existing.Reason = val
-	}
-	if val, ok := updates["use_for_monitor"].(bool); ok {
-		existing.UseForMonitor = val
 	}
 	if val, ok := updates["use_for_vuln"].(bool); ok {
 		existing.UseForVuln = val
