@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useIncidentStore } from "../stores/incidents";
 import { useDataStore } from "../stores/data";
 import { useAuthStore } from "../stores/auth";
@@ -8,6 +9,7 @@ import ViewHeader from "../components/ViewHeader.vue";
 import AppIcon from "../components/AppIcon.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import Pagination from "../components/Pagination.vue";
+import MonitorChecksPanel from "../components/monitoring/MonitorChecksPanel.vue";
 import type { Incident } from "../types";
 
 const incidentStore = useIncidentStore();
@@ -15,7 +17,36 @@ const dataStore = useDataStore();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
 
-const activeTab = ref<"active" | "history">("active");
+type Tab = "checks" | "active" | "history";
+const tabs: Tab[] = ["checks", "active", "history"];
+
+const route = useRoute();
+const router = useRouter();
+
+// The tab and site filter live in the URL (?tab=checks&site=<id>), so a
+// site page can link straight to its checks.
+function tabFromRoute(): Tab {
+	const t = route.query.tab;
+	return typeof t === "string" && tabs.includes(t as Tab)
+		? (t as Tab)
+		: "active";
+}
+const activeTab = ref<Tab>(tabFromRoute());
+const siteFilter = computed(() =>
+	typeof route.query.site === "string" ? route.query.site : undefined,
+);
+const checksPanel = ref<InstanceType<typeof MonitorChecksPanel> | null>(null);
+
+watch(
+	() => route.query.tab,
+	() => {
+		activeTab.value = tabFromRoute();
+	},
+);
+
+function clearSiteFilter() {
+	router.replace({ query: { ...route.query, site: undefined } });
+}
 const historyPage = ref(1);
 const historyLimit = ref(20);
 
@@ -31,6 +62,9 @@ onMounted(() => {
 
 function loadData() {
 	incidentStore.fetchActiveIncidents();
+	if (activeTab.value === "checks") {
+		checksPanel.value?.refresh();
+	}
 	if (activeTab.value === "history") {
 		incidentStore.fetchHistoryIncidents(
 			historyPage.value,
@@ -39,8 +73,11 @@ function loadData() {
 	}
 }
 
-function switchTab(tab: "active" | "history") {
+function switchTab(tab: Tab) {
 	activeTab.value = tab;
+	router.replace({
+		query: { ...route.query, tab: tab === "active" ? undefined : tab },
+	});
 	if (tab === "history") {
 		historyPage.value = 1;
 		incidentStore.fetchHistoryIncidents(
@@ -201,7 +238,7 @@ const canEdit = computed(() => authStore.canEdit);
 
 <template>
 	<div class="view-container incidents-view">
-		<ViewHeader title="Incidents">
+		<ViewHeader title="Monitoring">
 			<template #actions>
 				<button class="btn btn-outline btn-sm" @click="loadData">
 					<AppIcon name="refresh" size="14" />
@@ -211,6 +248,13 @@ const canEdit = computed(() => authStore.canEdit);
 		</ViewHeader>
 
 		<div class="incidents-tabs">
+			<button
+				class="tab-btn"
+				:class="{ active: activeTab === 'checks' }"
+				@click="switchTab('checks')"
+			>
+				Checks
+			</button>
 			<button
 				class="tab-btn"
 				:class="{ active: activeTab === 'active' }"
@@ -232,6 +276,14 @@ const canEdit = computed(() => authStore.canEdit);
 				Incident History
 			</button>
 		</div>
+
+		<!-- Checks Tab -->
+		<MonitorChecksPanel
+			v-if="activeTab === 'checks'"
+			ref="checksPanel"
+			:site-id="siteFilter"
+			@clear-site="clearSiteFilter"
+		/>
 
 		<!-- Active Incidents Tab -->
 		<div v-if="activeTab === 'active'" class="card">

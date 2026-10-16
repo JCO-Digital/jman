@@ -343,6 +343,28 @@ export interface MonitorCheck {
 	secret_headers: MonitorCheckSecret[];
 }
 
+/** Body for creating or editing a check; absent fields are kept on edit. */
+export interface MonitorCheckPayload {
+	site_id?: string;
+	name?: string;
+	host?: string;
+	path?: string;
+	expect?: "html" | "json";
+	assert_path?: string;
+	assert_op?: "" | "equals" | "exists";
+	assert_value?: unknown;
+	/** null follows the global setting. */
+	cache_bypass?: boolean | null;
+}
+
+export interface MonitorCheckTestResult {
+	up: boolean;
+	message?: string;
+	status_code?: number;
+	url: string;
+	duration_ms: number;
+}
+
 export interface MonitorCheckSecret {
 	name: string;
 	updated_at: string;
@@ -354,6 +376,7 @@ export interface MonitorStatus {
 	domain: string;
 	is_down: boolean;
 	failure_count: number;
+	last_alert_time?: string;
 	last_checked: string | null;
 	status_message?: string;
 }
