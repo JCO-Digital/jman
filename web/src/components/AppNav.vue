@@ -27,9 +27,9 @@ interface NavLink {
 const navLinks: NavLink[] = [
 	{ to: "/", label: "Dashboard", match: ["home"] },
 	{
-		to: "/incidents",
-		label: "Incidents",
-		match: ["incidents"],
+		to: "/monitoring",
+		label: "Monitoring",
+		match: ["monitoring"],
 		showIncidentBadge: true,
 	},
 	{ to: "/sites", label: "Sites", match: ["sites", "site-detail"] },

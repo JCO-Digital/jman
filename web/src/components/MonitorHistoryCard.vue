@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
 import type { MonitorHistory } from "../types";
 import { useMonitorStore } from "../stores/monitor";
 import { useAuthStore } from "../stores/auth";
@@ -160,6 +161,17 @@ const startTimeLabel = computed(() => {
 		<div class="card-header">
 			<div class="flex-row gap-3">
 				<h2>Uptime History</h2>
+				<RouterLink
+					v-if="effectiveSiteId"
+					:to="{
+						path: '/monitoring',
+						query: { tab: 'checks', site: effectiveSiteId },
+					}"
+					class="btn btn-text font-sm"
+					title="Manage this site's monitor checks"
+				>
+					Checks →
+				</RouterLink>
 				<div v-if="isPaused" class="ignored-badge">Paused</div>
 				<div
 					v-else-if="liveStatus"

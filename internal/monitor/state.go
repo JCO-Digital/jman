@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/models"
 )
 
 const (
@@ -27,14 +28,17 @@ var (
 type CheckStatus struct {
 	Mu       sync.Mutex `json:"-"`
 	InFlight bool       `json:"-"`
+	// Stopped is set when the check's outage was closed out (it was
+	// paused, edited or orphaned) while this status was still referenced.
+	Stopped bool `json:"-"`
 
 	CheckID string `json:"check_id"`
-	// Domain is the checked host, URL the address requested and Label the
+	// Domain is the checked host, Probe what is requested and Label the
 	// name used in alerts. All three come from the check's Target and are
 	// refreshed on every scheduler tick.
-	Domain string `json:"domain"`
-	URL    string `json:"url"`
-	Label  string `json:"label"`
+	Domain string    `json:"domain"`
+	Probe  HTTPProbe `json:"-"`
+	Label  string    `json:"label"`
 
 	IsDown               bool      `json:"is_down"`
 	FailureCount         int       `json:"failure_count"`
@@ -52,13 +56,13 @@ type CheckStatus struct {
 	PDEscalated bool      `json:"pd_escalated"`
 }
 
-// requestURL returns the address to check, falling back to the domain's
-// home page for a status that has no target applied yet.
-func (s *CheckStatus) requestURL() string {
-	if s.URL != "" {
-		return s.URL
+// probe returns what to check, falling back to the domain's home page
+// for a status that has no target applied yet.
+func (s *CheckStatus) probe() HTTPProbe {
+	if s.Probe.URL != "" {
+		return s.Probe
 	}
-	return "https://" + s.Domain
+	return HTTPProbe{URL: "https://" + s.Domain, Expect: models.MonitorExpectHTML}
 }
 
 // label returns the check's name for alerts, falling back to its domain.
@@ -156,7 +160,7 @@ func SaveCheckStatus(status *CheckStatus) error {
 }
 
 // GetStatus returns the status for a target's check, creating it if it
-// doesn't exist, and applies the target's current domain, URL and label.
+// doesn't exist, and applies the target's current domain, probe and label.
 func (s *State) GetStatus(t Target) *CheckStatus {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
@@ -173,7 +177,7 @@ func (s *State) GetStatus(t Target) *CheckStatus {
 
 	status.Mu.Lock()
 	status.Domain = t.Domain
-	status.URL = t.URL
+	status.Probe = t.Probe
 	status.Label = t.Label
 	status.Mu.Unlock()
 

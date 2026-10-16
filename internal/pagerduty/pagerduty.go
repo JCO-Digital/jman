@@ -66,38 +66,39 @@ func Enabled() bool {
 	return config.Cfg.TokenPagerDuty != ""
 }
 
-// DedupKey returns the deterministic PagerDuty dedup_key for domain's outage.
-// It is a pure function of the (lowercased) domain, so the same site's
-// repeated down/up cycles, and process restarts in between, all address the
-// same PagerDuty alert lineage.
-func DedupKey(domain string) string {
-	return "jman-monitor:" + strings.ToLower(domain)
+// DedupKey returns the deterministic PagerDuty dedup_key for a monitor
+// check's outage. It is a pure function of the check ID, so the same
+// check's repeated down/up cycles, and process restarts in between, all
+// address the same PagerDuty alert lineage.
+func DedupKey(checkID string) string {
+	return "jman-monitor:check:" + strings.ToLower(checkID)
 }
 
-// TriggerEvent sends a "trigger" event for domain at the given severity
-// (SeverityWarning or SeverityCritical), reusing DedupKey(domain) so a later
-// critical trigger escalates the same alert rather than opening a new one.
-func TriggerEvent(domain, summary, severity string) error {
+// TriggerEvent sends a "trigger" event for a check at the given severity
+// (SeverityWarning or SeverityCritical), reusing DedupKey(checkID) so a
+// later critical trigger escalates the same alert rather than opening a
+// new one. source names the checked host.
+func TriggerEvent(checkID, source, summary, severity string) error {
 	return sendEvent(event{
 		RoutingKey:  config.Cfg.TokenPagerDuty,
 		EventAction: "trigger",
-		DedupKey:    DedupKey(domain),
+		DedupKey:    DedupKey(checkID),
 		Payload: &eventPayload{
 			Summary:  summary,
-			Source:   domain,
+			Source:   source,
 			Severity: severity,
 		},
 	})
 }
 
-// ResolveEvent sends a "resolve" event for domain. Safe to call even if no
-// trigger was ever sent for this outage: PagerDuty drops resolve events that
-// have no matching open alert rather than erroring.
-func ResolveEvent(domain string) error {
+// ResolveEvent sends a "resolve" event for a check. Safe to call even if
+// no trigger was ever sent for this outage: PagerDuty drops resolve events
+// that have no matching open alert rather than erroring.
+func ResolveEvent(checkID string) error {
 	return sendEvent(event{
 		RoutingKey:  config.Cfg.TokenPagerDuty,
 		EventAction: "resolve",
-		DedupKey:    DedupKey(domain),
+		DedupKey:    DedupKey(checkID),
 	})
 }
 

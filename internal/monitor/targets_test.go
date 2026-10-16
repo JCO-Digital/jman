@@ -20,7 +20,7 @@ func createCheck(t *testing.T, c models.MonitorCheck) models.MonitorCheck {
 func targetsFor(checks []models.MonitorCheck, sites map[string]monitoredSite) map[string]Target {
 	targets := map[string]Target{}
 	for _, c := range checks {
-		if tg, ok := targetFor(c, sites); ok {
+		if tg, ok := targetFor(c, sites, nil); ok {
 			targets[c.ID] = tg
 		}
 	}
@@ -75,10 +75,10 @@ func TestReconcileDefaultChecks(t *testing.T) {
 	if len(targets) != 2 {
 		t.Errorf("got targets %+v, want only site-1's default check and the custom check", targets)
 	}
-	if tg := targets[existing.ID]; tg.URL != "https://one.example/" || tg.Label != "one.example" || tg.Domain != "one.example" {
+	if tg := targets[existing.ID]; tg.Probe.URL != "https://one.example/" || tg.Label != "one.example" || tg.Domain != "one.example" {
 		t.Errorf("default check target = %+v", tg)
 	}
-	if tg := targets[custom.ID]; tg.URL != "https://api.example/healthz" || tg.Label != "api.example/healthz" {
+	if tg := targets[custom.ID]; tg.Probe.URL != "https://api.example/healthz" || tg.Label != "api.example/healthz" {
 		t.Errorf("custom check target = %+v", tg)
 	}
 

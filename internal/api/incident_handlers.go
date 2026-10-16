@@ -112,7 +112,7 @@ func AcknowledgeIncidentHandler(w http.ResponseWriter, r *http.Request) {
 
 	// If PagerDuty was triggered, resolve it in PagerDuty so on-call paging stops
 	if inc.PDTriggered && pagerduty.Enabled() {
-		if err := pagerduty.ResolveEvent(inc.Domain); err != nil {
+		if err := pagerduty.ResolveEvent(inc.CheckID); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to resolve PagerDuty on acknowledge for %s: %v", inc.Domain, err)
 		}
 	}
@@ -171,7 +171,7 @@ func CloseIncidentHandler(w http.ResponseWriter, r *http.Request) {
 
 	// Resolve in PagerDuty if triggered
 	if existing.PDTriggered && pagerduty.Enabled() {
-		_ = pagerduty.ResolveEvent(existing.Domain)
+		_ = pagerduty.ResolveEvent(existing.CheckID)
 	}
 
 	// Reset monitor status so if the check still fails, it will re-investigate and alert again

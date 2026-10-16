@@ -1,8 +1,14 @@
 import { ref, computed } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
-import type { MonitorCheck, MonitorHistory, MonitorStatus } from "../types";
-import { BASE_URL, apiFetch } from "../utils/api";
+import type {
+	MonitorCheck,
+	MonitorCheckPayload,
+	MonitorCheckTestResult,
+	MonitorHistory,
+	MonitorStatus,
+} from "../types";
+import { BASE_URL, apiFetch, handleErrorResponse } from "../utils/api";
 
 export const useMonitorStore = defineStore("monitor", () => {
 	const authStore = useAuthStore();
@@ -146,11 +152,123 @@ export const useMonitorStore = defineStore("monitor", () => {
 		return updated;
 	}
 
+	/** Current status of every check, by check ID. */
+	const statusByCheck = ref<Record<string, MonitorStatus>>({});
+
+	/** GET /api/monitor/status (all checks) */
+	async function fetchCheckStatuses() {
+		const res = await apiFetch(`${BASE_URL}/monitor/status`);
+		if (!res.ok) await handleErrorResponse(res);
+		const list: MonitorStatus[] = (await res.json()) || [];
+		const map: Record<string, MonitorStatus> = {};
+		for (const st of list) {
+			if (st.check_id) map[st.check_id] = st;
+		}
+		statusByCheck.value = map;
+	}
+
+	function checkURL(id: string, suffix = "") {
+		return `${BASE_URL}/monitor/checks/${encodeURIComponent(id)}${suffix}`;
+	}
+
+	/** Stores a check returned by the API in the list. */
+	function upsertCheck(check: MonitorCheck) {
+		const idx = checks.value.findIndex((c) => c.id === check.id);
+		if (idx >= 0) checks.value[idx] = check;
+		else checks.value.push(check);
+		return check;
+	}
+
+	async function sendJSON(
+		url: string,
+		method: string,
+		body?: unknown,
+	): Promise<Response> {
+		const res = await apiFetch(url, {
+			method,
+			headers: { "Content-Type": "application/json" },
+			body: body === undefined ? undefined : JSON.stringify(body),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		return res;
+	}
+
+	/** POST /api/monitor/checks */
+	async function createCheck(payload: MonitorCheckPayload) {
+		const res = await sendJSON(
+			`${BASE_URL}/monitor/checks`,
+			"POST",
+			payload,
+		);
+		return upsertCheck(await res.json());
+	}
+
+	/** PATCH /api/monitor/checks/{id} */
+	async function updateCheck(id: string, payload: MonitorCheckPayload) {
+		const res = await sendJSON(checkURL(id), "PATCH", payload);
+		return upsertCheck(await res.json());
+	}
+
+	/** POST /api/monitor/checks/{id}/reset */
+	async function resetCheck(id: string) {
+		const res = await sendJSON(checkURL(id, "/reset"), "POST");
+		return upsertCheck(await res.json());
+	}
+
+	/** DELETE /api/monitor/checks/{id} */
+	async function deleteCheck(id: string) {
+		await sendJSON(checkURL(id), "DELETE");
+		checks.value = checks.value.filter((c) => c.id !== id);
+	}
+
+	/** PUT /api/monitor/checks/{id}/secrets/{header} */
+	async function setCheckSecret(id: string, header: string, value: string) {
+		const res = await sendJSON(
+			checkURL(id, `/secrets/${encodeURIComponent(header)}`),
+			"PUT",
+			{ value },
+		);
+		return upsertCheck(await res.json());
+	}
+
+	/** DELETE /api/monitor/checks/{id}/secrets/{header} */
+	async function deleteCheckSecret(id: string, header: string) {
+		const res = await sendJSON(
+			checkURL(id, `/secrets/${encodeURIComponent(header)}`),
+			"DELETE",
+		);
+		return upsertCheck(await res.json());
+	}
+
+	/** POST /api/monitor/checks/test: runs a check once, recording nothing. */
+	async function testCheck(
+		payload: MonitorCheckPayload & {
+			id?: string;
+			secret_headers?: Record<string, string>;
+		},
+	): Promise<MonitorCheckTestResult> {
+		const res = await sendJSON(
+			`${BASE_URL}/monitor/checks/test`,
+			"POST",
+			payload,
+		);
+		return res.json();
+	}
+
 	return {
 		checks,
 		defaultCheckBySite,
+		statusByCheck,
 		fetchChecks,
+		fetchCheckStatuses,
 		ensureChecks,
+		createCheck,
+		updateCheck,
+		resetCheck,
+		deleteCheck,
+		setCheckSecret,
+		deleteCheckSecret,
+		testCheck,
 		setCheckPaused,
 		history,
 		historyFetched,

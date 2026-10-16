@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -9,7 +10,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/utils"
 )
 
-const monitorCheckColumns = `id, site_id, is_default, type, name, host, path, expect, enabled,
+const monitorCheckColumns = `id, site_id, is_default, type, name, host, path, expect,
+	assert_path, assert_op, assert_value, cache_bypass, enabled,
 	orphaned_at, created_at, created_by, updated_at, updated_by`
 
 // ListMonitorChecks returns every monitor check, default checks first.
@@ -80,13 +82,61 @@ func CreateMonitorCheck(c *models.MonitorCheck, username string) error {
 	}
 	_, err := db.Exec(`
 		INSERT INTO monitor_checks (`+monitorCheckColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`, c.ID, siteID, c.IsDefault, c.Type, c.Name, c.Host, c.Path, c.Expect, c.Enabled,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`, c.ID, siteID, c.IsDefault, c.Type, c.Name, c.Host, c.Path, c.Expect,
+		c.AssertPath, c.AssertOp, string(c.AssertValue), c.CacheBypass, c.Enabled,
 		c.OrphanedAt, c.CreatedAt, c.CreatedBy, c.UpdatedAt, c.UpdatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to create monitor check: %w", err)
 	}
 	return nil
+}
+
+// UpdateMonitorCheck saves a check's editable fields: name, host, path,
+// expectation, assertion and cache bypass.
+func UpdateMonitorCheck(c *models.MonitorCheck, username string) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	c.UpdatedAt = time.Now().UTC()
+	c.UpdatedBy = username
+	_, err := db.Exec(`
+		UPDATE monitor_checks
+		SET name = ?, host = ?, path = ?, expect = ?, assert_path = ?, assert_op = ?, assert_value = ?,
+		    cache_bypass = ?, updated_at = ?, updated_by = ?
+		WHERE id = ?
+	`, c.Name, c.Host, c.Path, c.Expect, c.AssertPath, c.AssertOp, string(c.AssertValue),
+		c.CacheBypass, c.UpdatedAt, c.UpdatedBy, c.ID)
+	if err != nil {
+		return fmt.Errorf("failed to update monitor check %s: %w", c.ID, err)
+	}
+	return nil
+}
+
+// DeleteMonitorCheck deletes a check with its secrets, monitor state,
+// history and incidents.
+func DeleteMonitorCheck(id string) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, table := range []string{"monitor_check_secrets", "monitor_check_status", "monitor_history", "incidents"} {
+		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE check_id = ?`, id); err != nil {
+			return fmt.Errorf("failed to delete %s of check %s: %w", table, id, err)
+		}
+	}
+	if _, err := tx.Exec(`DELETE FROM monitor_checks WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete monitor check %s: %w", id, err)
+	}
+	return tx.Commit()
 }
 
 // SetMonitorCheckEnabled pauses (enabled = false) or resumes a check.
@@ -124,7 +174,10 @@ func scanMonitorCheck(row rowScanner) (*models.MonitorCheck, error) {
 	var c models.MonitorCheck
 	var siteID, createdBy, updatedBy sql.NullString
 	var orphanedAt, createdAt, updatedAt sql.NullTime
-	err := row.Scan(&c.ID, &siteID, &c.IsDefault, &c.Type, &c.Name, &c.Host, &c.Path, &c.Expect, &c.Enabled,
+	var assertValue string
+	var cacheBypass sql.NullBool
+	err := row.Scan(&c.ID, &siteID, &c.IsDefault, &c.Type, &c.Name, &c.Host, &c.Path, &c.Expect,
+		&c.AssertPath, &c.AssertOp, &assertValue, &cacheBypass, &c.Enabled,
 		&orphanedAt, &createdAt, &createdBy, &updatedAt, &updatedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -133,6 +186,13 @@ func scanMonitorCheck(row rowScanner) (*models.MonitorCheck, error) {
 		return nil, fmt.Errorf("failed to scan monitor check: %w", err)
 	}
 	c.SiteID = siteID.String
+	if assertValue != "" {
+		c.AssertValue = json.RawMessage(assertValue)
+	}
+	if cacheBypass.Valid {
+		b := cacheBypass.Bool
+		c.CacheBypass = &b
+	}
 	c.CreatedBy = createdBy.String
 	c.UpdatedBy = updatedBy.String
 	c.CreatedAt = createdAt.Time
@@ -142,4 +202,100 @@ func scanMonitorCheck(row rowScanner) (*models.MonitorCheck, error) {
 		c.OrphanedAt = &t
 	}
 	return &c, nil
+}
+
+// ListMonitorCheckSecrets returns the secret headers of every check (or of
+// one check, if checkID is given), without their values.
+func ListMonitorCheckSecrets(checkID ...string) ([]models.MonitorCheckSecret, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	query := `SELECT check_id, header_name, updated_at, COALESCE(updated_by, '') FROM monitor_check_secrets`
+	var args []any
+	if len(checkID) > 0 {
+		query += ` WHERE check_id = ?`
+		args = append(args, checkID[0])
+	}
+	rows, err := db.Query(query+` ORDER BY check_id, header_name`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list monitor check secrets: %w", err)
+	}
+	defer rows.Close()
+
+	secrets := []models.MonitorCheckSecret{}
+	for rows.Next() {
+		var sec models.MonitorCheckSecret
+		var updatedAt sql.NullTime
+		if err := rows.Scan(&sec.CheckID, &sec.Name, &updatedAt, &sec.UpdatedBy); err != nil {
+			return nil, fmt.Errorf("failed to scan monitor check secret: %w", err)
+		}
+		sec.UpdatedAt = updatedAt.Time
+		secrets = append(secrets, sec)
+	}
+	return secrets, rows.Err()
+}
+
+// GetMonitorCheckSecretValues returns secret header values by check ID and
+// header name, for the checks' requests.
+func GetMonitorCheckSecretValues() (map[string]map[string]string, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := db.Query(`SELECT check_id, header_name, value FROM monitor_check_secrets`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load monitor check secrets: %w", err)
+	}
+	defer rows.Close()
+
+	values := map[string]map[string]string{}
+	for rows.Next() {
+		var checkID, name, value string
+		if err := rows.Scan(&checkID, &name, &value); err != nil {
+			return nil, fmt.Errorf("failed to scan monitor check secret: %w", err)
+		}
+		if values[checkID] == nil {
+			values[checkID] = map[string]string{}
+		}
+		values[checkID][name] = value
+	}
+	return values, rows.Err()
+}
+
+// SetMonitorCheckSecret sets a secret header value on a check.
+func SetMonitorCheckSecret(checkID, name, value, username string) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	_, err := db.Exec(`
+		INSERT INTO monitor_check_secrets (check_id, header_name, value, updated_at, updated_by)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(check_id, header_name) DO UPDATE SET
+			value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by
+	`, checkID, name, value, time.Now(), username)
+	if err != nil {
+		return fmt.Errorf("failed to set secret %s on check %s: %w", name, checkID, err)
+	}
+	return nil
+}
+
+// DeleteMonitorCheckSecret removes a secret header from a check, reporting
+// whether it existed.
+func DeleteMonitorCheckSecret(checkID, name string) (bool, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+
+	res, err := db.Exec(`DELETE FROM monitor_check_secrets WHERE check_id = ? AND header_name = ?`, checkID, name)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete secret %s from check %s: %w", name, checkID, err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }

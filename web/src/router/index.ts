@@ -83,9 +83,13 @@ const router = createRouter({
 			component: () => import("../views/Assets/PaymentMethodsView.vue"),
 		},
 		{
+			path: "/monitoring",
+			name: "monitoring",
+			component: () => import("../views/MonitoringView.vue"),
+		},
+		{
 			path: "/incidents",
-			name: "incidents",
-			component: () => import("../views/IncidentsView.vue"),
+			redirect: (to) => ({ path: "/monitoring", query: to.query }),
 		},
 		{
 			path: "/tasks",
