@@ -20,6 +20,11 @@ type MonitorCheckResponse struct {
 	Domain        string                      `json:"domain"`
 	URL           string                      `json:"url,omitempty"`
 	SecretHeaders []models.MonitorCheckSecret `json:"secret_headers"`
+	// TokenPrefix and TokenCreatedAt describe a heartbeat check's check-in
+	// token. Token is the token itself, only when it was just issued.
+	TokenPrefix    string     `json:"token_prefix,omitempty"`
+	TokenCreatedAt *time.Time `json:"token_created_at,omitempty"`
+	Token          string     `json:"token,omitempty"`
 }
 
 // ListMonitorChecksHandler handles GET /api/monitor/checks.
@@ -56,13 +61,19 @@ func ListMonitorChecksHandler(w http.ResponseWriter, r *http.Request) {
 	for _, s := range secrets {
 		secretsByCheck[s.CheckID] = append(secretsByCheck[s.CheckID], s)
 	}
+	tokens, err := db.ListMonitorCheckTokens()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "ListMonitorChecksHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
 
 	resp := []MonitorCheckResponse{}
 	for _, c := range checks {
 		if siteFilter != "" && c.SiteID != siteFilter {
 			continue
 		}
-		resp = append(resp, describeMonitorCheck(c, domains, secretsByCheck[c.ID]))
+		resp = append(resp, describeMonitorCheck(c, domains, secretsByCheck[c.ID], tokens[c.ID]))
 	}
 	WriteJSON(w, http.StatusOK, resp)
 }
@@ -77,7 +88,8 @@ func GetMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // CreateMonitorCheckHandler handles POST /api/monitor/checks. It creates a
-// check of its own (not a site's default check), enabled.
+// check of its own (not a site's default check), enabled. A heartbeat
+// check gets a check-in token, returned in the response this once.
 func CreateMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 	var req MonitorCheckRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -86,6 +98,15 @@ func CreateMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	check := models.MonitorCheck{Type: models.MonitorCheckTypeHTTP, Enabled: true}
+	if req.Type != nil {
+		switch *req.Type {
+		case models.MonitorCheckTypeHTTP, models.MonitorCheckTypeHeartbeat:
+			check.Type = *req.Type
+		default:
+			WriteError(w, http.StatusBadRequest, "type must be http or heartbeat")
+			return
+		}
+	}
 	if req.SiteID != nil && strings.TrimSpace(*req.SiteID) != "" {
 		siteID, ok := resolveCheckSite(w, *req.SiteID)
 		if !ok {
@@ -98,9 +119,14 @@ func CreateMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := db.CreateMonitorCheck(&check, requestUsername(r)); err != nil {
+	username := requestUsername(r)
+	if err := db.CreateMonitorCheck(&check, username); err != nil {
 		verb.LogPrintf(verb.Normal, "CreateMonitorCheckHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if check.Type == models.MonitorCheckTypeHeartbeat {
+		writeIssuedToken(w, http.StatusCreated, &check, username, "CreateMonitorCheckHandler")
 		return
 	}
 	writeMonitorCheck(w, http.StatusCreated, &check, "CreateMonitorCheckHandler")
@@ -119,8 +145,8 @@ func UpdateMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	if req.SiteID != nil {
-		WriteError(w, http.StatusBadRequest, "site_id can't be changed")
+	if req.SiteID != nil || req.Type != nil {
+		WriteError(w, http.StatusBadRequest, "site_id and type can't be changed")
 		return
 	}
 
@@ -287,6 +313,10 @@ func TestMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if check.Type != models.MonitorCheckTypeHTTP {
+		WriteError(w, http.StatusBadRequest, "Only HTTP checks can be tested")
+		return
+	}
 	for name, value := range req.SecretHeaders {
 		canonical, err := normalizeSecretHeader(name, value)
 		if err != nil {
@@ -321,6 +351,40 @@ func TestMonitorCheckHandler(w http.ResponseWriter, r *http.Request) {
 		URL:        probe.URL,
 		DurationMS: time.Since(started).Milliseconds(),
 	})
+}
+
+// IssueMonitorCheckTokenHandler handles POST /api/monitor/checks/{id}/token:
+// it issues a new check-in token for a heartbeat check, replacing the old
+// one, and returns it this once.
+func IssueMonitorCheckTokenHandler(w http.ResponseWriter, r *http.Request) {
+	check, _, ok := loadMonitorCheckForRequest(w, r, "IssueMonitorCheckTokenHandler")
+	if !ok {
+		return
+	}
+	if check.Type != models.MonitorCheckTypeHeartbeat {
+		WriteError(w, http.StatusBadRequest, "Only heartbeat checks have check-in tokens")
+		return
+	}
+	writeIssuedToken(w, http.StatusOK, check, requestUsername(r), "IssueMonitorCheckTokenHandler")
+}
+
+// writeIssuedToken issues a check-in token for check and writes the check
+// with the token included.
+func writeIssuedToken(w http.ResponseWriter, status int, check *models.MonitorCheck, username, handler string) {
+	token, err := db.IssueMonitorCheckToken(check.ID, username)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "%s: %v", handler, err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	desc, err := describeStoredMonitorCheck(*check)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "%s: %v", handler, err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	desc.Token = token
+	WriteJSON(w, status, desc)
 }
 
 // MonitorCheckPauseRequest is the optional payload when pausing a check.
@@ -410,7 +474,8 @@ func closeOutEditedCheck(check *models.MonitorCheck, domain, username string) {
 func probeChanged(a, b models.MonitorCheck) bool {
 	return a.Host != b.Host || a.Path != b.Path || a.Expect != b.Expect ||
 		a.AssertPath != b.AssertPath || a.AssertOp != b.AssertOp || string(a.AssertValue) != string(b.AssertValue) ||
-		!sameBoolPtr(a.CacheBypass, b.CacheBypass)
+		!sameBoolPtr(a.CacheBypass, b.CacheBypass) ||
+		a.IntervalSeconds != b.IntervalSeconds || a.GraceSeconds != b.GraceSeconds || a.FailThreshold != b.FailThreshold
 }
 
 func sameBoolPtr(a, b *bool) bool {
@@ -492,7 +557,11 @@ func describeStoredMonitorCheck(c models.MonitorCheck) (MonitorCheckResponse, er
 	if err != nil {
 		return MonitorCheckResponse{}, err
 	}
-	return describeMonitorCheck(c, domains, secrets), nil
+	tokens, err := db.ListMonitorCheckTokens()
+	if err != nil {
+		return MonitorCheckResponse{}, err
+	}
+	return describeMonitorCheck(c, domains, secrets, tokens[c.ID]), nil
 }
 
 // siteDomains maps every managed site's UUID to its domain.
@@ -508,7 +577,7 @@ func siteDomains() (map[string]string, error) {
 	return domains, nil
 }
 
-func describeMonitorCheck(c models.MonitorCheck, siteDomains map[string]string, secrets []models.MonitorCheckSecret) MonitorCheckResponse {
+func describeMonitorCheck(c models.MonitorCheck, siteDomains map[string]string, secrets []models.MonitorCheckSecret, token db.MonitorCheckToken) MonitorCheckResponse {
 	host := c.Host
 	if c.IsDefault {
 		host = siteDomains[c.SiteID]
@@ -519,6 +588,11 @@ func describeMonitorCheck(c models.MonitorCheck, siteDomains map[string]string, 
 	resp := MonitorCheckResponse{MonitorCheck: c, Domain: host, SecretHeaders: secrets}
 	if host != "" {
 		resp.URL = "https://" + host + c.Path
+	}
+	if token.Prefix != "" {
+		resp.TokenPrefix = token.Prefix
+		createdAt := token.CreatedAt
+		resp.TokenCreatedAt = &createdAt
 	}
 	return resp
 }

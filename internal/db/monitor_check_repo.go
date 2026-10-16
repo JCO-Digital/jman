@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -11,7 +12,8 @@ import (
 )
 
 const monitorCheckColumns = `id, site_id, is_default, type, name, host, path, expect,
-	assert_path, assert_op, assert_value, cache_bypass, enabled,
+	assert_path, assert_op, assert_value, cache_bypass,
+	interval_seconds, grace_seconds, fail_threshold, enabled,
 	orphaned_at, created_at, created_by, updated_at, updated_by`
 
 // ListMonitorChecks returns every monitor check, default checks first.
@@ -69,8 +71,11 @@ func CreateMonitorCheck(c *models.MonitorCheck, username string) error {
 	if c.Path == "" {
 		c.Path = "/"
 	}
-	if c.Expect == "" {
+	if c.Expect == "" && c.Type == models.MonitorCheckTypeHTTP {
 		c.Expect = models.MonitorExpectHTML
+	}
+	if c.FailThreshold < 1 {
+		c.FailThreshold = 1
 	}
 	now := time.Now().UTC()
 	c.CreatedAt, c.UpdatedAt = now, now
@@ -82,9 +87,10 @@ func CreateMonitorCheck(c *models.MonitorCheck, username string) error {
 	}
 	_, err := db.Exec(`
 		INSERT INTO monitor_checks (`+monitorCheckColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, c.ID, siteID, c.IsDefault, c.Type, c.Name, c.Host, c.Path, c.Expect,
-		c.AssertPath, c.AssertOp, string(c.AssertValue), c.CacheBypass, c.Enabled,
+		c.AssertPath, c.AssertOp, string(c.AssertValue), c.CacheBypass,
+		c.IntervalSeconds, c.GraceSeconds, c.FailThreshold, c.Enabled,
 		c.OrphanedAt, c.CreatedAt, c.CreatedBy, c.UpdatedAt, c.UpdatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to create monitor check: %w", err)
@@ -93,7 +99,7 @@ func CreateMonitorCheck(c *models.MonitorCheck, username string) error {
 }
 
 // UpdateMonitorCheck saves a check's editable fields: name, host, path,
-// expectation, assertion and cache bypass.
+// expectation, assertion, cache bypass and heartbeat settings.
 func UpdateMonitorCheck(c *models.MonitorCheck, username string) error {
 	db := GetAPIDB()
 	if db == nil {
@@ -105,18 +111,19 @@ func UpdateMonitorCheck(c *models.MonitorCheck, username string) error {
 	_, err := db.Exec(`
 		UPDATE monitor_checks
 		SET name = ?, host = ?, path = ?, expect = ?, assert_path = ?, assert_op = ?, assert_value = ?,
-		    cache_bypass = ?, updated_at = ?, updated_by = ?
+		    cache_bypass = ?, interval_seconds = ?, grace_seconds = ?, fail_threshold = ?,
+		    updated_at = ?, updated_by = ?
 		WHERE id = ?
 	`, c.Name, c.Host, c.Path, c.Expect, c.AssertPath, c.AssertOp, string(c.AssertValue),
-		c.CacheBypass, c.UpdatedAt, c.UpdatedBy, c.ID)
+		c.CacheBypass, c.IntervalSeconds, c.GraceSeconds, c.FailThreshold, c.UpdatedAt, c.UpdatedBy, c.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update monitor check %s: %w", c.ID, err)
 	}
 	return nil
 }
 
-// DeleteMonitorCheck deletes a check with its secrets, monitor state,
-// history and incidents.
+// DeleteMonitorCheck deletes a check with its secrets, check-in token,
+// monitor state, history and incidents.
 func DeleteMonitorCheck(id string) error {
 	db := GetAPIDB()
 	if db == nil {
@@ -128,7 +135,7 @@ func DeleteMonitorCheck(id string) error {
 		return err
 	}
 	defer tx.Rollback()
-	for _, table := range []string{"monitor_check_secrets", "monitor_check_status", "monitor_history", "incidents"} {
+	for _, table := range []string{"monitor_check_secrets", "monitor_check_tokens", "monitor_check_status", "monitor_history", "incidents"} {
 		if _, err := tx.Exec(`DELETE FROM `+table+` WHERE check_id = ?`, id); err != nil {
 			return fmt.Errorf("failed to delete %s of check %s: %w", table, id, err)
 		}
@@ -177,7 +184,8 @@ func scanMonitorCheck(row rowScanner) (*models.MonitorCheck, error) {
 	var assertValue string
 	var cacheBypass sql.NullBool
 	err := row.Scan(&c.ID, &siteID, &c.IsDefault, &c.Type, &c.Name, &c.Host, &c.Path, &c.Expect,
-		&c.AssertPath, &c.AssertOp, &assertValue, &cacheBypass, &c.Enabled,
+		&c.AssertPath, &c.AssertOp, &assertValue, &cacheBypass,
+		&c.IntervalSeconds, &c.GraceSeconds, &c.FailThreshold, &c.Enabled,
 		&orphanedAt, &createdAt, &createdBy, &updatedAt, &updatedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -298,4 +306,89 @@ func DeleteMonitorCheckSecret(checkID, name string) (bool, error) {
 	}
 	n, _ := res.RowsAffected()
 	return n > 0, nil
+}
+
+// CheckInTokenPrefix starts every check-in token.
+const CheckInTokenPrefix = "jman_ci_"
+
+// MonitorCheckToken describes a heartbeat check's check-in token. The token
+// itself is only returned when issued.
+type MonitorCheckToken struct {
+	CheckID   string
+	Prefix    string
+	CreatedAt time.Time
+	CreatedBy string
+}
+
+// IssueMonitorCheckToken creates a new check-in token for a check,
+// replacing any earlier one, and returns the plaintext token. Only its
+// hash is stored.
+func IssueMonitorCheckToken(checkID, username string) (string, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return "", fmt.Errorf("database not initialized")
+	}
+	secret, err := randomToken(32)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate check-in token: %w", err)
+	}
+	raw := CheckInTokenPrefix + secret
+	_, err = db.Exec(`
+		INSERT INTO monitor_check_tokens (check_id, token_hash, token_prefix, created_at, created_by)
+		VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(check_id) DO UPDATE SET
+			token_hash = excluded.token_hash, token_prefix = excluded.token_prefix,
+			created_at = excluded.created_at, created_by = excluded.created_by
+	`, checkID, hashRefreshToken(raw), raw[:len(CheckInTokenPrefix)+6], time.Now(), username)
+	if err != nil {
+		return "", fmt.Errorf("failed to store check-in token for check %s: %w", checkID, err)
+	}
+	return raw, nil
+}
+
+// GetMonitorCheckIDByToken returns the check a plaintext check-in token
+// belongs to, or "" if it belongs to none.
+func GetMonitorCheckIDByToken(raw string) (string, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return "", fmt.Errorf("database not initialized")
+	}
+	if !strings.HasPrefix(raw, CheckInTokenPrefix) {
+		return "", nil
+	}
+	var checkID string
+	err := db.QueryRow(`SELECT check_id FROM monitor_check_tokens WHERE token_hash = ?`, hashRefreshToken(raw)).Scan(&checkID)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to look up check-in token: %w", err)
+	}
+	return checkID, nil
+}
+
+// ListMonitorCheckTokens returns every check-in token's description, by
+// check ID.
+func ListMonitorCheckTokens() (map[string]MonitorCheckToken, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := db.Query(`SELECT check_id, token_prefix, created_at, COALESCE(created_by, '') FROM monitor_check_tokens`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list check-in tokens: %w", err)
+	}
+	defer rows.Close()
+
+	tokens := map[string]MonitorCheckToken{}
+	for rows.Next() {
+		var t MonitorCheckToken
+		var createdAt sql.NullTime
+		if err := rows.Scan(&t.CheckID, &t.Prefix, &createdAt, &t.CreatedBy); err != nil {
+			return nil, fmt.Errorf("failed to scan check-in token: %w", err)
+		}
+		t.CreatedAt = createdAt.Time
+		tokens[t.CheckID] = t
+	}
+	return tokens, rows.Err()
 }

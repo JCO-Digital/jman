@@ -137,8 +137,8 @@ func TestCaseInsensitiveLookups(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if inc.Domain != "shop.example.com" {
-		t.Errorf("incident domain stored as %q, want lowercase", inc.Domain)
+	if inc.Domain != "Shop.Example.COM" {
+		t.Errorf("incident domain stored as %q, want it as given", inc.Domain)
 	}
 
 	if _, err := GetAPIDB().Exec(`INSERT INTO monitor_check_status (check_id, domain) VALUES ('check-shop', 'shop.example.com')`); err != nil {

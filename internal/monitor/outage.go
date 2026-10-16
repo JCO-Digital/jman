@@ -45,7 +45,7 @@ func (e *Engine) handleOutcome(status *CheckStatus, oc outcome, r ProbeResult) n
 	case outcomeDown:
 		status.IsDown = true
 		status.DownSince = time.Now()
-		n.slack = fmt.Sprintf("🚨 Site %s is DOWN (Status: %s)", label, r.Message)
+		n.slack = fmt.Sprintf("🚨 %s %s is DOWN (Status: %s)", status.subject(), label, r.Message)
 		n.alert = true
 		if _, err := db.CreateIncident(status.CheckID, status.Domain, r.Message, r.Code, status.DownSince); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to create incident for %s: %v\n", label, err)
@@ -57,7 +57,7 @@ func (e *Engine) handleOutcome(status *CheckStatus, oc outcome, r ProbeResult) n
 
 		// Repeat alert based on error type intervals if not acknowledged
 		if !isAcked && shouldRepeatAlert(status, r.Code) {
-			n.slack = fmt.Sprintf("🚨 Site %s is STILL DOWN (Status: %s)", label, r.Message)
+			n.slack = fmt.Sprintf("🚨 %s %s is STILL DOWN (Status: %s)", status.subject(), label, r.Message)
 			n.alert = true
 		}
 		// Trigger the PagerDuty incident with critical severity once the check
@@ -67,12 +67,12 @@ func (e *Engine) handleOutcome(status *CheckStatus, oc outcome, r ProbeResult) n
 			!status.PDTriggered && !status.DownSince.IsZero() &&
 			time.Since(status.DownSince) >= e.pdEscalationThreshold {
 			n.pdSeverity = pagerduty.SeverityCritical
-			n.summary = fmt.Sprintf("Site %s is down (Status: %s)", label, r.Message)
+			n.summary = fmt.Sprintf("%s %s is down (Status: %s)", status.subject(), label, r.Message)
 		}
 
 	case outcomeRecovered:
 		status.IsDown = false
-		n.slack = fmt.Sprintf("✅ Site %s is back up.", label)
+		n.slack = fmt.Sprintf("✅ %s %s is back up.", status.subject(), label)
 		if _, err := db.ResolveActiveIncidentByCheck(status.CheckID, ""); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to auto-resolve incident for %s: %v\n", label, err)
 		}

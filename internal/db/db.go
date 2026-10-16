@@ -468,12 +468,17 @@ func initAPISchema() error {
 				"assert_value": "TEXT NOT NULL DEFAULT ''",
 				// NULL follows the global monitorCacheBypass setting.
 				"cache_bypass": "BOOLEAN",
-				"enabled":      "BOOLEAN NOT NULL DEFAULT 1",
-				"orphaned_at":  "DATETIME",
-				"created_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":   "TEXT",
-				"updated_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by":   "TEXT",
+				// Heartbeat checks: expected check-in interval, grace on top
+				// of it, and failed check-ins in a row before alerting.
+				"interval_seconds": "INTEGER NOT NULL DEFAULT 0",
+				"grace_seconds":    "INTEGER NOT NULL DEFAULT 0",
+				"fail_threshold":   "INTEGER NOT NULL DEFAULT 1",
+				"enabled":          "BOOLEAN NOT NULL DEFAULT 1",
+				"orphaned_at":      "DATETIME",
+				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":       "TEXT",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":       "TEXT",
 			},
 		},
 		{
@@ -488,6 +493,18 @@ func initAPISchema() error {
 				"updated_by":  "TEXT",
 			},
 			PrimaryKey: []string{"check_id", "header_name"},
+		},
+		{
+			// monitor_check_tokens holds the hash of each heartbeat check's
+			// check-in token. The token itself is shown once, when issued.
+			Name: "monitor_check_tokens",
+			Columns: map[string]string{
+				"check_id":     "TEXT PRIMARY KEY",
+				"token_hash":   "TEXT NOT NULL",
+				"token_prefix": "TEXT NOT NULL",
+				"created_at":   "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":   "TEXT",
+			},
 		},
 		{
 			// monitor_check_status is the monitor's persisted per-check
@@ -506,6 +523,7 @@ func initAPISchema() error {
 				"down_since":            "DATETIME",
 				"pd_triggered":          "BOOLEAN DEFAULT 0",
 				"pd_escalated":          "BOOLEAN DEFAULT 0",
+				"last_started_at":       "DATETIME",
 			},
 		},
 		{
@@ -930,6 +948,10 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_checks_site_id ON monitor_checks(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_monitor_check_tokens_hash ON monitor_check_tokens(token_hash);")
 	if err != nil {
 		return err
 	}

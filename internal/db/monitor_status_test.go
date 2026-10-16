@@ -33,7 +33,7 @@ func TestMonitorStatusRecordRoundTrip(t *testing.T) {
 		t.Fatalf("got %d records, err %v; want 1", len(records), err)
 	}
 	got := records[0]
-	if got.CheckID != "check-1" || got.Domain != "example.com" || got.FailureCount != 4 || !got.IsDown || !got.PDTriggered || got.CurrentMode != "alert" {
+	if got.CheckID != "check-1" || got.Domain != "Example.com" || got.FailureCount != 4 || !got.IsDown || !got.PDTriggered || got.CurrentMode != "alert" {
 		t.Errorf("unexpected record %+v", got)
 	}
 	if !got.LastChecked.Equal(in.LastChecked) || !got.DownSince.Equal(in.DownSince) {
@@ -82,7 +82,7 @@ func TestRecordMonitorHistory(t *testing.T) {
 		rows.Scan(&e.domain, &e.status, &e.count)
 		got = append(got, e)
 	}
-	want := []entry{{"example.com", "UP", 2}, {"example.com", "HTTP 500", 1}, {"example.com", "UP", 1}}
+	want := []entry{{"Example.com", "UP", 2}, {"Example.com", "HTTP 500", 1}, {"Example.com", "UP", 1}}
 	if len(got) != len(want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

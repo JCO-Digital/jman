@@ -3,7 +3,6 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 )
 
@@ -51,6 +50,7 @@ type MonitorStatusRecord struct {
 	DownSince            time.Time
 	PDTriggered          bool
 	PDEscalated          bool
+	LastStartedAt        time.Time
 }
 
 // GetAllMonitorStatusRecords returns every persisted monitor_check_status row.
@@ -61,7 +61,7 @@ func GetAllMonitorStatusRecords() ([]MonitorStatusRecord, error) {
 	}
 
 	rows, err := db.Query(`SELECT check_id, domain, is_down, failure_count, consecutive_successes, current_mode,
-		last_alert_time, last_checked, next_check_at, down_since, pd_triggered, pd_escalated
+		last_alert_time, last_checked, next_check_at, down_since, pd_triggered, pd_escalated, last_started_at
 		FROM monitor_check_status`)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load monitor status: %w", err)
@@ -71,10 +71,10 @@ func GetAllMonitorStatusRecords() ([]MonitorStatusRecord, error) {
 	var records []MonitorStatusRecord
 	for rows.Next() {
 		var r MonitorStatusRecord
-		var lastAlertTime, lastChecked, nextCheckAt, downSince sql.NullTime
+		var lastAlertTime, lastChecked, nextCheckAt, downSince, lastStartedAt sql.NullTime
 		if err := rows.Scan(
 			&r.CheckID, &r.Domain, &r.IsDown, &r.FailureCount, &r.ConsecutiveSuccesses, &r.CurrentMode,
-			&lastAlertTime, &lastChecked, &nextCheckAt, &downSince, &r.PDTriggered, &r.PDEscalated,
+			&lastAlertTime, &lastChecked, &nextCheckAt, &downSince, &r.PDTriggered, &r.PDEscalated, &lastStartedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan monitor status: %w", err)
 		}
@@ -82,6 +82,7 @@ func GetAllMonitorStatusRecords() ([]MonitorStatusRecord, error) {
 		r.LastChecked = lastChecked.Time
 		r.NextCheckAt = nextCheckAt.Time
 		r.DownSince = downSince.Time
+		r.LastStartedAt = lastStartedAt.Time
 		records = append(records, r)
 	}
 	if err := rows.Err(); err != nil {
@@ -98,9 +99,12 @@ func SaveMonitorStatusRecord(r MonitorStatusRecord) error {
 		return fmt.Errorf("database not initialized")
 	}
 
-	var lastAlertTime, downSince any
+	var lastAlertTime, downSince, lastStartedAt any
 	if !r.LastAlertTime.IsZero() {
 		lastAlertTime = r.LastAlertTime
+	}
+	if !r.LastStartedAt.IsZero() {
+		lastStartedAt = r.LastStartedAt
 	}
 	if !r.DownSince.IsZero() {
 		downSince = r.DownSince
@@ -110,8 +114,8 @@ func SaveMonitorStatusRecord(r MonitorStatusRecord) error {
 		INSERT INTO monitor_check_status (
 			check_id, domain, is_down, failure_count, consecutive_successes,
 			current_mode, last_alert_time, last_checked, next_check_at,
-			down_since, pd_triggered, pd_escalated
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			down_since, pd_triggered, pd_escalated, last_started_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(check_id) DO UPDATE SET
 			domain = excluded.domain,
 			is_down = excluded.is_down,
@@ -123,11 +127,12 @@ func SaveMonitorStatusRecord(r MonitorStatusRecord) error {
 			next_check_at = excluded.next_check_at,
 			down_since = excluded.down_since,
 			pd_triggered = excluded.pd_triggered,
-			pd_escalated = excluded.pd_escalated
+			pd_escalated = excluded.pd_escalated,
+			last_started_at = excluded.last_started_at
 	`,
-		r.CheckID, strings.ToLower(r.Domain), r.IsDown, r.FailureCount, r.ConsecutiveSuccesses,
+		r.CheckID, r.Domain, r.IsDown, r.FailureCount, r.ConsecutiveSuccesses,
 		r.CurrentMode, lastAlertTime, r.LastChecked, r.NextCheckAt,
-		downSince, r.PDTriggered, r.PDEscalated,
+		downSince, r.PDTriggered, r.PDEscalated, lastStartedAt,
 	)
 	return err
 }

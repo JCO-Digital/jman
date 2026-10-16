@@ -28,11 +28,14 @@ type MonitorStatus struct {
 	LastAlertTime        *time.Time `json:"last_alert_time,omitempty"`
 	LastChecked          time.Time  `json:"last_checked"`
 	NextCheckAt          time.Time  `json:"next_check_at"`
+	// LastStartedAt is when a heartbeat check's job last reported starting.
+	LastStartedAt *time.Time `json:"last_started_at,omitempty"`
 }
 
 // Monitor check types.
 const (
-	MonitorCheckTypeHTTP = "http"
+	MonitorCheckTypeHTTP      = "http"
+	MonitorCheckTypeHeartbeat = "heartbeat" // an external job checks in
 )
 
 // Monitor check expectations: what a 2xx response body must look like.
@@ -65,13 +68,20 @@ type MonitorCheck struct {
 	AssertValue json.RawMessage `json:"assert_value,omitempty"`
 	// CacheBypass overrides the global monitorCacheBypass setting; nil
 	// follows it.
-	CacheBypass *bool      `json:"cache_bypass,omitempty"`
-	Enabled     bool       `json:"enabled"`
-	OrphanedAt  *time.Time `json:"orphaned_at,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
-	CreatedBy   string     `json:"created_by,omitempty"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	UpdatedBy   string     `json:"updated_by,omitempty"`
+	CacheBypass *bool `json:"cache_bypass,omitempty"`
+	// IntervalSeconds, GraceSeconds and FailThreshold configure a
+	// heartbeat check: it is down when no check-in finished within
+	// interval + grace of the last one, or after FailThreshold failed
+	// check-ins in a row.
+	IntervalSeconds int        `json:"interval_seconds,omitempty"`
+	GraceSeconds    int        `json:"grace_seconds,omitempty"`
+	FailThreshold   int        `json:"fail_threshold,omitempty"`
+	Enabled         bool       `json:"enabled"`
+	OrphanedAt      *time.Time `json:"orphaned_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	CreatedBy       string     `json:"created_by,omitempty"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+	UpdatedBy       string     `json:"updated_by,omitempty"`
 }
 
 // MonitorCheckSecret describes a secret header sent with a check's
