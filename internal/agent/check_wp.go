@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
 // CheckWPData runs the WordPress data collection for this server's sites
@@ -47,7 +48,7 @@ func CheckWPData(ctx context.Context, cfg Config, domain string, out io.Writer) 
 	failed := 0
 	for _, site := range sites {
 		fmt.Fprintf(out, "\n%s\n", site.Domain)
-		if !checkSite(ctx, runner, site, out) {
+		if !checkSite(ctx, runner, site, manifest.CollectUsers, out) {
 			failed++
 		}
 	}
@@ -59,7 +60,7 @@ func CheckWPData(ctx context.Context, cfg Config, domain string, out io.Writer) 
 	return failed, nil
 }
 
-func checkSite(ctx context.Context, runner wpDataRunner, site models.AgentManifestSite, out io.Writer) bool {
+func checkSite(ctx context.Context, runner wpDataRunner, site models.AgentManifestSite, collectUsers bool, out io.Writer) bool {
 	sitePath, err := resolvePath(site.Domain, site.SiteUser)
 	if err != nil {
 		fmt.Fprintf(out, "  FAILED: %v\n", err)
@@ -73,7 +74,7 @@ func checkSite(ctx context.Context, runner wpDataRunner, site models.AgentManife
 	}
 	fmt.Fprintf(out, "  runs as: %s (uid %d, gid %d, home %s)\n", id.Username, id.UID, id.GID, id.Home)
 
-	data := collectSiteWPData(ctx, runner, site)
+	data := collectSiteWPData(ctx, runner, site, collectUsers)
 	if data.Error != "" {
 		fmt.Fprintf(out, "  FAILED: %s\n", data.Error)
 		return false
@@ -99,6 +100,16 @@ func checkSite(ctx context.Context, runner wpDataRunner, site models.AgentManife
 		core += ", major update " + data.Core.MajorUpdate
 	}
 	fmt.Fprintf(out, "  ok: %d plugins (%d regular, %d with updates), WordPress %s\n", len(data.Plugins), regular, updates, core)
+	switch {
+	case data.Users != nil:
+		fmt.Fprintf(out, "  users: %d listed", len(data.Users.Users))
+		for _, role := range wpcli.ExcludedUserRoles {
+			fmt.Fprintf(out, ", %d %s", data.Users.ExcludedCounts[role], role)
+		}
+		fmt.Fprintln(out)
+	case collectUsers:
+		fmt.Fprintln(out, "  users: couldn't be listed (see the log)")
+	}
 	fmt.Fprintln(out, "  differs from jman-api's data (would be sent in full)")
 	return true
 }

@@ -184,7 +184,7 @@ func TestCollectSiteWPData(t *testing.T) {
 	stubSite(t, runner)
 	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com", IsWordpress: true}
 
-	data := collectSiteWPData(context.Background(), runner, site)
+	data := collectSiteWPData(context.Background(), runner, site, false)
 	if data.Error != "" {
 		t.Fatalf("error: %s", data.Error)
 	}
@@ -194,7 +194,7 @@ func TestCollectSiteWPData(t *testing.T) {
 	if data.Core == nil || *data.Core != (models.SiteCore{Version: "6.6.1", MinorUpdate: "6.6.2", MajorUpdate: "6.7.1"}) {
 		t.Errorf("core = %+v", data.Core)
 	}
-	if data.Hash != models.WPDataHash(data.Plugins, *data.Core) {
+	if data.Hash != models.WPDataHash(data.Plugins, *data.Core, nil) {
 		t.Error("hash doesn't match the data")
 	}
 	for _, id := range runner.ids {
@@ -205,7 +205,7 @@ func TestCollectSiteWPData(t *testing.T) {
 
 	// With jman-api already holding this state, only the hash is sent.
 	site.WPDataHash = data.Hash
-	again := collectSiteWPData(context.Background(), okRunner(), site)
+	again := collectSiteWPData(context.Background(), okRunner(), site, false)
 	if again.Hash != data.Hash || again.Plugins != nil || again.Core != nil {
 		t.Errorf("unchanged data was sent in full: %+v", again)
 	}
@@ -215,7 +215,7 @@ func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	runner := okRunner()
 	runner.fail = map[string]error{"plugin list --format=json": errors.New("wp-cli [plugin list] failed: Error: Error establishing a database connection.")}
 	stubSite(t, runner)
-	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"})
+	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if !strings.Contains(data.Error, "database connection") || data.Hash != "" || data.Plugins != nil {
 		t.Errorf("data = %+v", data)
 	}
@@ -224,7 +224,7 @@ func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	resolveIdentity = func(string, string) (siteIdentity, error) {
 		return siteIdentity{}, fmt.Errorf("refusing to run wp-cli: /sites/example.com/files is owned by root")
 	}
-	data = collectSiteWPData(context.Background(), okRunner(), models.AgentManifestSite{SiteID: "s1", Domain: "example.com"})
+	data = collectSiteWPData(context.Background(), okRunner(), models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if !strings.Contains(data.Error, "owned by root") {
 		t.Errorf("data = %+v", data)
 	}
@@ -233,7 +233,7 @@ func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	runner = okRunner()
 	runner.fail = map[string]error{"core check-update --format=json": errors.New("offline")}
 	resolveIdentity = func(string, string) (siteIdentity, error) { return siteIdentity{UID: 1001, GID: 1001}, nil }
-	data = collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"})
+	data = collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if data.Error != "" || data.Core == nil || data.Core.Version != "6.6.1" || data.Core.MajorUpdate != "" {
 		t.Errorf("data = %+v", data)
 	}
@@ -317,5 +317,79 @@ func TestFirstErrorLine(t *testing.T) {
 	}
 	if got := firstErrorLine("warning one\nlast words\n\n"); got != "last words" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func usersRunner() *fakeRunner {
+	r := okRunner()
+	r.out["user list --role__not_in=subscriber,customer --fields=ID,user_login,user_email,display_name,roles,user_registered --orderby=ID --order=ASC --number=1001 --format=json"] = `[{"ID":"1","user_login":"admin","user_email":"admin@example.com","display_name":"Admin","roles":"administrator","user_registered":"2020-01-01 00:00:00"}]`
+	r.out["user list --role=subscriber --format=count"] = "1234\n"
+	r.out["user list --role=customer --format=count"] = "0\n"
+	return r
+}
+
+func TestCollectSiteWPDataUsers(t *testing.T) {
+	runner := usersRunner()
+	stubSite(t, runner)
+	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com", IsWordpress: true}
+
+	data := collectSiteWPData(context.Background(), runner, site, true)
+	if data.Error != "" || data.Users == nil {
+		t.Fatalf("data = %+v", data)
+	}
+	if len(data.Users.Users) != 1 || data.Users.Users[0].Login != "admin" || data.Users.ExcludedCounts["subscriber"] != 1234 {
+		t.Errorf("users = %+v", data.Users)
+	}
+	if data.Hash != models.WPDataHash(data.Plugins, *data.Core, data.Users) {
+		t.Error("hash doesn't match the data")
+	}
+
+	// Not asked for users: none are collected and the hash leaves them out.
+	runner = usersRunner()
+	data = collectSiteWPData(context.Background(), runner, site, false)
+	if data.Users != nil || data.Hash != models.WPDataHash(data.Plugins, *data.Core, nil) {
+		t.Errorf("data = %+v", data)
+	}
+	for _, c := range runner.calls {
+		if strings.HasPrefix(c, "user ") {
+			t.Errorf("listed users without being asked: %s", c)
+		}
+	}
+
+	// A failed user list still reports plugins and core.
+	runner = usersRunner()
+	runner.fail = map[string]error{"user list --role=customer --format=count": errors.New("boom")}
+	data = collectSiteWPData(context.Background(), runner, site, true)
+	if data.Error != "" || data.Users != nil || data.Core == nil || data.Hash != models.WPDataHash(data.Plugins, *data.Core, nil) {
+		t.Errorf("data = %+v", data)
+	}
+}
+
+func TestCollectWPDataForSitesCapsPayloadBytes(t *testing.T) {
+	big := usersRunner()
+	var users []string
+	for i := 1; i <= 1000; i++ {
+		users = append(users, fmt.Sprintf(`{"ID":"%d","user_login":"user%d","user_email":"user%d@example.com","display_name":"A rather long display name %d","roles":"editor","user_registered":"2020-01-01 00:00:00"}`, i, i, i, i))
+	}
+	for k := range big.out {
+		if strings.HasPrefix(k, "user list --role__not_in") {
+			big.out[k] = "[" + strings.Join(users, ",") + "]"
+		}
+	}
+	stubSite(t, big)
+	manifest := &models.AgentManifest{WPDataIntervalMinutes: 60, CollectUsers: true}
+	for i := range 20 {
+		manifest.Sites = append(manifest.Sites, models.AgentManifestSite{SiteID: fmt.Sprintf("s%d", i), Domain: "example.com", IsWordpress: true})
+	}
+	data, done := collectWPDataForSites(context.Background(), manifest, time.Now())
+	if len(data) == 0 || len(data) >= 20 || len(done) != len(data) {
+		t.Fatalf("sent %d payloads, marked %d done", len(data), len(done))
+	}
+	total := 0
+	for _, d := range data {
+		total += payloadSize(d)
+	}
+	if len(data) > 1 && total > maxWPDataPayloadBytes {
+		t.Errorf("payloads total %d bytes, over %d", total, maxWPDataPayloadBytes)
 	}
 }

@@ -1,5 +1,5 @@
 // Package sitestate is the single way a site's observed WordPress state
-// (installed plugins, core version) gets into jman's cache. Whoever read
+// (installed plugins, core version, users) gets into jman's cache. Whoever read
 // it, jman-agent, an SSH refresh or an update job, the state is compared
 // with what jman knew before, and changes jman didn't make itself are
 // recorded in the site's update ledger as detected changes.
@@ -148,8 +148,30 @@ func ApplyCore(siteID string, core models.SiteCore, src Source, observedAt time.
 	return true, nil
 }
 
-// StoredHash returns the models.WPDataHash of the plugins and core state
-// stored for a site, or "" if neither is stored.
+// ApplyUsers stores a site's observed users and returns whether it did (it
+// skips users observed before the stored ones). User changes aren't
+// written to the update ledger.
+func ApplyUsers(siteID string, users models.SiteUsers, src Source, observedAt time.Time) (bool, error) {
+	if observedAt.IsZero() {
+		observedAt = time.Now()
+	}
+	knownAt, hasKnown, err := db.GetSiteUsersObservedAt(siteID)
+	if err != nil {
+		return false, err
+	}
+	if hasKnown && observedAt.Before(knownAt) {
+		return false, nil
+	}
+	if err := db.ReplaceSiteUsers(siteID, users, observedAt); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// StoredHash returns the models.WPDataHash of the plugins, core state and
+// users stored for a site, or "" if neither plugins nor core are stored.
+// Users count only if they are stored, matching an agent that doesn't
+// collect them as long as none are.
 func StoredHash(siteID string) (string, error) {
 	plugins, err := db.GetSitePlugins(siteID)
 	if err != nil {
@@ -166,7 +188,15 @@ func StoredHash(siteID string) (string, error) {
 	if core != nil {
 		c = *core
 	}
-	return models.WPDataHash(plugins, c), nil
+	users, found, err := db.GetSiteUsers(siteID)
+	if err != nil {
+		return "", err
+	}
+	var u *models.SiteUsers
+	if found {
+		u = &users
+	}
+	return models.WPDataHash(plugins, c, u), nil
 }
 
 // PluginChange is one detected change of a regular plugin.

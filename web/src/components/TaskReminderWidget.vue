@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
@@ -35,20 +35,20 @@ function vulnStatus(task: Task) {
 	return getVulnerabilityStatus(task, dataStore.enrichedSites);
 }
 
-const reminderTasks = ref<Task[]>([]);
 const isTasksLoading = ref(false);
 const selectedTask = ref<Task | null>(null);
 const showTaskModal = ref(false);
 const showFormModal = ref(false);
 const editingTask = ref<Task | null>(null);
 
-// Recomputes the widget's list from the task store's already-current data —
-// no network call — so it can be re-run after a store mutation (create/edit)
-// without re-introducing a fetch round-trip before the UI updates.
-function computeReminderTasks() {
+// Derived from the task store, so every change there (completing, editing or
+// deleting a task here or in the task modal, the next occurrence of a
+// repeating task arriving) shows up at once. The task modal closes before
+// its change is saved, so its updated/deleted events never reach us.
+const reminderTasks = computed(() => {
 	const now = new Date();
 	const currentUsername = authStore.user?.username;
-	reminderTasks.value = taskStore.tasks.filter((t) => {
+	return taskStore.tasks.filter((t) => {
 		if (!t.reminder_date) return false;
 		if (EXCLUDED_STATUSES.has(t.status)) return false;
 
@@ -60,13 +60,12 @@ function computeReminderTasks() {
 
 		return new Date(t.reminder_date) <= now;
 	});
-}
+});
 
 const loadReminderTasks = async () => {
 	isTasksLoading.value = true;
 	try {
 		await taskStore.fetchTasks();
-		computeReminderTasks();
 	} catch (e) {
 		console.error("Failed to load reminder tasks", e);
 	} finally {
@@ -87,7 +86,6 @@ function openEdit(task: Task) {
 
 function handleSaved(task: Task) {
 	showFormModal.value = false;
-	computeReminderTasks();
 	if (editingTask.value) {
 		selectedTask.value = task;
 		showTaskModal.value = true;
@@ -97,9 +95,6 @@ function handleSaved(task: Task) {
 async function completeTask(task: Task) {
 	try {
 		await taskStore.completeTask(task.id);
-		reminderTasks.value = reminderTasks.value.filter(
-			(t) => t.id !== task.id,
-		);
 	} catch (e) {
 		console.error("Failed to complete task", e);
 	}
@@ -107,20 +102,10 @@ async function completeTask(task: Task) {
 
 function handleTaskUpdated(updated: Task) {
 	selectedTask.value = updated;
-	if (EXCLUDED_STATUSES.has(updated.status)) {
-		reminderTasks.value = reminderTasks.value.filter(
-			(t) => t.id !== updated.id,
-		);
-	}
 }
 
 function handleTaskDeleted() {
 	showTaskModal.value = false;
-	if (selectedTask.value) {
-		reminderTasks.value = reminderTasks.value.filter(
-			(t) => t.id !== selectedTask.value?.id,
-		);
-	}
 }
 
 const formatDate = (dateString: string | null) => {

@@ -26,14 +26,15 @@ interface NavLink {
 
 const navLinks: NavLink[] = [
 	{ to: "/", label: "Dashboard", match: ["home"] },
+	{ to: "/sites", label: "Sites", match: ["sites", "site-detail"] },
+	{ to: "/plugins", label: "Plugins", match: ["plugins", "plugin-detail"] },
+	{ to: "/users", label: "Users", match: ["users"] },
 	{
 		to: "/monitoring",
 		label: "Monitoring",
 		match: ["monitoring"],
 		showIncidentBadge: true,
 	},
-	{ to: "/sites", label: "Sites", match: ["sites", "site-detail"] },
-	{ to: "/plugins", label: "Plugins", match: ["plugins", "plugin-detail"] },
 	{ to: "/tasks", label: "Tasks", match: ["tasks"] },
 	{
 		to: "/organizations",

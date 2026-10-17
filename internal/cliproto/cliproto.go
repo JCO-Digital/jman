@@ -37,6 +37,10 @@ type Snapshot struct {
 	Sites         []Site            `json:"sites"`
 	Plugins       []models.WPPlugin `json:"plugins"`
 	PluginInfo    []PluginInfo      `json:"plugin_info"`
+	// Users are the sites' WordPress users, without the roles only counted
+	// in UserSummaries, sorted by site and user ID.
+	Users         []models.SiteUser        `json:"users,omitempty"`
+	UserSummaries []models.SiteUserSummary `json:"user_summaries,omitempty"`
 }
 
 // Server is a server in the snapshot.

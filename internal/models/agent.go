@@ -82,6 +82,10 @@ type AgentManifest struct {
 	// WordPress data (plugins and core) with wp-cli. Zero means don't:
 	// jman-api versions that predate agent collection don't send it.
 	WPDataIntervalMinutes int `json:"wp_data_interval_minutes,omitempty"`
+	// CollectUsers asks the agent to include each site's users in its
+	// WordPress data. jman-api versions that predate it don't send it, and
+	// would reject a hash that includes users.
+	CollectUsers bool `json:"collect_users,omitempty"`
 }
 
 // TrafficTopEntry is a single ranked entry (a page path or a referrer) in a

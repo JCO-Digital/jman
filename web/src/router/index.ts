@@ -30,6 +30,19 @@ const router = createRouter({
 			}),
 		},
 		{
+			path: "/users/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			name: "users",
+			component: () => import("../views/UsersView.vue"),
+			props: (route) => ({
+				page: route.params.page
+					? parseInt(route.params.page as string, 10)
+					: undefined,
+				rowsPerPage: route.params.rowsPerPage
+					? parseInt(route.params.rowsPerPage as string, 10)
+					: undefined,
+			}),
+		},
+		{
 			path: "/plugin/:name",
 			name: "plugin-detail",
 			component: () => import("../views/PluginDetailView.vue"),

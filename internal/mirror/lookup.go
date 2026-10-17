@@ -78,6 +78,40 @@ func (m *Mirror) SitePlugins(siteID string) []models.WPPlugin {
 	return out
 }
 
+// Users returns the WordPress users of every site, sorted by site and ID,
+// without the roles that are only counted (see SiteUserSummary).
+func (m *Mirror) Users() []models.SiteUser {
+	if m.Snapshot == nil {
+		return nil
+	}
+	return m.Snapshot.Users
+}
+
+// SiteUsers returns a site's WordPress users, sorted by ID.
+func (m *Mirror) SiteUsers(siteID string) []models.SiteUser {
+	out := []models.SiteUser{}
+	for _, u := range m.Users() {
+		if u.SiteID == siteID {
+			out = append(out, u)
+		}
+	}
+	return out
+}
+
+// SiteUserSummary returns a site's user summary, and false if its users
+// were never read.
+func (m *Mirror) SiteUserSummary(siteID string) (models.SiteUserSummary, bool) {
+	if m.Snapshot == nil {
+		return models.SiteUserSummary{}, false
+	}
+	for _, s := range m.Snapshot.UserSummaries {
+		if s.SiteID == siteID {
+			return s, true
+		}
+	}
+	return models.SiteUserSummary{}, false
+}
+
 // CoreVersions returns the WordPress core version of every site that has
 // one recorded.
 func (m *Mirror) CoreVersions() []models.SiteCore {

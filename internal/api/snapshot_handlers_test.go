@@ -45,6 +45,15 @@ func seedSnapshotSites(t *testing.T) {
 	if err := db.SaveSiteCore("spinup-2", "6.8.3", "", ""); err != nil {
 		t.Fatalf("seed core: %v", err)
 	}
+	for _, id := range []string{"spinup-1", "spinup-2"} {
+		users := models.SiteUsers{
+			Users:          []models.SiteUser{{ID: 9, Login: "zed"}, {ID: 1, Login: "admin", Email: "admin@" + id}},
+			ExcludedCounts: map[string]int{"subscriber": 5},
+		}
+		if err := db.ReplaceSiteUsers(id, users, now); err != nil {
+			t.Fatalf("seed users: %v", err)
+		}
+	}
 }
 
 func getSnapshot(t *testing.T, header map[string]string) *httptest.ResponseRecorder {
@@ -94,6 +103,13 @@ func TestCLISnapshotHandler(t *testing.T) {
 	}
 	if len(snap.Plugins) != 2 {
 		t.Errorf("expected 2 plugin rows, got %+v", snap.Plugins)
+	}
+	// Users of included sites only, sorted by ID.
+	if len(snap.Users) != 2 || snap.Users[0].SiteID != "spinup-2" || snap.Users[0].ID != 1 || snap.Users[1].ID != 9 {
+		t.Errorf("users = %+v", snap.Users)
+	}
+	if len(snap.UserSummaries) != 1 || snap.UserSummaries[0].SiteID != "spinup-2" || snap.UserSummaries[0].ExcludedCounts["subscriber"] != 5 {
+		t.Errorf("user summaries = %+v", snap.UserSummaries)
 	}
 
 	etag := w.Header().Get("ETag")

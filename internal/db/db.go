@@ -301,6 +301,30 @@ func initInventorySchema() error {
 			},
 		},
 		{
+			Name: "site_users",
+			Columns: map[string]string{
+				"site_id":      "TEXT NOT NULL",
+				"user_id":      "INTEGER NOT NULL",
+				"login":        "TEXT NOT NULL DEFAULT ''",
+				"email":        "TEXT NOT NULL DEFAULT ''",
+				"display_name": "TEXT NOT NULL DEFAULT ''",
+				"roles":        "TEXT NOT NULL DEFAULT ''",
+				"registered":   "TEXT NOT NULL DEFAULT ''",
+			},
+			PrimaryKey: []string{"site_id", "user_id"},
+		},
+		{
+			// One row per site whose users were read, also when it has
+			// none to list: the excluded roles' counts and when it was read.
+			Name: "site_user_summary",
+			Columns: map[string]string{
+				"site_id":         "TEXT PRIMARY KEY",
+				"excluded_counts": "TEXT NOT NULL DEFAULT '{}'",
+				"truncated":       "BOOLEAN NOT NULL DEFAULT 0",
+				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
 			Name: "site_admin_user",
 			Columns: map[string]string{
 				"site_id":    "TEXT PRIMARY KEY",

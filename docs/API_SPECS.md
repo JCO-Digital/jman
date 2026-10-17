@@ -322,6 +322,41 @@ These endpoints require at least **`basic`** level.
 `GET /plugins` (Protected: `basic`)
 `GET /plugininfo` (Protected: `basic`)
 
+### WordPress Users of Sites
+
+These are the managed sites' WordPress users, not jman's own users (see User Management). Subscribers and WooCommerce customers aren't listed, only counted by role. At most 1000 users are kept per site (`truncated` is set when a site has more). Users are collected with the plugin data, by jman-agent or over SSH.
+
+`GET /site-users` (Protected: `basic`)
+
+Every site's users, ordered by site and user ID, with one summary per site whose users were read.
+
+```json
+{
+  "users": [
+    {
+      "site_id": "…",
+      "id": 1,
+      "login": "admin",
+      "email": "admin@example.com",
+      "display_name": "Admin",
+      "roles": "administrator",
+      "registered": "2020-01-02 03:04:05"
+    }
+  ],
+  "summaries": [
+    {
+      "site_id": "…",
+      "excluded_counts": { "subscriber": 1200, "customer": 0 },
+      "updated_at": "2026-10-17T08:00:00Z"
+    }
+  ]
+}
+```
+
+`GET /sites/{id}/users` (Protected: `basic`)
+
+One site's users: `{"users": [...], "excluded_counts": {...}, "truncated": false, "updated_at": "…"}`. `updated_at` is empty if the site's users were never read.
+
 ---
 
 ## Reports (Read-Only)

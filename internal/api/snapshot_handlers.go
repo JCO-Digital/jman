@@ -40,6 +40,14 @@ func buildCLISnapshot() (*cliproto.Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("plugin info: %w", err)
 	}
+	users, err := db.GetAllSiteUsers()
+	if err != nil {
+		return nil, fmt.Errorf("users: %w", err)
+	}
+	userSummaries, err := db.GetAllSiteUserSummaries()
+	if err != nil {
+		return nil, fmt.Errorf("user summaries: %w", err)
+	}
 
 	snap := &cliproto.Snapshot{
 		SchemaVersion: cliproto.SnapshotSchemaVersion,
@@ -99,6 +107,24 @@ func buildCLISnapshot() (*cliproto.Snapshot, error) {
 		}
 		return snap.Plugins[i].Name < snap.Plugins[j].Name
 	})
+
+	for _, u := range users {
+		if included[u.SiteID] {
+			snap.Users = append(snap.Users, u)
+		}
+	}
+	sort.Slice(snap.Users, func(i, j int) bool {
+		if snap.Users[i].SiteID != snap.Users[j].SiteID {
+			return snap.Users[i].SiteID < snap.Users[j].SiteID
+		}
+		return snap.Users[i].ID < snap.Users[j].ID
+	})
+	for _, s := range userSummaries {
+		if included[s.SiteID] {
+			snap.UserSummaries = append(snap.UserSummaries, s)
+		}
+	}
+	sort.Slice(snap.UserSummaries, func(i, j int) bool { return snap.UserSummaries[i].SiteID < snap.UserSummaries[j].SiteID })
 
 	for _, info := range infos {
 		snap.PluginInfo = append(snap.PluginInfo, cliproto.PluginInfo{Slug: info.Slug, Name: info.Name, Latest: info.Version})
