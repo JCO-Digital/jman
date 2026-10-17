@@ -22,6 +22,7 @@ import { useCoreUpdateStore } from "../stores/coreUpdate";
 import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
+import SiteUsersCard from "../components/SiteUsersCard.vue";
 import {
 	availablePluginUpdate,
 	formatBytes,
@@ -1325,6 +1326,8 @@ const unlinkOrganization = async () => {
 					</table>
 				</div>
 			</section>
+
+			<SiteUsersCard v-if="site.is_wordpress" :site-id="site.id" />
 
 			<section class="card mt-4">
 				<div class="card-header">

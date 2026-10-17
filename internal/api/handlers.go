@@ -47,6 +47,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	mux.Handle("GET /api/plugins", basic(PluginsHandler))
 	mux.Handle("GET /api/plugininfo", basic(PluginInfoHandler))
+	// WordPress users of the managed sites; /api/users is jman's own.
+	mux.Handle("GET /api/site-users", basic(SiteUsersHandler))
 	mux.Handle("GET /api/servers", basic(ServersHandler))
 	mux.Handle("POST /api/servers", edit(CreateServerHandler))
 	mux.Handle("DELETE /api/servers/{id}", edit(DeleteServerHandler))
@@ -174,6 +176,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	// --- Plugin management routes (background jobs) ---
 	mux.Handle("GET /api/sites/{id}/plugins", basic(SitePluginsHandler))
+	mux.Handle("GET /api/sites/{id}/users", basic(SiteUserListHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-actions", execute(SitePluginActionHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-install", execute(SitePluginInstallHandler))
 

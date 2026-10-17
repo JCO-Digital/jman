@@ -127,6 +127,14 @@ func collectSingleSite(site models.ManagedSite) error {
 		}
 	}
 
+	// 5. Collect Users
+	users, userErr := wpcli.GetSiteUsers(cliSite)
+	if userErr == nil {
+		if _, err := sitestate.ApplyUsers(site.ID, users, sitestate.SourceSSH, time.Now()); err != nil {
+			verb.LogPrintf(verb.Normal, "Agentless collection: failed to save users for %s: %v", site.Domain, err)
+		}
+	}
+
 	return nil
 }
 

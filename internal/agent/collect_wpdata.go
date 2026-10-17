@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -21,6 +22,20 @@ const wpDataConcurrency = 3
 // first collection on a server). Sites beyond it are collected again on
 // the next cycle.
 const maxWPDataPayloads = 40
+
+// maxWPDataPayloadBytes bounds the encoded size of the full payloads in one
+// report, as a site's user list can make a payload much larger than its
+// plugins do.
+const maxWPDataPayloadBytes = 1 << 20
+
+// payloadSize returns the encoded size of a site's WordPress data.
+func payloadSize(data *models.AgentWPData) int {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return 0
+	}
+	return len(b)
+}
 
 // lastWPCollection holds when each site's WordPress data was last
 // collected and reported. It lives in memory: after a restart every site
@@ -104,7 +119,7 @@ func collectWPDataForSites(ctx context.Context, manifest *models.AgentManifest, 
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			data := collectSiteWPData(ctx, runner, site)
+			data := collectSiteWPData(ctx, runner, site, manifest.CollectUsers)
 			mu.Lock()
 			results[site.SiteID] = data
 			mu.Unlock()
@@ -112,27 +127,31 @@ func collectWPDataForSites(ctx context.Context, manifest *models.AgentManifest, 
 	}
 	wg.Wait()
 
-	// Cap the full payloads; capped sites are left out entirely and stay
-	// due, so the next cycle collects and sends them.
-	payloads := 0
+	// Cap the full payloads by count and size; capped sites are left out
+	// entirely and stay due, so the next cycle collects and sends them.
+	// The first payload always goes, so no site can be held back forever.
+	payloads, size := 0, 0
 	var done []string
 	for _, site := range due {
 		data := results[site.SiteID]
 		if data.Plugins != nil || data.Core != nil {
-			if payloads == maxWPDataPayloads {
+			n := payloadSize(data)
+			if payloads == maxWPDataPayloads || (payloads > 0 && size+n > maxWPDataPayloadBytes) {
 				delete(results, site.SiteID)
 				continue
 			}
 			payloads++
+			size += n
 		}
 		done = append(done, site.SiteID)
 	}
 	return results, done
 }
 
-// collectSiteWPData collects one site's plugins and core state as its
+// collectSiteWPData collects one site's plugins, core state and users as its
 // owner. The data is included only if its hash differs from jman-api's.
-func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.AgentManifestSite) *models.AgentWPData {
+// Users are collected only if collectUsers (the manifest's CollectUsers).
+func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.AgentManifestSite, collectUsers bool) *models.AgentWPData {
 	data := &models.AgentWPData{CollectedAt: time.Now().UTC().Format(time.RFC3339)}
 	fail := func(err error) *models.AgentWPData {
 		verb.LogPrintf(verb.Normal, "Failed to collect WordPress data for %s: %v", site.Domain, err)
@@ -179,12 +198,48 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 		core.MinorUpdate, core.MajorUpdate = wpcli.SplitCoreUpdates(updates)
 	}
 
-	data.Hash = models.WPDataHash(plugins, core)
+	// Users that can't be listed leave the rest worth reporting; jman-api
+	// then drops the site's stored users, as it would for an agent that
+	// doesn't collect them.
+	var users *models.SiteUsers
+	if collectUsers {
+		if users, err = collectSiteUsers(ctx, runner, id, sitePath); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to collect users for %s: %v", site.Domain, err)
+		}
+	}
+
+	data.Hash = models.WPDataHash(plugins, core, users)
 	if data.Hash != site.WPDataHash {
 		data.Plugins = plugins
 		data.Core = &core
+		data.Users = users
 	}
 	return data
+}
+
+// collectSiteUsers lists a site's users without the excluded roles, which
+// it counts.
+func collectSiteUsers(ctx context.Context, runner wpDataRunner, id siteIdentity, sitePath string) (*models.SiteUsers, error) {
+	out, err := runner.run(ctx, id, sitePath, wpcli.UserListArgs()...)
+	if err != nil {
+		return nil, err
+	}
+	list, err := wpcli.ParseUserList(out, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse the user list: %w", err)
+	}
+	counts := make(map[string]int, len(wpcli.ExcludedUserRoles))
+	for _, role := range wpcli.ExcludedUserRoles {
+		out, err := runner.run(ctx, id, sitePath, wpcli.UserCountArgs(role)...)
+		if err != nil {
+			return nil, err
+		}
+		if counts[role], err = wpcli.ParseUserCount(out); err != nil {
+			return nil, err
+		}
+	}
+	users := wpcli.NewSiteUsers(list, counts)
+	return &users, nil
 }
 
 // lastLine returns the last non-empty line of wp-cli output, skipping any

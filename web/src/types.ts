@@ -1030,3 +1030,34 @@ export interface SpinupWPSyncResult {
 	sites: number;
 	message: string;
 }
+
+/** A WordPress user of a managed site (not a jman user, see AdminUser). */
+export interface SiteUser {
+	site_id: string;
+	id: number;
+	login: string;
+	email: string;
+	display_name: string;
+	/** Comma-separated roles, e.g. "editor,author". */
+	roles: string;
+	registered: string;
+}
+
+/** A site's user counts for the roles that aren't listed. */
+export interface SiteUserSummary {
+	site_id: string;
+	/** Users by excluded role (subscriber, customer). */
+	excluded_counts: Record<string, number>;
+	/** The site has more users than were listed. */
+	truncated?: boolean;
+	updated_at: string;
+}
+
+/** One site's users, from GET /api/sites/{id}/users. */
+export interface SiteUserList {
+	users: SiteUser[];
+	excluded_counts: Record<string, number>;
+	truncated?: boolean;
+	/** "" if the users were never read. */
+	updated_at: string;
+}

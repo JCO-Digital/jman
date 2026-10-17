@@ -44,6 +44,7 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		// Agents of this version and later collect WordPress data; older
 		// ones ignore the field and stay on the SSH refresh.
 		WPDataIntervalMinutes: config.AgentWPDataIntervalMinutes(),
+		CollectUsers:          true,
 	}
 	for _, site := range sites {
 		// SpinupWP sites go through deploying -> deployed (or failed), and
@@ -117,7 +118,10 @@ func applyAgentWPData(siteID string, wp *models.AgentWPData, receivedAt time.Tim
 		case len(wp.Plugins) > maxAgentPlugins:
 			record(fmt.Sprintf("the agent reported %d plugins, more than the %d accepted", len(wp.Plugins), maxAgentPlugins))
 			return
-		case models.WPDataHash(wp.Plugins, *wp.Core) != wp.Hash:
+		case wp.Users != nil && len(wp.Users.Users) > models.MaxSiteUsers:
+			record(fmt.Sprintf("the agent reported %d users, more than the %d accepted", len(wp.Users.Users), models.MaxSiteUsers))
+			return
+		case models.WPDataHash(wp.Plugins, *wp.Core, wp.Users) != wp.Hash:
 			record("the agent's WordPress data doesn't match its hash")
 			return
 		}
@@ -129,6 +133,16 @@ func applyAgentWPData(siteID string, wp *models.AgentWPData, receivedAt time.Tim
 		if _, err := sitestate.ApplyCore(siteID, *wp.Core, sitestate.SourceAgent, collectedAt); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to store agent-reported core version for site %s: %v", siteID, err)
 			return
+		}
+		// An agent that sent no users (an older one, or one that couldn't
+		// list them) leaves none stored, so the stored hash matches its own.
+		if wp.Users != nil {
+			if _, err := sitestate.ApplyUsers(siteID, *wp.Users, sitestate.SourceAgent, collectedAt); err != nil {
+				verb.LogPrintf(verb.Normal, "Failed to store agent-reported users for site %s: %v", siteID, err)
+				return
+			}
+		} else if err := db.DeleteSiteUsers(siteID); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to clear users for site %s: %v", siteID, err)
 		}
 	}
 	record("")

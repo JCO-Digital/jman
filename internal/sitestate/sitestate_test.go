@@ -248,7 +248,7 @@ func TestStoredHashMatchesAgentHash(t *testing.T) {
 	}
 	// The agent hashes its own list, without site IDs and in its order.
 	agentPlugins := []models.WPPlugin{plugin("a", "inactive", "1"), plugin("b", "active", "2")}
-	if got, want := mustHash(t), models.WPDataHash(agentPlugins, core); got != want {
+	if got, want := mustHash(t), models.WPDataHash(agentPlugins, core, nil); got != want {
 		t.Errorf("stored hash %s != agent hash %s", got, want)
 	}
 }

@@ -60,7 +60,7 @@ func TestAgentWPDataRoundTrip(t *testing.T) {
 
 	plugins := []models.WPPlugin{{Name: "akismet", Status: "active", Version: "5.0"}}
 	core := models.SiteCore{Version: "6.6.1", MajorUpdate: "6.7"}
-	hash := models.WPDataHash(plugins, core)
+	hash := models.WPDataHash(plugins, core, nil)
 	postAgentReport(t, 5, models.AgentReportSite{SiteID: site, WPData: &models.AgentWPData{
 		CollectedAt: time.Now().UTC().Format(time.RFC3339), Hash: hash, Plugins: plugins, Core: &core,
 	}})
@@ -111,5 +111,57 @@ func TestAgentWPDataRejectsInconsistentData(t *testing.T) {
 	statuses, _ := db.ListSiteAgentWPStatus()
 	if st := statuses[site]; st.Error == "" || !st.CollectedAt.IsZero() {
 		t.Errorf("status = %+v", st)
+	}
+}
+
+// Users sent with the WordPress data are stored and count in the stored
+// hash; a later report without users (an agent that couldn't list them)
+// clears them, so the hashes agree again.
+func TestAgentWPDataUsers(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{303, 5, "wp3.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(303)
+
+	if !fetchManifest(t, 5).CollectUsers {
+		t.Fatal("manifest doesn't ask for users")
+	}
+
+	plugins := []models.WPPlugin{{Name: "akismet", Status: "active", Version: "5.0"}}
+	core := models.SiteCore{Version: "6.6.1"}
+	users := &models.SiteUsers{
+		Users:          []models.SiteUser{{ID: 1, Login: "admin", Email: "admin@example.com", Roles: "administrator"}},
+		ExcludedCounts: map[string]int{"subscriber": 42, "customer": 0},
+	}
+	hash := models.WPDataHash(plugins, core, users)
+	postAgentReport(t, 5, models.AgentReportSite{SiteID: site, WPData: &models.AgentWPData{
+		CollectedAt: time.Now().UTC().Format(time.RFC3339), Hash: hash, Plugins: plugins, Core: &core, Users: users,
+	}})
+
+	stored, found, err := db.GetSiteUsers(site)
+	if err != nil || !found || len(stored.Users) != 1 || stored.Users[0].Email != "admin@example.com" || stored.ExcludedCounts["subscriber"] != 42 {
+		t.Fatalf("stored users = %+v, %v, %v", stored, found, err)
+	}
+	if got := fetchManifest(t, 5).Sites[0].WPDataHash; got != hash {
+		t.Errorf("manifest hash = %q, want %q", got, hash)
+	}
+
+	// A hash that leaves the users out is rejected.
+	postAgentReport(t, 5, models.AgentReportSite{SiteID: site, WPData: &models.AgentWPData{
+		CollectedAt: time.Now().UTC().Format(time.RFC3339), Hash: models.WPDataHash(plugins, core, nil), Plugins: plugins, Core: &core, Users: users,
+	}})
+	statuses, _ := db.ListSiteAgentWPStatus()
+	if st := statuses[site]; st.Error == "" {
+		t.Errorf("status = %+v, want a hash mismatch", st)
+	}
+
+	noUsers := models.WPDataHash(plugins, core, nil)
+	postAgentReport(t, 5, models.AgentReportSite{SiteID: site, WPData: &models.AgentWPData{
+		CollectedAt: time.Now().UTC().Format(time.RFC3339), Hash: noUsers, Plugins: plugins, Core: &core,
+	}})
+	if _, found, _ := db.GetSiteUsers(site); found {
+		t.Error("users kept after a report without them")
+	}
+	if got := fetchManifest(t, 5).Sites[0].WPDataHash; got != noUsers {
+		t.Errorf("manifest hash = %q, want %q", got, noUsers)
 	}
 }
