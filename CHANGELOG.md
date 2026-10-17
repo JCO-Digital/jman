@@ -1,6 +1,16 @@
 # Changelog
 
-### 7.4.3 (2026-10-16)
+## 7.5.0 (2026-10-17)
+
+#### Features
+
+- list WordPress users of sites and search them across sites (3305fe5)
+
+#### Bug Fixes
+
+- web: update the dashboard task list when a task changes (3d739bb)
+
+### v7.4.3 (2026-10-16)
 
 #### Bug Fixes
 
