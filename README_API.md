@@ -236,6 +236,7 @@ Authorization: Bearer <token>
 - `GET /api/plugininfo` — Returns enriched information for all cached plugins (author, description, etc.).
 - `GET /api/servers` — Returns cached SpinupWP servers.
 - `GET /api/sites` — Returns cached SpinupWP sites.
+- `POST /api/sites/batch` — Edit level. Creates up to 500 external sites from `{"sites": [...]}`, each entry shaped like the `POST /api/sites` body. Entries are created independently; the response lists the created sites in `created` and the skipped ones (missing or duplicate domain) in `errors`, each with its `index` in the request.
 - `GET /api/vulns?plugin=<slug>` — Returns cached vulnerability data for a specific plugin.
 
 ### Ignore List Endpoints

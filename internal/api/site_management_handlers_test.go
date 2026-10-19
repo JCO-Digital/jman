@@ -424,3 +424,74 @@ func TestSitesListHidesRemovedSpinupWPSites(t *testing.T) {
 		t.Errorf("managed list lacks the removed site: %s", w.Body.String())
 	}
 }
+
+func TestBatchCreateSitesHandler(t *testing.T) {
+	setupSiteManagementTest(t)
+	claims := &AuthClaims{Username: "admin", Level: config.LevelEdit}
+	ctx := contextWithClaims(context.Background(), claims)
+
+	if err := db.SaveManagedSite(models.ManagedSite{
+		ID:       utils.NewV7UUID(),
+		Provider: "manual",
+		Domain:   "existing.example.com",
+		Status:   "active",
+	}); err != nil {
+		t.Fatalf("seed site: %v", err)
+	}
+
+	post := func(body []byte) *httptest.ResponseRecorder {
+		req := httptest.NewRequest("POST", "/api/sites/batch", bytes.NewReader(body)).WithContext(ctx)
+		w := httptest.NewRecorder()
+		BatchCreateSitesHandler(w, req)
+		return w
+	}
+
+	if w := post([]byte(`{"sites": []}`)); w.Code != http.StatusBadRequest {
+		t.Fatalf("empty batch: expected 400, got %d", w.Code)
+	}
+
+	payload := BatchCreateSitesRequest{Sites: []CreateSiteRequest{
+		{Domain: "one.example.com", Provider: "wpengine", SSHHost: "one.ssh.wpengine.net", SSHUser: "one"},
+		{Domain: " two.example.com ", SitePath: "/sites/two/files"},
+		{Domain: ""},
+		{Domain: "EXISTING.example.com"},
+		{Domain: "One.example.com"},
+	}}
+	body, _ := json.Marshal(payload)
+	w := post(body)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp BatchCreateSitesResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Created) != 2 {
+		t.Fatalf("expected 2 created sites, got %d: %+v", len(resp.Created), resp.Created)
+	}
+	if resp.Created[0].Provider != "wpengine" || resp.Created[0].SSHUser != "one" {
+		t.Errorf("first site not saved as sent: %+v", resp.Created[0])
+	}
+	if resp.Created[1].Domain != "two.example.com" || resp.Created[1].Provider != "manual" || resp.Created[1].SSHPort != 22 {
+		t.Errorf("second site defaults not applied: %+v", resp.Created[1])
+	}
+
+	wantErrors := map[int]string{2: "required", 3: "already exists", 4: "more than once"}
+	if len(resp.Errors) != len(wantErrors) {
+		t.Fatalf("expected %d errors, got %+v", len(wantErrors), resp.Errors)
+	}
+	for _, e := range resp.Errors {
+		if want, ok := wantErrors[e.Index]; !ok || !strings.Contains(e.Error, want) {
+			t.Errorf("entry %d: unexpected error %q", e.Index, e.Error)
+		}
+	}
+
+	sites, err := db.ListManagedSites()
+	if err != nil {
+		t.Fatalf("list sites: %v", err)
+	}
+	if len(sites) != 3 {
+		t.Errorf("expected 3 sites in inventory, got %d", len(sites))
+	}
+}

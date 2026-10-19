@@ -39,6 +39,9 @@ type CreateSiteRequest struct {
 	Status         string                     `json:"status"`
 }
 
+// maxBatchSites caps how many sites one POST /api/sites/batch may create.
+const maxBatchSites = 500
+
 // CreateSiteHandler creates a new external or manual site in inventory.db.
 func CreateSiteHandler(w http.ResponseWriter, r *http.Request) {
 	var req CreateSiteRequest
@@ -47,22 +50,97 @@ func CreateSiteHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	created, status, err := createSite(req)
+	if err != nil {
+		WriteError(w, status, err.Error())
+		return
+	}
+	WriteJSON(w, http.StatusCreated, created)
+}
+
+// BatchCreateSitesRequest defines the JSON payload for creating several sites at once.
+type BatchCreateSitesRequest struct {
+	Sites []CreateSiteRequest `json:"sites"`
+}
+
+// BatchSiteError reports why one entry of a batch was not created.
+type BatchSiteError struct {
+	Index  int    `json:"index"`
+	Domain string `json:"domain"`
+	Error  string `json:"error"`
+}
+
+// BatchCreateSitesResponse lists the sites a batch created and the entries it skipped.
+type BatchCreateSitesResponse struct {
+	Created []models.ManagedSite `json:"created"`
+	Errors  []BatchSiteError     `json:"errors"`
+}
+
+// BatchCreateSitesHandler creates several external or manual sites. Each entry
+// is created independently: entries that fail (missing or duplicate domain,
+// save error) are reported in errors and don't stop the rest.
+//
+//	POST /api/sites/batch
+func BatchCreateSitesHandler(w http.ResponseWriter, r *http.Request) {
+	var req BatchCreateSitesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if len(req.Sites) == 0 {
+		WriteError(w, http.StatusBadRequest, "No sites given")
+		return
+	}
+	if len(req.Sites) > maxBatchSites {
+		WriteError(w, http.StatusBadRequest, fmt.Sprintf("At most %d sites can be added at once", maxBatchSites))
+		return
+	}
+
+	resp := BatchCreateSitesResponse{
+		Created: []models.ManagedSite{},
+		Errors:  []BatchSiteError{},
+	}
+	seen := make(map[string]bool, len(req.Sites))
+	for i, siteReq := range req.Sites {
+		domain := strings.TrimSpace(siteReq.Domain)
+		key := strings.ToLower(domain)
+		if domain != "" && seen[key] {
+			resp.Errors = append(resp.Errors, BatchSiteError{
+				Index:  i,
+				Domain: domain,
+				Error:  fmt.Sprintf("Domain %q appears more than once in the batch", domain),
+			})
+			continue
+		}
+		seen[key] = true
+
+		created, _, err := createSite(siteReq)
+		if err != nil {
+			resp.Errors = append(resp.Errors, BatchSiteError{Index: i, Domain: domain, Error: err.Error()})
+			continue
+		}
+		resp.Created = append(resp.Created, *created)
+	}
+
+	WriteJSON(w, http.StatusOK, resp)
+}
+
+// createSite validates req, fills in defaults and saves the new site. On
+// failure it returns the HTTP status and a message suitable for the client.
+func createSite(req CreateSiteRequest) (*models.ManagedSite, int, error) {
 	req.Domain = strings.TrimSpace(req.Domain)
 	if req.Domain == "" {
-		WriteError(w, http.StatusBadRequest, "Domain is required")
-		return
+		return nil, http.StatusBadRequest, fmt.Errorf("Domain is required")
 	}
 
 	// Check if site with this domain already exists
 	existing, err := db.GetManagedSiteByDomain(req.Domain)
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "CreateSiteHandler lookup error: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
+		verb.LogPrintf(verb.Normal, "createSite lookup error: %v", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("Internal server error")
 	}
 	if existing != nil {
-		WriteError(w, http.StatusConflict, fmt.Sprintf("Site with domain %q already exists", req.Domain))
-		return
+		return nil, http.StatusConflict, fmt.Errorf("Site with domain %q already exists", req.Domain)
 	}
 
 	provider := strings.TrimSpace(req.Provider)
@@ -134,19 +212,16 @@ func CreateSiteHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.SaveManagedSite(site); err != nil {
-		verb.LogPrintf(verb.Normal, "CreateSiteHandler save error: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Failed to save site")
-		return
+		verb.LogPrintf(verb.Normal, "createSite save error: %v", err)
+		return nil, http.StatusInternalServerError, fmt.Errorf("Failed to save site")
 	}
 
 	// Fetch created site to return fully populated model
 	created, err := db.GetManagedSite(site.ID)
 	if err != nil || created == nil {
-		WriteJSON(w, http.StatusCreated, site)
-		return
+		return &site, 0, nil
 	}
-
-	WriteJSON(w, http.StatusCreated, created)
+	return created, 0, nil
 }
 
 // GetSiteHandler returns a single site by UUID or legacy SpinupWP integer ID.
