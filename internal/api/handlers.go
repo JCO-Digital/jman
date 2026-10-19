@@ -55,6 +55,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	mux.Handle("GET /api/sites", basic(SitesHandler))
 	mux.Handle("POST /api/sites", edit(CreateSiteHandler))
+	mux.Handle("POST /api/sites/batch", edit(BatchCreateSitesHandler))
 	mux.Handle("GET /api/sites/{id}", basic(GetSiteHandler))
 	mux.Handle("PUT /api/sites/{id}", edit(UpdateSiteHandler))
 	mux.Handle("DELETE /api/sites/{id}", edit(DeleteSiteHandler))

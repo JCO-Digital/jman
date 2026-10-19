@@ -348,23 +348,4 @@ async function handleSubmit() {
 .site-form-modal {
 	max-width: 640px;
 }
-
-.capability-grid {
-	display: grid;
-	grid-template-columns: repeat(2, minmax(0, 1fr));
-	gap: 8px 16px;
-}
-
-.checkbox-label {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	cursor: pointer;
-}
-
-@media (max-width: 640px) {
-	.capability-grid {
-		grid-template-columns: 1fr;
-	}
-}
 </style>

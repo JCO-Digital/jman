@@ -9,6 +9,7 @@ import { useToastStore } from "../../stores/toast";
 import { useConfirm } from "../../composables/useConfirm";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import SiteFormModal from "./SiteFormModal.vue";
+import BatchSiteFormModal from "./BatchSiteFormModal.vue";
 import ServerFormModal from "./ServerFormModal.vue";
 import type { ManagedServer, ManagedSite } from "../../types";
 
@@ -21,6 +22,7 @@ const { confirm } = useConfirm();
 
 const showReadOnly = ref(loadShowReadOnly());
 const showSiteModal = ref(false);
+const showBatchModal = ref(false);
 const showServerModal = ref(false);
 const editingSite = ref<ManagedSite | null>(null);
 const testingSiteId = ref<string | null>(null);
@@ -123,6 +125,13 @@ function closeSiteModal() {
 
 function handleSiteSaved(site: ManagedSite) {
 	toast.addToast(`Site "${site.domain}" saved.`, "success");
+}
+
+function handleBatchSaved(count: number) {
+	toast.addToast(
+		count === 1 ? "1 site added." : `${count} sites added.`,
+		"success",
+	);
 }
 
 async function handleDeleteSite(site: ManagedSite) {
@@ -230,9 +239,14 @@ async function handleSync() {
 	<section class="card">
 		<div class="card-header">
 			<h2>Sites</h2>
-			<button class="btn btn-primary" @click="openCreateSite">
-				Add Site
-			</button>
+			<div class="flex-row gap-2">
+				<button class="btn btn-outline" @click="showBatchModal = true">
+					Batch Add
+				</button>
+				<button class="btn btn-primary" @click="openCreateSite">
+					Add Site
+				</button>
+			</div>
 		</div>
 
 		<p class="sub-text mb-4">
@@ -453,6 +467,11 @@ async function handleSync() {
 		:edit-site="editingSite"
 		@close="closeSiteModal"
 		@saved="handleSiteSaved"
+	/>
+	<BatchSiteFormModal
+		:visible="showBatchModal"
+		@close="showBatchModal = false"
+		@saved="handleBatchSaved"
 	/>
 	<ServerFormModal
 		:visible="showServerModal"

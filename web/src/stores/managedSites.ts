@@ -3,6 +3,7 @@ import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
 import { useDataStore } from "./data";
 import type {
+	BatchCreateSitesResult,
 	ManagedServer,
 	ManagedServerPayload,
 	ManagedSite,
@@ -89,6 +90,20 @@ export const useManagedSitesStore = defineStore("managedSites", () => {
 		return created;
 	}
 
+	// Entries are created independently; the result lists the ones that
+	// failed alongside the ones that were created.
+	async function batchCreateSites(
+		sites: ManagedSitePayload[],
+	): Promise<BatchCreateSitesResult> {
+		const result = await request<BatchCreateSitesResult>(
+			"/sites/batch",
+			"POST",
+			{ sites },
+		);
+		if (result.created.length > 0) await refreshAfterMutation();
+		return result;
+	}
+
 	async function updateSite(
 		id: string,
 		payload: ManagedSitePayload,
@@ -159,6 +174,7 @@ export const useManagedSitesStore = defineStore("managedSites", () => {
 		// Actions
 		fetchAll,
 		createSite,
+		batchCreateSites,
 		updateSite,
 		deleteSite,
 		testConnection,

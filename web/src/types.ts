@@ -1007,6 +1007,18 @@ export interface ManagedSitePayload {
 	status?: ManagedSiteStatus;
 }
 
+export interface BatchSiteError {
+	/** Position of the entry in the submitted sites array. */
+	index: number;
+	domain: string;
+	error: string;
+}
+
+export interface BatchCreateSitesResult {
+	created: ManagedSite[];
+	errors: BatchSiteError[];
+}
+
 export interface ManagedServerPayload {
 	name: string;
 	provider?: string;

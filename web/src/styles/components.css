@@ -473,6 +473,23 @@
 	cursor: pointer;
 }
 
+/* Two-column grid of capability checkboxes in the site forms. */
+.capability-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 8px 16px;
+
+	& .checkbox-label {
+		display: flex;
+		font-size: inherit;
+		color: inherit;
+	}
+
+	@media (max-width: 640px) {
+		grid-template-columns: 1fr;
+	}
+}
+
 .confirm-option-warning {
 	margin: 8px 0 0;
 	padding: 8px 12px;
