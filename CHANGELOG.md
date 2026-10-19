@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.5.0 (2026-10-17)
+## 7.6.0 (2026-10-19)
+
+#### Features
+
+- web: batch add managed sites (65a6b4c)
+
+## v7.5.0 (2026-10-17)
 
 #### Features
 
