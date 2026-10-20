@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.7.0 (2026-10-20)
+### 7.7.1 (2026-10-20)
+
+#### Bug Fixes
+
+- monitor: open a new connection for every uptime probe (bf4446f)
+
+## v7.7.0 (2026-10-20)
 
 #### Features
 
