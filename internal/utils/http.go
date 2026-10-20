@@ -28,6 +28,21 @@ func NewHTTPClient(timeout time.Duration) *http.Client {
 	}
 }
 
+// NewFreshConnHTTPClient is NewHTTPClient without keep-alive: every
+// request opens a new connection, looking the host up in DNS again. Uptime
+// checks use it so they see a site as a new visitor would. A kept-alive
+// connection would otherwise keep reaching the old server after a DNS
+// change, for as long as requests come often enough to keep it open (the
+// idle timeout is 90 seconds), e.g. while a site is checked often because
+// it's down.
+func NewFreshConnHTTPClient(timeout time.Duration) *http.Client {
+	client := NewHTTPClient(timeout)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.DisableKeepAlives = true
+	client.Transport = &limitedBodyTransport{base: transport}
+	return client
+}
+
 // limitedBodyTransport wraps a RoundTripper so every response body is capped
 // at MaxResponseBodySize, regardless of which caller reads it.
 type limitedBodyTransport struct {
