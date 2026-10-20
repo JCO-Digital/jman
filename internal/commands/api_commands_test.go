@@ -60,7 +60,11 @@ var apis = map[string]*fakeJmanAPI{}
 
 func (f *fakeJmanAPI) record(r *http.Request) string {
 	body, _ := io.ReadAll(r.Body)
-	call := r.Method + " " + strings.TrimPrefix(r.URL.Path, "/api") + " " + strings.TrimSpace(string(body))
+	path := strings.TrimPrefix(r.URL.Path, "/api")
+	if r.URL.RawQuery != "" {
+		path += "?" + r.URL.RawQuery
+	}
+	call := r.Method + " " + path + " " + strings.TrimSpace(string(body))
 	f.mu.Lock()
 	f.calls = append(f.calls, call)
 	f.mu.Unlock()
@@ -97,7 +101,16 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				SSHHost: "host", SSHPort: 22, SSHUser: "u", SitePath: "public",
 				WPCore:      &models.SiteCore{SiteID: testSiteID, Version: "6.8.2"},
 				UpdateLocks: []models.UpdateLock{{SiteID: testSiteID, Plugin: "woocommerce"}},
+			}, {
+				ID: "site-m", Provider: "manual", Domain: "multi.example.com", IsWordpress: true, CanWPCLI: true,
+				SSHHost: "host", SSHPort: 22, SSHUser: "m", SitePath: "public", Multisite: true,
 			}},
+			Users: []models.SiteUser{
+				{SiteID: testSiteID, ID: 1, Login: "admin", Email: "admin@example.com", Roles: "administrator"},
+				{SiteID: testSiteID, ID: 7, Login: "mainwp", Email: "mainwp@example.com", Roles: "administrator"},
+				{SiteID: testSiteID, ID: 8, Login: "mainwp2", Email: "other@example.com", Roles: "administrator"},
+				{SiteID: "site-m", ID: 3, Login: "mainwp", Email: "mainwp@example.com", Roles: "administrator"},
+			},
 			Plugins: []models.WPPlugin{
 				{SiteID: testSiteID, Name: "akismet", Status: "active", Version: "5.0", Update: "5.1"},
 				{SiteID: testSiteID, Name: "hello", Status: "inactive", Version: "1.7"},
@@ -119,10 +132,11 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} `json:"jobs"`
 		}
 		_ = json.Unmarshal([]byte(f.record(r)), &body)
-		job := models.UpdateJob{Kind: models.UpdateJobKindPlugins}
+		var payload models.PluginsPayload
 		for _, p := range body.Jobs[0].Plugins {
-			job.Plugins = append(job.Plugins, models.PluginUpdateRequest{Name: p})
+			payload.Plugins = append(payload.Plugins, models.PluginUpdateRequest{Name: p})
 		}
+		job := models.NewUpdateJob(models.UpdateJobKindPlugins, "", payload)
 		f.mu.Lock()
 		job.ID = f.next
 		f.next++
@@ -138,7 +152,7 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Plugins []string `json:"plugins"`
 		}
 		_ = json.Unmarshal([]byte(f.record(r)), &body)
-		f.queue(w, models.UpdateJob{Kind: body.Action, Plugins: []models.PluginUpdateRequest{{Name: body.Plugins[0]}}})
+		f.queue(w, models.NewUpdateJob(body.Action, "", models.PluginsPayload{Plugins: []models.PluginUpdateRequest{{Name: body.Plugins[0]}}}))
 
 	case r.Method == http.MethodPost && path == sitePath+"/plugin-install":
 		body := f.record(r)
@@ -147,7 +161,16 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"error":"Plugin akismet is already installed on this site"}`))
 			return
 		}
-		f.queue(w, models.UpdateJob{Kind: models.UpdateJobKindInstall, Source: "jetpack"})
+		f.queue(w, models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "jetpack"}))
+
+	case r.Method == http.MethodPost && path == sitePath+"/users":
+		var body models.UserCreatePayload
+		_ = json.Unmarshal([]byte(f.record(r)), &body)
+		f.queue(w, models.NewUpdateJob(models.UpdateJobKindUserCreate, "", body))
+
+	case r.Method == http.MethodDelete && strings.HasPrefix(path, sitePath+"/users/"):
+		f.record(r)
+		f.queue(w, models.NewUpdateJob(models.UpdateJobKindUserDelete, "", models.UserDeletePayload{}))
 
 	case r.Method == http.MethodPost && path == sitePath+"/core-update":
 		f.record(r)
@@ -163,17 +186,20 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.mu.Unlock()
 		job.Status = models.UpdateJobDone
+		payload, _ := models.DecodePayload[models.PluginsPayload](job)
 		switch job.Kind {
 		case models.UpdateJobKindPlugins:
-			for _, p := range job.Plugins {
+			for _, p := range payload.Plugins {
 				job.Results = append(job.Results, models.UpdateResult{Name: p.Name, OldVersion: "5.0", NewVersion: "5.1", Status: models.UpdateUpdated})
 			}
 		case models.UpdateJobKindCore:
 			job.Results = []models.UpdateResult{{Name: "WordPress", OldVersion: "6.8.2", NewVersion: "6.8.3", Status: models.UpdateUpdated}}
 		case models.UpdateJobKindInstall:
 			job.Results = []models.UpdateResult{{Name: "jetpack", NewVersion: "14.0", Status: models.UpdateDone}}
+		case models.UpdateJobKindUserCreate, models.UpdateJobKindUserDelete:
+			job.Results = []models.UpdateResult{{Name: "user", Status: models.UpdateDone}}
 		default:
-			job.Results = []models.UpdateResult{{Name: job.Plugins[0].Name, Status: models.UpdateDone}}
+			job.Results = []models.UpdateResult{{Name: payload.Plugins[0].Name, Status: models.UpdateDone}}
 		}
 		_ = json.NewEncoder(w).Encode(job)
 
@@ -294,6 +320,54 @@ func TestYesSkipsConfirmation(t *testing.T) {
 	// No input at all: without --yes the confirmation can't be read.
 	calls := runJmanWithInput(t, srv, "", "--yes", "core", "update", "a.example.com")
 	if len(calls) != 1 || !strings.HasPrefix(calls[0], "POST /sites/site-a/core-update") {
+		t.Errorf("calls: %v", calls)
+	}
+}
+
+func TestUserAdd(t *testing.T) {
+	srv := newFakeJmanAPI(t)
+	t.Cleanup(func() { flagUserRole, flagUserPassword = "administrator", "" })
+
+	calls := runJman(t, srv, "user", "add", "a.example.com", "jco", "jco@example.com")
+	var body models.UserCreatePayload
+	var password struct {
+		Password string `json:"password"`
+	}
+	if len(calls) != 1 || !strings.HasPrefix(calls[0], "POST /sites/site-a/users ") {
+		t.Fatalf("calls: %v", calls)
+	}
+	raw := strings.TrimPrefix(calls[0], "POST /sites/site-a/users ")
+	_ = json.Unmarshal([]byte(raw), &body)
+	_ = json.Unmarshal([]byte(raw), &password)
+	if body.Login != "jco" || body.Email != "jco@example.com" || body.Role != "administrator" || len(password.Password) != generatedPasswordLength {
+		t.Errorf("request body: %s", raw)
+	}
+
+	calls = runJman(t, srv, "user", "add", "a.example.com", "ed", "ed@example.com", "--role", "editor", "--password", "my-own-long-password")
+	if len(calls) != 1 || !strings.Contains(calls[0], `"password":"my-own-long-password"`) || !strings.Contains(calls[0], `"role":"editor"`) {
+		t.Errorf("calls: %v", calls)
+	}
+}
+
+func TestUserDelete(t *testing.T) {
+	srv := newFakeJmanAPI(t)
+	t.Cleanup(func() { flagUserReassign = "" })
+
+	// An exact login match wins over mainwp2; the multisite's mainwp is
+	// left out, so the single match is confirmed.
+	calls := runJman(t, srv, "user", "delete", "mainwp")
+	if len(calls) != 1 || calls[0] != "DELETE /sites/site-a/users/7 " {
+		t.Errorf("calls: %v", calls)
+	}
+
+	// A partial match offers both; the second is picked.
+	calls = runJmanWithInput(t, srv, "2\n", "user", "delete", "main", "--reassign", "admin@example.com")
+	if len(calls) != 1 || calls[0] != "DELETE /sites/site-a/users/8?reassign=admin%40example.com " {
+		t.Errorf("calls: %v", calls)
+	}
+
+	// Display names aren't matched.
+	if calls := runJman(t, srv, "user", "delete", "nobody"); len(calls) != 0 {
 		t.Errorf("calls: %v", calls)
 	}
 }

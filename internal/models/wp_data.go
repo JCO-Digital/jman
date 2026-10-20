@@ -45,7 +45,13 @@ func WPDataHash(plugins []WPPlugin, core SiteCore, users *SiteUsers) string {
 	}
 	if users != nil {
 		for _, u := range users.Users {
-			lines = append(lines, fmt.Sprintf("u\x00%d\x00%s\x00%s\x00%s\x00%s\x00%s", u.ID, u.Login, u.Email, u.DisplayName, u.Roles, u.Registered))
+			line := fmt.Sprintf("u\x00%d\x00%s\x00%s\x00%s\x00%s\x00%s", u.ID, u.Login, u.Email, u.DisplayName, u.Roles, u.Registered)
+			// Unknown counts add nothing, so users stored without them
+			// still match.
+			if u.PostCount != nil {
+				line += fmt.Sprintf("\x00p%d", *u.PostCount)
+			}
+			lines = append(lines, line)
 		}
 		for role, n := range users.ExcludedCounts {
 			lines = append(lines, fmt.Sprintf("x\x00%s\x00%d", role, n))

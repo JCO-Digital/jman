@@ -37,15 +37,16 @@ func ReplaceSiteUsers(siteID string, users models.SiteUsers, observedAt time.Tim
 	}
 	for _, u := range users.Users {
 		if _, err := tx.Exec(
-			`INSERT INTO site_users (site_id, user_id, login, email, display_name, roles, registered)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO site_users (site_id, user_id, login, email, display_name, roles, registered, post_count)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(site_id, user_id) DO UPDATE SET
 				login = excluded.login,
 				email = excluded.email,
 				display_name = excluded.display_name,
 				roles = excluded.roles,
-				registered = excluded.registered`,
-			siteID, u.ID, u.Login, u.Email, u.DisplayName, u.Roles, u.Registered,
+				registered = excluded.registered,
+				post_count = excluded.post_count`,
+			siteID, u.ID, u.Login, u.Email, u.DisplayName, u.Roles, u.Registered, u.PostCount,
 		); err != nil {
 			return fmt.Errorf("failed to save user %d for site %s: %w", u.ID, siteID, err)
 		}
@@ -85,6 +86,20 @@ func GetSiteUsers(siteID string) (models.SiteUsers, bool, error) {
 	return models.SiteUsers{Users: users, ExcludedCounts: summary.ExcludedCounts, Truncated: summary.Truncated}, true, nil
 }
 
+// GetSiteUser returns one stored user of a site, and false if there's no
+// such user.
+func GetSiteUser(siteID string, userID int) (models.SiteUser, bool, error) {
+	db := GetInventoryDB()
+	if db == nil {
+		return models.SiteUser{}, false, fmt.Errorf("database not initialized")
+	}
+	users, err := querySiteUsers(db, `WHERE site_id = ? AND user_id = ?`, siteID, userID)
+	if err != nil || len(users) == 0 {
+		return models.SiteUser{}, false, err
+	}
+	return users[0], true, nil
+}
+
 // GetAllSiteUsers returns every stored user of every site, ordered by
 // site and ID.
 func GetAllSiteUsers() ([]models.SiteUser, error) {
@@ -96,7 +111,7 @@ func GetAllSiteUsers() ([]models.SiteUser, error) {
 }
 
 func querySiteUsers(db *sql.DB, where string, args ...any) ([]models.SiteUser, error) {
-	rows, err := db.Query(`SELECT site_id, user_id, login, email, display_name, roles, registered
+	rows, err := db.Query(`SELECT site_id, user_id, login, email, display_name, roles, registered, post_count
 		FROM site_users `+where+` ORDER BY site_id, user_id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query site users: %w", err)
@@ -106,8 +121,13 @@ func querySiteUsers(db *sql.DB, where string, args ...any) ([]models.SiteUser, e
 	users := []models.SiteUser{}
 	for rows.Next() {
 		var u models.SiteUser
-		if err := rows.Scan(&u.SiteID, &u.ID, &u.Login, &u.Email, &u.DisplayName, &u.Roles, &u.Registered); err != nil {
+		var postCount sql.NullInt64
+		if err := rows.Scan(&u.SiteID, &u.ID, &u.Login, &u.Email, &u.DisplayName, &u.Roles, &u.Registered, &postCount); err != nil {
 			return nil, fmt.Errorf("failed to scan site user: %w", err)
+		}
+		if postCount.Valid {
+			n := int(postCount.Int64)
+			u.PostCount = &n
 		}
 		users = append(users, u)
 	}

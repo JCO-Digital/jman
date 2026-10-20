@@ -330,6 +330,8 @@ These are the managed sites' WordPress users, not jman's own users (see User Man
 
 Every site's users, ordered by site and user ID, with one summary per site whose users were read.
 
+`post_count` is how many posts of any type and status (revisions and attachments included) the user authored, which is what deleting the user deletes unless their content is reassigned. It's absent when it isn't known, e.g. for users reported by an older jman-agent.
+
 ```json
 {
   "users": [
@@ -340,7 +342,8 @@ Every site's users, ordered by site and user ID, with one summary per site whose
       "email": "admin@example.com",
       "display_name": "Admin",
       "roles": "administrator",
-      "registered": "2020-01-02 03:04:05"
+      "registered": "2020-01-02 03:04:05",
+      "post_count": 12
     }
   ],
   "summaries": [
@@ -356,6 +359,36 @@ Every site's users, ordered by site and user ID, with one summary per site whose
 `GET /sites/{id}/users` (Protected: `basic`)
 
 One site's users: `{"users": [...], "excluded_counts": {...}, "truncated": false, "updated_at": "…"}`. `updated_at` is empty if the site's users were never read.
+
+#### Create a User
+
+`POST /sites/{id}/users` (Protected: `execute`)
+
+Queues a background job (see Plugin Update Operations) that creates a WordPress user on the site, and returns it with `202 Accepted`. `role` defaults to `administrator`.
+
+```json
+{ "login": "jco", "email": "jco@example.com", "role": "administrator", "password": "at least 12 characters" }
+```
+
+The password is only held in jman-api's memory until the job runs. It's never stored, logged or returned, so a job queued when jman-api restarts fails, and the user has to be created again. The site's user list is refreshed after the job.
+
+- `400`: the login (up to 60 letters, digits, spaces and `_ . - @`), email, role or password (at least 12 characters, no control characters) is invalid.
+- `404`: the site isn't reachable over WP-CLI.
+- `409`: the site's user list already has the login or email. The job also fails if WordPress finds one.
+
+#### Delete a User
+
+`DELETE /sites/{id}/users/{userId}?reassign=<login or email>` (Protected: `execute`)
+
+Queues a background job that deletes a user from the site's user list, and returns it with `202 Accepted`. `reassign` names the user who gets the deleted user's content, by exact login or email. Without it, a user who has posts isn't deleted. Before deleting, the job checks on the site that:
+- the user still has the listed login and email;
+- it has no posts, or the reassign target matches exactly one other user.
+
+The site's user list is refreshed after the job.
+
+- `400`: the user ID is invalid, or `reassign` is the user being deleted.
+- `404`: the user isn't in the site's user list, or the site isn't reachable over WP-CLI.
+- `409`: the site is a multisite (not supported), or the user has posts and no `reassign` is given.
 
 ---
 
@@ -813,6 +846,16 @@ Warnings flag rules that can't be verified against cached vulnerability data or 
 ## Plugin Update Operations
 
 Plugin and core updates run as background jobs (`POST /plugin-update-jobs`, `POST /sites/{id}/core-update`; progress via `GET /update-jobs`). Queueing them requires the **`execute`** level.
+
+Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `failed`, `interrupted`), `results`, `error`, `created_by` and the timestamps. What the job changes is in `payload`, whose shape depends on `kind`:
+
+| `kind` | `payload` |
+| :--- | :--- |
+| `plugins`, `activate`, `deactivate`, `delete`, `uninstall` | `{"plugins": [{"name": "akismet", "old_version": "5.0"}], "allow_major": false}` |
+| `core` | `{"target": "minor", "allow_major": false}` |
+| `install` | `{"source": "akismet", "activate": true}` |
+| `user_create` | `{"login": "jco", "email": "jco@example.com", "role": "administrator"}` |
+| `user_delete` | `{"user_id": 7, "login": "mainwp", "email": "mainwp@example.com", "reassign": "admin"}` |
 
 ### Get Available Plugin Updates for a Site
 

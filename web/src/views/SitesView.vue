@@ -632,11 +632,4 @@ function timeSince(dateString: string) {
 .controls {
 	flex-wrap: wrap;
 }
-
-.batch-action-bar {
-	display: flex;
-	align-items: center;
-	gap: 16px;
-	margin-bottom: 24px;
-}
 </style>

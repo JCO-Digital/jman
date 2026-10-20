@@ -593,7 +593,7 @@ func fatalAPIError(err error) error {
 	case errors.Is(err, client.ErrUnauthorized), errors.As(err, &upgrade):
 		return err
 	case isStatus(err, http.StatusForbidden):
-		return errors.New("changing plugins and WordPress core needs the execute level in jman-api")
+		return errors.New("changing sites needs the execute level in jman-api")
 	}
 	return nil
 }

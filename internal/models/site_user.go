@@ -16,6 +16,11 @@ type SiteUser struct {
 	// Roles is wp-cli's comma-separated role list, e.g. "editor,author".
 	Roles      string `json:"roles"`
 	Registered string `json:"registered"`
+	// PostCount is how many posts of any type and status (revisions and
+	// attachments included) the user authored: what deleting the user
+	// would delete unless they're reassigned. Nil if unknown, e.g. from an
+	// agent that doesn't count them yet.
+	PostCount *int `json:"post_count,omitempty"`
 }
 
 // SiteUsers is a site's users, without the roles that tend to pile up by

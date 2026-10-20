@@ -9,7 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-const updateJobColumns = `id, kind, site_id, status, plugins, target, source, activate, allow_major, upload_path, results, core, error, created_by, created_at, started_at, finished_at`
+const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, error, created_by, created_at, started_at, finished_at`
 
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
@@ -22,21 +22,17 @@ func CreateUpdateJob(job *models.UpdateJob) error {
 	if job.Kind == "" {
 		job.Kind = models.UpdateJobKindPlugins
 	}
-	if job.Plugins == nil {
-		job.Plugins = []models.PluginUpdateRequest{}
-	}
-	plugins, err := json.Marshal(job.Plugins)
-	if err != nil {
-		return fmt.Errorf("failed to encode job plugins: %w", err)
+	if len(job.Payload) == 0 {
+		job.Payload = json.RawMessage("{}")
 	}
 	job.Status = models.UpdateJobQueued
 	job.CreatedAt = time.Now()
 	job.Results = []models.UpdateResult{}
 
-	err = db.QueryRow(
-		`INSERT INTO plugin_update_jobs (kind, site_id, status, plugins, target, source, activate, allow_major, upload_path, created_by, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		job.Kind, job.SiteID, job.Status, string(plugins), job.Target, job.Source, job.Activate, job.AllowMajor, job.UploadPath, job.CreatedBy, job.CreatedAt,
+	err := db.QueryRow(
+		`INSERT INTO plugin_update_jobs (kind, site_id, status, payload, upload_path, created_by, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		job.Kind, job.SiteID, job.Status, string(job.Payload), job.UploadPath, job.CreatedBy, job.CreatedAt,
 	).Scan(&job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to create update job: %w", err)
@@ -203,18 +199,16 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 	jobs := []models.UpdateJob{}
 	for rows.Next() {
 		var job models.UpdateJob
-		var plugins string
-		var target, source, uploadPath, results, core, errMsg, createdBy sql.NullString
+		var payload string
+		var uploadPath, results, core, errMsg, createdBy sql.NullString
 		var startedAt, finishedAt sql.NullTime
 		if err := rows.Scan(
-			&job.ID, &job.Kind, &job.SiteID, &job.Status, &plugins, &target, &source, &job.Activate, &job.AllowMajor, &uploadPath, &results, &core, &errMsg, &createdBy,
+			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &errMsg, &createdBy,
 			&job.CreatedAt, &startedAt, &finishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan update job: %w", err)
 		}
-		if err := json.Unmarshal([]byte(plugins), &job.Plugins); err != nil {
-			return nil, fmt.Errorf("invalid plugins in job %d: %w", job.ID, err)
-		}
+		job.Payload = json.RawMessage(payload)
 		job.Results = []models.UpdateResult{}
 		if results.Valid && results.String != "" && results.String != "null" {
 			if err := json.Unmarshal([]byte(results.String), &job.Results); err != nil {
@@ -227,8 +221,6 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 				return nil, fmt.Errorf("invalid core state in job %d: %w", job.ID, err)
 			}
 		}
-		job.Target = target.String
-		job.Source = source.String
 		job.UploadPath = uploadPath.String
 		job.Error = errMsg.String
 		job.CreatedBy = createdBy.String

@@ -197,10 +197,22 @@ jman plugin info mysite.com akismet   # one plugin
 jman plugin info mysite.com           # every plugin on the site
 ```
 
-**Create an admin user:**
+**Manage WordPress users:**
 
 ```bash
-jman admin mysite.com myusername user@example.com
+# List a site's users (subscribers and WooCommerce customers are only counted)
+jman user list mysite.com
+
+# Find a user on every site by login, email or name
+jman user find someone@example.com
+
+# Create an administrator; the generated password is shown once
+jman user add mysite.com myusername user@example.com
+jman user add mysite.com editor1 editor@example.com --role editor --password '…'
+
+# Delete matching users, picking from a list; users with posts need --reassign
+jman user delete mainwp
+jman user delete olduser --reassign admin@example.com
 ```
 
 **Manage WordPress core:**

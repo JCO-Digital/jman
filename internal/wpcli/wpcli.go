@@ -156,22 +156,6 @@ func effectiveTimeout(opts CliOptions) time.Duration {
 	return timeout
 }
 
-// AddUser creates a new user on the target WordPress site.
-func AddUser(ssh, path, username, email, role string) (string, error) {
-	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "user", "create", username, email, "--role="+role)
-	if err != nil {
-		return "", fmt.Errorf("failed to add user: %w (stderr: %s)", err, res.Error)
-	}
-
-	lines := strings.SplitSeq(res.Output, "\n")
-	for line := range lines {
-		if after, ok := strings.CutPrefix(line, "Password: "); ok {
-			return strings.TrimSpace(after), nil
-		}
-	}
-	return "", nil
-}
-
 // ResetUserPassword resets the password for a given user.
 func ResetUserPassword(ssh, path, username string) (string, error) {
 	res, err := RunWP(CliOptions{SSH: ssh, Path: path}, "user", "reset-password", username, "--porcelain")

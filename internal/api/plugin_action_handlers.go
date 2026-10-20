@@ -97,12 +97,8 @@ func SitePluginActionHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job := models.UpdateJob{
-		Kind:      body.Action,
-		SiteID:    siteID,
-		Plugins:   withInstalledVersions(siteID, names),
-		CreatedBy: getUsername(r),
-	}
+	job := models.NewUpdateJob(body.Action, siteID, models.PluginsPayload{Plugins: withInstalledVersions(siteID, names)})
+	job.CreatedBy = getUsername(r)
 	if err := updatejobs.Enqueue(&job); err != nil {
 		verb.LogPrintf(verb.Normal, "SitePluginActionHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to queue plugin change")
@@ -149,11 +145,8 @@ func SitePluginInstallHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job := models.UpdateJob{
-		Kind:      models.UpdateJobKindInstall,
-		SiteID:    siteID,
-		CreatedBy: getUsername(r),
-	}
+	var install models.InstallPayload
+	var uploadPath string
 
 	multipartUpload := strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
 	if !multipartUpload {
@@ -170,8 +163,7 @@ func SitePluginInstallHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		job.Source = source
-		job.Activate = body.Activate
+		install = models.InstallPayload{Source: source, Activate: body.Activate}
 
 		// WP-CLI reports success for a slug that's already installed, so
 		// catch that here. (ZIPs replace an existing plugin instead.)
@@ -206,10 +198,13 @@ func SitePluginInstallHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			return
 		}
-		job.Source = name
-		job.UploadPath = path
-		job.Activate = activate
+		install = models.InstallPayload{Source: name, Activate: activate}
+		uploadPath = path
 	}
+
+	job := models.NewUpdateJob(models.UpdateJobKindInstall, siteID, install)
+	job.UploadPath = uploadPath
+	job.CreatedBy = getUsername(r)
 
 	if err := updatejobs.Enqueue(&job); err != nil {
 		if job.UploadPath != "" {

@@ -69,9 +69,12 @@ type Site struct {
 	SSHPort        int                        `json:"ssh_port"`
 	SSHUser        string                     `json:"ssh_user"`
 	// SSH is the WP-CLI --ssh target ("user@host" or "user@host:port").
-	SSH         string              `json:"ssh,omitempty"`
-	SitePath    string              `json:"site_path"`
-	CanWPCLI    bool                `json:"can_wp_cli"`
+	SSH      string `json:"ssh,omitempty"`
+	SitePath string `json:"site_path"`
+	CanWPCLI bool   `json:"can_wp_cli"`
+	// Multisite is set for WordPress multisite installs, where jman
+	// doesn't delete users.
+	Multisite   bool                `json:"multisite,omitempty"`
 	WPCore      *models.SiteCore    `json:"wp_core,omitempty"`
 	UpdateLocks []models.UpdateLock `json:"update_locks,omitempty"`
 }

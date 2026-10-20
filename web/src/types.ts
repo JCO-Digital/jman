@@ -416,13 +416,15 @@ export type LedgerStatus =
 	| "deactivated"
 	| "deleted"
 	| "installed"
+	/** A WordPress user created by a user job. */
+	| "created"
 	/** A change jman found on the site but didn't make itself. */
 	| "detected";
 
 export interface SiteUpdateLedgerEntry {
 	id: number;
 	site_id: string;
-	update_type: "core" | "plugin" | "theme";
+	update_type: "core" | "plugin" | "theme" | "user";
 	status: LedgerStatus;
 	data_json?: string;
 	updated_by: string;
@@ -698,28 +700,72 @@ export type PluginActionKind =
 	| "delete"
 	| "uninstall";
 
-export type UpdateJobKind = "plugins" | "core" | PluginActionKind | "install";
+export type UpdateJobKind =
+	| "plugins"
+	| "core"
+	| PluginActionKind
+	| "install"
+	| UserJobKind;
+
+/** Job kinds that create or delete a WordPress user. */
+export type UserJobKind = "user_create" | "user_delete";
+
+/** Payload of plugin update jobs and plugin management jobs. */
+export interface PluginsJobPayload {
+	plugins: { name: string; old_version: string }[];
+	/** Update-locked plugins may get major updates. */
+	allow_major?: boolean;
+}
+
+/** Payload of core update jobs. */
+export interface CoreJobPayload {
+	target: "minor" | "major";
+	/** A major update may run on an update-locked site. */
+	allow_major?: boolean;
+}
+
+/** Payload of plugin install jobs. */
+export interface InstallJobPayload {
+	/** The slug, ZIP URL or uploaded file name. */
+	source: string;
+	/** Activate after installing. */
+	activate?: boolean;
+}
+
+/** Payload of user create jobs; the password is never part of it. */
+export interface UserCreateJobPayload {
+	login: string;
+	email: string;
+	role: string;
+}
+
+/** Payload of user delete jobs. */
+export interface UserDeleteJobPayload {
+	user_id: number;
+	login: string;
+	email: string;
+	/** Login or email of the user who gets the deleted user's content. */
+	reassign?: string;
+}
+
+/** What a job changes; its type depends on the job's kind. */
+export type UpdateJobPayload =
+	| { kind: "plugins" | PluginActionKind; payload: PluginsJobPayload }
+	| { kind: "core"; payload: CoreJobPayload }
+	| { kind: "install"; payload: InstallJobPayload }
+	| { kind: "user_create"; payload: UserCreateJobPayload }
+	| { kind: "user_delete"; payload: UserDeleteJobPayload };
 
 /**
  * A background change on one site: `wp plugin update` for one or more
  * plugins (kind "plugins"), `wp core update`, activating, deactivating,
- * deleting or uninstalling plugins, or installing one plugin.
+ * deleting or uninstalling plugins, installing one plugin, or creating or
+ * deleting a WordPress user.
  */
-export interface UpdateJob {
+export type UpdateJob = UpdateJobPayload & {
 	id: number;
-	kind: UpdateJobKind;
 	site_id: string;
 	status: UpdateJobStatus;
-	/** Plugins to act on; empty for core and install jobs. */
-	plugins: { name: string; old_version: string }[];
-	/** Core jobs: "minor" or "major". */
-	target?: "minor" | "major";
-	/** Install jobs: the slug, ZIP URL or uploaded file name. */
-	source?: string;
-	/** Install jobs: activate after installing. */
-	activate?: boolean;
-	/** Plugins and core jobs: update-locked items may get major updates. */
-	allow_major?: boolean;
 	/**
 	 * One entry per plugin (one "WordPress" entry for core jobs, one entry
 	 * for the installed plugin for install jobs) once finished.
@@ -732,7 +778,7 @@ export interface UpdateJob {
 	created_at: string;
 	started_at?: string;
 	finished_at?: string;
-}
+};
 
 export interface TwoFactorSetupResponse {
 	secret: string;
@@ -1053,6 +1099,11 @@ export interface SiteUser {
 	/** Comma-separated roles, e.g. "editor,author". */
 	roles: string;
 	registered: string;
+	/**
+	 * Posts of any type and status the user authored, which deleting the
+	 * user deletes unless they're reassigned; absent if unknown.
+	 */
+	post_count?: number;
 }
 
 /** A site's user counts for the roles that aren't listed. */

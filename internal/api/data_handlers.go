@@ -626,13 +626,11 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	job := models.UpdateJob{
-		Kind:       models.UpdateJobKindCore,
-		SiteID:     siteID,
+	job := models.NewUpdateJob(models.UpdateJobKindCore, siteID, models.CorePayload{
 		Target:     body.Target,
 		AllowMajor: body.Target == "major" && body.AllowMajor,
-		CreatedBy:  getUsername(r),
-	}
+	})
+	job.CreatedBy = getUsername(r)
 	if err := updatejobs.Enqueue(&job); err != nil {
 		verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to queue core update")

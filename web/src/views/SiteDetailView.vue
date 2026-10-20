@@ -177,8 +177,28 @@ const ledgerStatusTitle: Record<LedgerStatus, string> = {
 	deactivated: "Plugins deactivated",
 	deleted: "Plugins deleted",
 	installed: "Plugin installed",
+	created: "User created",
 	detected: "Changed outside jman (found by jman-agent or a refresh)",
 };
+
+/** The title of a ledger entry's status badge. */
+function ledgerTitle(entry: SiteUpdateLedgerEntry): string {
+	if (entry.update_type === "user" && entry.status === "deleted") {
+		return "User deleted";
+	}
+	return ledgerStatusTitle[entry.status];
+}
+
+/** Describes a user job's ledger entry. */
+function formatUserChange(data: any): string {
+	const action = data.action === "user_create" ? "Created" : "Deleted";
+	let txt = `${action} user ${data.login} <${data.email}>`;
+	if (data.role) txt += ` (${data.role})`;
+	if (data.reassign) txt += `\nPosts reassigned to ${data.reassign}`;
+	if (data.note) txt += `\n${data.note}`;
+	if (data.error) txt += `\n[Error: ${data.error}]`;
+	return txt;
+}
 
 /** Describes a change found on the site that jman didn't make. */
 function formatDetectedChange(data: any): string {
@@ -214,6 +234,9 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 		const data = JSON.parse(entry.data_json);
 		if (data.detected) {
 			return formatDetectedChange(data);
+		}
+		if (entry.update_type === "user") {
+			return formatUserChange(data);
 		}
 		if (data.action) {
 			const verbs: Record<string, string> = {
@@ -721,7 +744,8 @@ const coreJob = computed(() =>
 	site.value ? jobsStore.activeCoreJob(site.value.id) : undefined,
 );
 const isUpdatingCore = computed(() => {
-	const target = queueingCoreTarget.value ?? coreJob.value?.target ?? null;
+	const target =
+		queueingCoreTarget.value ?? coreJob.value?.payload.target ?? null;
 	return { minor: target === "minor", major: target === "major" };
 });
 
@@ -1239,7 +1263,7 @@ const unlinkOrganization = async () => {
 												? "Queued install of"
 												: "Installing"
 										}}
-										{{ job.source }}…
+										{{ job.payload.source }}…
 									</span>
 								</td>
 							</tr>
@@ -1327,7 +1351,7 @@ const unlinkOrganization = async () => {
 				</div>
 			</section>
 
-			<SiteUsersCard v-if="site.is_wordpress" :site-id="site.id" />
+			<SiteUsersCard v-if="site.is_wordpress" :site="site" />
 
 			<section class="card mt-4">
 				<div class="card-header">
@@ -1377,7 +1401,7 @@ const unlinkOrganization = async () => {
 											'badge-sm',
 											ledgerBadgeClass(entry.status),
 										]"
-										:title="ledgerStatusTitle[entry.status]"
+										:title="ledgerTitle(entry)"
 									>
 										{{ entry.status }}
 									</span>

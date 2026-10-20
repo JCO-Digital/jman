@@ -70,13 +70,12 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusBadRequest, "allow_major is only allowed for a single plugin on a single site")
 			return
 		}
-		jobs = append(jobs, models.UpdateJob{
-			Kind:       models.UpdateJobKindPlugins,
-			SiteID:     siteID,
+		job := models.NewUpdateJob(models.UpdateJobKindPlugins, siteID, models.PluginsPayload{
 			Plugins:    withInstalledVersions(siteID, plugins),
 			AllowMajor: req.AllowMajor,
-			CreatedBy:  getUsername(r),
 		})
+		job.CreatedBy = getUsername(r)
+		jobs = append(jobs, job)
 	}
 
 	sites, err := cache.GetFastSiteList()

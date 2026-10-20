@@ -290,9 +290,10 @@ func (c *Client) Post(ctx context.Context, path string, body, out any) error {
 	return c.doJSON(ctx, http.MethodPost, path, body, out)
 }
 
-// Delete sends a DELETE to path (under /api).
-func (c *Client) Delete(ctx context.Context, path string) error {
-	return c.doJSON(ctx, http.MethodDelete, path, nil, nil)
+// Delete sends a DELETE to path (under /api) and decodes the JSON
+// response into out, if out isn't nil.
+func (c *Client) Delete(ctx context.Context, path string, out any) error {
+	return c.doJSON(ctx, http.MethodDelete, path, nil, out)
 }
 
 // PostFile uploads a local file as multipart/form-data to path (under

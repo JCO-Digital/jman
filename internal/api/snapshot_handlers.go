@@ -86,6 +86,7 @@ func buildCLISnapshot() (*cliproto.Snapshot, error) {
 			SSH:            s.SSH,
 			SitePath:       s.SitePath,
 			CanWPCLI:       s.CanWPCLI,
+			Multisite:      s.WpFlags != nil && s.WpFlags.IsMultisite,
 			WPCore:         s.WPCore,
 			UpdateLocks:    s.UpdateLocks,
 		}

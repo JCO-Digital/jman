@@ -218,7 +218,7 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 }
 
 // collectSiteUsers lists a site's users without the excluded roles, which
-// it counts.
+// it counts, and counts each listed user's posts.
 func collectSiteUsers(ctx context.Context, runner wpDataRunner, id siteIdentity, sitePath string) (*models.SiteUsers, error) {
 	out, err := runner.run(ctx, id, sitePath, wpcli.UserListArgs()...)
 	if err != nil {
@@ -239,6 +239,18 @@ func collectSiteUsers(ctx context.Context, runner wpDataRunner, id siteIdentity,
 		}
 	}
 	users := wpcli.NewSiteUsers(list, counts)
+	// Post counts only inform the delete checks, which the delete job
+	// repeats on the site, so a failure leaves them unknown.
+	out, err = runner.run(ctx, id, sitePath, "eval", wpcli.UserPostCountsEval)
+	if err == nil {
+		var posts map[int]int
+		if posts, err = wpcli.ParseUserPostCounts(out); err == nil {
+			wpcli.SetPostCounts(users.Users, posts)
+		}
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to count posts per user at %s: %v", sitePath, err)
+	}
 	return &users, nil
 }
 

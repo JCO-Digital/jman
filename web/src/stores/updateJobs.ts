@@ -2,11 +2,24 @@ import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import { useDataStore } from "./data";
 import { useNotificationStore, type NotificationType } from "./notifications";
-import type { PluginActionKind, UpdateJob, UpdateJobKind } from "../types";
+import { useSiteUsersStore } from "./siteUsers";
+import type {
+	PluginActionKind,
+	UpdateJob,
+	UpdateJobKind,
+	UserCreateJobPayload,
+} from "../types";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 /** How often the job list is polled while any job is queued or running. */
 const POLL_INTERVAL_MS = 3000;
+
+/** A job of one kind, with that kind's payload. */
+type JobOfKind<K extends UpdateJobKind> = Extract<UpdateJob, { kind: K }>;
+
+/** The plugins a plugin update or management job acts on. */
+const jobPlugins = (job: UpdateJob) =>
+	"plugins" in job.payload ? job.payload.plugins : [];
 
 const isActive = (job: UpdateJob) =>
 	job.status === "queued" || job.status === "running";
@@ -25,6 +38,9 @@ const ACTION_VERBS: Record<PluginActionKind, [string, string]> = {
 const isPluginAction = (kind: UpdateJobKind): kind is PluginActionKind =>
 	kind in ACTION_VERBS;
 
+/** A user to create; the password goes to jman-api but never into the job. */
+export type NewSiteUser = UserCreateJobPayload & { password: string };
+
 /** What an install request installs: a slug or ZIP URL, or a ZIP file. */
 export type InstallSource =
 	| { source: string; activate: boolean }
@@ -40,6 +56,7 @@ export type InstallSource =
 export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	const dataStore = useDataStore();
 	const notifications = useNotificationStore();
+	const siteUsersStore = useSiteUsersStore();
 
 	const jobs = ref<UpdateJob[]>([]);
 	/**
@@ -61,10 +78,10 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	const pendingBySite = computed(() => {
 		const map = new Map<string, Map<string, UpdateJobKind>>();
 		for (const job of activeJobs.value) {
-			if (job.kind === "core" || job.kind === "install") continue;
+			if (!("plugins" in job.payload)) continue;
 			const names =
 				map.get(job.site_id) ?? new Map<string, UpdateJobKind>();
-			for (const p of job.plugins) {
+			for (const p of jobPlugins(job)) {
 				if (!names.has(p.name)) names.set(p.name, job.kind);
 			}
 			map.set(job.site_id, names);
@@ -81,21 +98,26 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	}
 
 	/** Queued or running plugin installs on a site. */
-	function activeInstalls(siteId: string): UpdateJob[] {
+	function activeInstalls(siteId: string): JobOfKind<"install">[] {
 		return activeJobs.value.filter(
-			(j) => j.kind === "install" && j.site_id === siteId,
+			(j): j is JobOfKind<"install"> =>
+				j.kind === "install" && j.site_id === siteId,
 		);
 	}
 
 	/** The queued or running core update job on a site, if any. */
-	function activeCoreJob(siteId: string): UpdateJob | undefined {
+	function activeCoreJob(siteId: string): JobOfKind<"core"> | undefined {
 		return activeJobs.value.find(
-			(j) => j.kind === "core" && j.site_id === siteId,
+			(j): j is JobOfKind<"core"> =>
+				j.kind === "core" && j.site_id === siteId,
 		);
 	}
 
 	function handleFinished(job: UpdateJob) {
-		if (job.kind === "core") {
+		if (job.kind === "user_create" || job.kind === "user_delete") {
+			// The job refreshed jman-api's user list for the site.
+			if (siteUsersStore.isLoaded) siteUsersStore.fetchAll(true);
+		} else if (job.kind === "core") {
 			if (job.core) dataStore.applyCoreUpdate(job.site_id, job.core);
 		} else {
 			if (job.kind === "plugins") {
@@ -128,6 +150,13 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		type: NotificationType;
 	} {
 		const site = dataStore.getSiteById(job.site_id)?.domain ?? job.site_id;
+		if (job.kind === "user_create" || job.kind === "user_delete") {
+			const action = job.kind === "user_create" ? "Add" : "Delete";
+			return {
+				title: `${action} user ${job.payload.login} · ${site}`,
+				...describeUser(job, site),
+			};
+		}
 		if (job.kind === "core") {
 			return {
 				title: `WordPress core · ${site}`,
@@ -141,16 +170,18 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			};
 		}
 		if (isPluginAction(job.kind)) {
-			const count = job.plugins.length;
+			const plugins = jobPlugins(job);
 			const what =
-				count === 1 ? job.plugins[0]!.name : `${count} plugins`;
+				plugins.length === 1
+					? plugins[0]!.name
+					: `${plugins.length} plugins`;
 			const action = job.kind.charAt(0).toUpperCase() + job.kind.slice(1);
 			return {
 				title: `${action} ${what} · ${site}`,
 				...describeAction(job, job.kind, site),
 			};
 		}
-		const count = job.plugins.length;
+		const count = jobPlugins(job).length;
 		return {
 			title: `${count} plugin${count === 1 ? "" : "s"} · ${site}`,
 			...describePlugins(job, site),
@@ -161,7 +192,10 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		job: UpdateJob,
 		siteName: string,
 	): { message: string; type: NotificationType } {
-		const target = job.target === "major" ? "major" : "minor";
+		const target =
+			job.kind === "core" && job.payload.target === "major"
+				? "major"
+				: "minor";
 		const r = job.results[0];
 		switch (job.status) {
 			case "queued":
@@ -207,7 +241,9 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		siteName: string,
 	): { message: string; type: NotificationType } {
 		const [doing, done] = ACTION_VERBS[kind];
-		const requested = job.plugins.map((p) => p.name).join(", ");
+		const requested = jobPlugins(job)
+			.map((p) => p.name)
+			.join(", ");
 		switch (job.status) {
 			case "queued":
 				return {
@@ -242,11 +278,52 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		};
 	}
 
+	function describeUser(
+		job: JobOfKind<"user_create" | "user_delete">,
+		siteName: string,
+	): { message: string; type: NotificationType } {
+		const login = job.payload.login;
+		const [doing, done] =
+			job.kind === "user_create"
+				? ["Creating", "Created"]
+				: ["Deleting", "Deleted"];
+		switch (job.status) {
+			case "queued":
+				return {
+					message: `Queued: ${doing.toLowerCase()} user ${login} on ${siteName}.`,
+					type: "running",
+				};
+			case "running":
+				return {
+					message: `${doing} user ${login} on ${siteName}…`,
+					type: "running",
+				};
+			case "interrupted":
+				return {
+					message: `${doing} user ${login} on ${siteName} was interrupted by a jman-api restart. Check the site's users.`,
+					type: "error",
+				};
+		}
+		const r = job.results[0];
+		if (job.status === "failed" || r?.status === "failed") {
+			return {
+				message: `Failed: ${doing.toLowerCase()} user ${login} on ${siteName}: ${truncate(r?.error || job.error || "Unknown error")}`,
+				type: "error",
+			};
+		}
+		const note = r?.note ? ` ${r.note}.` : "";
+		return {
+			message: `${done} user ${login} on ${siteName}.${note}`,
+			type: "success",
+		};
+	}
+
 	function describeInstall(
 		job: UpdateJob,
 		siteName: string,
 	): { message: string; type: NotificationType } {
-		const source = job.source ?? "plugin";
+		const install = job.kind === "install" ? job.payload : undefined;
+		const source = install?.source ?? "plugin";
 		switch (job.status) {
 			case "queued":
 				return {
@@ -274,7 +351,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const name =
 			r?.name && r.name !== source ? `${r.name} (${source})` : source;
 		const version = r?.new_version ? ` ${r.new_version}` : "";
-		const activated = job.activate ? " and activated" : "";
+		const activated = install?.activate ? " and activated" : "";
 		return {
 			message: `Installed${activated} ${name}${version} on ${siteName}.`,
 			type: "success",
@@ -285,7 +362,9 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		job: UpdateJob,
 		siteName: string,
 	): { message: string; type: NotificationType } {
-		const requested = job.plugins.map((p) => p.name).join(", ");
+		const requested = jobPlugins(job)
+			.map((p) => p.name)
+			.join(", ");
 		if (job.status === "queued") {
 			return {
 				message: `Queued update of ${requested} on ${siteName}.`,
@@ -543,6 +622,43 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return job;
 	}
 
+	/**
+	 * Queues creating a WordPress user. jman-api keeps the password in
+	 * memory until the job runs; the job itself never holds it.
+	 */
+	async function enqueueUserCreate(
+		siteId: string,
+		user: NewSiteUser,
+	): Promise<UpdateJob> {
+		const job = await postJobs<UpdateJob>(`/sites/${siteId}/users`, user);
+		merge([job]);
+		schedulePoll();
+		return job;
+	}
+
+	/**
+	 * Queues deleting a WordPress user. reassign is the login or email of
+	 * the user who gets its posts; without it, a user with posts is refused.
+	 */
+	async function enqueueUserDelete(
+		siteId: string,
+		userId: number,
+		reassign = "",
+	): Promise<UpdateJob> {
+		const query = reassign
+			? `?reassign=${encodeURIComponent(reassign)}`
+			: "";
+		const res = await apiFetch(
+			`${BASE_URL}/sites/${siteId}/users/${userId}${query}`,
+			{ method: "DELETE" },
+		);
+		if (!res.ok) await handleErrorResponse(res);
+		const job = (await res.json()) as UpdateJob;
+		merge([job]);
+		schedulePoll();
+		return job;
+	}
+
 	function reset() {
 		if (pollTimer) clearTimeout(pollTimer);
 		pollTimer = null;
@@ -563,6 +679,8 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		enqueueAction,
 		enqueueInstall,
 		enqueueCore,
+		enqueueUserCreate,
+		enqueueUserDelete,
 		fetchJobs,
 		reset,
 	};

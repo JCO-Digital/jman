@@ -41,6 +41,12 @@ func createJob(t *testing.T, job models.UpdateJob) models.UpdateJob {
 	return job
 }
 
+// pluginsJob returns a plugin update or management job for the plugins on
+// testSite.
+func pluginsJob(kind string, plugins ...models.PluginUpdateRequest) models.UpdateJob {
+	return models.NewUpdateJob(kind, testSite, models.PluginsPayload{Plugins: plugins})
+}
+
 func storedJob(t *testing.T, id int64) *models.UpdateJob {
 	t.Helper()
 	job, err := db.GetUpdateJob(id)
@@ -83,7 +89,7 @@ func TestRunPluginActionChecksResultingState(t *testing.T) {
 		return nil
 	}
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindActivate, Plugins: []models.PluginUpdateRequest{{Name: "a", OldVersion: "1.0"}, {Name: "b", OldVersion: "2.0"}}})
+	job := createJob(t, pluginsJob(models.UpdateJobKindActivate, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"}, models.PluginUpdateRequest{Name: "b", OldVersion: "2.0"}))
 	run(job)
 
 	if gotAction != "activate" || len(gotPlugins) != 2 {
@@ -114,7 +120,7 @@ func TestRunPluginActionDelete(t *testing.T) {
 		return nil
 	}
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindDelete, Plugins: []models.PluginUpdateRequest{{Name: "a"}}})
+	job := createJob(t, pluginsJob(models.UpdateJobKindDelete, models.PluginUpdateRequest{Name: "a"}))
 	run(job)
 
 	stored := storedJob(t, job.ID)
@@ -131,7 +137,7 @@ func TestRunPluginActionWithoutFreshCacheUsesCallResult(t *testing.T) {
 	pluginAction = func(models.CliSite, string, []string) error { return nil }
 	refreshPluginCache = func(models.CliSite) error { return errors.New("ssh down") }
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindDeactivate, Plugins: []models.PluginUpdateRequest{{Name: "a"}}})
+	job := createJob(t, pluginsJob(models.UpdateJobKindDeactivate, models.PluginUpdateRequest{Name: "a"}))
 	run(job)
 
 	if r := storedJob(t, job.ID).Results[0]; r.Status != models.UpdateDone {
@@ -152,7 +158,7 @@ func TestRunInstallFromSlug(t *testing.T) {
 		return nil
 	}
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindInstall, Source: "akismet", Activate: true})
+	job := createJob(t, models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "akismet", Activate: true}))
 	run(job)
 
 	if gotSource != "akismet" || !gotActivate {
@@ -208,7 +214,9 @@ func TestRunInstallUploadedZip(t *testing.T) {
 		return nil
 	}
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindInstall, Source: "my-plugin.zip", UploadPath: upload})
+	job := models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "my-plugin.zip"})
+	job.UploadPath = upload
+	job = createJob(t, job)
 	run(job)
 
 	// The upload isn't a readable ZIP, so the slug comes from its name.
@@ -233,7 +241,7 @@ func TestRunInstallFailure(t *testing.T) {
 		return false, errors.New("plugin not found")
 	}
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindInstall, Source: "nope"})
+	job := createJob(t, models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "nope"}))
 	run(job)
 
 	stored := storedJob(t, job.ID)
@@ -258,13 +266,14 @@ func TestStartInterruptsActionAndCleansUploads(t *testing.T) {
 		}
 	}
 
-	job := createJob(t, models.UpdateJob{Kind: models.UpdateJobKindDeactivate, Plugins: []models.PluginUpdateRequest{{Name: "a"}}})
+	job := createJob(t, pluginsJob(models.UpdateJobKindDeactivate, models.PluginUpdateRequest{Name: "a"}))
 	if err := db.StartUpdateJob(job.ID); err != nil {
 		t.Fatal(err)
 	}
 	// Queued on another site, so it doesn't run (and remove its upload)
 	// before the assertions; findSite blocks it.
-	queued := models.UpdateJob{Kind: models.UpdateJobKindInstall, SiteID: "22222222-2222-2222-2222-222222222222", Source: "q.zip", UploadPath: queuedUpload}
+	queued := models.NewUpdateJob(models.UpdateJobKindInstall, "22222222-2222-2222-2222-222222222222", models.InstallPayload{Source: "q.zip"})
+	queued.UploadPath = queuedUpload
 	if err := db.CreateUpdateJob(&queued); err != nil {
 		t.Fatal(err)
 	}

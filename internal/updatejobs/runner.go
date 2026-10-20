@@ -1,6 +1,7 @@
 // Package updatejobs runs site updates as background jobs inside jman-api.
 // A plugins job updates one or more plugins on one site with a single
-// `wp plugin update` call; a core job runs `wp core update`. Jobs for
+// `wp plugin update` call; a core job runs `wp core update`; other jobs
+// manage plugins or WordPress users. Jobs for
 // different sites run concurrently, jobs for the same site one at a time.
 // Jobs live in api.db, so their state survives page reloads and is visible
 // to every user, and each finished job writes one entry to the site update
@@ -177,11 +178,17 @@ func Start(ctx context.Context) error {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
 			}
 			writeCoreLedger(job, "", interruptedCoreReason, "failed", "")
+		case models.IsUserKind(job.Kind):
+			r := models.UpdateResult{Name: userLogin(job), Status: models.UpdateFailed, Error: interruptedUserReason}
+			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, []models.UpdateResult{r}, nil, interruptedUserReason); err != nil {
+				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
+			}
+			writeUserLedger(job, r, interruptedUserReason)
 		case isPluginManagementJob(job):
 			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, nil, nil, interruptedActionReason); err != nil {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
 			}
-			writeActionLedger(job, failAll(job.Plugins, interruptedActionReason), interruptedActionReason)
+			writeActionLedger(job, failAll(actionTargets(job), interruptedActionReason), interruptedActionReason)
 		default:
 			writeLedger(job, nil, "failed", interruptedReason)
 		}
@@ -253,19 +260,27 @@ func run(job models.UpdateJob) {
 	if job.UploadPath != "" {
 		defer removeUpload(job)
 	}
+	// A user create job's password is dropped once it has run, whatever
+	// the outcome.
+	defer forgetPassword(job.ID)
 
 	site, err := findSite(job.SiteID)
+	if err == nil {
+		err = checkPayload(job)
+	}
 	if err != nil {
 		switch {
 		case job.Kind == models.UpdateJobKindCore:
 			finishCore(job, models.UpdateJobFailed, failedCoreResult("", err.Error()), nil, err.Error())
 			writeCoreLedger(job, "", err.Error(), "failed", "")
+		case models.IsUserKind(job.Kind):
+			failUserJob(job, err.Error())
 		case isPluginManagementJob(job):
 			results := failAll(actionTargets(job), err.Error())
 			finishAction(job, models.UpdateJobFailed, results, err.Error())
 			writeActionLedger(job, results, err.Error())
 		default:
-			finish(job, models.UpdateJobFailed, failAll(job.Plugins, err.Error()), err.Error())
+			finish(job, models.UpdateJobFailed, failAll(jobPlugins(job), err.Error()), err.Error())
 		}
 		return
 	}
@@ -277,6 +292,10 @@ func run(job models.UpdateJob) {
 		runPluginAction(job, *site)
 	case job.Kind == models.UpdateJobKindInstall:
 		runInstall(job, *site)
+	case job.Kind == models.UpdateJobKindUserCreate:
+		runUserCreate(job, *site)
+	case job.Kind == models.UpdateJobKindUserDelete:
+		runUserDelete(job, *site)
 	default:
 		runPlugins(job, *site)
 	}
@@ -290,22 +309,24 @@ func run(job models.UpdateJob) {
 // Locks are read here rather than when the job was queued, so a lock added
 // in between still applies.
 func runPlugins(job models.UpdateJob, site models.CliSite) {
+	payload := jobPluginsPayload(job)
+	plugins := payload.Plugins
 	// Checked against the pre-update versions, for the ledger status.
-	updatedVulnerable := anyVulnerable(job.SiteID, job.Plugins)
+	updatedVulnerable := anyVulnerable(job.SiteID, plugins)
 
 	var free, locked []models.PluginUpdateRequest
-	if job.AllowMajor {
-		free = job.Plugins
+	if payload.AllowMajor {
+		free = plugins
 	} else {
 		locks, err := siteLocks(job.SiteID)
 		if err != nil {
 			// Without the locks it's unknown which plugins may get major
 			// updates, so update none.
 			msg := fmt.Sprintf("failed to load update locks: %v", err)
-			finish(job, models.UpdateJobFailed, failAll(job.Plugins, msg), msg)
+			finish(job, models.UpdateJobFailed, failAll(plugins, msg), msg)
 			return
 		}
-		for _, p := range job.Plugins {
+		for _, p := range plugins {
 			if locks.PluginLocked(p.Name) {
 				locked = append(locked, p)
 			} else {
@@ -341,8 +362,8 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 		markHeldBack(job.SiteID, locked, byName)
 	}
 
-	results := make([]models.UpdateResult, len(job.Plugins))
-	for i, p := range job.Plugins {
+	results := make([]models.UpdateResult, len(plugins))
+	for i, p := range plugins {
 		results[i] = byName[p.Name]
 	}
 	jobErr := strings.Join(errs, "; ")
@@ -442,9 +463,10 @@ func requestNames(reqs []models.PluginUpdateRequest) []string {
 func runCore(job models.UpdateJob, site models.CliSite) {
 	oldVersion := cachedCoreVersion(job.SiteID)
 
-	major := job.Target == "major"
+	payload := jobCore(job)
+	major := payload.Target == "major"
 	var lockNote string
-	if major && !job.AllowMajor {
+	if major && !payload.AllowMajor {
 		locks, err := siteLocks(job.SiteID)
 		switch {
 		case err != nil:
@@ -522,7 +544,7 @@ func finishCore(job models.UpdateJob, status string, results []models.UpdateResu
 // writeCoreLedger records a finished core job in the site update ledger,
 // in the format the core update handler used to write.
 func writeCoreLedger(job models.UpdateJob, newVersion, errMsg, status, note string) {
-	data := map[string]any{"target": job.Target, "new_version": newVersion}
+	data := map[string]any{"target": jobCore(job).Target, "new_version": newVersion}
 	if errMsg != "" {
 		data["error"] = errMsg
 	}
@@ -667,7 +689,7 @@ func anyVulnerable(siteID string, plugins []models.PluginUpdateRequest) bool {
 // single-plugin or bulk data format the UI already renders.
 func writeLedger(job models.UpdateJob, results []models.UpdateResult, status, jobErr string) {
 	if results == nil {
-		results = failAll(job.Plugins, jobErr)
+		results = failAll(jobPlugins(job), jobErr)
 	}
 
 	var data any

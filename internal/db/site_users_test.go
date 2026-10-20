@@ -19,9 +19,10 @@ func TestReplaceSiteUsers(t *testing.T) {
 	}
 
 	observed := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	posts := 7
 	users := models.SiteUsers{
 		Users: []models.SiteUser{
-			{ID: 5, Login: "ed", Email: "ed@example.com", DisplayName: "Ed", Roles: "editor,author", Registered: "2021-01-01 00:00:00"},
+			{ID: 5, Login: "ed", Email: "ed@example.com", DisplayName: "Ed", Roles: "editor,author", Registered: "2021-01-01 00:00:00", PostCount: &posts},
 			{ID: 1, Login: "admin", Email: "admin@example.com", Roles: "administrator"},
 		},
 		ExcludedCounts: map[string]int{"subscriber": 1200, "customer": 3},
@@ -37,6 +38,15 @@ func TestReplaceSiteUsers(t *testing.T) {
 	}
 	if len(got.Users) != 2 || got.Users[0].ID != 1 || got.Users[1].Roles != "editor,author" || got.Users[1].SiteID != site {
 		t.Errorf("users = %+v", got.Users)
+	}
+	if got.Users[0].PostCount != nil || got.Users[1].PostCount == nil || *got.Users[1].PostCount != 7 {
+		t.Errorf("post counts = %v, %v; want unknown and 7", got.Users[0].PostCount, got.Users[1].PostCount)
+	}
+	if u, found, err := GetSiteUser(site, 5); err != nil || !found || u.Login != "ed" {
+		t.Errorf("GetSiteUser = %+v, %v, %v", u, found, err)
+	}
+	if _, found, err := GetSiteUser(site, 99); err != nil || found {
+		t.Errorf("GetSiteUser of a missing user: found=%v err=%v", found, err)
 	}
 	if got.ExcludedCounts["subscriber"] != 1200 || got.ExcludedCounts["customer"] != 3 || !got.Truncated {
 		t.Errorf("summary = %+v", got)
