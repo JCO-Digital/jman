@@ -305,14 +305,22 @@ func GetCachedVulnerabilities(plugin string, ttl ...time.Duration) (*models.Vuln
 // failure is only logged: users are secondary to the plugin data read
 // alongside them.
 func RefreshSiteUsers(site models.CliSite) {
+	if err := RefreshSiteUsersFrom(site, sitestate.SourceSSH); err != nil {
+		verb.PrintErrorf(verb.Normal, "Warning: %v\n", err)
+	}
+}
+
+// RefreshSiteUsersFrom reads a site's users over SSH and stores them as
+// read by src.
+func RefreshSiteUsersFrom(site models.CliSite, src sitestate.Source) error {
 	users, err := wpcli.GetSiteUsers(site)
 	if err != nil {
-		verb.PrintErrorf(verb.Normal, "Warning: failed to fetch users for site %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
-		return
+		return fmt.Errorf("failed to fetch users for site %s: %w", site.Name, err)
 	}
-	if _, err := sitestate.ApplyUsers(site.ID, users, sitestate.SourceSSH, time.Now()); err != nil {
-		verb.PrintErrorf(verb.Normal, "Warning: failed to save users for site %s: %v\n", verb.Blue(site.Name), err)
+	if _, err := sitestate.ApplyUsers(site.ID, users, src, time.Now()); err != nil {
+		return fmt.Errorf("failed to save users for site %s: %w", site.Name, err)
 	}
+	return nil
 }
 
 // pruneSiteUsers removes the stored users of sites that no longer exist.

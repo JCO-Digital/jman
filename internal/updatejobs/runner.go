@@ -1,6 +1,7 @@
 // Package updatejobs runs site updates as background jobs inside jman-api.
 // A plugins job updates one or more plugins on one site with a single
-// `wp plugin update` call; a core job runs `wp core update`. Jobs for
+// `wp plugin update` call; a core job runs `wp core update`; other jobs
+// manage plugins or WordPress users. Jobs for
 // different sites run concurrently, jobs for the same site one at a time.
 // Jobs live in api.db, so their state survives page reloads and is visible
 // to every user, and each finished job writes one entry to the site update
@@ -177,6 +178,12 @@ func Start(ctx context.Context) error {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
 			}
 			writeCoreLedger(job, "", interruptedCoreReason, "failed", "")
+		case models.IsUserKind(job.Kind):
+			r := models.UpdateResult{Name: userLogin(job), Status: models.UpdateFailed, Error: interruptedUserReason}
+			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, []models.UpdateResult{r}, nil, interruptedUserReason); err != nil {
+				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
+			}
+			writeUserLedger(job, r, interruptedUserReason)
 		case isPluginManagementJob(job):
 			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, nil, nil, interruptedActionReason); err != nil {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
@@ -253,6 +260,9 @@ func run(job models.UpdateJob) {
 	if job.UploadPath != "" {
 		defer removeUpload(job)
 	}
+	// A user create job's password is dropped once it has run, whatever
+	// the outcome.
+	defer forgetPassword(job.ID)
 
 	site, err := findSite(job.SiteID)
 	if err == nil {
@@ -263,6 +273,8 @@ func run(job models.UpdateJob) {
 		case job.Kind == models.UpdateJobKindCore:
 			finishCore(job, models.UpdateJobFailed, failedCoreResult("", err.Error()), nil, err.Error())
 			writeCoreLedger(job, "", err.Error(), "failed", "")
+		case models.IsUserKind(job.Kind):
+			failUserJob(job, err.Error())
 		case isPluginManagementJob(job):
 			results := failAll(actionTargets(job), err.Error())
 			finishAction(job, models.UpdateJobFailed, results, err.Error())
@@ -280,6 +292,10 @@ func run(job models.UpdateJob) {
 		runPluginAction(job, *site)
 	case job.Kind == models.UpdateJobKindInstall:
 		runInstall(job, *site)
+	case job.Kind == models.UpdateJobKindUserCreate:
+		runUserCreate(job, *site)
+	case job.Kind == models.UpdateJobKindUserDelete:
+		runUserDelete(job, *site)
 	default:
 		runPlugins(job, *site)
 	}

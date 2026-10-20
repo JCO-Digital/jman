@@ -26,6 +26,10 @@ const (
 	LedgerDeleted   = "deleted"
 	LedgerInstalled = "installed"
 
+	// LedgerCreated is a WordPress user created by a user job; a deleted
+	// user is LedgerDeleted.
+	LedgerCreated = "created"
+
 	// LedgerDetected is a change jman found on the site but didn't make
 	// itself (e.g. an update in wp-admin or a WordPress auto-update).
 	LedgerDetected = "detected"
@@ -35,7 +39,7 @@ const (
 type SiteUpdateLedgerEntry struct {
 	ID         int       `json:"id"`
 	SiteID     string    `json:"site_id"`     // site UUID
-	UpdateType string    `json:"update_type"` // "core", "plugin", "theme"
+	UpdateType string    `json:"update_type"` // "core", "plugin", "theme", "user"
 	Status     string    `json:"status"`      // one of the Ledger* statuses
 	DataJSON   string    `json:"data_json,omitempty"`
 	UpdatedBy  string    `json:"updated_by"`

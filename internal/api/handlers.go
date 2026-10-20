@@ -178,6 +178,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Plugin management routes (background jobs) ---
 	mux.Handle("GET /api/sites/{id}/plugins", basic(SitePluginsHandler))
 	mux.Handle("GET /api/sites/{id}/users", basic(SiteUserListHandler))
+	mux.Handle("POST /api/sites/{id}/users", execute(SiteUserCreateHandler))
+	mux.Handle("DELETE /api/sites/{id}/users/{userId}", execute(SiteUserDeleteHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-actions", execute(SitePluginActionHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-install", execute(SitePluginInstallHandler))
 
