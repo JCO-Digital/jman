@@ -700,26 +700,43 @@ export type PluginActionKind =
 
 export type UpdateJobKind = "plugins" | "core" | PluginActionKind | "install";
 
+/** Payload of plugin update jobs and plugin management jobs. */
+export interface PluginsJobPayload {
+	plugins: { name: string; old_version: string }[];
+	/** Update-locked plugins may get major updates. */
+	allow_major?: boolean;
+}
+
+/** Payload of core update jobs. */
+export interface CoreJobPayload {
+	target: "minor" | "major";
+	/** A major update may run on an update-locked site. */
+	allow_major?: boolean;
+}
+
+/** Payload of plugin install jobs. */
+export interface InstallJobPayload {
+	/** The slug, ZIP URL or uploaded file name. */
+	source: string;
+	/** Activate after installing. */
+	activate?: boolean;
+}
+
+/** What a job changes; its type depends on the job's kind. */
+export type UpdateJobPayload =
+	| { kind: "plugins" | PluginActionKind; payload: PluginsJobPayload }
+	| { kind: "core"; payload: CoreJobPayload }
+	| { kind: "install"; payload: InstallJobPayload };
+
 /**
  * A background change on one site: `wp plugin update` for one or more
  * plugins (kind "plugins"), `wp core update`, activating, deactivating,
  * deleting or uninstalling plugins, or installing one plugin.
  */
-export interface UpdateJob {
+export type UpdateJob = UpdateJobPayload & {
 	id: number;
-	kind: UpdateJobKind;
 	site_id: string;
 	status: UpdateJobStatus;
-	/** Plugins to act on; empty for core and install jobs. */
-	plugins: { name: string; old_version: string }[];
-	/** Core jobs: "minor" or "major". */
-	target?: "minor" | "major";
-	/** Install jobs: the slug, ZIP URL or uploaded file name. */
-	source?: string;
-	/** Install jobs: activate after installing. */
-	activate?: boolean;
-	/** Plugins and core jobs: update-locked items may get major updates. */
-	allow_major?: boolean;
 	/**
 	 * One entry per plugin (one "WordPress" entry for core jobs, one entry
 	 * for the installed plugin for install jobs) once finished.
@@ -732,7 +749,7 @@ export interface UpdateJob {
 	created_at: string;
 	started_at?: string;
 	finished_at?: string;
-}
+};
 
 export interface TwoFactorSetupResponse {
 	secret: string;

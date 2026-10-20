@@ -129,7 +129,8 @@ func TestRunWritesResultsAndOneLedgerEntry(t *testing.T) {
 		}, nil
 	}
 
-	job := models.UpdateJob{SiteID: testSite, CreatedBy: "alice", Plugins: []models.PluginUpdateRequest{{Name: "a", OldVersion: "1.0"}, {Name: "b", OldVersion: "2.0"}}}
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"}, models.PluginUpdateRequest{Name: "b", OldVersion: "2.0"})
+	job.CreatedBy = "alice"
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +175,7 @@ func TestRunRecordsUnreachableSite(t *testing.T) {
 		return nil, nil
 	}
 
-	job := models.UpdateJob{SiteID: testSite, Plugins: []models.PluginUpdateRequest{{Name: "a", OldVersion: "1.0"}}}
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"})
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}
@@ -193,8 +194,9 @@ func TestRunRecordsUnreachableSite(t *testing.T) {
 func TestStartInterruptsRunningAndResumesQueued(t *testing.T) {
 	setupRunnerTest(t)
 
-	running := models.UpdateJob{SiteID: testSite, Plugins: []models.PluginUpdateRequest{{Name: "a"}}}
-	queued := models.UpdateJob{SiteID: "22222222-2222-2222-2222-222222222222", Plugins: []models.PluginUpdateRequest{{Name: "b"}}}
+	running := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a"})
+	queued := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "b"})
+	queued.SiteID = "22222222-2222-2222-2222-222222222222"
 	for _, j := range []*models.UpdateJob{&running, &queued} {
 		if err := db.CreateUpdateJob(j); err != nil {
 			t.Fatal(err)
@@ -275,7 +277,8 @@ func TestQueueRunsOneJobPerSiteAtATime(t *testing.T) {
 
 func runCoreJob(t *testing.T, target string) *models.UpdateJob {
 	t.Helper()
-	job := models.UpdateJob{Kind: models.UpdateJobKindCore, SiteID: testSite, Target: target, CreatedBy: "alice"}
+	job := models.NewUpdateJob(models.UpdateJobKindCore, testSite, models.CorePayload{Target: target})
+	job.CreatedBy = "alice"
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}
@@ -318,7 +321,7 @@ func TestRunCoreJobSuccess(t *testing.T) {
 	if !gotMajor {
 		t.Error("major target did not request a major update")
 	}
-	if stored.Status != models.UpdateJobDone || stored.Target != "major" || stored.Core == nil || stored.Core.Version != "6.5.0" {
+	if stored.Status != models.UpdateJobDone || jobCore(*stored).Target != "major" || stored.Core == nil || stored.Core.Version != "6.5.0" {
 		t.Errorf("stored job = %+v", stored)
 	}
 	want := []models.UpdateResult{{Name: "WordPress", OldVersion: "6.4.0", NewVersion: "6.5.0", Status: models.UpdateUpdated}}
@@ -377,7 +380,7 @@ func TestRunCoreJobFailure(t *testing.T) {
 
 func TestStartInterruptsRunningCoreJob(t *testing.T) {
 	setupRunnerTest(t)
-	job := models.UpdateJob{Kind: models.UpdateJobKindCore, SiteID: testSite, Target: "minor"}
+	job := models.NewUpdateJob(models.UpdateJobKindCore, testSite, models.CorePayload{Target: "minor"})
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}
@@ -458,7 +461,8 @@ func TestRunPluginUpdateWritesVulnStatus(t *testing.T) {
 		return nil
 	}
 
-	job := models.UpdateJob{SiteID: testSite, CreatedBy: "alice", Plugins: []models.PluginUpdateRequest{{Name: "a", OldVersion: "1.0"}}}
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"})
+	job.CreatedBy = "alice"
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}

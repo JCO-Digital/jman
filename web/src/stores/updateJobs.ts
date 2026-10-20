@@ -8,6 +8,13 @@ import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 /** How often the job list is polled while any job is queued or running. */
 const POLL_INTERVAL_MS = 3000;
 
+/** A job of one kind, with that kind's payload. */
+type JobOfKind<K extends UpdateJobKind> = Extract<UpdateJob, { kind: K }>;
+
+/** The plugins a plugin update or management job acts on. */
+const jobPlugins = (job: UpdateJob) =>
+	"plugins" in job.payload ? job.payload.plugins : [];
+
 const isActive = (job: UpdateJob) =>
 	job.status === "queued" || job.status === "running";
 
@@ -64,7 +71,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			if (job.kind === "core" || job.kind === "install") continue;
 			const names =
 				map.get(job.site_id) ?? new Map<string, UpdateJobKind>();
-			for (const p of job.plugins) {
+			for (const p of jobPlugins(job)) {
 				if (!names.has(p.name)) names.set(p.name, job.kind);
 			}
 			map.set(job.site_id, names);
@@ -81,16 +88,18 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	}
 
 	/** Queued or running plugin installs on a site. */
-	function activeInstalls(siteId: string): UpdateJob[] {
+	function activeInstalls(siteId: string): JobOfKind<"install">[] {
 		return activeJobs.value.filter(
-			(j) => j.kind === "install" && j.site_id === siteId,
+			(j): j is JobOfKind<"install"> =>
+				j.kind === "install" && j.site_id === siteId,
 		);
 	}
 
 	/** The queued or running core update job on a site, if any. */
-	function activeCoreJob(siteId: string): UpdateJob | undefined {
+	function activeCoreJob(siteId: string): JobOfKind<"core"> | undefined {
 		return activeJobs.value.find(
-			(j) => j.kind === "core" && j.site_id === siteId,
+			(j): j is JobOfKind<"core"> =>
+				j.kind === "core" && j.site_id === siteId,
 		);
 	}
 
@@ -141,16 +150,18 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			};
 		}
 		if (isPluginAction(job.kind)) {
-			const count = job.plugins.length;
+			const plugins = jobPlugins(job);
 			const what =
-				count === 1 ? job.plugins[0]!.name : `${count} plugins`;
+				plugins.length === 1
+					? plugins[0]!.name
+					: `${plugins.length} plugins`;
 			const action = job.kind.charAt(0).toUpperCase() + job.kind.slice(1);
 			return {
 				title: `${action} ${what} · ${site}`,
 				...describeAction(job, job.kind, site),
 			};
 		}
-		const count = job.plugins.length;
+		const count = jobPlugins(job).length;
 		return {
 			title: `${count} plugin${count === 1 ? "" : "s"} · ${site}`,
 			...describePlugins(job, site),
@@ -161,7 +172,10 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		job: UpdateJob,
 		siteName: string,
 	): { message: string; type: NotificationType } {
-		const target = job.target === "major" ? "major" : "minor";
+		const target =
+			job.kind === "core" && job.payload.target === "major"
+				? "major"
+				: "minor";
 		const r = job.results[0];
 		switch (job.status) {
 			case "queued":
@@ -207,7 +221,9 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		siteName: string,
 	): { message: string; type: NotificationType } {
 		const [doing, done] = ACTION_VERBS[kind];
-		const requested = job.plugins.map((p) => p.name).join(", ");
+		const requested = jobPlugins(job)
+			.map((p) => p.name)
+			.join(", ");
 		switch (job.status) {
 			case "queued":
 				return {
@@ -246,7 +262,8 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		job: UpdateJob,
 		siteName: string,
 	): { message: string; type: NotificationType } {
-		const source = job.source ?? "plugin";
+		const install = job.kind === "install" ? job.payload : undefined;
+		const source = install?.source ?? "plugin";
 		switch (job.status) {
 			case "queued":
 				return {
@@ -274,7 +291,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const name =
 			r?.name && r.name !== source ? `${r.name} (${source})` : source;
 		const version = r?.new_version ? ` ${r.new_version}` : "";
-		const activated = job.activate ? " and activated" : "";
+		const activated = install?.activate ? " and activated" : "";
 		return {
 			message: `Installed${activated} ${name}${version} on ${siteName}.`,
 			type: "success",
@@ -285,7 +302,9 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		job: UpdateJob,
 		siteName: string,
 	): { message: string; type: NotificationType } {
-		const requested = job.plugins.map((p) => p.name).join(", ");
+		const requested = jobPlugins(job)
+			.map((p) => p.name)
+			.join(", ");
 		if (job.status === "queued") {
 			return {
 				message: `Queued update of ${requested} on ${siteName}.`,

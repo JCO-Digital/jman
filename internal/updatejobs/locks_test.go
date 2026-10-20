@@ -27,7 +27,8 @@ func runPluginsJob(t *testing.T, allowMajor bool, plugins ...string) models.Upda
 	for i, p := range plugins {
 		reqs[i] = models.PluginUpdateRequest{Name: p, OldVersion: "1.0.0"}
 	}
-	job := models.UpdateJob{SiteID: testSite, CreatedBy: "alice", AllowMajor: allowMajor, Plugins: reqs}
+	job := models.NewUpdateJob(models.UpdateJobKindPlugins, testSite, models.PluginsPayload{Plugins: reqs, AllowMajor: allowMajor})
+	job.CreatedBy = "alice"
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +75,8 @@ func TestRunLockedPlugins(t *testing.T) {
 	pluginFixedIn = func(_, plugin, _ string) string { return "1.1.0" }
 
 	reqs := []models.PluginUpdateRequest{{Name: "a", OldVersion: "1.0.0"}, {Name: "b", OldVersion: "1.0.0"}, {Name: "c", OldVersion: "1.0.0"}}
-	job := models.UpdateJob{SiteID: testSite, CreatedBy: "alice", Plugins: reqs}
+	job := models.NewUpdateJob(models.UpdateJobKindPlugins, testSite, models.PluginsPayload{Plugins: reqs})
+	job.CreatedBy = "alice"
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +200,8 @@ func TestRunCoreJobOnLockedSite(t *testing.T) {
 				return &models.SiteCore{SiteID: site.ID, Version: "6.4.3"}, nil
 			}
 
-			job := models.UpdateJob{Kind: models.UpdateJobKindCore, SiteID: testSite, Target: "major", AllowMajor: allowMajor, CreatedBy: "alice"}
+			job := models.NewUpdateJob(models.UpdateJobKindCore, testSite, models.CorePayload{Target: "major", AllowMajor: allowMajor})
+			job.CreatedBy = "alice"
 			if err := db.CreateUpdateJob(&job); err != nil {
 				t.Fatal(err)
 			}

@@ -119,10 +119,11 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			} `json:"jobs"`
 		}
 		_ = json.Unmarshal([]byte(f.record(r)), &body)
-		job := models.UpdateJob{Kind: models.UpdateJobKindPlugins}
+		var payload models.PluginsPayload
 		for _, p := range body.Jobs[0].Plugins {
-			job.Plugins = append(job.Plugins, models.PluginUpdateRequest{Name: p})
+			payload.Plugins = append(payload.Plugins, models.PluginUpdateRequest{Name: p})
 		}
+		job := models.NewUpdateJob(models.UpdateJobKindPlugins, "", payload)
 		f.mu.Lock()
 		job.ID = f.next
 		f.next++
@@ -138,7 +139,7 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			Plugins []string `json:"plugins"`
 		}
 		_ = json.Unmarshal([]byte(f.record(r)), &body)
-		f.queue(w, models.UpdateJob{Kind: body.Action, Plugins: []models.PluginUpdateRequest{{Name: body.Plugins[0]}}})
+		f.queue(w, models.NewUpdateJob(body.Action, "", models.PluginsPayload{Plugins: []models.PluginUpdateRequest{{Name: body.Plugins[0]}}}))
 
 	case r.Method == http.MethodPost && path == sitePath+"/plugin-install":
 		body := f.record(r)
@@ -147,7 +148,7 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`{"error":"Plugin akismet is already installed on this site"}`))
 			return
 		}
-		f.queue(w, models.UpdateJob{Kind: models.UpdateJobKindInstall, Source: "jetpack"})
+		f.queue(w, models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "jetpack"}))
 
 	case r.Method == http.MethodPost && path == sitePath+"/core-update":
 		f.record(r)
@@ -163,9 +164,10 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		f.mu.Unlock()
 		job.Status = models.UpdateJobDone
+		payload, _ := models.DecodePayload[models.PluginsPayload](job)
 		switch job.Kind {
 		case models.UpdateJobKindPlugins:
-			for _, p := range job.Plugins {
+			for _, p := range payload.Plugins {
 				job.Results = append(job.Results, models.UpdateResult{Name: p.Name, OldVersion: "5.0", NewVersion: "5.1", Status: models.UpdateUpdated})
 			}
 		case models.UpdateJobKindCore:
@@ -173,7 +175,7 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		case models.UpdateJobKindInstall:
 			job.Results = []models.UpdateResult{{Name: "jetpack", NewVersion: "14.0", Status: models.UpdateDone}}
 		default:
-			job.Results = []models.UpdateResult{{Name: job.Plugins[0].Name, Status: models.UpdateDone}}
+			job.Results = []models.UpdateResult{{Name: payload.Plugins[0].Name, Status: models.UpdateDone}}
 		}
 		_ = json.NewEncoder(w).Encode(job)
 

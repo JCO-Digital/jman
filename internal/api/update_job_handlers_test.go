@@ -73,7 +73,7 @@ func TestSiteCoreUpdateRejectsDuplicateJob(t *testing.T) {
 	})
 
 	site := "11111111-1111-1111-1111-111111111111"
-	existing := models.UpdateJob{Kind: models.UpdateJobKindCore, SiteID: site, Target: "minor"}
+	existing := models.NewUpdateJob(models.UpdateJobKindCore, site, models.CorePayload{Target: "minor"})
 	if err := db.CreateUpdateJob(&existing); err != nil {
 		t.Fatal(err)
 	}

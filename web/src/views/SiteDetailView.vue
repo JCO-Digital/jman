@@ -721,7 +721,8 @@ const coreJob = computed(() =>
 	site.value ? jobsStore.activeCoreJob(site.value.id) : undefined,
 );
 const isUpdatingCore = computed(() => {
-	const target = queueingCoreTarget.value ?? coreJob.value?.target ?? null;
+	const target =
+		queueingCoreTarget.value ?? coreJob.value?.payload.target ?? null;
 	return { minor: target === "minor", major: target === "major" };
 });
 
@@ -1239,7 +1240,7 @@ const unlinkOrganization = async () => {
 												? "Queued install of"
 												: "Installing"
 										}}
-										{{ job.source }}…
+										{{ job.payload.source }}…
 									</span>
 								</td>
 							</tr>

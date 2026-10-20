@@ -814,6 +814,14 @@ Warnings flag rules that can't be verified against cached vulnerability data or 
 
 Plugin and core updates run as background jobs (`POST /plugin-update-jobs`, `POST /sites/{id}/core-update`; progress via `GET /update-jobs`). Queueing them requires the **`execute`** level.
 
+Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `failed`, `interrupted`), `results`, `error`, `created_by` and the timestamps. What the job changes is in `payload`, whose shape depends on `kind`:
+
+| `kind` | `payload` |
+| :--- | :--- |
+| `plugins`, `activate`, `deactivate`, `delete`, `uninstall` | `{"plugins": [{"name": "akismet", "old_version": "5.0"}], "allow_major": false}` |
+| `core` | `{"target": "minor", "allow_major": false}` |
+| `install` | `{"source": "akismet", "activate": true}` |
+
 ### Get Available Plugin Updates for a Site
 
 `GET /sites/{id}/plugin-updates` (Protected: `execute`)

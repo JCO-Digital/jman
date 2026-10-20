@@ -868,25 +868,21 @@ func initAPISchema() error {
 		{
 			// Background jobs on one site: plugin updates (kind "plugins"),
 			// WordPress core updates (kind "core"), plugin activate,
-			// deactivate, delete and uninstall, and plugin installs (source,
-			// activate, upload_path). plugins/results hold JSON arrays, core
-			// the refreshed SiteCore after a core job.
+			// deactivate, delete and uninstall, plugin installs, and
+			// WordPress user create and delete. payload holds the kind's
+			// JSON payload (models.*Payload), results a JSON array, core the
+			// refreshed SiteCore after a core job. upload_path is an
+			// uploaded plugin ZIP, kept out of the payload as it's local to
+			// jman-api.
 			Name: "plugin_update_jobs",
 			Columns: map[string]string{
 				"id":          "INTEGER PRIMARY KEY AUTOINCREMENT",
 				"kind":        "TEXT NOT NULL DEFAULT 'plugins'",
 				"site_id":     "TEXT NOT NULL",
-				"target":      "TEXT",
+				"payload":     "TEXT NOT NULL DEFAULT '{}'",
 				"core":        "TEXT",
-				"source":      "TEXT",
-				"activate":    "INTEGER NOT NULL DEFAULT 0",
 				"upload_path": "TEXT",
-				// allow_major lets a job update locked plugins (or core on
-				// a locked site) past fix releases; set only by an
-				// explicitly confirmed single-item update.
-				"allow_major": "INTEGER NOT NULL DEFAULT 0",
 				"status":      "TEXT NOT NULL",
-				"plugins":     "TEXT NOT NULL",
 				"results":     "TEXT",
 				"error":       "TEXT",
 				"created_by":  "TEXT",
@@ -954,6 +950,11 @@ func initAPISchema() error {
 				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
+	}
+
+	// Before migrateTable drops the old job columns.
+	if err := MigrateUpdateJobPayloads(apiDB.DB); err != nil {
+		return fmt.Errorf("failed to migrate update job payloads: %w", err)
 	}
 
 	for _, table := range tables {

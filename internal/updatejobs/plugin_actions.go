@@ -38,20 +38,16 @@ func isPluginManagementJob(job models.UpdateJob) bool {
 // plugins, or for an install job its source.
 func actionTargets(job models.UpdateJob) []models.PluginUpdateRequest {
 	if job.Kind == models.UpdateJobKindInstall {
-		return []models.PluginUpdateRequest{{Name: job.Source}}
+		return []models.PluginUpdateRequest{{Name: jobInstall(job).Source}}
 	}
-	return job.Plugins
+	return jobPlugins(job)
 }
 
 // runPluginAction activates, deactivates, deletes or uninstalls the job's
 // plugins with one WP-CLI call, then checks each plugin's resulting state
 // in the refreshed plugin cache.
 func runPluginAction(job models.UpdateJob, site models.CliSite) {
-	names := make([]string, len(job.Plugins))
-	for i, p := range job.Plugins {
-		names[i] = p.Name
-	}
-	actionErr := pluginAction(site, job.Kind, names)
+	actionErr := pluginAction(site, job.Kind, requestNames(jobPlugins(job)))
 	jobErr := ""
 	if actionErr != nil {
 		jobErr = actionErr.Error()
@@ -82,8 +78,9 @@ func actionResults(job models.UpdateJob, actionErr error, cacheFresh bool) []mod
 		}
 	}
 
-	results := make([]models.UpdateResult, len(job.Plugins))
-	for i, p := range job.Plugins {
+	plugins := jobPlugins(job)
+	results := make([]models.UpdateResult, len(plugins))
+	for i, p := range plugins {
 		r := models.UpdateResult{Name: p.Name, OldVersion: p.OldVersion, NewVersion: p.OldVersion, Status: models.UpdateDone}
 		var problem string
 		if status == nil {
@@ -135,13 +132,14 @@ func stateProblem(kind string, status map[string]string, name string) string {
 // runInstall installs the job's source, uploading it first if it's a ZIP
 // uploaded to jman-api, and reports the installed plugin.
 func runInstall(job models.UpdateJob, site models.CliSite) {
-	source := job.Source
+	install := jobInstall(job)
+	source := install.Source
 	if job.UploadPath != "" {
 		// WordPress names the directory of a ZIP with files at its root
 		// after the ZIP, so stage it as <slug>.zip in a directory of its
 		// own. The .zip suffix makes WP-CLI install it as a ZIP (with --force).
 		if site.SSH == "" {
-			staged, cleanup, err := wpcli.StagePluginZip(job.UploadPath, job.Source)
+			staged, cleanup, err := wpcli.StagePluginZip(job.UploadPath, install.Source)
 			if err != nil {
 				failInstall(job, err.Error())
 				return
@@ -150,7 +148,7 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 			source = staged
 		} else {
 			dir := fmt.Sprintf("/tmp/jman-plugin-%d", job.ID)
-			remote := dir + "/" + wpcli.PluginZipSlug(job.UploadPath, job.Source) + ".zip"
+			remote := dir + "/" + wpcli.PluginZipSlug(job.UploadPath, install.Source) + ".zip"
 			defer func() {
 				if _, err := runSSH(site.SSH, "rm", "-rf", dir); err != nil {
 					log.Printf("Plugin install job %d: failed to remove %s on %s: %v", job.ID, dir, site.Name, err)
@@ -175,7 +173,7 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 		}
 	}
 
-	ok, installErr := installPlugin(site, source, job.Activate)
+	ok, installErr := installPlugin(site, source, install.Activate)
 	if installErr == nil && !ok {
 		installErr = fmt.Errorf("WP-CLI did not report a successful install")
 	}
@@ -185,7 +183,7 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 		log.Printf("Plugin install job %d: failed to refresh plugin cache for %s: %v", job.ID, site.Name, cacheErr)
 	}
 
-	r := models.UpdateResult{Name: job.Source, Status: models.UpdateDone}
+	r := models.UpdateResult{Name: install.Source, Status: models.UpdateDone}
 	if cacheErr == nil {
 		if p := installedPlugin(job, before); p != nil {
 			r.Name = p.Name
@@ -213,7 +211,7 @@ func installedPlugin(job models.UpdateJob, before map[string]bool) *models.WPPlu
 		return nil
 	}
 	for i, p := range plugins {
-		if p.Name == job.Source {
+		if p.Name == jobInstall(job).Source {
 			return &plugins[i]
 		}
 	}
@@ -277,8 +275,9 @@ func writeActionLedger(job models.UpdateJob, results []models.UpdateResult, jobE
 
 	data := map[string]any{"action": job.Kind, "plugins": entries}
 	if job.Kind == models.UpdateJobKindInstall {
-		data["source"] = job.Source
-		data["activate"] = job.Activate
+		install := jobInstall(job)
+		data["source"] = install.Source
+		data["activate"] = install.Activate
 	}
 	if jobErr != "" {
 		data["error"] = jobErr
