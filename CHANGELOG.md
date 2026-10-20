@@ -1,6 +1,20 @@
 # Changelog
 
-## 7.6.0 (2026-10-19)
+## 7.7.0 (2026-10-20)
+
+#### Features
+
+- web: delete a user from the site page (f25dbd9)
+- web: add and delete WordPress users (f60996d)
+- cli: add and delete WordPress users; remove jman admin (b56a6e7)
+- create and delete WordPress users as jman-api jobs (022fa9f)
+- count each WordPress user's posts (142524f)
+
+#### Refactor
+
+- keep update job details in a payload per kind (59c1f97)
+
+## v7.6.0 (2026-10-19)
 
 #### Features
 
