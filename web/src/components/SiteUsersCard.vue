@@ -79,11 +79,12 @@ const admins = computed(() =>
 						<th>Name</th>
 						<th>Roles</th>
 						<th>Registered</th>
+						<th class="text-right">Posts</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-if="admins.length === 0">
-						<td colspan="5" class="empty-state">
+						<td colspan="6" class="empty-state">
 							No administrators found.
 						</td>
 					</tr>
@@ -102,6 +103,9 @@ const admins = computed(() =>
 						</td>
 						<td class="text-muted">
 							{{ user.registered.slice(0, 10) }}
+						</td>
+						<td class="text-right">
+							{{ user.post_count?.toLocaleString() ?? "?" }}
 						</td>
 					</tr>
 				</tbody>

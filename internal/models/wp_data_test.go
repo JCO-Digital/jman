@@ -28,3 +28,22 @@ func TestWPDataHashUsers(t *testing.T) {
 		t.Error("an empty user list hashes like no users")
 	}
 }
+
+func TestWPDataHashPostCounts(t *testing.T) {
+	core := SiteCore{Version: "6.6.1"}
+	users := func(count *int) *SiteUsers {
+		return &SiteUsers{Users: []SiteUser{{ID: 1, Login: "a", PostCount: count}}}
+	}
+	// Users stored without post counts (older agents) keep the hash they
+	// had before counts existed.
+	if got, want := WPDataHash(nil, core, users(nil)), "af646049e4665ac7eaff1c15468286b70ac75286b64ac766629404777678c7a1"; got != want {
+		t.Errorf("hash without post counts = %q, want %q", got, want)
+	}
+	zero, one := 0, 1
+	if WPDataHash(nil, core, users(nil)) == WPDataHash(nil, core, users(&zero)) {
+		t.Error("a known post count hashes like an unknown one")
+	}
+	if WPDataHash(nil, core, users(&zero)) == WPDataHash(nil, core, users(&one)) {
+		t.Error("post counts don't change the hash")
+	}
+}

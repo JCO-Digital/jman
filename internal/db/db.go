@@ -310,6 +310,8 @@ func initInventorySchema() error {
 				"display_name": "TEXT NOT NULL DEFAULT ''",
 				"roles":        "TEXT NOT NULL DEFAULT ''",
 				"registered":   "TEXT NOT NULL DEFAULT ''",
+				// NULL when the posts weren't counted.
+				"post_count": "INTEGER",
 			},
 			PrimaryKey: []string{"site_id", "user_id"},
 		},

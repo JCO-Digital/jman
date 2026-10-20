@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // ExcludedUserRoles are the roles left out of a site's user list and only
@@ -34,8 +35,21 @@ func UserCountArgs(role string) []string {
 	return []string{"user", "list", "--role=" + role, "--format=count"}
 }
 
+// UserPostCountsEval is PHP for `wp eval` that prints how many posts each
+// author has, as a JSON object of user ID to count. It counts every post
+// type and status straight from the posts table, as deleting a user
+// deletes all of them; post_author is indexed, so this stays cheap on large
+// sites.
+const UserPostCountsEval = `global $wpdb;
+$rows = $wpdb->get_results("SELECT post_author, COUNT(*) FROM {$wpdb->posts} WHERE post_author > 0 GROUP BY post_author", ARRAY_N);
+if ($wpdb->last_error) { WP_CLI::error($wpdb->last_error); }
+$out = array();
+foreach ((array) $rows as $r) { $out[(string) $r[0]] = (int) $r[1]; }
+echo json_encode((object) $out);`
+
 // GetSiteUsers returns the target site's users, without the excluded
-// roles, which are counted.
+// roles, which are counted. If the posts can't be counted, the users'
+// post counts are left unknown.
 func GetSiteUsers(site models.CliSite) (models.SiteUsers, error) {
 	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}
 	res, err := RunWP(opts, UserListArgs()...)
@@ -58,7 +72,50 @@ func GetSiteUsers(site models.CliSite) (models.SiteUsers, error) {
 		}
 		counts[role] = n
 	}
-	return NewSiteUsers(users, counts), nil
+	su := NewSiteUsers(users, counts)
+	res, err = RunWP(opts, "eval", UserPostCountsEval)
+	if err == nil {
+		var posts map[int]int
+		if posts, err = ParseUserPostCounts(res.Output); err == nil {
+			SetPostCounts(su.Users, posts)
+		}
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to count posts per user on %s: %v", site.Name, err)
+	}
+	return su, nil
+}
+
+// ParseUserPostCounts parses UserPostCountsEval output, skipping any PHP
+// notices printed before the JSON.
+func ParseUserPostCounts(output string) (map[int]int, error) {
+	output = strings.TrimSpace(output)
+	idx := strings.Index(output, "{")
+	if idx == -1 {
+		return nil, fmt.Errorf("no JSON object found in post count output")
+	}
+	var raw map[string]int
+	if err := json.Unmarshal([]byte(output[idx:]), &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse post counts: %w", err)
+	}
+	counts := make(map[int]int, len(raw))
+	for k, n := range raw {
+		id, err := strconv.Atoi(k)
+		if err != nil {
+			return nil, fmt.Errorf("invalid user ID %q in post counts", k)
+		}
+		counts[id] = n
+	}
+	return counts, nil
+}
+
+// SetPostCounts sets each user's post count from counts by user ID; users
+// without posts aren't in counts and get 0.
+func SetPostCounts(users []models.SiteUser, counts map[int]int) {
+	for i := range users {
+		n := counts[users[i].ID]
+		users[i].PostCount = &n
+	}
 }
 
 // NewSiteUsers builds a site's users from a parsed list (as fetched with

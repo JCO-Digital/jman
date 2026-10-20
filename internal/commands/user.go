@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 
@@ -90,9 +91,9 @@ Subscribers and WooCommerce customers aren't searched.`,
 
 		verb.Printf(verb.Normal, "Found %d users matching '%s':\n", len(matches), args[0])
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "SITE\tLOGIN\tEMAIL\tNAME\tROLES")
+		fmt.Fprintln(w, "SITE\tLOGIN\tEMAIL\tNAME\tROLES\tPOSTS")
 		for _, u := range matches {
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", siteDomain(m, u.SiteID), u.Login, u.Email, u.DisplayName, u.Roles)
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", siteDomain(m, u.SiteID), u.Login, u.Email, u.DisplayName, u.Roles, postCount(u))
 		}
 		return w.Flush()
 	},
@@ -140,6 +141,14 @@ func findUsers(m *mirror.Mirror, query string) []models.SiteUser {
 	return out
 }
 
+// postCount formats a user's post count, "?" if it's unknown.
+func postCount(u models.SiteUser) string {
+	if u.PostCount == nil {
+		return "?"
+	}
+	return strconv.Itoa(*u.PostCount)
+}
+
 // siteDomain returns a site's domain, or its ID if the site is unknown.
 func siteDomain(m *mirror.Mirror, siteID string) string {
 	if s, ok := m.Site(siteID); ok {
@@ -152,9 +161,9 @@ func printSiteUsers(site models.CliSite, users models.SiteUsers) {
 	verb.Printf(verb.Normal, "Users on %s:\n", verb.Blue(site.Name))
 	if len(users.Users) > 0 {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "  ID\tLOGIN\tEMAIL\tNAME\tROLES")
+		fmt.Fprintln(w, "  ID\tLOGIN\tEMAIL\tNAME\tROLES\tPOSTS")
 		for _, u := range users.Users {
-			fmt.Fprintf(w, "  %d\t%s\t%s\t%s\t%s\n", u.ID, u.Login, u.Email, u.DisplayName, u.Roles)
+			fmt.Fprintf(w, "  %d\t%s\t%s\t%s\t%s\t%s\n", u.ID, u.Login, u.Email, u.DisplayName, u.Roles, postCount(u))
 		}
 		w.Flush()
 	} else {

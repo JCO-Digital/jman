@@ -19,7 +19,8 @@ type SortKey =
 	| "display_name"
 	| "email"
 	| "roles"
-	| "registered";
+	| "registered"
+	| "post_count";
 
 const route = useRoute();
 const router = useRouter();
@@ -127,10 +128,12 @@ const filteredUsers = computed(() => {
 	}
 
 	const dir = sortOrder.value === "asc" ? 1 : -1;
+	const key = sortKey.value;
 	return [...filtered].sort((a, b) => {
-		const cmp = a[sortKey.value]
-			.toLowerCase()
-			.localeCompare(b[sortKey.value].toLowerCase());
+		const cmp =
+			key === "post_count"
+				? (a.post_count ?? -1) - (b.post_count ?? -1)
+				: a[key].toLowerCase().localeCompare(b[key].toLowerCase());
 		if (cmp !== 0) return cmp * dir;
 		return a.login.toLowerCase().localeCompare(b.login.toLowerCase());
 	});
@@ -291,6 +294,15 @@ const goToSite = (id: string) => {
 								sortOrder === "asc" ? "↑" : "↓"
 							}}</span>
 						</th>
+						<th
+							class="text-right"
+							@click="handleSort('post_count')"
+						>
+							Posts
+							<span v-if="sortKey === 'post_count'">{{
+								sortOrder === "asc" ? "↑" : "↓"
+							}}</span>
+						</th>
 					</tr>
 				</thead>
 				<tbody>
@@ -300,12 +312,12 @@ const goToSite = (id: string) => {
 							usersWithSite.length === 0
 						"
 					>
-						<td colspan="6">
+						<td colspan="7">
 							<LoadingSpinner message="Loading users..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedUsers.length === 0">
-						<td colspan="6" class="empty-state">
+						<td colspan="7" class="empty-state">
 							<span v-if="searchQuery || filterRole"
 								>No users found matching the filters.</span
 							>
@@ -333,6 +345,9 @@ const goToSite = (id: string) => {
 						</td>
 						<td class="text-muted truncate">
 							{{ user.registered.slice(0, 10) }}
+						</td>
+						<td class="text-right">
+							{{ user.post_count?.toLocaleString() ?? "?" }}
 						</td>
 					</tr>
 				</tbody>

@@ -330,6 +330,8 @@ These are the managed sites' WordPress users, not jman's own users (see User Man
 
 Every site's users, ordered by site and user ID, with one summary per site whose users were read.
 
+`post_count` is how many posts of any type and status (revisions and attachments included) the user authored, which is what deleting the user deletes unless their content is reassigned. It's absent when it isn't known, e.g. for users reported by an older jman-agent.
+
 ```json
 {
   "users": [
@@ -340,7 +342,8 @@ Every site's users, ordered by site and user ID, with one summary per site whose
       "email": "admin@example.com",
       "display_name": "Admin",
       "roles": "administrator",
-      "registered": "2020-01-02 03:04:05"
+      "registered": "2020-01-02 03:04:05",
+      "post_count": 12
     }
   ],
   "summaries": [

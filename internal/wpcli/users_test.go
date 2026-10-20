@@ -31,6 +31,25 @@ func TestParseUserList(t *testing.T) {
 	}
 }
 
+func TestParseUserPostCounts(t *testing.T) {
+	counts, err := ParseUserPostCounts("PHP Notice: x\n{\"1\":12,\"7\":1}")
+	if err != nil || len(counts) != 2 || counts[1] != 12 || counts[7] != 1 {
+		t.Errorf("counts = %v, %v", counts, err)
+	}
+	if counts, err := ParseUserPostCounts("{}"); err != nil || len(counts) != 0 {
+		t.Errorf("no posts = %v, %v", counts, err)
+	}
+	if _, err := ParseUserPostCounts("Error: no database"); err == nil {
+		t.Error("no error for output without JSON")
+	}
+
+	users := []models.SiteUser{{ID: 1}, {ID: 2}}
+	SetPostCounts(users, map[int]int{1: 12})
+	if users[0].PostCount == nil || *users[0].PostCount != 12 || users[1].PostCount == nil || *users[1].PostCount != 0 {
+		t.Errorf("users = %+v", users)
+	}
+}
+
 func TestParseUserCount(t *testing.T) {
 	if n, err := ParseUserCount("Notice: x\n1234\n"); err != nil || n != 1234 {
 		t.Errorf("count = %d, %v", n, err)

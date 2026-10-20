@@ -1070,6 +1070,11 @@ export interface SiteUser {
 	/** Comma-separated roles, e.g. "editor,author". */
 	roles: string;
 	registered: string;
+	/**
+	 * Posts of any type and status the user authored, which deleting the
+	 * user deletes unless they're reassigned; absent if unknown.
+	 */
+	post_count?: number;
 }
 
 /** A site's user counts for the roles that aren't listed. */

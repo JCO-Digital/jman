@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
 func stubUsers(t *testing.T, users ...*user.User) {
@@ -325,6 +326,7 @@ func usersRunner() *fakeRunner {
 	r.out["user list --role__not_in=subscriber,customer --fields=ID,user_login,user_email,display_name,roles,user_registered --orderby=ID --order=ASC --number=1001 --format=json"] = `[{"ID":"1","user_login":"admin","user_email":"admin@example.com","display_name":"Admin","roles":"administrator","user_registered":"2020-01-01 00:00:00"}]`
 	r.out["user list --role=subscriber --format=count"] = "1234\n"
 	r.out["user list --role=customer --format=count"] = "0\n"
+	r.out["eval "+wpcli.UserPostCountsEval] = `{"1":3}`
 	return r
 }
 
@@ -340,6 +342,9 @@ func TestCollectSiteWPDataUsers(t *testing.T) {
 	if len(data.Users.Users) != 1 || data.Users.Users[0].Login != "admin" || data.Users.ExcludedCounts["subscriber"] != 1234 {
 		t.Errorf("users = %+v", data.Users)
 	}
+	if pc := data.Users.Users[0].PostCount; pc == nil || *pc != 3 {
+		t.Errorf("post count = %v, want 3", pc)
+	}
 	if data.Hash != models.WPDataHash(data.Plugins, *data.Core, data.Users) {
 		t.Error("hash doesn't match the data")
 	}
@@ -354,6 +359,14 @@ func TestCollectSiteWPDataUsers(t *testing.T) {
 		if strings.HasPrefix(c, "user ") {
 			t.Errorf("listed users without being asked: %s", c)
 		}
+	}
+
+	// Posts that can't be counted leave the counts unknown.
+	runner = usersRunner()
+	runner.fail = map[string]error{"eval " + wpcli.UserPostCountsEval: errors.New("boom")}
+	data = collectSiteWPData(context.Background(), runner, site, true)
+	if data.Users == nil || len(data.Users.Users) != 1 || data.Users.Users[0].PostCount != nil {
+		t.Errorf("users = %+v", data.Users)
 	}
 
 	// A failed user list still reports plugins and core.
