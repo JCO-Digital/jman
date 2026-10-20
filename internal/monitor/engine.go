@@ -32,7 +32,7 @@ func NewEngine() *Engine {
 	}
 
 	return &Engine{
-		client:                utils.NewHTTPClient(time.Duration(timeout) * time.Second),
+		client:                utils.NewFreshConnHTTPClient(time.Duration(timeout) * time.Second),
 		slackChannel:          monitorSlackChannel(),
 		pagerDutyEnabled:      pagerduty.Enabled(),
 		pdEscalationThreshold: time.Duration(pdEscalationMinutes) * time.Minute,
