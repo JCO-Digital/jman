@@ -490,6 +490,20 @@
 	}
 }
 
+/* Selection actions above a table in batch mode */
+.batch-action-bar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin-bottom: 24px;
+}
+
+.form-error {
+	color: var(--error-text);
+	font-size: 13px;
+}
+
 .confirm-option-warning {
 	margin: 8px 0 0;
 	padding: 8px 12px;
@@ -692,7 +706,9 @@
 	.hide-col-3-sm th:nth-child(3),
 	.hide-col-3-sm td:nth-child(3),
 	.hide-col-4-sm th:nth-child(4),
-	.hide-col-4-sm td:nth-child(4) {
+	.hide-col-4-sm td:nth-child(4),
+	.hide-col-5-sm th:nth-child(5),
+	.hide-col-5-sm td:nth-child(5) {
 		display: none !important;
 	}
 }

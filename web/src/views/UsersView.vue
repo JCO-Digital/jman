@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
 import { useSiteUsersStore } from "../stores/siteUsers";
+import type { SiteUser } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import AppIcon from "../components/AppIcon.vue";
+import SiteUserDeleteModal from "../components/SiteUserDeleteModal.vue";
 
 const props = defineProps<{
 	page?: number;
@@ -22,8 +25,11 @@ type SortKey =
 	| "registered"
 	| "post_count";
 
+type UserRow = SiteUser & { domain: string };
+
 const route = useRoute();
 const router = useRouter();
+const authStore = useAuthStore();
 const dataStore = useDataStore();
 const siteUsersStore = useSiteUsersStore();
 
@@ -197,6 +203,59 @@ const handleRowsPerPageUpdate = (newRpp: number) => {
 	updateRoute(1, newRpp);
 };
 
+// Selecting users to delete. Rows stay selected across filters and pages.
+const selectMode = ref(false);
+const selected = ref(new Map<string, UserRow>());
+const showDeleteModal = ref(false);
+
+const rowKey = (u: SiteUser) => `${u.site_id}-${u.id}`;
+
+/** Why a user can't be deleted from here, or "" if it can. */
+const deleteBlocker = (u: UserRow) => {
+	const site = dataStore.getSiteById(u.site_id);
+	if (site?.wp_flags?.is_multisite) {
+		return "Deleting users on multisite sites isn't supported";
+	}
+	if (!site?.can_wp_cli) return "The site isn't reachable over WP-CLI";
+	return "";
+};
+
+const selectableOnPage = computed(() =>
+	paginatedUsers.value.filter((u) => !deleteBlocker(u)),
+);
+
+const allOnPageSelected = computed(
+	() =>
+		selectableOnPage.value.length > 0 &&
+		selectableOnPage.value.every((u) => selected.value.has(rowKey(u))),
+);
+
+const toggleSelectAllOnPage = () => {
+	const select = !allOnPageSelected.value;
+	for (const u of selectableOnPage.value) {
+		if (select) selected.value.set(rowKey(u), u);
+		else selected.value.delete(rowKey(u));
+	}
+};
+
+const toggleSelected = (u: UserRow) => {
+	if (selected.value.has(rowKey(u))) selected.value.delete(rowKey(u));
+	else selected.value.set(rowKey(u), u);
+};
+
+const toggleSelectMode = () => {
+	selectMode.value = !selectMode.value;
+	selected.value.clear();
+};
+
+const onDeletesQueued = (keys: string[], all: boolean) => {
+	for (const k of keys) selected.value.delete(k);
+	if (all) {
+		showDeleteModal.value = false;
+		selectMode.value = false;
+	}
+};
+
 const goToSite = (id: string) => {
 	router.push({ name: "site-detail", params: { id } });
 };
@@ -239,6 +298,27 @@ const goToSite = (id: string) => {
 				{{ filterSiteDomain }}
 				<AppIcon name="x" size="14" />
 			</button>
+
+			<button
+				v-if="authStore.canExecute"
+				type="button"
+				class="btn btn-outline"
+				@click="toggleSelectMode"
+			>
+				{{ selectMode ? "Cancel" : "Select" }}
+			</button>
+		</div>
+
+		<div v-if="selectMode" class="card-muted batch-action-bar">
+			<span class="font-medium">{{ selected.size }} selected</span>
+			<button
+				type="button"
+				class="btn btn-danger btn-sm"
+				:disabled="selected.size === 0"
+				@click="showDeleteModal = true"
+			>
+				Delete…
+			</button>
 		</div>
 
 		<p class="sub-text mb-4">
@@ -255,9 +335,19 @@ const goToSite = (id: string) => {
 		</p>
 
 		<main class="table-container">
-			<table class="data-table sortable hide-col-4-sm">
+			<table
+				class="data-table sortable"
+				:class="selectMode ? 'hide-col-5-sm' : 'hide-col-4-sm'"
+			>
 				<thead>
 					<tr>
+						<th v-if="selectMode" class="col-narrow text-center">
+							<input
+								type="checkbox"
+								:checked="allOnPageSelected"
+								@click="toggleSelectAllOnPage"
+							/>
+						</th>
 						<th class="col-wide" @click="handleSort('domain')">
 							Site
 							<span v-if="sortKey === 'domain'">{{
@@ -312,12 +402,12 @@ const goToSite = (id: string) => {
 							usersWithSite.length === 0
 						"
 					>
-						<td colspan="7">
+						<td :colspan="selectMode ? 8 : 7">
 							<LoadingSpinner message="Loading users..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedUsers.length === 0">
-						<td colspan="7" class="empty-state">
+						<td :colspan="selectMode ? 8 : 7" class="empty-state">
 							<span v-if="searchQuery || filterRole"
 								>No users found matching the filters.</span
 							>
@@ -330,6 +420,19 @@ const goToSite = (id: string) => {
 						class="clickable-row"
 						@click="goToSite(user.site_id)"
 					>
+						<td
+							v-if="selectMode"
+							class="col-narrow text-center"
+							:title="deleteBlocker(user)"
+							@click.stop
+						>
+							<input
+								type="checkbox"
+								:checked="selected.has(rowKey(user))"
+								:disabled="!!deleteBlocker(user)"
+								@change="toggleSelected(user)"
+							/>
+						</td>
 						<td class="col-wide truncate">{{ user.domain }}</td>
 						<td class="truncate font-medium">{{ user.login }}</td>
 						<td class="col-expand truncate">{{ user.email }}</td>
@@ -362,5 +465,12 @@ const goToSite = (id: string) => {
 				@next="nextPage"
 			/>
 		</main>
+
+		<SiteUserDeleteModal
+			:visible="showDeleteModal"
+			:users="[...selected.values()]"
+			@close="showDeleteModal = false"
+			@queued="onDeletesQueued"
+		/>
 	</div>
 </template>

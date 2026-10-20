@@ -1,31 +1,53 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
+import { useAuthStore } from "../stores/auth";
 import { useSiteUsersStore } from "../stores/siteUsers";
-import type { SiteUserList } from "../types";
+import { useUpdateJobsStore } from "../stores/updateJobs";
+import type { Site, SiteUserList } from "../types";
 import LoadingSpinner from "./LoadingSpinner.vue";
+import SiteUserCreateModal from "./SiteUserCreateModal.vue";
 
-const props = defineProps<{ siteId: string }>();
+const props = defineProps<{ site: Site }>();
 
+const authStore = useAuthStore();
 const siteUsersStore = useSiteUsersStore();
+const jobsStore = useUpdateJobsStore();
 const list = ref<SiteUserList | null>(null);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
+const showCreateModal = ref(false);
+
+const canManageUsers = computed(
+	() => authStore.canExecute && !!props.site.can_wp_cli,
+);
+
+async function load(id: string, quiet = false) {
+	if (!quiet) {
+		list.value = null;
+		isLoading.value = true;
+	}
+	error.value = null;
+	try {
+		list.value = await siteUsersStore.fetchSiteUsers(id);
+	} catch (e: any) {
+		error.value = e.message;
+	} finally {
+		isLoading.value = false;
+	}
+}
 
 watch(
-	() => props.siteId,
-	async (id) => {
-		list.value = null;
-		error.value = null;
-		isLoading.value = true;
-		try {
-			list.value = await siteUsersStore.fetchSiteUsers(id);
-		} catch (e: any) {
-			error.value = e.message;
-		} finally {
-			isLoading.value = false;
-		}
-	},
+	() => props.site.id,
+	(id) => load(id),
 	{ immediate: true },
+);
+
+// A finished user job refreshed the site's users in jman-api.
+watch(
+	() => jobsStore.lastFinishedBySite[props.site.id],
+	(finished) => {
+		if (finished) load(props.site.id, true);
+	},
 );
 
 const excludedText = computed(() =>
@@ -43,6 +65,10 @@ const splitRoles = (roles: string) =>
 		.map((r) => r.trim())
 		.filter(Boolean);
 
+const siteRoles = computed(() => [
+	...new Set((list.value?.users ?? []).flatMap((u) => splitRoles(u.roles))),
+]);
+
 // Only administrators are shown here; the users page lists the rest.
 const admins = computed(() =>
 	(list.value?.users ?? []).filter((u) =>
@@ -55,13 +81,23 @@ const admins = computed(() =>
 	<section class="card mt-4">
 		<div class="card-header">
 			<h2>Administrators ({{ admins.length }})</h2>
-			<router-link
-				v-if="list?.updated_at"
-				:to="{ name: 'users', query: { site: siteId } }"
-				class="btn btn-outline btn-sm"
-			>
-				All users ({{ list.users.length.toLocaleString() }})
-			</router-link>
+			<div class="flex-row gap-2">
+				<router-link
+					v-if="list?.updated_at"
+					:to="{ name: 'users', query: { site: site.id } }"
+					class="btn btn-outline btn-sm"
+				>
+					All users ({{ list.users.length.toLocaleString() }})
+				</router-link>
+				<button
+					v-if="canManageUsers"
+					type="button"
+					class="btn btn-primary btn-sm"
+					@click="showCreateModal = true"
+				>
+					Add user
+				</button>
+			</div>
 		</div>
 		<LoadingSpinner v-if="isLoading" message="Loading users..." />
 		<div v-else-if="error" class="error-banner">
@@ -120,5 +156,12 @@ const admins = computed(() =>
 				</template>
 			</p>
 		</div>
+		<SiteUserCreateModal
+			:visible="showCreateModal"
+			:site-id="site.id"
+			:site-name="site.domain"
+			:site-roles="siteRoles"
+			@close="showCreateModal = false"
+		/>
 	</section>
 </template>

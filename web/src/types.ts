@@ -416,13 +416,15 @@ export type LedgerStatus =
 	| "deactivated"
 	| "deleted"
 	| "installed"
+	/** A WordPress user created by a user job. */
+	| "created"
 	/** A change jman found on the site but didn't make itself. */
 	| "detected";
 
 export interface SiteUpdateLedgerEntry {
 	id: number;
 	site_id: string;
-	update_type: "core" | "plugin" | "theme";
+	update_type: "core" | "plugin" | "theme" | "user";
 	status: LedgerStatus;
 	data_json?: string;
 	updated_by: string;
@@ -698,7 +700,15 @@ export type PluginActionKind =
 	| "delete"
 	| "uninstall";
 
-export type UpdateJobKind = "plugins" | "core" | PluginActionKind | "install";
+export type UpdateJobKind =
+	| "plugins"
+	| "core"
+	| PluginActionKind
+	| "install"
+	| UserJobKind;
+
+/** Job kinds that create or delete a WordPress user. */
+export type UserJobKind = "user_create" | "user_delete";
 
 /** Payload of plugin update jobs and plugin management jobs. */
 export interface PluginsJobPayload {
@@ -722,16 +732,35 @@ export interface InstallJobPayload {
 	activate?: boolean;
 }
 
+/** Payload of user create jobs; the password is never part of it. */
+export interface UserCreateJobPayload {
+	login: string;
+	email: string;
+	role: string;
+}
+
+/** Payload of user delete jobs. */
+export interface UserDeleteJobPayload {
+	user_id: number;
+	login: string;
+	email: string;
+	/** Login or email of the user who gets the deleted user's content. */
+	reassign?: string;
+}
+
 /** What a job changes; its type depends on the job's kind. */
 export type UpdateJobPayload =
 	| { kind: "plugins" | PluginActionKind; payload: PluginsJobPayload }
 	| { kind: "core"; payload: CoreJobPayload }
-	| { kind: "install"; payload: InstallJobPayload };
+	| { kind: "install"; payload: InstallJobPayload }
+	| { kind: "user_create"; payload: UserCreateJobPayload }
+	| { kind: "user_delete"; payload: UserDeleteJobPayload };
 
 /**
  * A background change on one site: `wp plugin update` for one or more
  * plugins (kind "plugins"), `wp core update`, activating, deactivating,
- * deleting or uninstalling plugins, or installing one plugin.
+ * deleting or uninstalling plugins, installing one plugin, or creating or
+ * deleting a WordPress user.
  */
 export type UpdateJob = UpdateJobPayload & {
 	id: number;
