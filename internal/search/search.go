@@ -80,58 +80,71 @@ func PromptSearch(all []models.CliSite, query string, confirmSingle bool) ([]mod
 		return []models.CliSite{}, fmt.Errorf("no sites found")
 	}
 
+	return PromptSelect(sites, "site", func(site models.CliSite) string {
+		return verb.Blue(site.Name) + " " + verb.Gray("("+site.ServerName+")")
+	}, confirmSingle)
+}
+
+// PromptSelect asks the user to pick from items, shown with label, or, for
+// a single item, to confirm it. noun names an item ("site"). With
+// confirmSingle false, a single item is used without asking. Picking
+// nothing returns an empty slice.
+func PromptSelect[T any](items []T, noun string, label func(T) string, confirmSingle bool) ([]T, error) {
+	if len(items) == 0 {
+		return []T{}, nil
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
-	if len(sites) == 1 {
-		site := sites[0]
+	if len(items) == 1 {
 		if !confirmSingle {
-			verb.PrintErrorf(verb.Verbose, "Found site: %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
-			return sites, nil
+			verb.PrintErrorf(verb.Verbose, "Found %s: %s\n", noun, label(items[0]))
+			return items, nil
 		}
-		verb.PrintErrorf(verb.Quiet, "Found site: %s %s\n", verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
-		verb.PrintErrorf(verb.Quiet, "Do you want to run the command on this site? [Y/n]: ")
+		verb.PrintErrorf(verb.Quiet, "Found %s: %s\n", noun, label(items[0]))
+		verb.PrintErrorf(verb.Quiet, "Do you want to run the command on this %s? [Y/n]: ", noun)
 		response, err := reader.ReadString('\n')
 		if err != nil {
-			return []models.CliSite{}, err
+			return []T{}, err
 		}
 		response = strings.TrimSpace(strings.ToLower(response))
 		if response == "n" || response == "no" {
-			return []models.CliSite{}, nil
+			return []T{}, nil
 		}
-		return sites, nil
+		return items, nil
 	}
 
-	verb.PrintErrorln(verb.Normal, "Found sites:")
-	for i, site := range sites {
-		verb.PrintErrorf(verb.Quiet, "[%d] %s %s\n", i+1, verb.Blue(site.Name), verb.Gray("("+site.ServerName+")"))
+	verb.PrintErrorf(verb.Normal, "Found %ss:\n", noun)
+	for i, item := range items {
+		verb.PrintErrorf(verb.Quiet, "[%d] %s\n", i+1, label(item))
 	}
 
 	verb.PrintErrorf(verb.Quiet, "%s (empty for all, 'n' to cancel): ", verb.Bold("Enter numbers separated by space"))
 	response, err := reader.ReadString('\n')
 	if err != nil {
-		return []models.CliSite{}, err
+		return []T{}, err
 	}
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	if response == "" {
-		return sites, nil
+		return items, nil
 	}
 
 	if response == "n" || response == "no" {
-		return []models.CliSite{}, nil
+		return []T{}, nil
 	}
 
 	parts := strings.Fields(response)
-	var selected []models.CliSite
+	var selected []T
 	for _, part := range parts {
 		idx, err := strconv.Atoi(part)
 		if err != nil {
-			return []models.CliSite{}, fmt.Errorf("invalid selection: %s", part)
+			return []T{}, fmt.Errorf("invalid selection: %s", part)
 		}
-		if idx < 1 || idx > len(sites) {
-			return []models.CliSite{}, fmt.Errorf("selection out of range: %d", idx)
+		if idx < 1 || idx > len(items) {
+			return []T{}, fmt.Errorf("selection out of range: %d", idx)
 		}
-		selected = append(selected, sites[idx-1])
+		selected = append(selected, items[idx-1])
 	}
 
 	return selected, nil

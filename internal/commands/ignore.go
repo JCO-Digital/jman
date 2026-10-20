@@ -173,7 +173,7 @@ var ignoreRemoveCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if err := c.Delete(cmd.Context(), fmt.Sprintf("/ignore/%d", id)); err != nil {
+		if err := c.Delete(cmd.Context(), fmt.Sprintf("/ignore/%d", id), nil); err != nil {
 			return err
 		}
 
