@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.7.1 (2026-10-20)
+## 7.8.0 (2026-10-21)
+
+#### Features
+
+- web: paginate active incidents (2aa2f6d)
+
+### v7.7.1 (2026-10-20)
 
 #### Bug Fixes
 
