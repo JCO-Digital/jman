@@ -47,6 +47,8 @@ watch(
 function clearSiteFilter() {
 	router.replace({ query: { ...route.query, site: undefined } });
 }
+const activePage = ref(1);
+const activeLimit = ref(50);
 const historyPage = ref(1);
 const historyLimit = ref(20);
 
@@ -61,7 +63,7 @@ onMounted(() => {
 });
 
 function loadData() {
-	incidentStore.fetchActiveIncidents();
+	loadActiveIncidents();
 	if (activeTab.value === "checks") {
 		checksPanel.value?.refresh();
 	}
@@ -85,8 +87,49 @@ function switchTab(tab: Tab) {
 			historyLimit.value,
 		);
 	} else {
-		incidentStore.fetchActiveIncidents();
+		loadActiveIncidents();
 	}
+}
+
+function loadActiveIncidents() {
+	return incidentStore.fetchActiveIncidents(
+		activePage.value,
+		activeLimit.value,
+	);
+}
+
+const activeTotalPages = computed(() => {
+	return Math.max(
+		1,
+		Math.ceil(incidentStore.activeTotal / activeLimit.value),
+	);
+});
+
+function handleActivePrevPage() {
+	if (activePage.value > 1) {
+		activePage.value--;
+		loadActiveIncidents();
+	}
+}
+
+function handleActiveNextPage() {
+	if (activePage.value < activeTotalPages.value) {
+		activePage.value++;
+		loadActiveIncidents();
+	}
+}
+
+function handleActiveRowsPerPageChange(val: number) {
+	activeLimit.value = val;
+	activePage.value = 1;
+	loadActiveIncidents();
+}
+
+// Refetches the current page after an incident leaves the active list, so
+// the next page's rows move up, stepping back if the page is now empty.
+function reloadActiveAfterRemoval() {
+	activePage.value = Math.min(activePage.value, activeTotalPages.value);
+	loadActiveIncidents();
 }
 
 const historyTotalPages = computed(() => {
@@ -186,6 +229,7 @@ async function handleClose(incident: Incident) {
 	}
 	try {
 		await incidentStore.closeIncident(incident.id);
+		reloadActiveAfterRemoval();
 		toastStore.addToast(
 			`Closed incident for ${incident.domain}`,
 			"success",
@@ -217,6 +261,7 @@ async function submitPause() {
 			selectedIncident.value.id,
 			pauseReason.value,
 		);
+		reloadActiveAfterRemoval();
 		toastStore.addToast(
 			`Paused monitoring for ${selectedIncident.value.domain} and resolved incident`,
 			"success",
@@ -412,6 +457,17 @@ const canEdit = computed(() => authStore.canEdit);
 						</tr>
 					</tbody>
 				</table>
+
+				<div class="pagination-wrapper">
+					<Pagination
+						:current-page="activePage"
+						:total-pages="activeTotalPages"
+						:rows-per-page="activeLimit"
+						@prev="handleActivePrevPage"
+						@next="handleActiveNextPage"
+						@update:rows-per-page="handleActiveRowsPerPageChange"
+					/>
+				</div>
 			</div>
 		</div>
 
