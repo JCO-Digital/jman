@@ -10,12 +10,15 @@ export const useIncidentStore = defineStore("incidents", () => {
 	const activeIncidents = ref<Incident[]>([]);
 	const historyIncidents = ref<Incident[]>([]);
 	const activeCount = ref(0);
+	const activeTotal = ref(0);
 	const historyTotal = ref(0);
 	const isLoading = ref(false);
 
-	async function fetchActiveIncidents() {
+	async function fetchActiveIncidents(page: number = 1, limit: number = 50) {
 		try {
-			const res = await apiFetch(`${BASE_URL}/incidents?filter=active`);
+			const res = await apiFetch(
+				`${BASE_URL}/incidents?filter=active&page=${page}&limit=${limit}`,
+			);
 			if (!res.ok) {
 				if (res.status === 401) {
 					authStore.logout();
@@ -25,6 +28,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 			}
 			const data: IncidentsResponse = await res.json();
 			activeIncidents.value = data.incidents || [];
+			activeTotal.value = data.total;
 			activeCount.value = data.active_count ?? activeIncidents.value.length;
 			return activeIncidents.value;
 		} catch (error) {
@@ -104,6 +108,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 		const updated: Incident = await res.json();
 		// Remove from active list
 		activeIncidents.value = activeIncidents.value.filter((i) => i.id !== id);
+		activeTotal.value = Math.max(0, activeTotal.value - 1);
 		activeCount.value = Math.max(0, activeCount.value - 1);
 		return updated;
 	}
@@ -123,6 +128,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 		}
 		const updated: Incident = await res.json();
 		activeIncidents.value = activeIncidents.value.filter((i) => i.id !== id);
+		activeTotal.value = Math.max(0, activeTotal.value - 1);
 		activeCount.value = Math.max(0, activeCount.value - 1);
 		return updated;
 	}
@@ -131,6 +137,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 		activeIncidents,
 		historyIncidents,
 		activeCount,
+		activeTotal,
 		historyTotal,
 		isLoading,
 		fetchActiveIncidents,
