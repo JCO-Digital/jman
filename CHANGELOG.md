@@ -1,6 +1,17 @@
 # Changelog
 
-## 7.8.0 (2026-10-21)
+## 7.9.0 (2026-10-22)
+
+#### Features
+
+- monitor: rules that start new sites' checks paused (6c6b601)
+- monitor: new checks wait until seen up before alerting (31a7e15)
+
+#### Bug Fixes
+
+- web: space rule type label, list running matches first (6043ee9)
+
+## v7.8.0 (2026-10-21)
 
 #### Features
 
