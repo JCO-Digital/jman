@@ -252,8 +252,10 @@ func truncate(s string, n int) string {
 }
 
 // confirmHTTP applies the HTTP checks' confirmation rules to a probe
-// result: a failure starts an investigation, three failures in a row
-// confirm an outage, and three successes end an investigation. It returns
+// result: a waiting check starts normal monitoring after three successes
+// in a row and never alerts before that, a failure starts an
+// investigation, three failures in a row confirm an outage, and three
+// successes end an investigation. It returns
 // what the result means for the check's outage and when to check next.
 // Called with status.Mu held.
 func confirmHTTP(status *CheckStatus, up bool) (outcome, time.Duration) {
@@ -266,6 +268,16 @@ func confirmHTTP(status *CheckStatus, up bool) (outcome, time.Duration) {
 	}
 
 	switch status.CurrentMode {
+	case ModeWaiting:
+		if !up {
+			return outcomeNone, 5 * time.Minute
+		}
+		if status.ConsecutiveSuccesses >= 3 {
+			status.CurrentMode = ModeNormal
+			return outcomeNone, 5 * time.Minute
+		}
+		return outcomeNone, time.Minute
+
 	case ModeNormal:
 		if !up {
 			status.CurrentMode = ModeInvestigation

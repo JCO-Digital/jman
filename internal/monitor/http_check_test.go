@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -107,5 +108,40 @@ func TestNewHTTPProbe(t *testing.T) {
 	c.Name = "Keycloak"
 	if l := CheckLabel(c, "auth.example"); l != "Keycloak" {
 		t.Errorf("named label = %q", l)
+	}
+}
+
+func TestConfirmHTTPWaiting(t *testing.T) {
+	state := &State{Checks: map[string]*CheckStatus{}}
+	s := state.GetStatus(Target{CheckID: "check-new", Domain: "new.example"})
+	if s.CurrentMode != ModeWaiting {
+		t.Fatalf("new status mode = %q, want %q", s.CurrentMode, ModeWaiting)
+	}
+
+	// A site that isn't serving yet never alerts while waiting.
+	for i := range 5 {
+		if oc, next := confirmHTTP(s, false); oc != outcomeNone || s.CurrentMode != ModeWaiting || next != 5*time.Minute {
+			t.Fatalf("failure %d while waiting: %v, mode %s, next %v", i+1, oc, s.CurrentMode, next)
+		}
+	}
+
+	// Two successes are not enough; a failure in between starts over.
+	confirmHTTP(s, true)
+	confirmHTTP(s, true)
+	confirmHTTP(s, false)
+	for i := range 2 {
+		if oc, next := confirmHTTP(s, true); oc != outcomeNone || s.CurrentMode != ModeWaiting || next != time.Minute {
+			t.Fatalf("success %d while waiting: %v, mode %s, next %v", i+1, oc, s.CurrentMode, next)
+		}
+	}
+	if oc, _ := confirmHTTP(s, true); oc != outcomeNone || s.CurrentMode != ModeNormal {
+		t.Fatalf("third success: %v, mode %s", oc, s.CurrentMode)
+	}
+
+	// Once up, failures alert as usual.
+	confirmHTTP(s, false)
+	confirmHTTP(s, false)
+	if oc, _ := confirmHTTP(s, false); oc != outcomeDown || s.CurrentMode != ModeAlert {
+		t.Fatalf("third failure after waiting: %v, mode %s", oc, s.CurrentMode)
 	}
 }

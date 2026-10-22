@@ -392,6 +392,8 @@ export interface MonitorStatus {
 	domain: string;
 	is_down: boolean;
 	failure_count: number;
+	/** "waiting" until a new check has been seen up; it can't alert before. */
+	current_mode?: "waiting" | "normal" | "investigation" | "alert";
 	last_alert_time?: string;
 	last_checked: string | null;
 	/** When the check runs next; for a heartbeat check, its deadline. */

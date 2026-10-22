@@ -33,7 +33,6 @@ type CheckState =
 	| "down"
 	| "investigating"
 	| "up"
-	| "pending"
 	| "waiting";
 
 const stateLabels: Record<CheckState, string> = {
@@ -42,19 +41,18 @@ const stateLabels: Record<CheckState, string> = {
 	down: "Down",
 	investigating: "Investigating",
 	up: "Up",
-	pending: "Pending",
 	waiting: "Waiting",
 };
 
-// Order in the table: what needs attention first.
+// Order in the table: new checks still waiting to be seen up first, then
+// what needs attention.
 const stateOrder: Record<CheckState, number> = {
-	down: 0,
-	investigating: 1,
-	pending: 2,
-	waiting: 3,
-	up: 4,
-	paused: 5,
-	orphaned: 6,
+	waiting: 0,
+	down: 1,
+	investigating: 2,
+	up: 3,
+	paused: 4,
+	orphaned: 5,
 };
 
 const isLoading = ref(false);
@@ -93,8 +91,9 @@ function checkState(c: MonitorCheck): CheckState {
 	if (c.orphaned_at) return "orphaned";
 	if (!c.enabled) return "paused";
 	const st = monitorStore.statusByCheck[c.id];
-	if (!st || !st.last_checked) {
-		return c.type === "heartbeat" ? "waiting" : "pending";
+	// Not probed or checked in yet, or not yet seen up: it can't alert.
+	if (!st || !st.last_checked || st.current_mode === "waiting") {
+		return "waiting";
 	}
 	if (st.is_down) return "down";
 	if (st.failure_count > 0) return "investigating";
@@ -581,7 +580,6 @@ async function remove(c: MonitorCheck) {
 	color: #ca8a04;
 }
 
-.state-pending,
 .state-waiting,
 .state-paused,
 .state-orphaned {

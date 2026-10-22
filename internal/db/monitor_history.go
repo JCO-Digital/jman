@@ -63,7 +63,7 @@ func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
 	}
 
 	query := `
-		SELECT check_id, domain, is_down, failure_count, last_alert_time, last_checked
+		SELECT check_id, domain, is_down, failure_count, current_mode, last_alert_time, last_checked
 		FROM monitor_check_status
 		WHERE domain = ?
 		ORDER BY is_down DESC, check_id ASC
@@ -77,6 +77,7 @@ func GetMonitorStatus(domain string) (*models.MonitorStatus, error) {
 		&s.Domain,
 		&s.IsDown,
 		&s.FailureCount,
+		&s.CurrentMode,
 		&lastAlertTime,
 		&s.LastChecked,
 	)
@@ -103,7 +104,7 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 	}
 
 	query := `
-		SELECT check_id, domain, is_down, failure_count, last_alert_time, last_checked, next_check_at, last_started_at
+		SELECT check_id, domain, is_down, failure_count, current_mode, last_alert_time, last_checked, next_check_at, last_started_at
 		FROM monitor_check_status
 		ORDER BY domain ASC, check_id ASC
 	`
@@ -122,6 +123,7 @@ func GetAllMonitorStatuses() ([]models.MonitorStatus, error) {
 			&s.Domain,
 			&s.IsDown,
 			&s.FailureCount,
+			&s.CurrentMode,
 			&lastAlertTime,
 			&lastChecked,
 			&nextCheckAt,
