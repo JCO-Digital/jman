@@ -13,7 +13,7 @@ import (
 
 const monitorCheckColumns = `id, site_id, is_default, type, name, host, path, expect,
 	assert_path, assert_op, assert_value, cache_bypass,
-	interval_seconds, grace_seconds, fail_threshold, enabled,
+	interval_seconds, grace_seconds, fail_threshold, enabled, paused_by_rule_id,
 	orphaned_at, created_at, created_by, updated_at, updated_by`
 
 // ListMonitorChecks returns every monitor check, default checks first.
@@ -81,16 +81,19 @@ func CreateMonitorCheck(c *models.MonitorCheck, username string) error {
 	c.CreatedAt, c.UpdatedAt = now, now
 	c.CreatedBy, c.UpdatedBy = username, username
 
-	var siteID any
+	var siteID, pausedBy any
 	if c.SiteID != "" {
 		siteID = c.SiteID
 	}
+	if c.PausedByRuleID != "" {
+		pausedBy = c.PausedByRuleID
+	}
 	_, err := db.Exec(`
 		INSERT INTO monitor_checks (`+monitorCheckColumns+`)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`, c.ID, siteID, c.IsDefault, c.Type, c.Name, c.Host, c.Path, c.Expect,
 		c.AssertPath, c.AssertOp, string(c.AssertValue), c.CacheBypass,
-		c.IntervalSeconds, c.GraceSeconds, c.FailThreshold, c.Enabled,
+		c.IntervalSeconds, c.GraceSeconds, c.FailThreshold, c.Enabled, pausedBy,
 		c.OrphanedAt, c.CreatedAt, c.CreatedBy, c.UpdatedAt, c.UpdatedBy)
 	if err != nil {
 		return fmt.Errorf("failed to create monitor check: %w", err)
@@ -147,14 +150,24 @@ func DeleteMonitorCheck(id string) error {
 }
 
 // SetMonitorCheckEnabled pauses (enabled = false) or resumes a check.
+// Either way the check is no longer paused by a rule.
 func SetMonitorCheckEnabled(id string, enabled bool, username string) error {
+	return setMonitorCheckEnabled(id, enabled, nil, username)
+}
+
+// PauseMonitorCheckByRule pauses a check on behalf of a rule.
+func PauseMonitorCheckByRule(id, ruleID, username string) error {
+	return setMonitorCheckEnabled(id, false, ruleID, username)
+}
+
+func setMonitorCheckEnabled(id string, enabled bool, pausedBy any, username string) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	_, err := db.Exec(`UPDATE monitor_checks SET enabled = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
-		enabled, time.Now(), username, id)
+	_, err := db.Exec(`UPDATE monitor_checks SET enabled = ?, paused_by_rule_id = ?, updated_at = ?, updated_by = ? WHERE id = ?`,
+		enabled, pausedBy, time.Now(), username, id)
 	if err != nil {
 		return fmt.Errorf("failed to update monitor check %s: %w", id, err)
 	}
@@ -179,13 +192,13 @@ func SetMonitorCheckOrphaned(id string, at *time.Time) error {
 
 func scanMonitorCheck(row rowScanner) (*models.MonitorCheck, error) {
 	var c models.MonitorCheck
-	var siteID, createdBy, updatedBy sql.NullString
+	var siteID, pausedBy, createdBy, updatedBy sql.NullString
 	var orphanedAt, createdAt, updatedAt sql.NullTime
 	var assertValue string
 	var cacheBypass sql.NullBool
 	err := row.Scan(&c.ID, &siteID, &c.IsDefault, &c.Type, &c.Name, &c.Host, &c.Path, &c.Expect,
 		&c.AssertPath, &c.AssertOp, &assertValue, &cacheBypass,
-		&c.IntervalSeconds, &c.GraceSeconds, &c.FailThreshold, &c.Enabled,
+		&c.IntervalSeconds, &c.GraceSeconds, &c.FailThreshold, &c.Enabled, &pausedBy,
 		&orphanedAt, &createdAt, &createdBy, &updatedAt, &updatedBy)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -194,6 +207,7 @@ func scanMonitorCheck(row rowScanner) (*models.MonitorCheck, error) {
 		return nil, fmt.Errorf("failed to scan monitor check: %w", err)
 	}
 	c.SiteID = siteID.String
+	c.PausedByRuleID = pausedBy.String
 	if assertValue != "" {
 		c.AssertValue = json.RawMessage(assertValue)
 	}

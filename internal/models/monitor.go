@@ -73,15 +73,41 @@ type MonitorCheck struct {
 	// heartbeat check: it is down when no check-in finished within
 	// interval + grace of the last one, or after FailThreshold failed
 	// check-ins in a row.
-	IntervalSeconds int        `json:"interval_seconds,omitempty"`
-	GraceSeconds    int        `json:"grace_seconds,omitempty"`
-	FailThreshold   int        `json:"fail_threshold,omitempty"`
-	Enabled         bool       `json:"enabled"`
-	OrphanedAt      *time.Time `json:"orphaned_at,omitempty"`
-	CreatedAt       time.Time  `json:"created_at"`
-	CreatedBy       string     `json:"created_by,omitempty"`
-	UpdatedAt       time.Time  `json:"updated_at"`
-	UpdatedBy       string     `json:"updated_by,omitempty"`
+	IntervalSeconds int  `json:"interval_seconds,omitempty"`
+	GraceSeconds    int  `json:"grace_seconds,omitempty"`
+	FailThreshold   int  `json:"fail_threshold,omitempty"`
+	Enabled         bool `json:"enabled"`
+	// PausedByRuleID is the rule that started this default check paused;
+	// cleared when the check is resumed or the rule deleted.
+	PausedByRuleID string     `json:"paused_by_rule_id,omitempty"`
+	OrphanedAt     *time.Time `json:"orphaned_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	CreatedBy      string     `json:"created_by,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	UpdatedBy      string     `json:"updated_by,omitempty"`
+}
+
+// Monitor check rule match types.
+const (
+	MonitorRuleMatchServer = "server" // Value is a server UUID
+	MonitorRuleMatchHost   = "host"   // Value is a glob on the site's domain
+)
+
+// MonitorRuleActionStartPaused is the action of a rule that creates
+// matching sites' default checks paused.
+const MonitorRuleActionStartPaused = "start_paused"
+
+// MonitorCheckRule decides how new default checks are created: a site
+// matching it gets its check with Action applied. It never changes
+// existing checks.
+type MonitorCheckRule struct {
+	ID        string    `json:"id"`
+	MatchType string    `json:"match_type"`
+	Value     string    `json:"value"`
+	Action    string    `json:"action"`
+	Note      string    `json:"note,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy string    `json:"created_by,omitempty"`
 }
 
 // MonitorCheckSecret describes a secret header sent with a check's

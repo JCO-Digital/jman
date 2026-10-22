@@ -317,6 +317,40 @@ export interface MonitorHistory {
 }
 
 /** One thing the uptime monitor checks; default checks belong to a site. */
+/**
+ * A rule for new default checks: a site on the server, or whose domain
+ * matches the glob, gets its check created paused.
+ */
+export interface MonitorCheckRule {
+	id: string;
+	match_type: "server" | "host";
+	/** A server ID, or a host glob such as *.staging.* */
+	value: string;
+	action: "start_paused";
+	note?: string;
+	created_at: string;
+	created_by?: string;
+	server_name?: string;
+	/** Checks the rule holds paused. */
+	paused_checks: number;
+}
+
+export interface MonitorCheckRulePayload {
+	match_type: "server" | "host";
+	value: string;
+	note?: string;
+	/** Also pause the running default checks the rule matches. */
+	pause_existing?: boolean;
+}
+
+/** An existing default check a rule matches. */
+export interface MonitorCheckRuleMatch {
+	check_id: string;
+	site_id: string;
+	domain: string;
+	enabled: boolean;
+}
+
 export interface MonitorCheck {
 	id: string;
 	site_id?: string;
@@ -338,6 +372,8 @@ export interface MonitorCheck {
 	grace_seconds?: number;
 	/** Heartbeat checks: failed check-ins in a row before alerting. */
 	fail_threshold?: number;
+	/** The rule that started this default check paused, while it still is. */
+	paused_by_rule_id?: string;
 	/** Heartbeat checks: start of the check-in token, and when it was issued. */
 	token_prefix?: string;
 	token_created_at?: string;

@@ -28,7 +28,8 @@ type Target struct {
 
 // monitoredSite is a site that has (or should have) a default check.
 type monitoredSite struct {
-	domain string
+	domain   string
+	serverID string // UUID; empty when the site has no server
 	// active sites have their checks run; inactive ones keep them but skip.
 	active bool
 }
@@ -45,7 +46,11 @@ func LoadTargets() ([]Target, error) {
 		return nil, err
 	}
 
-	checks = reconcileDefaultChecks(checks, sites, spinupListed)
+	rules, err := db.ListMonitorCheckRules()
+	if err != nil {
+		return nil, err
+	}
+	checks = reconcileDefaultChecks(checks, sites, spinupListed, rules)
 
 	secrets, err := db.GetMonitorCheckSecretValues()
 	if err != nil {
@@ -80,7 +85,11 @@ func loadMonitoredSites() (map[string]monitoredSite, bool, error) {
 	sites := make(map[string]monitoredSite, len(spinupSites)+len(managed))
 	for _, s := range spinupSites {
 		// A site still deploying, or whose deploy failed, has nothing to check.
-		sites[utils.SpinupWPSiteUUID(s.ID)] = monitoredSite{domain: s.Domain, active: s.Status == "deployed"}
+		sites[utils.SpinupWPSiteUUID(s.ID)] = monitoredSite{
+			domain:   s.Domain,
+			serverID: utils.SpinupWPServerUUID(s.ServerID),
+			active:   s.Status == "deployed",
+		}
 	}
 	for _, ms := range managed {
 		// SyncSpinupWPIntoInventory only upserts, so inventory can still hold
@@ -92,20 +101,25 @@ func loadMonitoredSites() (map[string]monitoredSite, bool, error) {
 		if ms.Status == "archived" {
 			continue
 		}
-		sites[ms.ID] = monitoredSite{domain: ms.Domain, active: ms.Status == "active"}
+		site := monitoredSite{domain: ms.Domain, active: ms.Status == "active"}
+		if ms.ServerID != nil {
+			site.serverID = *ms.ServerID
+		}
+		sites[ms.ID] = site
 	}
 
 	return sites, len(spinupSites) > 0, nil
 }
 
-// reconcileDefaultChecks gives every site without one a default check and
+// reconcileDefaultChecks gives every site without one a default check,
+// paused when a rule says so (see ruleFor), and
 // marks checks whose site is gone as orphaned, closing out any outage (or
 // clears the mark when the site is back). It never changes what users set on a check, and never
 // deletes one. It returns checks with these changes applied.
 //
 // While spinupListed is false, checks on SpinupWP sites aren't orphaned:
 // an empty list would otherwise orphan all of them at once.
-func reconcileDefaultChecks(checks []models.MonitorCheck, sites map[string]monitoredSite, spinupListed bool) []models.MonitorCheck {
+func reconcileDefaultChecks(checks []models.MonitorCheck, sites map[string]monitoredSite, spinupListed bool, rules []models.MonitorCheckRule) []models.MonitorCheck {
 	hasDefault := make(map[string]bool, len(checks))
 	var spinupSiteIDs map[string]bool
 	if !spinupListed {
@@ -149,11 +163,20 @@ func reconcileDefaultChecks(checks []models.MonitorCheck, sites map[string]monit
 			continue
 		}
 		c := models.MonitorCheck{SiteID: siteID, IsDefault: true, Enabled: true}
+		rule := ruleFor(rules, site)
+		if rule != nil {
+			c.Enabled = false
+			c.PausedByRuleID = rule.ID
+		}
 		if err := db.CreateMonitorCheck(&c, systemUser); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to create default check for %s: %v\n", site.domain, err)
 			continue
 		}
-		verb.LogPrintf(verb.Verbose, "Created default check for %s\n", site.domain)
+		if rule != nil {
+			verb.LogPrintf(verb.Verbose, "Created default check for %s, paused by rule %s %s\n", site.domain, rule.MatchType, rule.Value)
+		} else {
+			verb.LogPrintf(verb.Verbose, "Created default check for %s\n", site.domain)
+		}
 		checks = append(checks, c)
 	}
 

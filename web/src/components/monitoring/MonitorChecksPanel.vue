@@ -10,6 +10,7 @@ import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import MonitorCheckFormModal from "./MonitorCheckFormModal.vue";
 import HeartbeatCheckFormModal from "./HeartbeatCheckFormModal.vue";
+import MonitorRulesModal from "./MonitorRulesModal.vue";
 import type { MonitorCheck } from "../../types";
 
 const props = defineProps<{
@@ -60,6 +61,7 @@ const search = ref("");
 const stateFilter = ref<"" | CheckState>("");
 const formVisible = ref(false);
 const heartbeatFormVisible = ref(false);
+const rulesVisible = ref(false);
 const editing = ref<MonitorCheck | null>(null);
 const busyId = ref<string | null>(null);
 
@@ -74,6 +76,7 @@ async function refresh() {
 		await Promise.all([
 			monitorStore.fetchChecks(),
 			monitorStore.fetchCheckStatuses(),
+			monitorStore.fetchRules(),
 		]);
 	} catch (e) {
 		toastStore.addToast(
@@ -176,6 +179,18 @@ function dueBy(c: MonitorCheck): string | null {
 	if (!st?.next_check_at || !st.last_checked || st.is_down) return null;
 	if (st.next_check_at.startsWith("9999")) return null;
 	return formatShort(st.next_check_at);
+}
+
+/** "Started paused by rule …" for a check a rule holds paused. */
+function pausedByRule(c: MonitorCheck): string | undefined {
+	if (c.enabled || !c.paused_by_rule_id) return undefined;
+	const rule = monitorStore.rules.find((r) => r.id === c.paused_by_rule_id);
+	if (!rule) return undefined;
+	const what =
+		rule.match_type === "server"
+			? `server ${rule.server_name || rule.value}`
+			: rule.value;
+	return `Paused by the rule for ${what}`;
 }
 
 function siteDomain(siteId?: string): string | undefined {
@@ -303,6 +318,13 @@ async function remove(c: MonitorCheck) {
 				</button>
 			</span>
 			<span class="spacer"></span>
+			<button
+				class="btn btn-outline btn-sm"
+				title="Start new sites' checks paused, by server or host pattern"
+				@click="rulesVisible = true"
+			>
+				Rules
+			</button>
 			<template v-if="authStore.canEdit">
 				<button
 					class="btn btn-outline btn-sm"
@@ -424,6 +446,13 @@ async function remove(c: MonitorCheck) {
 							>
 								{{ stateLabels[row.state] }}
 							</span>
+							<span
+								v-if="pausedByRule(row.check)"
+								class="sub-text text-xs rule-tag"
+								:title="pausedByRule(row.check)"
+							>
+								by rule
+							</span>
 						</td>
 						<td>
 							<span class="sub-text">{{
@@ -491,6 +520,10 @@ async function remove(c: MonitorCheck) {
 			:edit-check="editing"
 			@close="heartbeatFormVisible = false"
 			@saved="monitorStore.fetchCheckStatuses()"
+		/>
+		<MonitorRulesModal
+			:visible="rulesVisible"
+			@close="rulesVisible = false"
 		/>
 	</div>
 </template>
@@ -578,6 +611,11 @@ async function remove(c: MonitorCheck) {
 .state-investigating {
 	background: rgba(234, 179, 8, 0.12);
 	color: #ca8a04;
+}
+
+.rule-tag {
+	margin-left: 6px;
+	cursor: help;
 }
 
 .state-waiting,

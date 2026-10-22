@@ -103,6 +103,10 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/monitor/checks/{id}/token", edit(IssueMonitorCheckTokenHandler))
 	mux.Handle("PUT /api/monitor/checks/{id}/secrets/{header}", edit(SetMonitorCheckSecretHandler))
 	mux.Handle("DELETE /api/monitor/checks/{id}/secrets/{header}", edit(DeleteMonitorCheckSecretHandler))
+	mux.Handle("GET /api/monitor/rules", basic(ListMonitorCheckRulesHandler))
+	mux.Handle("POST /api/monitor/rules", edit(CreateMonitorCheckRuleHandler))
+	mux.Handle("POST /api/monitor/rules/preview", edit(PreviewMonitorCheckRuleHandler))
+	mux.Handle("DELETE /api/monitor/rules/{id}", edit(DeleteMonitorCheckRuleHandler))
 
 	// --- Incident routes ---
 	mux.Handle("GET /api/incidents", basic(ListIncidentsHandler))

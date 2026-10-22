@@ -48,7 +48,7 @@ func TestReconcileDefaultChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checks = reconcileDefaultChecks(checks, sites, true)
+	checks = reconcileDefaultChecks(checks, sites, true, nil)
 
 	stored, err := db.ListMonitorChecks()
 	if err != nil {
@@ -87,7 +87,7 @@ func TestReconcileDefaultChecks(t *testing.T) {
 
 	// The site comes back: the orphan mark clears.
 	sites["site-gone"] = monitoredSite{domain: "back.example", active: true}
-	checks = reconcileDefaultChecks(checks, sites, true)
+	checks = reconcileDefaultChecks(checks, sites, true, nil)
 	if again, _ := db.GetMonitorCheck(gone.ID); again == nil || again.OrphanedAt != nil {
 		t.Errorf("returning site's check still orphaned: %+v", again)
 	}
@@ -110,7 +110,7 @@ func TestReconcileKeepsSpinupWPChecksWithoutList(t *testing.T) {
 		t.Fatal(err)
 	}
 	// An empty SpinupWP list: SpinupWP sites look gone, but aren't orphaned.
-	reconcileDefaultChecks(checks, map[string]monitoredSite{}, false)
+	reconcileDefaultChecks(checks, map[string]monitoredSite{}, false, nil)
 
 	if c, _ := db.GetMonitorCheck(spin.ID); c == nil || c.OrphanedAt != nil {
 		t.Errorf("SpinupWP check orphaned without a SpinupWP list: %+v", c)

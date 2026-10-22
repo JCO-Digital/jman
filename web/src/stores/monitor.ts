@@ -4,6 +4,9 @@ import { useAuthStore } from "./auth";
 import type {
 	MonitorCheck,
 	MonitorCheckPayload,
+	MonitorCheckRule,
+	MonitorCheckRuleMatch,
+	MonitorCheckRulePayload,
 	MonitorCheckTestResult,
 	MonitorHistory,
 	MonitorStatus,
@@ -270,8 +273,60 @@ export const useMonitorStore = defineStore("monitor", () => {
 		return res.json();
 	}
 
+	const rules = ref<MonitorCheckRule[]>([]);
+
+	/** GET /api/monitor/rules */
+	async function fetchRules() {
+		const res = await apiFetch(`${BASE_URL}/monitor/rules`);
+		if (!res.ok) await handleErrorResponse(res);
+		rules.value = (await res.json()) || [];
+		return rules.value;
+	}
+
+	/** POST /api/monitor/rules/preview: the default checks a rule would match. */
+	async function previewRule(
+		payload: MonitorCheckRulePayload,
+	): Promise<MonitorCheckRuleMatch[]> {
+		const res = await sendJSON(
+			`${BASE_URL}/monitor/rules/preview`,
+			"POST",
+			payload,
+		);
+		return (await res.json()) || [];
+	}
+
+	/** POST /api/monitor/rules; with pause_existing, refreshes the checks. */
+	async function createRule(payload: MonitorCheckRulePayload) {
+		const res = await sendJSON(
+			`${BASE_URL}/monitor/rules`,
+			"POST",
+			payload,
+		);
+		const rule: MonitorCheckRule = await res.json();
+		rules.value.push(rule);
+		if (payload.pause_existing) await fetchChecks();
+		return rule;
+	}
+
+	/** DELETE /api/monitor/rules/{id} */
+	async function deleteRule(id: string) {
+		await sendJSON(
+			`${BASE_URL}/monitor/rules/${encodeURIComponent(id)}`,
+			"DELETE",
+		);
+		rules.value = rules.value.filter((r) => r.id !== id);
+		for (const c of checks.value) {
+			if (c.paused_by_rule_id === id) c.paused_by_rule_id = undefined;
+		}
+	}
+
 	return {
 		checks,
+		rules,
+		fetchRules,
+		previewRule,
+		createRule,
+		deleteRule,
 		defaultCheckBySite,
 		statusByCheck,
 		fetchChecks,
