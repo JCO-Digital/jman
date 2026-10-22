@@ -78,6 +78,12 @@ watch(payload, (p) => {
 	previewTimer = setTimeout(async () => {
 		try {
 			const result = await monitorStore.previewRule(p);
+			// Running checks first: those are what "pause existing" pauses.
+			result.sort(
+				(a, b) =>
+					Number(b.enabled) - Number(a.enabled) ||
+					a.domain.localeCompare(b.domain),
+			);
 			if (payload.value === p) matches.value = result;
 		} catch (e) {
 			if (payload.value === p) {
@@ -183,7 +189,7 @@ async function remove(r: MonitorCheckRule) {
 						<tbody>
 							<tr v-for="r in monitorStore.rules" :key="r.id">
 								<td>
-									<span class="sub-text text-xs">
+									<span class="sub-text text-xs match-type">
 										{{
 											r.match_type === "server"
 												? "Server"
@@ -364,6 +370,10 @@ legend {
 	font-weight: 600;
 	padding: 0 4px;
 	color: var(--text-heading);
+}
+
+.match-type {
+	margin-right: 6px;
 }
 
 .match-list {
