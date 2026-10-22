@@ -500,11 +500,27 @@ func initAPISchema() error {
 				"grace_seconds":    "INTEGER NOT NULL DEFAULT 0",
 				"fail_threshold":   "INTEGER NOT NULL DEFAULT 1",
 				"enabled":          "BOOLEAN NOT NULL DEFAULT 1",
-				"orphaned_at":      "DATETIME",
-				"created_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"created_by":       "TEXT",
-				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_by":       "TEXT",
+				// The monitor_check_rules row that created the check paused.
+				"paused_by_rule_id": "TEXT",
+				"orphaned_at":       "DATETIME",
+				"created_at":        "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":        "TEXT",
+				"updated_at":        "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":        "TEXT",
+			},
+		},
+		{
+			// monitor_check_rules decide how new default checks are
+			// created, e.g. paused for every site on a staging server.
+			Name: "monitor_check_rules",
+			Columns: map[string]string{
+				"id":         "TEXT PRIMARY KEY",
+				"match_type": "TEXT NOT NULL",
+				"value":      "TEXT NOT NULL",
+				"action":     "TEXT NOT NULL DEFAULT 'start_paused'",
+				"note":       "TEXT NOT NULL DEFAULT ''",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT",
 			},
 		},
 		{

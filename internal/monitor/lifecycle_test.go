@@ -123,7 +123,7 @@ func TestOrphaningClosesOutIncident(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reconcileDefaultChecks(checks, map[string]monitoredSite{}, true)
+	reconcileDefaultChecks(checks, map[string]monitoredSite{}, true, nil)
 
 	got, err := db.GetIncidentByID(inc.ID)
 	if err != nil || got == nil || got.Status != models.IncidentStatusResolved {

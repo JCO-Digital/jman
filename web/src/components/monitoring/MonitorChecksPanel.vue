@@ -10,6 +10,7 @@ import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import MonitorCheckFormModal from "./MonitorCheckFormModal.vue";
 import HeartbeatCheckFormModal from "./HeartbeatCheckFormModal.vue";
+import MonitorRulesModal from "./MonitorRulesModal.vue";
 import type { MonitorCheck } from "../../types";
 
 const props = defineProps<{
@@ -33,7 +34,6 @@ type CheckState =
 	| "down"
 	| "investigating"
 	| "up"
-	| "pending"
 	| "waiting";
 
 const stateLabels: Record<CheckState, string> = {
@@ -42,19 +42,18 @@ const stateLabels: Record<CheckState, string> = {
 	down: "Down",
 	investigating: "Investigating",
 	up: "Up",
-	pending: "Pending",
 	waiting: "Waiting",
 };
 
-// Order in the table: what needs attention first.
+// Order in the table: new checks still waiting to be seen up first, then
+// what needs attention.
 const stateOrder: Record<CheckState, number> = {
-	down: 0,
-	investigating: 1,
-	pending: 2,
-	waiting: 3,
-	up: 4,
-	paused: 5,
-	orphaned: 6,
+	waiting: 0,
+	down: 1,
+	investigating: 2,
+	up: 3,
+	paused: 4,
+	orphaned: 5,
 };
 
 const isLoading = ref(false);
@@ -62,6 +61,7 @@ const search = ref("");
 const stateFilter = ref<"" | CheckState>("");
 const formVisible = ref(false);
 const heartbeatFormVisible = ref(false);
+const rulesVisible = ref(false);
 const editing = ref<MonitorCheck | null>(null);
 const busyId = ref<string | null>(null);
 
@@ -76,6 +76,7 @@ async function refresh() {
 		await Promise.all([
 			monitorStore.fetchChecks(),
 			monitorStore.fetchCheckStatuses(),
+			monitorStore.fetchRules(),
 		]);
 	} catch (e) {
 		toastStore.addToast(
@@ -93,8 +94,9 @@ function checkState(c: MonitorCheck): CheckState {
 	if (c.orphaned_at) return "orphaned";
 	if (!c.enabled) return "paused";
 	const st = monitorStore.statusByCheck[c.id];
-	if (!st || !st.last_checked) {
-		return c.type === "heartbeat" ? "waiting" : "pending";
+	// Not probed or checked in yet, or not yet seen up: it can't alert.
+	if (!st || !st.last_checked || st.current_mode === "waiting") {
+		return "waiting";
 	}
 	if (st.is_down) return "down";
 	if (st.failure_count > 0) return "investigating";
@@ -177,6 +179,18 @@ function dueBy(c: MonitorCheck): string | null {
 	if (!st?.next_check_at || !st.last_checked || st.is_down) return null;
 	if (st.next_check_at.startsWith("9999")) return null;
 	return formatShort(st.next_check_at);
+}
+
+/** "Started paused by rule …" for a check a rule holds paused. */
+function pausedByRule(c: MonitorCheck): string | undefined {
+	if (c.enabled || !c.paused_by_rule_id) return undefined;
+	const rule = monitorStore.rules.find((r) => r.id === c.paused_by_rule_id);
+	if (!rule) return undefined;
+	const what =
+		rule.match_type === "server"
+			? `server ${rule.server_name || rule.value}`
+			: rule.value;
+	return `Paused by the rule for ${what}`;
 }
 
 function siteDomain(siteId?: string): string | undefined {
@@ -304,6 +318,13 @@ async function remove(c: MonitorCheck) {
 				</button>
 			</span>
 			<span class="spacer"></span>
+			<button
+				class="btn btn-outline btn-sm"
+				title="Start new sites' checks paused, by server or host pattern"
+				@click="rulesVisible = true"
+			>
+				Rules
+			</button>
 			<template v-if="authStore.canEdit">
 				<button
 					class="btn btn-outline btn-sm"
@@ -425,6 +446,13 @@ async function remove(c: MonitorCheck) {
 							>
 								{{ stateLabels[row.state] }}
 							</span>
+							<span
+								v-if="pausedByRule(row.check)"
+								class="sub-text text-xs rule-tag"
+								:title="pausedByRule(row.check)"
+							>
+								by rule
+							</span>
 						</td>
 						<td>
 							<span class="sub-text">{{
@@ -492,6 +520,10 @@ async function remove(c: MonitorCheck) {
 			:edit-check="editing"
 			@close="heartbeatFormVisible = false"
 			@saved="monitorStore.fetchCheckStatuses()"
+		/>
+		<MonitorRulesModal
+			:visible="rulesVisible"
+			@close="rulesVisible = false"
 		/>
 	</div>
 </template>
@@ -581,7 +613,11 @@ async function remove(c: MonitorCheck) {
 	color: #ca8a04;
 }
 
-.state-pending,
+.rule-tag {
+	margin-left: 6px;
+	cursor: help;
+}
+
 .state-waiting,
 .state-paused,
 .state-orphaned {

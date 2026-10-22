@@ -10,6 +10,11 @@ import (
 )
 
 const (
+	// ModeWaiting is a new check's mode: it cannot alert until it has
+	// been seen up (three successful probes in a row for an HTTP check,
+	// a finished check-in for a heartbeat check), so a site that isn't
+	// serving yet doesn't alert as soon as its check is added.
+	ModeWaiting       = "waiting"
 	ModeNormal        = "normal"
 	ModeInvestigation = "investigation"
 	ModeAlert         = "alert"
@@ -176,8 +181,8 @@ func SaveCheckStatus(status *CheckStatus) error {
 	return db.SaveMonitorStatusRecord(record)
 }
 
-// GetStatus returns the status for a target's check, creating it if it
-// doesn't exist, and applies the target's current domain, probe and label.
+// GetStatus returns the status for a target's check, creating it in
+// ModeWaiting if it doesn't exist, and applies the target's current domain, probe and label.
 func (s *State) GetStatus(t Target) *CheckStatus {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
@@ -186,7 +191,7 @@ func (s *State) GetStatus(t Target) *CheckStatus {
 	if !ok {
 		status = &CheckStatus{
 			CheckID:     t.CheckID,
-			CurrentMode: ModeNormal,
+			CurrentMode: ModeWaiting,
 			NextCheckAt: time.Now(),
 		}
 		s.Checks[t.CheckID] = status
