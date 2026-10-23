@@ -70,6 +70,10 @@ type AppConfig struct {
 	// each site's plugins and core version (default 60; negative turns
 	// agent collection off, leaving those sites to the SSH refresh).
 	AgentWPDataInterval int `toml:"agentWpDataInterval" mapstructure:"agentWpDataInterval"`
+	// AgentScanInterval is how often, in minutes, jman-agent scans each
+	// site's files for signs of compromise (default 60; negative turns
+	// scanning off).
+	AgentScanInterval int `toml:"agentScanInterval" mapstructure:"agentScanInterval"`
 	// AgentServerStaleMinutes and AgentSiteStaleMinutes are how long a
 	// server's agent may go without calling in (default 30), and a site
 	// without a successful WordPress data collection (default 180),
@@ -269,6 +273,18 @@ func AgentWPDataIntervalMinutes() int {
 		return 60
 	}
 	return Cfg.AgentWPDataInterval
+}
+
+// AgentScanIntervalMinutes returns the agent's file scan interval, or 0 if
+// scanning is turned off.
+func AgentScanIntervalMinutes() int {
+	switch {
+	case Cfg.AgentScanInterval < 0:
+		return 0
+	case Cfg.AgentScanInterval == 0:
+		return 60
+	}
+	return Cfg.AgentScanInterval
 }
 
 // AgentServerStaleAfter returns how long a server's agent may stay silent

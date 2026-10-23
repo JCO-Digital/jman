@@ -45,6 +45,7 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		// ones ignore the field and stay on the SSH refresh.
 		WPDataIntervalMinutes: config.AgentWPDataIntervalMinutes(),
 		CollectUsers:          true,
+		ScanIntervalMinutes:   config.AgentScanIntervalMinutes(),
 	}
 	for _, site := range sites {
 		// SpinupWP sites go through deploying -> deployed (or failed), and
@@ -231,6 +232,10 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 
 		if siteReport.WPData != nil {
 			applyAgentWPData(siteReport.SiteID, siteReport.WPData, measuredAt)
+		}
+
+		if siteReport.Scan != nil {
+			applyAgentScan(siteReport.SiteID, siteReport.Scan, measuredAt)
 		}
 
 		for _, hourly := range siteReport.TrafficHourly {

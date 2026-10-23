@@ -794,6 +794,44 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// site_scans holds the latest file scan jman-agent reported for
+			// each site. fingerprint is the agent's baseline after that
+			// scan, which the next scan's prev_fingerprint must match.
+			Name: "site_scans",
+			Columns: map[string]string{
+				"site_id":          "TEXT PRIMARY KEY",
+				"scanned_at":       "DATETIME NOT NULL",
+				"rule_set_version": "TEXT NOT NULL DEFAULT ''",
+				"fingerprint":      "TEXT NOT NULL DEFAULT ''",
+				"entries":          "INTEGER NOT NULL DEFAULT 0",
+				"omitted":          "INTEGER NOT NULL DEFAULT 0",
+				"duration_ms":      "INTEGER NOT NULL DEFAULT 0",
+				"error":            "TEXT NOT NULL DEFAULT ''",
+				"rebaselined_at":   "DATETIME",
+				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			// scan_findings holds what file scans flagged. The same site,
+			// rule, path and hash is one finding (see
+			// idx_scan_findings_identity), however often it's reported.
+			Name: "scan_findings",
+			Columns: map[string]string{
+				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":          "TEXT NOT NULL",
+				"engine":           "TEXT NOT NULL",
+				"rule":             "TEXT NOT NULL",
+				"severity":         "TEXT NOT NULL",
+				"path":             "TEXT NOT NULL DEFAULT ''",
+				"sha256":           "TEXT NOT NULL DEFAULT ''",
+				"snippet":          "TEXT NOT NULL DEFAULT ''",
+				"detail":           "TEXT NOT NULL DEFAULT ''",
+				"rule_set_version": "TEXT NOT NULL DEFAULT ''",
+				"first_seen_at":    "DATETIME NOT NULL",
+				"last_seen_at":     "DATETIME NOT NULL",
+			},
+		},
+		{
 			Name: "site_traffic_hourly",
 			Columns: map[string]string{
 				"site_id":         "TEXT NOT NULL",
@@ -1082,6 +1120,14 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_update_locks_site_plugin ON update_locks(site_id, plugin);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_scan_findings_identity ON scan_findings(site_id, rule, path, sha256);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_findings_last_seen_at ON scan_findings(last_seen_at);")
 	if err != nil {
 		return err
 	}

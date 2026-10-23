@@ -86,6 +86,10 @@ type AgentManifest struct {
 	// WordPress data. jman-api versions that predate it don't send it, and
 	// would reject a hash that includes users.
 	CollectUsers bool `json:"collect_users,omitempty"`
+	// ScanIntervalMinutes is how often the agent scans each site's files
+	// for signs of compromise. Zero means don't: jman-api versions that
+	// predate scanning don't send it.
+	ScanIntervalMinutes int `json:"scan_interval_minutes,omitempty"`
 }
 
 // TrafficTopEntry is a single ranked entry (a page path or a referrer) in a
@@ -174,6 +178,76 @@ type AgentReportSite struct {
 	WPData        *AgentWPData         `json:"wp_data,omitempty"`
 	TrafficHourly []TrafficHourlyEntry `json:"traffic_hourly,omitempty"`
 	TrafficDaily  []TrafficDailyEntry  `json:"traffic_daily,omitempty"`
+	// Scan is set on cycles where the agent scanned the site's files
+	// (about every ScanIntervalMinutes).
+	Scan *AgentScan `json:"scan,omitempty"`
+}
+
+// ScanFinding is one thing a file scan flagged. Findings describe changes:
+// the agent reports a file once, when it appears or changes, not on every
+// scan it is still there.
+type ScanFinding struct {
+	// Engine is what produced the finding: "builtin" for the agent's own
+	// rules, "api" for ones jman-api raises itself.
+	Engine   string `json:"engine"`
+	Rule     string `json:"rule"`
+	Severity string `json:"severity"` // low, medium, high or critical
+	Path     string `json:"path"`     // relative to the site's directory
+	SHA256   string `json:"sha256,omitempty"`
+	// Snippet is the start of the file, for triage. It's left out for
+	// files that hold secrets, such as wp-config.php.
+	Snippet string `json:"snippet,omitempty"`
+	Detail  string `json:"detail,omitempty"`
+}
+
+// AgentScan is one file scan of a site, as reported by jman-agent.
+type AgentScan struct {
+	ScannedAt      string `json:"scanned_at"` // RFC3339, UTC
+	RuleSetVersion string `json:"rule_set_version"`
+	// Fingerprint is a hash of the agent's baseline after this scan, and
+	// PrevFingerprint of the one it compared against. jman-api checks the
+	// latter against the fingerprint it last stored, to notice a baseline
+	// that was reset or changed behind its back.
+	Fingerprint     string `json:"fingerprint,omitempty"`
+	PrevFingerprint string `json:"prev_fingerprint,omitempty"`
+	// Rebaselined is set when the agent had no baseline for the site (the
+	// first scan, or its state was lost) and recorded one. Such a scan only
+	// reports the rules that flag a state (stray, foreign-owned and
+	// unreadable files), not changes.
+	Rebaselined bool `json:"rebaselined,omitempty"`
+	// Entries is how many files the baseline holds, and Omitted how many
+	// more the scan skipped because the baseline was full.
+	Entries    int           `json:"entries"`
+	Omitted    int           `json:"omitted,omitempty"`
+	DurationMs int64         `json:"duration_ms"`
+	Findings   []ScanFinding `json:"findings,omitempty"`
+	// FindingsOmitted counts findings left out to keep the report small.
+	FindingsOmitted int `json:"findings_omitted,omitempty"`
+	// Error is set when the scan failed; nothing else is then meaningful.
+	Error string `json:"error,omitempty"`
+}
+
+// SiteScan is the latest file scan jman-api holds for a site.
+type SiteScan struct {
+	SiteID         string  `json:"site_id"`
+	ScannedAt      string  `json:"scanned_at"`
+	RuleSetVersion string  `json:"rule_set_version"`
+	Entries        int     `json:"entries"`
+	Omitted        int     `json:"omitted"`
+	DurationMs     int64   `json:"duration_ms"`
+	Error          string  `json:"error,omitempty"`
+	RebaselinedAt  *string `json:"rebaselined_at,omitempty"`
+}
+
+// StoredScanFinding is a scan finding as jman-api stores it. The same
+// site, rule, path and hash is one finding, however often it's reported.
+type StoredScanFinding struct {
+	ID     int64  `json:"id"`
+	SiteID string `json:"site_id"`
+	ScanFinding
+	RuleSetVersion string `json:"rule_set_version"`
+	FirstSeenAt    string `json:"first_seen_at"`
+	LastSeenAt     string `json:"last_seen_at"`
 }
 
 // AgentReport is the request body jman-agent POSTs on each collection cycle.

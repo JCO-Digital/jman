@@ -392,6 +392,37 @@ The site's user list is refreshed after the job.
 
 ---
 
+### File Scans
+
+jman-agent scans each site's files about once an hour (see README_AGENT.md) and reports what it flags. Basic level.
+
+`GET /api/scan/findings` returns findings, most recently seen first. `?site_id=` limits them to one site, `?limit=` caps how many are returned (default 200, at most 1000).
+
+```json
+{
+  "findings": [
+    {
+      "id": 12,
+      "site_id": "…",
+      "engine": "builtin",
+      "rule": "uploads-php",
+      "severity": "high",
+      "path": "wp-content/uploads/2026/10/x.php",
+      "sha256": "…",
+      "snippet": "<?php eval($_POST['x']);",
+      "detail": "new PHP file in uploads",
+      "rule_set_version": "1",
+      "first_seen_at": "2026-10-23T14:00:00Z",
+      "last_seen_at": "2026-10-23T14:00:00Z"
+    }
+  ]
+}
+```
+
+A finding is identified by its site, rule, path and `sha256`, so reporting the same one again only updates `last_seen_at`. `engine` is `api` for findings jman-api raises itself: `baseline-reset` (low) when an agent lost its baseline for a site or compared against one other than it last reported.
+
+`GET /api/scan/sites` returns the latest scan of every scanned site: `site_id`, `scanned_at`, `rule_set_version`, `entries` (files in the baseline), `omitted`, `duration_ms`, `error` (set when the last scan failed) and `rebaselined_at`.
+
 ## Reports (Read-Only)
 
 Backend-defined tabular reports. The frontend renders the returned columns/rows

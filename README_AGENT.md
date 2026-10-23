@@ -100,7 +100,9 @@ jman-agent --once
 - `-s`, `--service`: Run as a continuous background service.
 - `--once`: Run a single collection cycle and exit.
 - `--check-wp`: Collect each WordPress site's plugins and core as the service would, print the result (path, the user wp-cli ran as, and the data or why the site was refused), and exit without reporting anything. Exits non-zero if any site failed.
-- `--site <domain>`: With `--check-wp`, only check this site.
+- `--check-scan`: Scan each site's files as the service would and print what the rules flag, without reporting anything or changing any baseline. A site without a baseline shows what its first scan would report. Exits non-zero if any site failed.
+- `--site <domain>`: With `--check-wp` or `--check-scan`, only check this site.
+- `--scan-site <dir>`: Internal. The agent runs itself with this flag, as a site's owner, to scan the site's files (see File Scanning).
 - `--config <path>`: Path to `config.toml` (default: `/etc/jman-agent/config.toml`, or `$XDG_CONFIG_HOME/jman-agent/config.toml` if not root).
 - `-v`, `--verbose`: Enable verbose output.
 - `-d`, `--debug`: Enable debug output.
@@ -136,6 +138,27 @@ The agent only runs a `wp` binary found in a system directory (`/usr/local/bin`,
 To try it on a server before (or after) jman-api enables it, run `sudo jman-agent --check-wp` (optionally with `--site example.com`): it uses the server's manifest but ignores whether jman-api has enabled collection, reports nothing and doesn't self-update. If the installed agent self-updates, test a newer build with `selfUpdateEnabled = false` in a separate config (`--config`), since a development build's version (e.g. `v6.6.0-7-g79e5220`) sorts below the release it's based on.
 
 Data is only sent in full when it changed: the manifest carries a hash of what jman-api holds for each site, and the agent sends just its own hash when they match. That small report still tells jman-api the site was collected, which is what its staleness warnings are based on. Once the agent has collected a site, jman-api stops reading it over SSH in its periodic refresh.
+
+## File Scanning
+
+About once an hour (`agentScanInterval` in jman-api's config), the agent scans each site's directory for signs of compromise and reports what changed since the last scan. The scan runs as the site's owner, like wp-cli: the agent starts its own binary again with `--scan-site` under that user (it refuses to scan as root), and compares what it prints with the site's baseline.
+
+The rules flag:
+
+| Rule               | Severity | What                                                                                            |
+| ------------------ | -------- | ----------------------------------------------------------------------------------------------- |
+| `uploads-php`      | high     | A new or changed PHP file (`.php`, `.phtml`, `.phar`, …) under `wp-content/uploads`. Empty files aren't flagged until they get content; WPML's compiled templates (`uploads/cache/wpml/twig/`) are low. |
+| `auto-prepend`     | high     | A new or changed `.user.ini` or `.htaccess` that sets `auto_prepend_file` or `auto_append_file` |
+| `mu-plugin-change` | medium   | A new or changed file directly in `wp-content/mu-plugins` (not in its subdirectories)          |
+| `dropin-change`    | medium   | A new or changed drop-in (`object-cache.php`, `advanced-cache.php`, `db.php`, …)                |
+| `config-change`    | medium   | `wp-config.php` or the site root's `.htaccess` changed                                          |
+| `foreign-owner`    | medium   | A file or directory owned by someone other than the site's owner, except root-owned symlinks    |
+| `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps. |
+| `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
+
+Only changes are reported: a file is flagged when it appears or changes, not on every scan. The baseline lives in `<stateDir>/scan/<site>.json`, readable only by root, and is saved only after the report holding the scan has been sent. With no baseline (the first scan, or after it was lost) the agent records one and only reports `stray-file`, `foreign-owner` and `unreadable`, which describe a state rather than a change; jman-api notes the re-baseline. Findings include the start of the file, except for `wp-config.php`.
+
+Scans never follow symlinks or open anything but regular files, hash files up to 16 MiB, are limited to 10 minutes per site and run at a lower CPU priority. Walking a 40 GB site with about 75,000 files takes around a second.
 
 ## Self-Updating
 

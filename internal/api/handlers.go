@@ -109,6 +109,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("DELETE /api/monitor/rules/{id}", edit(DeleteMonitorCheckRuleHandler))
 
 	// --- Incident routes ---
+	mux.Handle("GET /api/scan/findings", basic(ListScanFindingsHandler))
+	mux.Handle("GET /api/scan/sites", basic(ListSiteScansHandler))
 	mux.Handle("GET /api/incidents", basic(ListIncidentsHandler))
 	mux.Handle("POST /api/incidents/{id}/acknowledge", basic(AcknowledgeIncidentHandler))
 	mux.Handle("POST /api/incidents/{id}/close", basic(CloseIncidentHandler))

@@ -377,6 +377,7 @@ a daily reminder while it lasts and a message when it recovers.
 | Key                       | Env var                        | Default | Description                                                                                       |
 | ------------------------- | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------- |
 | `agentWpDataInterval`     | `JMAN_AGENTWPDATAINTERVAL`     | `60`    | How often agents collect each site's plugins and core, in minutes. Negative turns it off.         |
+| `agentScanInterval`       | `JMAN_AGENTSCANINTERVAL`       | `60`    | How often agents scan each site's files for signs of compromise, in minutes. Negative turns it off. |
 | `agentServerStaleMinutes` | `JMAN_AGENTSERVERSTALEMINUTES` | `30`    | Warn when a server's agent hasn't called in for this long.                                        |
 | `agentSiteStaleMinutes`   | `JMAN_AGENTSITESTALEMINUTES`   | `180`   | Warn when an agent site's WordPress data hasn't been collected successfully for this long.        |
 
