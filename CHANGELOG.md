@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.10.0 (2026-10-23)
+### 7.10.1 (2026-10-23)
+
+#### Bug Fixes
+
+- agent: only flag .env and .git as stray in plugins and themes (a90030f)
+
+## v7.10.0 (2026-10-23)
 
 #### Features
 
