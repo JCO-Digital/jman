@@ -163,6 +163,7 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 	result.Omitted = walk.Omitted
 	if prev == nil {
 		result.Rebaselined = true
+		result.Findings = scan.EvaluateFirst(walk.Entries, id.UID, userName)
 	} else {
 		result.PrevFingerprint = prev.Fingerprint
 		result.Findings = scan.Evaluate(prev.Entries, walk.Entries, id.UID, userName)

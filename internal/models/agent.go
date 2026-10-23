@@ -211,8 +211,9 @@ type AgentScan struct {
 	Fingerprint     string `json:"fingerprint,omitempty"`
 	PrevFingerprint string `json:"prev_fingerprint,omitempty"`
 	// Rebaselined is set when the agent had no baseline for the site (the
-	// first scan, or its state was lost) and recorded one without
-	// reporting findings.
+	// first scan, or its state was lost) and recorded one. Such a scan only
+	// reports the rules that flag a state (stray, foreign-owned and
+	// unreadable files), not changes.
 	Rebaselined bool `json:"rebaselined,omitempty"`
 	// Entries is how many files the baseline holds, and Omitted how many
 	// more the scan skipped because the baseline was full.

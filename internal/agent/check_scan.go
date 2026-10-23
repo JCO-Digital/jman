@@ -17,10 +17,9 @@ const maxCheckScanFindings = 50
 
 // CheckScan scans this server's sites once and prints what the rules
 // flag, without reporting anything to jman-api, self-updating or changing
-// any baseline. A site without a baseline is compared with an empty one,
-// which shows what its first scan would flag if it weren't a re-baseline.
-// It ignores the manifest's scan interval. domain limits it to one site.
-// It returns how many sites failed.
+// any baseline. A site without a baseline gets what its first scan would
+// report. It ignores the manifest's scan interval. domain limits it to one
+// site. It returns how many sites failed.
 func CheckScan(ctx context.Context, cfg Config, domain string, out io.Writer) (int, error) {
 	manifest, err := NewClient(cfg).FetchManifest(ctx)
 	if err != nil {
@@ -91,15 +90,14 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	}
 	fmt.Fprintf(out, " in %s\n", time.Since(start).Round(time.Millisecond))
 
-	baseline := map[string]scan.Entry{}
+	var findings []models.ScanFinding
 	if prev != nil {
-		baseline = prev.Entries
 		fmt.Fprintln(out, "  compared with the baseline of the last reported scan")
+		findings = scan.Evaluate(prev.Entries, walk.Entries, id.UID, userName)
 	} else {
-		fmt.Fprintln(out, "  no baseline yet (the service would record one without findings); compared with an empty one")
+		fmt.Fprintln(out, "  no baseline yet: a first scan, which only flags stray, foreign-owned and unreadable files")
+		findings = scan.EvaluateFirst(walk.Entries, id.UID, userName)
 	}
-
-	findings := scan.Evaluate(baseline, walk.Entries, id.UID, userName)
 	if len(findings) == 0 {
 		fmt.Fprintln(out, "  ok: nothing flagged")
 		return true

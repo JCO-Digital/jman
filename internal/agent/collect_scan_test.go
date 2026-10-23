@@ -164,3 +164,18 @@ func TestRunScanChildPrintsTheWalk(t *testing.T) {
 		t.Fatalf("result = %+v", res)
 	}
 }
+
+// A first scan records a baseline but still reports what's already wrong.
+func TestFirstScanReportsStateRules(t *testing.T) {
+	root, stateDir := t.TempDir(), t.TempDir()
+	writeSiteFile(t, root, "backup.sql", "dump")
+	writeSiteFile(t, root, "wp-content/uploads/x.php", "<?php eval($_POST['x']);")
+	writeSiteFile(t, root, "wp-content/mu-plugins/loader.php", "<?php")
+	stubScan(t, map[string]string{"a.example": root})
+
+	scans, _ := collectScansForSites(context.Background(), stateDir, scanManifest("a.example"), time.Now())
+	first := scans["id-a"]
+	if first == nil || !first.Rebaselined || len(first.Findings) != 1 || first.Findings[0].Rule != scan.RuleStrayFile || first.Findings[0].Path != "backup.sql" {
+		t.Fatalf("first scan = %+v, want only the stray file", first)
+	}
+}

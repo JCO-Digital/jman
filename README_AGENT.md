@@ -100,7 +100,7 @@ jman-agent --once
 - `-s`, `--service`: Run as a continuous background service.
 - `--once`: Run a single collection cycle and exit.
 - `--check-wp`: Collect each WordPress site's plugins and core as the service would, print the result (path, the user wp-cli ran as, and the data or why the site was refused), and exit without reporting anything. Exits non-zero if any site failed.
-- `--check-scan`: Scan each site's files as the service would and print what the rules flag, without reporting anything or changing any baseline. A site without a baseline is compared with an empty one, which previews what it would flag if its first scan weren't a re-baseline. Exits non-zero if any site failed.
+- `--check-scan`: Scan each site's files as the service would and print what the rules flag, without reporting anything or changing any baseline. A site without a baseline shows what its first scan would report. Exits non-zero if any site failed.
 - `--site <domain>`: With `--check-wp` or `--check-scan`, only check this site.
 - `--scan-site <dir>`: Internal. The agent runs itself with this flag, as a site's owner, to scan the site's files (see File Scanning).
 - `--config <path>`: Path to `config.toml` (default: `/etc/jman-agent/config.toml`, or `$XDG_CONFIG_HOME/jman-agent/config.toml` if not root).
@@ -156,7 +156,7 @@ The rules flag:
 | `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps. |
 | `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
 
-Only changes are reported: a file is flagged when it appears or changes, not on every scan. The baseline lives in `<stateDir>/scan/<site>.json`, readable only by root, and is saved only after the report holding the scan has been sent. With no baseline (the first scan, or after it was lost) the agent records one without reporting findings, and jman-api notes the re-baseline. Findings include the start of the file, except for `wp-config.php`.
+Only changes are reported: a file is flagged when it appears or changes, not on every scan. The baseline lives in `<stateDir>/scan/<site>.json`, readable only by root, and is saved only after the report holding the scan has been sent. With no baseline (the first scan, or after it was lost) the agent records one and only reports `stray-file`, `foreign-owner` and `unreadable`, which describe a state rather than a change; jman-api notes the re-baseline. Findings include the start of the file, except for `wp-config.php`.
 
 Scans never follow symlinks or open anything but regular files, hash files up to 16 MiB, are limited to 10 minutes per site and run at a lower CPU priority. Walking a 40 GB site with about 75,000 files takes around a second.
 

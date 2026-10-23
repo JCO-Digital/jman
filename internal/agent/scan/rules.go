@@ -125,6 +125,23 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 	return findings
 }
 
+// stateRules flag a state rather than a change, so they're worth
+// reporting on a first scan too, when there's nothing to compare against.
+var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true}
+
+// EvaluateFirst returns what the rules flag on a scan without a baseline:
+// only the state rules. The change rules stay quiet until there is a
+// baseline, or everything already on the site would count as new.
+func EvaluateFirst(cur []Entry, ownerUID uint32, userName func(uint32) string) []models.ScanFinding {
+	var findings []models.ScanFinding
+	for _, f := range Evaluate(nil, cur, ownerUID, userName) {
+		if stateRules[f.Rule] {
+			findings = append(findings, f)
+		}
+	}
+	return findings
+}
+
 // Fingerprint hashes a baseline's entries, independent of their order.
 func Fingerprint(entries []Entry) string {
 	lines := make([]string, len(entries))
