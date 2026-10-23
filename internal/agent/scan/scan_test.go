@@ -270,6 +270,11 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	writeFile(t, root, "wp-content/uploads/sites/2/cache/wpml/twig/02/def.php", "<?php // compiled")
 	writeFile(t, root, "wp-content/uploads/2020/06/logos.zip", "PK")
 	writeFile(t, root, "wp-content/uploads/db.sql.zip", "PK")
+	writeFile(t, root, "wp-content/themes/x/style.css.bak", "/* theme */")
+	writeFile(t, root, "wp-content/plugins/y/vendor/fixtures/archive.zip", "PK")
+	writeFile(t, root, "wp-content/plugins/y/schema.sql", "CREATE TABLE")
+	writeFile(t, root, "wp-content/plugins/y/.env", "SECRET=1")
+	writeFile(t, root, "wp-content/plugins/y/.git/HEAD", "ref")
 	owner := uint32(os.Getuid())
 	res, err := Walk(root, owner)
 	if err != nil {
@@ -285,6 +290,8 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	}
 	slices.Sort(got)
 	want := []string{
+		"low stray-file wp-content/plugins/y/.env",
+		"low stray-file wp-content/plugins/y/.git",
 		"low stray-file wp-content/uploads/db.sql.zip",
 		"low uploads-php wp-content/uploads/cache/wpml/twig/01/abc.php",
 		"low uploads-php wp-content/uploads/sites/2/cache/wpml/twig/02/def.php",
