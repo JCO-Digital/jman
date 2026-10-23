@@ -1,6 +1,19 @@
 # Changelog
 
-## 7.9.0 (2026-10-22)
+## 7.10.0 (2026-10-23)
+
+#### Features
+
+- agent: report stray, foreign-owned and unreadable files on a first scan (7520d79)
+- agent: --check-scan, and less noise from the scan rules (24e1ed8)
+- agent: scan site files for signs of compromise (330a6ba)
+
+#### Documentation
+
+- settle open questions in the scanning plan, add timings (12653e2)
+- plan malware and exploit scanning on jman-agent (7ee45ad)
+
+## v7.9.0 (2026-10-22)
 
 #### Features
 
