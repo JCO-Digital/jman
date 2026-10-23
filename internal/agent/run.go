@@ -201,8 +201,12 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	// its data has been sent.
 	wpData, wpCollected := collectWPDataForSites(ctx, manifest, time.Now())
 
+	// File scans run on their own schedule too; a site's baseline is only
+	// saved once the report holding its scan has been sent.
+	scans, scansDone := collectScansForSites(ctx, cfg.StateDir, manifest, time.Now())
+
 	for _, site := range sites {
-		siteReport := models.AgentReportSite{SiteID: site.SiteID, WPData: wpData[site.SiteID]}
+		siteReport := models.AgentReportSite{SiteID: site.SiteID, WPData: wpData[site.SiteID], Scan: scans[site.SiteID]}
 
 		if sitePath, err := ResolveSitePath(site.Domain, site.SiteUser); err != nil {
 			skipTarget := "disk usage"
@@ -265,6 +269,7 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	}
 
 	markWPCollected(wpCollected, time.Now())
+	saveScans(cfg.StateDir, scansDone, time.Now())
 
 	for siteID, state := range pendingLogStates {
 		if err := logs.SaveState(cfg.StateDir, siteID, state); err != nil {

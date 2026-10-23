@@ -21,6 +21,7 @@ var (
 	flagCheckWP    bool
 	flagSite       string
 	flagConfigPath string
+	flagScanSite   string
 )
 
 func main() {
@@ -39,7 +40,18 @@ func run() int {
 	flag.BoolVar(&flagCheckWP, "check-wp", false, "Collect WordPress data (plugins, core) as each site's owner once and print the result, without reporting it")
 	flag.StringVar(&flagSite, "site", "", "With --check-wp, only check this domain")
 	flag.StringVar(&flagConfigPath, "config", "", "Path to config.toml (default: /etc/jman-agent/config.toml, or $XDG_CONFIG_HOME/jman-agent/config.toml)")
+	flag.StringVar(&flagScanSite, agent.ScanSiteFlag, "", "Internal: scan this site directory as the current user and print the result (used by the agent itself)")
 	flag.Parse()
+
+	// The scan child runs as a site's owner and needs no config, which
+	// only root can read.
+	if flagScanSite != "" {
+		if err := agent.RunScanChild(flagScanSite, os.Stdout); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 1
+		}
+		return 0
+	}
 
 	if flagDebug {
 		verb.Set(verb.Debug)
