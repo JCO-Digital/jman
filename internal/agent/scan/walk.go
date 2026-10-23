@@ -134,7 +134,7 @@ func Walk(root string, ownerUID uint32) (*Result, error) {
 		}
 
 		if info.Mode()&fs.ModeSymlink != 0 {
-			if isTracked(rel) || isStrayFile(rel) || foreign {
+			if recordSymlink(rel, e.UID, ownerUID) {
 				if target, err := os.Readlink(full); err == nil {
 					e.Symlink = target
 				} else {
@@ -160,6 +160,14 @@ func Walk(root string, ownerUID uint32) (*Result, error) {
 		return nil, err
 	}
 	return res, nil
+}
+
+// recordSymlink reports whether the walk records a symlink. A root-owned
+// one is recorded only if it's tracked or stray: no other rule looks at it
+// (see Evaluate), and a site whose media are symlinked from another site
+// can have thousands, which would fill the baseline.
+func recordSymlink(rel string, uid, ownerUID uint32) bool {
+	return isTracked(rel) || isStrayFile(rel) || (uid != ownerUID && uid != 0)
 }
 
 // readTracked fills in a tracked file's hash, head and PHP directives, or
