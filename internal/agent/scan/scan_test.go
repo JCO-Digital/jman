@@ -232,6 +232,25 @@ func TestEvaluateForeignOwnerOnlyWhenOwnerChanges(t *testing.T) {
 	}
 }
 
+func TestRecordSymlink(t *testing.T) {
+	cases := []struct {
+		path string
+		uid  uint32
+		want bool
+	}{
+		{"wp-content/uploads/2022/05/photo.jpg", 0, false},    // root-owned, e.g. media shared from another site
+		{"wp-content/uploads/2022/05/photo.jpg", 33, true},    // owned by another user
+		{"wp-content/uploads/2022/05/photo.jpg", 1000, false}, // the owner's
+		{"wp-content/uploads/x.php", 0, true},                 // tracked
+		{"backup.sql", 0, true},                               // stray
+	}
+	for _, c := range cases {
+		if got := recordSymlink(c.path, c.uid, 1000); got != c.want {
+			t.Errorf("recordSymlink(%q, uid %d) = %t, want %t", c.path, c.uid, got, c.want)
+		}
+	}
+}
+
 func TestStateRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	if s, err := LoadState(dir, "site-1"); err != nil || s != nil {
