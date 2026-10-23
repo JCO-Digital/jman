@@ -100,12 +100,18 @@ func isPHPIni(p string) bool {
 }
 
 // isStrayFile reports whether p is a file that shouldn't be in a webroot.
-// Zip files in uploads aren't: they're nearly always there on purpose, as
-// downloads. Zipped database dumps still are.
+// In plugins and themes only .env files are: archives, SQL files and
+// backups there are nearly always shipped with the code (test fixtures,
+// schemas, bundled plugins). Zip files in uploads aren't either: they're
+// nearly always there on purpose, as downloads. Zipped database dumps
+// still are.
 func isStrayFile(p string) bool {
 	base := strings.ToLower(path.Base(p))
 	if base == ".env" {
 		return true
+	}
+	if isCode(p) {
+		return false
 	}
 	if strings.HasPrefix(p, uploadsPrefix) && strings.HasSuffix(base, ".zip") && !strings.HasSuffix(base, ".sql.zip") {
 		return false
@@ -116,6 +122,11 @@ func isStrayFile(p string) bool {
 		}
 	}
 	return false
+}
+
+// isCode reports whether p is in the plugins or themes directory.
+func isCode(p string) bool {
+	return strings.HasPrefix(p, "wp-content/plugins/") || strings.HasPrefix(p, "wp-content/themes/")
 }
 
 func isStrayDir(p string) bool {

@@ -153,7 +153,7 @@ The rules flag:
 | `dropin-change`    | medium   | A new or changed drop-in (`object-cache.php`, `advanced-cache.php`, `db.php`, …)                |
 | `config-change`    | medium   | `wp-config.php` or the site root's `.htaccess` changed                                          |
 | `foreign-owner`    | medium   | A file or directory owned by someone other than the site's owner, except root-owned symlinks    |
-| `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps. |
+| `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps, and in plugins and themes only `.env` and `.git` are. |
 | `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
 
 Only changes are reported: a file is flagged when it appears or changes, not on every scan. The baseline lives in `<stateDir>/scan/<site>.json`, readable only by root, and is saved only after the report holding the scan has been sent. With no baseline (the first scan, or after it was lost) the agent records one and only reports `stray-file`, `foreign-owner` and `unreadable`, which describe a state rather than a change; jman-api notes the re-baseline. Findings include the start of the file, except for `wp-config.php`.
