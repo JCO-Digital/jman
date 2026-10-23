@@ -19,6 +19,7 @@ var (
 	flagService    bool
 	flagOnce       bool
 	flagCheckWP    bool
+	flagCheckScan  bool
 	flagSite       string
 	flagConfigPath string
 	flagScanSite   string
@@ -38,7 +39,8 @@ func run() int {
 	flag.BoolVar(&flagService, "s", false, "Run as a continuous service (shorthand)")
 	flag.BoolVar(&flagOnce, "once", false, "Run a single collection cycle and exit")
 	flag.BoolVar(&flagCheckWP, "check-wp", false, "Collect WordPress data (plugins, core) as each site's owner once and print the result, without reporting it")
-	flag.StringVar(&flagSite, "site", "", "With --check-wp, only check this domain")
+	flag.BoolVar(&flagCheckScan, "check-scan", false, "Scan each site's files as its owner once and print what the rules flag, without reporting it or changing any baseline")
+	flag.StringVar(&flagSite, "site", "", "With --check-wp or --check-scan, only check this domain")
 	flag.StringVar(&flagConfigPath, "config", "", "Path to config.toml (default: /etc/jman-agent/config.toml, or $XDG_CONFIG_HOME/jman-agent/config.toml)")
 	flag.StringVar(&flagScanSite, agent.ScanSiteFlag, "", "Internal: scan this site directory as the current user and print the result (used by the agent itself)")
 	flag.Parse()
@@ -74,6 +76,18 @@ func run() int {
 
 	if flagCheckWP {
 		failed, err := agent.CheckWPData(context.Background(), cfg, flagSite, os.Stdout)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 1
+		}
+		if failed > 0 {
+			return 1
+		}
+		return 0
+	}
+
+	if flagCheckScan {
+		failed, err := agent.CheckScan(context.Background(), cfg, flagSite, os.Stdout)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return 1

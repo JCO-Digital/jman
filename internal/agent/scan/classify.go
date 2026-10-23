@@ -30,12 +30,13 @@ var dropins = map[string]bool{
 }
 
 // straySuffixes mark files that shouldn't be in a webroot: database dumps,
-// archives and backups, and editor leftovers.
+// archives and backups, and editor swap files. A trailing "~" isn't one:
+// Loco Translate leaves hundreds of harmless *.po~ backups.
 var straySuffixes = []string{
 	".sql", ".sql.gz", ".sql.bz2", ".sql.zip",
 	".zip", ".tar", ".tar.gz", ".tgz",
 	".bak", ".old", ".orig",
-	".swp", ".swo", "~",
+	".swp", ".swo",
 }
 
 // strayDirs are directories that shouldn't be in a webroot. The walk
@@ -45,6 +46,9 @@ var strayDirs = map[string]bool{".git": true, ".svn": true}
 const (
 	uploadsPrefix   = "wp-content/uploads/"
 	muPluginsPrefix = "wp-content/mu-plugins/"
+	// wpmlTwigCache is where WPML keeps compiled Twig templates, PHP files
+	// it regenerates whenever its cache is rebuilt.
+	wpmlTwigCache = "/cache/wpml/twig/"
 )
 
 // isPHP reports whether name has an extension a web server may run as PHP.
@@ -64,8 +68,19 @@ func isUploadsPHP(p string) bool {
 	return strings.HasPrefix(p, uploadsPrefix) && isPHP(path.Base(p))
 }
 
+// isMuPlugin reports whether p is directly in mu-plugins, where WordPress
+// loads every PHP file on its own. Files in its subdirectories, such as a
+// bundled plugin, only run when one of those includes them.
 func isMuPlugin(p string) bool {
-	return strings.HasPrefix(p, muPluginsPrefix)
+	rest, ok := strings.CutPrefix(p, muPluginsPrefix)
+	return ok && !strings.Contains(rest, "/")
+}
+
+// isWPMLTwigCache reports whether p is one of WPML's compiled templates in
+// uploads (on a multisite, under uploads/sites/<n>/).
+func isWPMLTwigCache(p string) bool {
+	rest, ok := strings.CutPrefix(p, uploadsPrefix)
+	return ok && strings.Contains("/"+rest, wpmlTwigCache)
 }
 
 func isDropin(p string) bool {
@@ -85,10 +100,15 @@ func isPHPIni(p string) bool {
 }
 
 // isStrayFile reports whether p is a file that shouldn't be in a webroot.
+// Zip files in uploads aren't: they're nearly always there on purpose, as
+// downloads. Zipped database dumps still are.
 func isStrayFile(p string) bool {
 	base := strings.ToLower(path.Base(p))
 	if base == ".env" {
 		return true
+	}
+	if strings.HasPrefix(p, uploadsPrefix) && strings.HasSuffix(base, ".zip") && !strings.HasSuffix(base, ".sql.zip") {
+		return false
 	}
 	for _, suffix := range straySuffixes {
 		if strings.HasSuffix(base, suffix) {

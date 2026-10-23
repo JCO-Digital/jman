@@ -62,10 +62,15 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 		old, existed := prev[e.Path]
 		changed := !existed || signature(old) != signature(e)
 		flag := func(rule, detail string) {
+			severity := severities[rule]
+			if rule == RuleUploadsPHP && isWPMLTwigCache(e.Path) {
+				// WPML rewrites these whenever it rebuilds its cache.
+				severity = "low"
+			}
 			f := models.ScanFinding{
 				Engine:   Engine,
 				Rule:     rule,
-				Severity: severities[rule],
+				Severity: severity,
 				Path:     e.Path,
 				SHA256:   e.SHA256,
 				Snippet:  e.Head,
@@ -85,7 +90,12 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 		if !e.Dir {
 			switch {
 			case isUploadsPHP(e.Path) && changed:
-				flag(RuleUploadsPHP, change+" PHP file in uploads")
+				// Plugins leave empty index.php files all over uploads.
+				// An empty file runs nothing; it's flagged once it isn't
+				// empty any more.
+				if e.Size > 0 || e.Symlink != "" || e.Unreadable {
+					flag(RuleUploadsPHP, change+" PHP file in uploads")
+				}
 			case isMuPlugin(e.Path) && changed:
 				flag(RuleMuPlugin, change+" file in mu-plugins")
 			case isDropin(e.Path) && changed:
@@ -98,7 +108,11 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 			}
 		}
 
-		if e.UID != ownerUID && (!existed || old.UID != e.UID) {
+		// A root-owned symlink is the server's own doing (SpinupWP links
+		// wp-content/debug.log into the site's logs directory); the site's
+		// owner can't create one.
+		rootSymlink := e.Symlink != "" && e.UID == 0
+		if e.UID != ownerUID && !rootSymlink && (!existed || old.UID != e.UID) {
 			flag(RuleForeignOwner, fmt.Sprintf("owned by %s, not the site's owner %s", userName(e.UID), userName(ownerUID)))
 		}
 		if !existed && ((e.Dir && isStrayDir(e.Path)) || (!e.Dir && isStrayFile(e.Path))) {

@@ -259,3 +259,45 @@ func TestStateRoundTrip(t *testing.T) {
 		t.Error("LoadState accepted a site ID with a path in it")
 	}
 }
+
+// Patterns from a real server that aren't worth flagging, or not as high.
+func TestEvaluateSkipsKnownNoise(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "wp-content/mu-plugins/acf/acf.php", "<?php // bundled plugin")
+	writeFile(t, root, "wp-content/uploads/wpallimport/index.php", "")
+	writeFile(t, root, "wp-content/languages/loco/x-fi-backup.po~", "msgid")
+	writeFile(t, root, "wp-content/uploads/cache/wpml/twig/01/abc.php", "<?php // compiled")
+	writeFile(t, root, "wp-content/uploads/sites/2/cache/wpml/twig/02/def.php", "<?php // compiled")
+	writeFile(t, root, "wp-content/uploads/2020/06/logos.zip", "PK")
+	writeFile(t, root, "wp-content/uploads/db.sql.zip", "PK")
+	owner := uint32(os.Getuid())
+	res, err := Walk(root, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// SpinupWP's root-owned debug.log symlink.
+	cur := append(res.Entries, Entry{Path: "wp-content/debug.log", UID: 0, Symlink: "/sites/x/logs/debug.log"})
+
+	findings := Evaluate(map[string]Entry{}, cur, owner, func(uint32) string { return "u" })
+	var got []string
+	for _, f := range findings {
+		got = append(got, f.Severity+" "+f.Rule+" "+f.Path)
+	}
+	slices.Sort(got)
+	want := []string{
+		"low stray-file wp-content/uploads/db.sql.zip",
+		"low uploads-php wp-content/uploads/cache/wpml/twig/01/abc.php",
+		"low uploads-php wp-content/uploads/sites/2/cache/wpml/twig/02/def.php",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("flagged %q, want %q", got, want)
+	}
+
+	// An empty upload that gets content is flagged.
+	baseline := NewState(res.Entries)
+	writeFile(t, root, "wp-content/uploads/wpallimport/index.php", "<?php system($_GET['c']);")
+	again, _ := Walk(root, owner)
+	if got := evaluate(baseline.Entries, again.Entries, owner); !slices.Equal(got, []string{"uploads-php wp-content/uploads/wpallimport/index.php"}) {
+		t.Errorf("after filling an empty upload, flagged %q", got)
+	}
+}

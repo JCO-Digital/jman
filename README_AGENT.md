@@ -100,7 +100,8 @@ jman-agent --once
 - `-s`, `--service`: Run as a continuous background service.
 - `--once`: Run a single collection cycle and exit.
 - `--check-wp`: Collect each WordPress site's plugins and core as the service would, print the result (path, the user wp-cli ran as, and the data or why the site was refused), and exit without reporting anything. Exits non-zero if any site failed.
-- `--site <domain>`: With `--check-wp`, only check this site.
+- `--check-scan`: Scan each site's files as the service would and print what the rules flag, without reporting anything or changing any baseline. A site without a baseline is compared with an empty one, which previews what it would flag if its first scan weren't a re-baseline. Exits non-zero if any site failed.
+- `--site <domain>`: With `--check-wp` or `--check-scan`, only check this site.
 - `--scan-site <dir>`: Internal. The agent runs itself with this flag, as a site's owner, to scan the site's files (see File Scanning).
 - `--config <path>`: Path to `config.toml` (default: `/etc/jman-agent/config.toml`, or `$XDG_CONFIG_HOME/jman-agent/config.toml` if not root).
 - `-v`, `--verbose`: Enable verbose output.
@@ -146,13 +147,13 @@ The rules flag:
 
 | Rule               | Severity | What                                                                                            |
 | ------------------ | -------- | ----------------------------------------------------------------------------------------------- |
-| `uploads-php`      | high     | A new or changed PHP file (`.php`, `.phtml`, `.phar`, …) under `wp-content/uploads`             |
+| `uploads-php`      | high     | A new or changed PHP file (`.php`, `.phtml`, `.phar`, …) under `wp-content/uploads`. Empty files aren't flagged until they get content; WPML's compiled templates (`uploads/cache/wpml/twig/`) are low. |
 | `auto-prepend`     | high     | A new or changed `.user.ini` or `.htaccess` that sets `auto_prepend_file` or `auto_append_file` |
-| `mu-plugin-change` | medium   | A new or changed file in `wp-content/mu-plugins`                                                |
+| `mu-plugin-change` | medium   | A new or changed file directly in `wp-content/mu-plugins` (not in its subdirectories)          |
 | `dropin-change`    | medium   | A new or changed drop-in (`object-cache.php`, `advanced-cache.php`, `db.php`, …)                |
 | `config-change`    | medium   | `wp-config.php` or the site root's `.htaccess` changed                                          |
-| `foreign-owner`    | medium   | A file or directory owned by someone other than the site's owner                                |
-| `stray-file`       | low      | A database dump, archive, backup or editor leftover, `.env`, or a `.git`/`.svn` directory       |
+| `foreign-owner`    | medium   | A file or directory owned by someone other than the site's owner, except root-owned symlinks    |
+| `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps. |
 | `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
 
 Only changes are reported: a file is flagged when it appears or changes, not on every scan. The baseline lives in `<stateDir>/scan/<site>.json`, readable only by root, and is saved only after the report holding the scan has been sent. With no baseline (the first scan, or after it was lost) the agent records one without reporting findings, and jman-api notes the re-baseline. Findings include the start of the file, except for `wp-config.php`.
