@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.10.1 (2026-10-23)
+### 7.10.2 (2026-10-23)
+
+#### Bug Fixes
+
+- agent: don't record root-owned symlinks in the scan baseline (0ca5514)
+
+### v7.10.1 (2026-10-23)
 
 #### Bug Fixes
 
