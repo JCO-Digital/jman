@@ -6,6 +6,7 @@ package scan
 
 import (
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -50,6 +51,20 @@ const (
 	// it regenerates whenever its cache is rebuilt.
 	wpmlTwigCache = "/cache/wpml/twig/"
 )
+
+// guardedRe matches the start of a PHP file whose first statement ends the
+// script: exit or die, with no argument, a number or a string that can't
+// interpolate, after nothing but whitespace and line comments. Plugins such
+// as Sucuri keep data in .php files behind such a guard, so requesting or
+// including one runs nothing. A "?>" in a comment would end PHP mode early,
+// so it makes the file not match.
+var guardedRe = regexp.MustCompile(`^\x{FEFF}?<\?php\s(?:\s|//[^\n?]*\n|#[^\n?]*\n)*(?i:exit|die)\s*(?:\(\s*(?:\d+|'[^'\\]*'|"[^"\\$]*")?\s*\))?\s*(?:;|\?>)`)
+
+// isGuarded reports whether head, the start of a PHP file, is a guarded
+// data file (see guardedRe).
+func isGuarded(head string) bool {
+	return guardedRe.MatchString(head)
+}
 
 // isPHP reports whether name has an extension a web server may run as PHP.
 func isPHP(name string) bool {

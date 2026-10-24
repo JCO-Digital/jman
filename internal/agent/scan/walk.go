@@ -189,6 +189,12 @@ func readTracked(full, rel string, e *Entry) {
 	}
 	e.Size = info.Size()
 	if e.Size > maxHashBytes {
+		// Too large to hash, but its start still shows what it is.
+		head := make([]byte, headBytes)
+		n, _ := io.ReadFull(f, head)
+		if !hasSecrets(rel) {
+			e.Head = strings.ToValidUTF8(string(head[:n]), "\uFFFD")
+		}
 		return
 	}
 

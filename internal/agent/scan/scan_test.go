@@ -327,3 +327,65 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 		t.Errorf("after filling an empty upload, flagged %q", got)
 	}
 }
+
+func TestIsGuarded(t *testing.T) {
+	cases := []struct {
+		head string
+		want bool
+	}{
+		{"<?php exit(0); ?>\n{\"user_login\":\"x\"}", true},
+		{"<?php\n// datastore=auditqueue;\n// created_on=1739135453;\nexit(0);\n?>\n", true},
+		{"<?php die('Silence is golden'); ?>", true},
+		{"<?php die(\"Silence is golden\");", true},
+		{"<?php EXIT;", true},
+		{"\xEF\xBB\xBF<?php exit; ?>", true},
+		{"<?php die(system($_GET['c'])); ?>", false},
+		{"<?php die(\"{$_GET['c']}\");", false},
+		{"<?php exit(0) . system('x');", false},
+		{"<?php // ?> <?php system('x'); exit;", false},
+		{"<?php eval($_POST['x']); exit;", false},
+		{"<?php /* comment */ exit;", false},
+		{"<?phpexit;", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := isGuarded(c.head); got != c.want {
+			t.Errorf("isGuarded(%q) = %t, want %t", c.head, got, c.want)
+		}
+	}
+}
+
+// Sucuri's data files, one too large to hash, aren't flagged; one that
+// loses its guard is.
+func TestEvaluateSkipsGuardedDataFiles(t *testing.T) {
+	root := t.TempDir()
+	owner := uint32(os.Getuid())
+	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-failedlogins.php", "<?php exit(0); ?>\n{\"user_login\":\"x\"}\n")
+	big := "<?php\n// datastore=auditqueue;\nexit(0);\n?>\n" + strings.Repeat("x", maxHashBytes)
+	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-auditqueue.php", big)
+
+	first, err := Walk(root, owner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e := byPath(first.Entries)["wp-content/uploads/sucuri/sucuri-auditqueue.php"]; e.SHA256 != "" || !strings.HasPrefix(e.Head, "<?php") {
+		t.Fatalf("large file = hash %q, head %q; want no hash and its head", e.SHA256, e.Head)
+	}
+	if got := evaluate(map[string]Entry{}, first.Entries, owner); len(got) != 0 {
+		t.Errorf("guarded files flagged: %q", got)
+	}
+
+	baseline := NewState(first.Entries)
+	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-failedlogins.php", "<?php exit(0); ?>\n{\"user_login\":\"y\"}\n")
+	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-auditqueue.php", big+"more")
+	again, _ := Walk(root, owner)
+	if got := evaluate(baseline.Entries, again.Entries, owner); len(got) != 0 {
+		t.Errorf("rewritten guarded files flagged: %q", got)
+	}
+
+	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-failedlogins.php", "<?php system($_GET['c']); exit(0); ?>")
+	lost, _ := Walk(root, owner)
+	if got := evaluate(baseline.Entries, lost.Entries, owner); !slices.Equal(got, []string{"uploads-php wp-content/uploads/sucuri/sucuri-failedlogins.php"}) {
+		t.Errorf("after losing its guard, flagged %q", got)
+	}
+}
