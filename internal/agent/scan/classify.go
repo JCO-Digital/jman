@@ -47,9 +47,6 @@ var strayDirs = map[string]bool{".git": true, ".svn": true}
 const (
 	uploadsPrefix   = "wp-content/uploads/"
 	muPluginsPrefix = "wp-content/mu-plugins/"
-	// wpmlTwigCache is where WPML keeps compiled Twig templates, PHP files
-	// it regenerates whenever its cache is rebuilt.
-	wpmlTwigCache = "/cache/wpml/twig/"
 )
 
 // guardedRe matches the start of a PHP file whose first statement ends the
@@ -89,13 +86,6 @@ func isUploadsPHP(p string) bool {
 func isMuPlugin(p string) bool {
 	rest, ok := strings.CutPrefix(p, muPluginsPrefix)
 	return ok && !strings.Contains(rest, "/")
-}
-
-// isWPMLTwigCache reports whether p is one of WPML's compiled templates in
-// uploads (on a multisite, under uploads/sites/<n>/).
-func isWPMLTwigCache(p string) bool {
-	rest, ok := strings.CutPrefix(p, uploadsPrefix)
-	return ok && strings.Contains("/"+rest, wpmlTwigCache)
 }
 
 func isDropin(p string) bool {

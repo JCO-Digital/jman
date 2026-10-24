@@ -309,11 +309,12 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	}
 	slices.Sort(got)
 	want := []string{
+		// WPML's compiled templates are a good place to hide a shell.
+		"high uploads-php wp-content/uploads/cache/wpml/twig/01/abc.php",
+		"high uploads-php wp-content/uploads/sites/2/cache/wpml/twig/02/def.php",
 		"low stray-file wp-content/plugins/y/.env",
 		"low stray-file wp-content/plugins/y/.git",
 		"low stray-file wp-content/uploads/db.sql.zip",
-		"low uploads-php wp-content/uploads/cache/wpml/twig/01/abc.php",
-		"low uploads-php wp-content/uploads/sites/2/cache/wpml/twig/02/def.php",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("flagged %q, want %q", got, want)

@@ -74,6 +74,14 @@ type AppConfig struct {
 	// site's files for signs of compromise (default 60; negative turns
 	// scanning off).
 	AgentScanInterval int `toml:"agentScanInterval" mapstructure:"agentScanInterval"`
+	// ScanSlackSeverity and ScanPagerDutySeverity are the lowest severity of
+	// a scan finding that alerts in Slack (default "high") and PagerDuty
+	// (default "critical"); "off" turns that alert off. Findings below both
+	// only show in the web UI. Slack alerts go to SlackSecurityChannel, or
+	// slackMonitorChannel when it's unset.
+	ScanSlackSeverity     string `toml:"scanSlackSeverity" mapstructure:"scanSlackSeverity"`
+	ScanPagerDutySeverity string `toml:"scanPagerDutySeverity" mapstructure:"scanPagerDutySeverity"`
+	SlackSecurityChannel  string `toml:"slackSecurityChannel" mapstructure:"slackSecurityChannel"`
 	// AgentServerStaleMinutes and AgentSiteStaleMinutes are how long a
 	// server's agent may go without calling in (default 30), and a site
 	// without a successful WordPress data collection (default 180),
@@ -203,6 +211,9 @@ func loadConfig() error {
 		"slackChannel":               "SLACKCHANNEL",
 		"slackMonitorChannel":        "SLACKMONITORCHANNEL",
 		"slackTasksChannel":          "SLACKTASKSCHANNEL",
+		"slackSecurityChannel":       "SLACKSECURITYCHANNEL",
+		"scanSlackSeverity":          "SCANSLACKSEVERITY",
+		"scanPagerDutySeverity":      "SCANPAGERDUTYSEVERITY",
 		"pagerdutyRoutingKey":        "PAGERDUTYROUTINGKEY",
 		"pagerdutyEscalationMinutes": "PAGERDUTYESCALATIONMINUTES",
 		"pagerdutyEuRegion":          "PAGERDUTYEUREGION",
@@ -285,6 +296,40 @@ func AgentScanIntervalMinutes() int {
 		return 60
 	}
 	return Cfg.AgentScanInterval
+}
+
+// ScanSeverityRank orders scan finding severities, from 1 for low to 4 for
+// critical. Anything else is 0.
+func ScanSeverityRank(severity string) int {
+	switch severity {
+	case "low":
+		return 1
+	case "medium":
+		return 2
+	case "high":
+		return 3
+	case "critical":
+		return 4
+	}
+	return 0
+}
+
+// ScanSlackAlertRank and ScanPagerDutyAlertRank return the ScanSeverityRank
+// a scan finding needs for a Slack or PagerDuty alert, or 0 when that alert
+// is off.
+func ScanSlackAlertRank() int {
+	return scanAlertRank(Cfg.ScanSlackSeverity, "high")
+}
+
+func ScanPagerDutyAlertRank() int {
+	return scanAlertRank(Cfg.ScanPagerDutySeverity, "critical")
+}
+
+func scanAlertRank(setting, def string) int {
+	if setting == "" {
+		setting = def
+	}
+	return ScanSeverityRank(setting)
 }
 
 // AgentServerStaleAfter returns how long a server's agent may stay silent

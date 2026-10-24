@@ -10,10 +10,22 @@ const (
 	IncidentStatusClosed       = "closed"
 )
 
-// Incident represents an outage incident for a monitored site.
+// Incident types. An uptime incident follows a monitor check's outage; a
+// security incident groups a site's file scan findings and only a person
+// closes it.
+const (
+	IncidentTypeUptime   = "uptime"
+	IncidentTypeSecurity = "security"
+)
+
+// Incident represents an outage of a monitored site, or a security
+// incident on a scanned one.
 type Incident struct {
 	ID             int64      `json:"id"`
+	Type           string     `json:"type"`
 	CheckID        string     `json:"check_id"`
+	SiteID         string     `json:"site_id,omitempty"`
+	Severity       string     `json:"severity,omitempty"`
 	Domain         string     `json:"domain"`
 	Status         string     `json:"status"` // open, acknowledged, resolved, closed
 	ErrorMessage   string     `json:"error_message"`

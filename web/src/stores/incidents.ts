@@ -1,7 +1,7 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
-import type { Incident, IncidentsResponse } from "../types";
+import type { Incident, IncidentsResponse, IncidentType } from "../types";
 import { BASE_URL, apiFetch } from "../utils/api";
 
 export const useIncidentStore = defineStore("incidents", () => {
@@ -9,7 +9,9 @@ export const useIncidentStore = defineStore("incidents", () => {
 
 	const activeIncidents = ref<Incident[]>([]);
 	const historyIncidents = ref<Incident[]>([]);
+	/** Active incidents of every type, for the navigation badge. */
 	const activeCount = ref(0);
+	const activeByType = ref<Partial<Record<IncidentType, number>>>({});
 	const activeTotal = ref(0);
 	const historyTotal = ref(0);
 	const isLoading = ref(false);
@@ -17,7 +19,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 	async function fetchActiveIncidents(page: number = 1, limit: number = 50) {
 		try {
 			const res = await apiFetch(
-				`${BASE_URL}/incidents?filter=active&page=${page}&limit=${limit}`,
+				`${BASE_URL}/incidents?type=uptime&filter=active&page=${page}&limit=${limit}`,
 			);
 			if (!res.ok) {
 				if (res.status === 401) {
@@ -29,7 +31,9 @@ export const useIncidentStore = defineStore("incidents", () => {
 			const data: IncidentsResponse = await res.json();
 			activeIncidents.value = data.incidents || [];
 			activeTotal.value = data.total;
-			activeCount.value = data.active_count ?? activeIncidents.value.length;
+			activeCount.value =
+				data.active_count ?? activeIncidents.value.length;
+			activeByType.value = data.active_by_type ?? {};
 			return activeIncidents.value;
 		} catch (error) {
 			console.error("Failed to fetch active incidents:", error);
@@ -41,7 +45,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 		isLoading.value = true;
 		try {
 			const res = await apiFetch(
-				`${BASE_URL}/incidents?filter=history&page=${page}&limit=${limit}`,
+				`${BASE_URL}/incidents?type=uptime&filter=history&page=${page}&limit=${limit}`,
 			);
 			if (!res.ok) {
 				if (res.status === 401) {
@@ -54,6 +58,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 			historyIncidents.value = data.incidents || [];
 			historyTotal.value = data.total;
 			activeCount.value = data.active_count;
+			activeByType.value = data.active_by_type ?? {};
 			return historyIncidents.value;
 		} catch (error) {
 			console.error("Failed to fetch incident history:", error);
@@ -65,10 +70,13 @@ export const useIncidentStore = defineStore("incidents", () => {
 
 	async function fetchActiveCount() {
 		try {
-			const res = await apiFetch(`${BASE_URL}/incidents?filter=active&limit=1`);
+			const res = await apiFetch(
+				`${BASE_URL}/incidents?filter=active&limit=1`,
+			);
 			if (!res.ok) return;
 			const data: IncidentsResponse = await res.json();
 			activeCount.value = data.active_count;
+			activeByType.value = data.active_by_type ?? {};
 		} catch (error) {
 			console.error("Failed to fetch incident count:", error);
 		}
@@ -82,7 +90,9 @@ export const useIncidentStore = defineStore("incidents", () => {
 			},
 		});
 		if (!res.ok) {
-			const err = await res.json().catch(() => ({ error: "Failed to acknowledge" }));
+			const err = await res
+				.json()
+				.catch(() => ({ error: "Failed to acknowledge" }));
 			throw new Error(err.error || "Failed to acknowledge incident");
 		}
 		const updated: Incident = await res.json();
@@ -102,12 +112,16 @@ export const useIncidentStore = defineStore("incidents", () => {
 			},
 		});
 		if (!res.ok) {
-			const err = await res.json().catch(() => ({ error: "Failed to close incident" }));
+			const err = await res
+				.json()
+				.catch(() => ({ error: "Failed to close incident" }));
 			throw new Error(err.error || "Failed to close incident");
 		}
 		const updated: Incident = await res.json();
 		// Remove from active list
-		activeIncidents.value = activeIncidents.value.filter((i) => i.id !== id);
+		activeIncidents.value = activeIncidents.value.filter(
+			(i) => i.id !== id,
+		);
 		activeTotal.value = Math.max(0, activeTotal.value - 1);
 		activeCount.value = Math.max(0, activeCount.value - 1);
 		return updated;
@@ -123,11 +137,15 @@ export const useIncidentStore = defineStore("incidents", () => {
 			body: JSON.stringify({ reason }),
 		});
 		if (!res.ok) {
-			const err = await res.json().catch(() => ({ error: "Failed to pause check" }));
+			const err = await res
+				.json()
+				.catch(() => ({ error: "Failed to pause check" }));
 			throw new Error(err.error || "Failed to pause check from incident");
 		}
 		const updated: Incident = await res.json();
-		activeIncidents.value = activeIncidents.value.filter((i) => i.id !== id);
+		activeIncidents.value = activeIncidents.value.filter(
+			(i) => i.id !== id,
+		);
 		activeTotal.value = Math.max(0, activeTotal.value - 1);
 		activeCount.value = Math.max(0, activeCount.value - 1);
 		return updated;
@@ -137,6 +155,7 @@ export const useIncidentStore = defineStore("incidents", () => {
 		activeIncidents,
 		historyIncidents,
 		activeCount,
+		activeByType,
 		activeTotal,
 		historyTotal,
 		isLoading,

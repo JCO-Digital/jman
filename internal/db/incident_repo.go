@@ -8,6 +8,11 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
+// incidentColumns are the columns scanIncident and scanIncidentRows read.
+const incidentColumns = `id, type, COALESCE(check_id, ''), COALESCE(site_id, ''), severity, domain, status,
+		error_message, error_code, down_since, acknowledged_by, acknowledged_at, resolved_by, resolved_at,
+		pd_triggered, created_at, updated_at`
+
 // CreateIncident creates a new incident if there is not already an active (open or acknowledged)
 // incident for the check. If an active incident already exists, it updates its error message/code
 // and returns the existing incident. domain is the checked host, stored for display.
@@ -56,6 +61,7 @@ func CreateIncident(checkID, domain, errorMessage string, errorCode int, downSin
 
 	return &models.Incident{
 		ID:           id,
+		Type:         models.IncidentTypeUptime,
 		CheckID:      checkID,
 		Domain:       domain,
 		Status:       models.IncidentStatusOpen,
@@ -76,9 +82,7 @@ func GetActiveIncidentByCheck(checkID string) (*models.Incident, error) {
 	}
 
 	query := `
-		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
-		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
-		       pd_triggered, created_at, updated_at
+		SELECT ` + incidentColumns + `
 		FROM incidents
 		WHERE check_id = ? AND status IN ('open', 'acknowledged')
 		ORDER BY id DESC LIMIT 1
@@ -102,9 +106,7 @@ func GetIncidentByID(id int64) (*models.Incident, error) {
 	}
 
 	query := `
-		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
-		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
-		       pd_triggered, created_at, updated_at
+		SELECT ` + incidentColumns + `
 		FROM incidents
 		WHERE id = ?
 	`
@@ -127,9 +129,7 @@ func GetActiveIncidents() ([]models.Incident, error) {
 	}
 
 	query := `
-		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
-		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
-		       pd_triggered, created_at, updated_at
+		SELECT ` + incidentColumns + `
 		FROM incidents
 		WHERE status IN ('open', 'acknowledged')
 		ORDER BY down_since DESC
@@ -151,8 +151,9 @@ func GetActiveIncidents() ([]models.Incident, error) {
 	return incidents, nil
 }
 
-// GetIncidents retrieves paginated incidents according to filter ("active", "resolved", "closed", or "all").
-func GetIncidents(filter string, limit, offset int) ([]models.Incident, int, error) {
+// GetIncidents retrieves paginated incidents according to filter ("active",
+// "resolved", "closed", "history" or "all") and incidentType ("" for any).
+func GetIncidents(filter, incidentType string, limit, offset int) ([]models.Incident, int, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, 0, fmt.Errorf("database not initialized")
@@ -175,6 +176,14 @@ func GetIncidents(filter string, limit, offset int) ([]models.Incident, int, err
 		whereClause = "WHERE status = ?"
 		args = append(args, filter)
 	}
+	if incidentType != "" {
+		if whereClause == "" {
+			whereClause = "WHERE type = ?"
+		} else {
+			whereClause += " AND type = ?"
+		}
+		args = append(args, incidentType)
+	}
 
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM incidents %s", whereClause)
 	var total int
@@ -190,9 +199,7 @@ func GetIncidents(filter string, limit, offset int) ([]models.Incident, int, err
 	}
 
 	query := fmt.Sprintf(`
-		SELECT id, COALESCE(check_id, ''), domain, status, error_message, error_code, down_since,
-		       acknowledged_by, acknowledged_at, resolved_by, resolved_at,
-		       pd_triggered, created_at, updated_at
+		SELECT `+incidentColumns+`
 		FROM incidents
 		%s
 		ORDER BY id DESC
@@ -220,17 +227,40 @@ func GetIncidents(filter string, limit, offset int) ([]models.Incident, int, err
 
 // GetActiveIncidentCount returns the count of currently open or acknowledged incidents.
 func GetActiveIncidentCount() (int, error) {
+	counts, err := GetActiveIncidentCounts()
+	if err != nil {
+		return 0, err
+	}
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	return total, nil
+}
+
+// GetActiveIncidentCounts returns how many incidents of each type are open
+// or acknowledged.
+func GetActiveIncidentCounts() (map[string]int, error) {
 	db := GetAPIDB()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return nil, fmt.Errorf("database not initialized")
 	}
 
-	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM incidents WHERE status IN ('open', 'acknowledged')").Scan(&count)
+	rows, err := db.Query("SELECT type, COUNT(*) FROM incidents WHERE status IN ('open', 'acknowledged') GROUP BY type")
 	if err != nil {
-		return 0, fmt.Errorf("failed to get active incident count: %w", err)
+		return nil, fmt.Errorf("failed to get active incident counts: %w", err)
 	}
-	return count, nil
+	defer rows.Close()
+	counts := map[string]int{models.IncidentTypeUptime: 0, models.IncidentTypeSecurity: 0}
+	for rows.Next() {
+		var incidentType string
+		var n int
+		if err := rows.Scan(&incidentType, &n); err != nil {
+			return nil, fmt.Errorf("failed to scan active incident count: %w", err)
+		}
+		counts[incidentType] = n
+	}
+	return counts, rows.Err()
 }
 
 // AcknowledgeIncident transitions an open incident to acknowledged.
@@ -357,7 +387,10 @@ func scanIncident(row *sql.Row) (*models.Incident, error) {
 
 	err := row.Scan(
 		&inc.ID,
+		&inc.Type,
 		&inc.CheckID,
+		&inc.SiteID,
+		&inc.Severity,
 		&inc.Domain,
 		&inc.Status,
 		&inc.ErrorMessage,
@@ -408,7 +441,10 @@ func scanIncidentRows(rows *sql.Rows) (*models.Incident, error) {
 
 	err := rows.Scan(
 		&inc.ID,
+		&inc.Type,
 		&inc.CheckID,
+		&inc.SiteID,
+		&inc.Severity,
 		&inc.Domain,
 		&inc.Status,
 		&inc.ErrorMessage,

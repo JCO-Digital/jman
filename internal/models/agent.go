@@ -248,6 +248,50 @@ type StoredScanFinding struct {
 	RuleSetVersion string `json:"rule_set_version"`
 	FirstSeenAt    string `json:"first_seen_at"`
 	LastSeenAt     string `json:"last_seen_at"`
+	// IncidentID is the security incident the finding belongs to.
+	IncidentID *int64 `json:"incident_id,omitempty"`
+	// Status is one of the ScanFindingStatus constants; StatusBy and
+	// StatusAt say who changed it last and when.
+	Status   string  `json:"status"`
+	StatusBy string  `json:"status_by,omitempty"`
+	StatusAt *string `json:"status_at,omitempty"`
+}
+
+// Scan finding statuses. An open finding needs looking at; a closed one
+// was dismissed, or its incident closed. Allowlisted findings have a hash
+// on the allowlist, acknowledged ones a path acknowledged for their site.
+const (
+	ScanFindingOpen         = "open"
+	ScanFindingClosed       = "closed"
+	ScanFindingAllowlisted  = "allowlisted"
+	ScanFindingAcknowledged = "acknowledged"
+)
+
+// ScanAllowlistEntry trusts a file hash on every site. SiteID, Rule, Path
+// and Snippet describe the finding it was made from. A removed entry is
+// kept for the record; UpdatedBy and UpdatedAt say who removed it.
+type ScanAllowlistEntry struct {
+	ID      int64  `json:"id"`
+	SHA256  string `json:"sha256"`
+	Reason  string `json:"reason"`
+	SiteID  string `json:"site_id"`
+	Rule    string `json:"rule"`
+	Path    string `json:"path"`
+	Snippet string `json:"snippet,omitempty"`
+	Removed bool   `json:"removed"`
+	AuditFields
+}
+
+// ScanPathAck acknowledges a state rule's findings for one path on one
+// site, whatever the file holds. Removal works as in ScanAllowlistEntry.
+type ScanPathAck struct {
+	ID      int64  `json:"id"`
+	SiteID  string `json:"site_id"`
+	Rule    string `json:"rule"`
+	Path    string `json:"path"`
+	Reason  string `json:"reason"`
+	Removed bool   `json:"removed"`
+	AuditFields
 }
 
 // AgentReport is the request body jman-agent POSTs on each collection cycle.
