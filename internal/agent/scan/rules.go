@@ -14,7 +14,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "2"
+const RuleSetVersion = "3"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -90,10 +90,11 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 		if !e.Dir {
 			switch {
 			case isUploadsPHP(e.Path) && changed:
-				// Plugins leave empty index.php files all over uploads.
-				// An empty file runs nothing; it's flagged once it isn't
-				// empty any more.
-				if e.Size > 0 || e.Symlink != "" || e.Unreadable {
+				// Plugins leave empty index.php files all over uploads, and
+				// keep data in .php files that exit before anything else
+				// (see isGuarded). Neither runs anything; each is flagged
+				// once it does.
+				if (e.Size > 0 && !isGuarded(e.Head)) || e.Symlink != "" || e.Unreadable {
 					flag(RuleUploadsPHP, change+" PHP file in uploads")
 				}
 			case isMuPlugin(e.Path) && changed:
