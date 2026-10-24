@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.10.2 (2026-10-23)
+### 7.10.3 (2026-10-24)
+
+#### Bug Fixes
+
+- agent: don't flag PHP data files guarded by exit in uploads (8154c23)
+
+### v7.10.2 (2026-10-23)
 
 #### Bug Fixes
 
