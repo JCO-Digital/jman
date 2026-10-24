@@ -20,10 +20,13 @@ type IncidentsResponse struct {
 	Incidents   []models.Incident `json:"incidents"`
 	Total       int               `json:"total"`
 	ActiveCount int               `json:"active_count"`
+	// ActiveByType is ActiveCount split by incident type.
+	ActiveByType map[string]int `json:"active_by_type"`
 }
 
 // ListIncidentsHandler handles GET /api/incidents.
-// Query params: filter (active|resolved|closed|history|all), page, limit.
+// Query params: filter (active|resolved|closed|history|all), type
+// (uptime|security|all, default uptime), page, limit.
 func ListIncidentsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", "GET")
@@ -48,16 +51,32 @@ func ListIncidentsHandler(w http.ResponseWriter, r *http.Request) {
 
 	offset := (page - 1) * limit
 
-	incidents, total, err := db.GetIncidents(filter, limit, offset)
+	incidentType := r.URL.Query().Get("type")
+	switch incidentType {
+	case "":
+		incidentType = models.IncidentTypeUptime
+	case "all":
+		incidentType = ""
+	case models.IncidentTypeUptime, models.IncidentTypeSecurity:
+	default:
+		WriteError(w, http.StatusBadRequest, "Invalid incident type")
+		return
+	}
+
+	incidents, total, err := db.GetIncidents(filter, incidentType, limit, offset)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "ListIncidentsHandler: failed to fetch incidents: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
 
-	activeCount, err := db.GetActiveIncidentCount()
+	activeByType, err := db.GetActiveIncidentCounts()
 	if err != nil {
-		verb.LogPrintf(verb.Normal, "ListIncidentsHandler: failed to get active count: %v", err)
+		verb.LogPrintf(verb.Normal, "ListIncidentsHandler: failed to get active counts: %v", err)
+	}
+	activeCount := 0
+	for _, n := range activeByType {
+		activeCount += n
 	}
 
 	if incidents == nil {
@@ -65,9 +84,10 @@ func ListIncidentsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	WriteJSON(w, http.StatusOK, IncidentsResponse{
-		Incidents:   incidents,
-		Total:       total,
-		ActiveCount: activeCount,
+		Incidents:    incidents,
+		Total:        total,
+		ActiveCount:  activeCount,
+		ActiveByType: activeByType,
 	})
 }
 
@@ -107,6 +127,16 @@ func AcknowledgeIncidentHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "AcknowledgeIncidentHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+
+	if inc.Type == models.IncidentTypeSecurity {
+		resolveSecurityPagerDuty(inc)
+		msg := fmt.Sprintf("👀 Security incident for site *%s* acknowledged by *%s*", inc.Domain, username)
+		if err := slack.SendMessageToChannel(msg, securitySlackChannel(), true); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to send Slack ack message: %v", err)
+		}
+		WriteJSON(w, http.StatusOK, inc)
 		return
 	}
 
@@ -160,6 +190,21 @@ func CloseIncidentHandler(w http.ResponseWriter, r *http.Request) {
 	username := "User"
 	if claims != nil && claims.Username != "" {
 		username = claims.Username
+	}
+
+	if existing.Type == models.IncidentTypeSecurity {
+		// Closing closes its open findings; one reported again reopens it.
+		scanTriageMu.Lock()
+		inc, err := db.CloseSecurityIncident(id, username)
+		scanTriageMu.Unlock()
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "CloseIncidentHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		resolveSecurityPagerDuty(existing)
+		WriteJSON(w, http.StatusOK, inc)
+		return
 	}
 
 	inc, err := db.CloseIncident(id, username)

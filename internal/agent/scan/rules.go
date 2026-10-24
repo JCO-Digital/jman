@@ -14,7 +14,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "3"
+const RuleSetVersion = "4"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -62,15 +62,10 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 		old, existed := prev[e.Path]
 		changed := !existed || signature(old) != signature(e)
 		flag := func(rule, detail string) {
-			severity := severities[rule]
-			if rule == RuleUploadsPHP && isWPMLTwigCache(e.Path) {
-				// WPML rewrites these whenever it rebuilds its cache.
-				severity = "low"
-			}
 			f := models.ScanFinding{
 				Engine:   Engine,
 				Rule:     rule,
-				Severity: severity,
+				Severity: severities[rule],
 				Path:     e.Path,
 				SHA256:   e.SHA256,
 				Snippet:  e.Head,

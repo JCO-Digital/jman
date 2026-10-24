@@ -413,7 +413,9 @@ jman-agent scans each site's files about once an hour (see README_AGENT.md) and 
       "detail": "new PHP file in uploads",
       "rule_set_version": "1",
       "first_seen_at": "2026-10-23T14:00:00Z",
-      "last_seen_at": "2026-10-23T14:00:00Z"
+      "last_seen_at": "2026-10-23T14:00:00Z",
+      "incident_id": 41,
+      "status": "open"
     }
   ]
 }
@@ -421,7 +423,27 @@ jman-agent scans each site's files about once an hour (see README_AGENT.md) and 
 
 A finding is identified by its site, rule, path and `sha256`, so reporting the same one again only updates `last_seen_at`. `engine` is `api` for findings jman-api raises itself: `baseline-reset` (low) when an agent lost its baseline for a site or compared against one other than it last reported.
 
+Each finding also has a `status`: `open`, `closed` (dismissed, or its incident was closed), `allowlisted` (its hash is on the allowlist) or `acknowledged` (its path is acknowledged for the site), with `status_by` and `status_at`, and the `incident_id` of the security incident it's in. A closed finding reported again is open again.
+
+`GET /api/scan/findings` takes these filters as well: `?incident_id=`, `?status=`, `?sha256=` and `?unassigned=1` (findings without an incident).
+
 `GET /api/scan/sites` returns the latest scan of every scanned site: `site_id`, `scanned_at`, `rule_set_version`, `entries` (files in the baseline), `omitted`, `duration_ms`, `error` (set when the last scan failed) and `rebaselined_at`.
+
+#### Security incidents
+
+Findings of medium severity and above are grouped into one security incident per site (`GET /api/incidents?type=security`). Low findings stay out of incidents; the web UI lists them as informational. jman-api never resolves a security incident itself: a person closes it, which closes its open findings. A finding reported again goes back into the incident it was in, reopening it, and so does a new finding whose file hash was in a closed incident of the same site. Other findings join the site's active security incident, or open a new one. Findings stored before security incidents existed are assigned on startup, without alerts.
+
+New findings alert by severity: `scanSlackSeverity` (default `high`) and above in Slack (`slackSecurityChannel`, or `slackMonitorChannel`), `scanPagerDutySeverity` (default `critical`) and above in PagerDuty, keyed `jman-scan:incident:<id>`. Acknowledging or closing the incident resolves its PagerDuty alert.
+
+#### Triage (execute level)
+
+`POST /api/scan/allowlist` with `{"finding_id": 12, "reason": "…", "close_matching": false}` trusts the finding's file hash on every site, and marks the finding allowlisted. With `close_matching`, every open finding with that hash is marked too. Findings of an allowlisted hash are marked when they're reported, and don't open incidents. Each entry records the reason, who added it and when, and the site, rule, path and snippet of the finding it came from. `GET /api/scan/allowlist` (basic level; `?include_removed=1` for removed entries) lists them; `DELETE /api/scan/allowlist/{id}` removes one, keeping it for the record with who removed it and when.
+
+`POST /api/scan/acks` with `{"finding_ids": [12, 13], "reason": "…"}` acknowledges the paths of `stray-file`, `foreign-owner` and `unreadable` findings on their sites: those rules don't flag the path there again, whatever the file holds. `GET /api/scan/acks` (basic level; `?site_id=`, `?include_removed=1`) and `DELETE /api/scan/acks/{id}` work as for the allowlist.
+
+`POST /api/scan/findings/close` with `{"finding_ids": [12]}` dismisses findings.
+
+Each of these closes the incidents it leaves without open findings.
 
 ## Reports (Read-Only)
 
@@ -661,6 +683,8 @@ curl -fsS -X POST -H "Authorization: Bearer $TOKEN" https://jman.example.com/api
 `POST /monitor/checks/{id}/pause` (Protected: `edit`): pauses a check. An active incident is resolved, its PagerDuty alert resolved, and a "paused" message posted to Slack. Optional body `{"reason": "..."}`.
 `POST /monitor/checks/{id}/resume` (Protected: `edit`)
 `POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check, resolving the incident.
+
+Incidents have a `type`: `uptime`, or `security` for a site's file scan findings (see File Scans), which also carry `site_id` and `severity`. `GET /incidents` returns uptime incidents unless `?type=security` or `?type=all`, and `active_by_type` splits `active_count` by type.
 
 Monitor history, statuses and incidents carry the `check_id` they belong to. Every site has a default check (path `/`, expecting HTML), created automatically; a check whose site is gone is marked `orphaned_at` and no longer runs (its active incident is resolved, as when pausing). PagerDuty alerts are keyed by check ID (`jman-monitor:check:<id>`).
 

@@ -87,6 +87,7 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 		if s.FindingsOmitted > 0 {
 			verb.LogPrintf(verb.Normal, "Agent left %d scan finding(s) for site %s out of its report", s.FindingsOmitted, siteID)
 		}
+		triageScanFindings(siteID, true)
 	}
 
 	if err := db.RecordSiteScan(siteID, s, scannedAt); err != nil {
@@ -95,14 +96,31 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 }
 
 // ListScanFindingsHandler handles GET /api/scan/findings: the findings of
-// file scans, most recently seen first. ?site_id= limits them to one site,
-// ?limit= (default 200, at most 1000) caps how many are returned.
+// file scans, most recently seen first. ?site_id=, ?incident_id=, ?status=
+// and ?sha256= filter them, ?unassigned=1 keeps the ones without an
+// incident, and ?limit= (default 200, at most 1000) caps how many are
+// returned.
 func ListScanFindingsHandler(w http.ResponseWriter, r *http.Request) {
-	limit := 200
-	if l, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && l > 0 {
-		limit = min(l, 1000)
+	q := r.URL.Query()
+	filter := db.ScanFindingFilter{
+		SiteID:     q.Get("site_id"),
+		Status:     q.Get("status"),
+		SHA256:     q.Get("sha256"),
+		Unassigned: q.Get("unassigned") == "1" || q.Get("unassigned") == "true",
+		Limit:      200,
 	}
-	findings, err := db.ListScanFindings(r.URL.Query().Get("site_id"), limit)
+	if l, err := strconv.Atoi(q.Get("limit")); err == nil && l > 0 {
+		filter.Limit = min(l, 1000)
+	}
+	if v := q.Get("incident_id"); v != "" {
+		id, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			WriteError(w, http.StatusBadRequest, "Invalid incident_id")
+			return
+		}
+		filter.IncidentID = id
+	}
+	findings, err := db.ListScanFindings(filter)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "ListScanFindingsHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")

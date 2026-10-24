@@ -133,3 +133,32 @@ func sendEvent(e event) error {
 
 	return nil
 }
+
+// SecurityDedupKey returns the PagerDuty dedup_key for a security incident.
+func SecurityDedupKey(incidentID int64) string {
+	return fmt.Sprintf("jman-scan:incident:%d", incidentID)
+}
+
+// TriggerSecurityEvent sends a critical "trigger" event for a security
+// incident. source names the site.
+func TriggerSecurityEvent(incidentID int64, source, summary string) error {
+	return sendEvent(event{
+		RoutingKey:  config.Cfg.TokenPagerDuty,
+		EventAction: "trigger",
+		DedupKey:    SecurityDedupKey(incidentID),
+		Payload: &eventPayload{
+			Summary:  summary,
+			Source:   source,
+			Severity: SeverityCritical,
+		},
+	})
+}
+
+// ResolveSecurityEvent sends a "resolve" event for a security incident.
+func ResolveSecurityEvent(incidentID int64) error {
+	return sendEvent(event{
+		RoutingKey:  config.Cfg.TokenPagerDuty,
+		EventAction: "resolve",
+		DedupKey:    SecurityDedupKey(incidentID),
+	})
+}

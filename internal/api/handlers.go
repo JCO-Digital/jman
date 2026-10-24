@@ -111,6 +111,13 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Incident routes ---
 	mux.Handle("GET /api/scan/findings", basic(ListScanFindingsHandler))
 	mux.Handle("GET /api/scan/sites", basic(ListSiteScansHandler))
+	mux.Handle("POST /api/scan/findings/close", execute(CloseScanFindingsHandler))
+	mux.Handle("GET /api/scan/allowlist", basic(ListScanAllowlistHandler))
+	mux.Handle("POST /api/scan/allowlist", execute(AddScanAllowlistHandler))
+	mux.Handle("DELETE /api/scan/allowlist/{id}", execute(RemoveScanAllowlistHandler))
+	mux.Handle("GET /api/scan/acks", basic(ListScanPathAcksHandler))
+	mux.Handle("POST /api/scan/acks", execute(AddScanPathAcksHandler))
+	mux.Handle("DELETE /api/scan/acks/{id}", execute(RemoveScanPathAckHandler))
 	mux.Handle("GET /api/incidents", basic(ListIncidentsHandler))
 	mux.Handle("POST /api/incidents/{id}/acknowledge", basic(AcknowledgeIncidentHandler))
 	mux.Handle("POST /api/incidents/{id}/close", basic(CloseIncidentHandler))

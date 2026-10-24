@@ -10,6 +10,7 @@ import AppIcon from "../components/AppIcon.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import Pagination from "../components/Pagination.vue";
 import MonitorChecksPanel from "../components/monitoring/MonitorChecksPanel.vue";
+import SecurityPanel from "../components/monitoring/SecurityPanel.vue";
 import type { Incident } from "../types";
 
 const incidentStore = useIncidentStore();
@@ -17,8 +18,8 @@ const dataStore = useDataStore();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
 
-type Tab = "checks" | "active" | "history";
-const tabs: Tab[] = ["checks", "active", "history"];
+type Tab = "checks" | "active" | "history" | "security";
+const tabs: Tab[] = ["checks", "active", "history", "security"];
 
 const route = useRoute();
 const router = useRouter();
@@ -36,6 +37,7 @@ const siteFilter = computed(() =>
 	typeof route.query.site === "string" ? route.query.site : undefined,
 );
 const checksPanel = ref<InstanceType<typeof MonitorChecksPanel> | null>(null);
+const securityPanel = ref<InstanceType<typeof SecurityPanel> | null>(null);
 
 watch(
 	() => route.query.tab,
@@ -66,6 +68,9 @@ function loadData() {
 	loadActiveIncidents();
 	if (activeTab.value === "checks") {
 		checksPanel.value?.refresh();
+	}
+	if (activeTab.value === "security") {
+		securityPanel.value?.refresh();
 	}
 	if (activeTab.value === "history") {
 		incidentStore.fetchHistoryIncidents(
@@ -307,10 +312,10 @@ const canEdit = computed(() => authStore.canEdit);
 			>
 				Active Incidents
 				<span
-					v-if="incidentStore.activeCount > 0"
+					v-if="(incidentStore.activeByType.uptime ?? 0) > 0"
 					class="tab-badge tab-badge-danger"
 				>
-					{{ incidentStore.activeCount }}
+					{{ incidentStore.activeByType.uptime }}
 				</span>
 			</button>
 			<button
@@ -319,6 +324,19 @@ const canEdit = computed(() => authStore.canEdit);
 				@click="switchTab('history')"
 			>
 				Incident History
+			</button>
+			<button
+				class="tab-btn"
+				:class="{ active: activeTab === 'security' }"
+				@click="switchTab('security')"
+			>
+				Security
+				<span
+					v-if="(incidentStore.activeByType.security ?? 0) > 0"
+					class="tab-badge tab-badge-danger"
+				>
+					{{ incidentStore.activeByType.security }}
+				</span>
 			</button>
 		</div>
 
@@ -329,6 +347,9 @@ const canEdit = computed(() => authStore.canEdit);
 			:site-id="siteFilter"
 			@clear-site="clearSiteFilter"
 		/>
+
+		<!-- Security Tab -->
+		<SecurityPanel v-if="activeTab === 'security'" ref="securityPanel" />
 
 		<!-- Active Incidents Tab -->
 		<div v-if="activeTab === 'active'" class="card">

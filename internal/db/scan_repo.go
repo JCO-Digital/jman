@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -61,7 +62,8 @@ func RecordSiteScan(siteID string, s *models.AgentScan, scannedAt time.Time) err
 }
 
 // UpsertScanFinding stores a finding, or updates when it was last seen if
-// the site already has the same one.
+// the site already has the same one. A closed finding reported again is
+// open again; allowlisted and acknowledged ones keep their status.
 func UpsertScanFinding(siteID string, f models.ScanFinding, ruleSetVersion string, seenAt time.Time) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
@@ -75,7 +77,10 @@ func UpsertScanFinding(siteID string, f models.ScanFinding, ruleSetVersion strin
 		snippet = excluded.snippet,
 		detail = excluded.detail,
 		rule_set_version = excluded.rule_set_version,
-		last_seen_at = excluded.last_seen_at;
+		last_seen_at = excluded.last_seen_at,
+		status = CASE WHEN scan_findings.status = 'closed' THEN 'open' ELSE scan_findings.status END,
+		status_by = CASE WHEN scan_findings.status = 'closed' THEN '' ELSE scan_findings.status_by END,
+		status_at = CASE WHEN scan_findings.status = 'closed' THEN excluded.last_seen_at ELSE scan_findings.status_at END;
 	`, siteID, f.Engine, f.Rule, f.Severity, f.Path, f.SHA256, f.Snippet, f.Detail, ruleSetVersion, seenAt, seenAt)
 	if err != nil {
 		return fmt.Errorf("failed to store scan finding for site %s: %w", siteID, err)
@@ -83,21 +88,73 @@ func UpsertScanFinding(siteID string, f models.ScanFinding, ruleSetVersion strin
 	return nil
 }
 
-// ListScanFindings returns findings, most recently seen first, for one
-// site or (siteID "") all sites.
-func ListScanFindings(siteID string, limit int) ([]models.StoredScanFinding, error) {
+// ScanFindingFilter selects findings for ListScanFindings. Zero fields
+// don't filter.
+type ScanFindingFilter struct {
+	SiteID     string
+	IncidentID int64
+	Status     string
+	SHA256     string
+	// Unassigned keeps only findings without an incident.
+	Unassigned bool
+	Limit      int
+}
+
+const scanFindingColumns = `id, site_id, engine, rule, severity, path, sha256, snippet, detail, rule_set_version,
+	first_seen_at, last_seen_at, incident_id, status, status_by, status_at`
+
+func scanScanFinding(row interface{ Scan(...any) error }) (models.StoredScanFinding, error) {
+	var f models.StoredScanFinding
+	var incidentID sql.NullInt64
+	var statusAt sql.NullString
+	err := row.Scan(&f.ID, &f.SiteID, &f.Engine, &f.Rule, &f.Severity, &f.Path, &f.SHA256, &f.Snippet, &f.Detail, &f.RuleSetVersion,
+		&f.FirstSeenAt, &f.LastSeenAt, &incidentID, &f.Status, &f.StatusBy, &statusAt)
+	if incidentID.Valid {
+		f.IncidentID = &incidentID.Int64
+	}
+	if statusAt.Valid {
+		f.StatusAt = &statusAt.String
+	}
+	return f, err
+}
+
+// ListScanFindings returns the findings filter selects, most recently seen
+// first.
+func ListScanFindings(filter ScanFindingFilter) ([]models.StoredScanFinding, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	query := `SELECT id, site_id, engine, rule, severity, path, sha256, snippet, detail, rule_set_version, first_seen_at, last_seen_at FROM scan_findings`
-	args := []any{}
-	if siteID != "" {
-		query += ` WHERE site_id = ?`
-		args = append(args, siteID)
+	var where []string
+	var args []any
+	if filter.SiteID != "" {
+		where = append(where, "site_id = ?")
+		args = append(args, filter.SiteID)
 	}
-	query += ` ORDER BY last_seen_at DESC, id DESC LIMIT ?`
-	args = append(args, limit)
+	if filter.IncidentID != 0 {
+		where = append(where, "incident_id = ?")
+		args = append(args, filter.IncidentID)
+	}
+	if filter.Status != "" {
+		where = append(where, "status = ?")
+		args = append(args, filter.Status)
+	}
+	if filter.SHA256 != "" {
+		where = append(where, "sha256 = ?")
+		args = append(args, filter.SHA256)
+	}
+	if filter.Unassigned {
+		where = append(where, "incident_id IS NULL")
+	}
+	query := `SELECT ` + scanFindingColumns + ` FROM scan_findings`
+	if len(where) > 0 {
+		query += ` WHERE ` + strings.Join(where, " AND ")
+	}
+	query += ` ORDER BY last_seen_at DESC, id DESC`
+	if filter.Limit > 0 {
+		query += ` LIMIT ?`
+		args = append(args, filter.Limit)
+	}
 
 	rows, err := dbConn.Query(query, args...)
 	if err != nil {
@@ -107,8 +164,8 @@ func ListScanFindings(siteID string, limit int) ([]models.StoredScanFinding, err
 
 	findings := []models.StoredScanFinding{}
 	for rows.Next() {
-		var f models.StoredScanFinding
-		if err := rows.Scan(&f.ID, &f.SiteID, &f.Engine, &f.Rule, &f.Severity, &f.Path, &f.SHA256, &f.Snippet, &f.Detail, &f.RuleSetVersion, &f.FirstSeenAt, &f.LastSeenAt); err != nil {
+		f, err := scanScanFinding(rows)
+		if err != nil {
 			return nil, fmt.Errorf("failed to scan scan finding: %w", err)
 		}
 		findings = append(findings, f)
@@ -117,6 +174,35 @@ func ListScanFindings(siteID string, limit int) ([]models.StoredScanFinding, err
 		return nil, fmt.Errorf("error iterating scan findings: %w", err)
 	}
 	return findings, nil
+}
+
+// GetScanFindings returns the findings with the given IDs that exist.
+func GetScanFindings(ids []int64) ([]models.StoredScanFinding, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := dbConn.Query(`SELECT `+scanFindingColumns+` FROM scan_findings WHERE id IN (?`+strings.Repeat(", ?", len(ids)-1)+`) ORDER BY id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query scan findings: %w", err)
+	}
+	defer rows.Close()
+	var findings []models.StoredScanFinding
+	for rows.Next() {
+		f, err := scanScanFinding(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan scan finding: %w", err)
+		}
+		findings = append(findings, f)
+	}
+	return findings, rows.Err()
 }
 
 // ListSiteScans returns the latest scan of every scanned site.

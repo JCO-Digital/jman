@@ -272,9 +272,9 @@ latestCliVersion = "6.12.0"          # newest CLI release (optional, defaults to
 
 - `GET /api/monitor/history?hours=48` — Returns aggregated status history for all sites.
 - `GET /api/monitor/status?domain=...` — Returns current status for a specific site (or all sites if domain is omitted).
-- `GET /api/incidents?filter=active` — Returns open and acknowledged incidents with total count and active count (filters: `active`, `resolved`, `closed`, `history`, `all`).
+- `GET /api/incidents?filter=active` — Returns open and acknowledged incidents with total count and active count (filters: `active`, `resolved`, `closed`, `history`, `all`). `?type=` picks `uptime` (the default), `security` or `all`; `active_by_type` splits the active count by type.
 - `POST /api/incidents/{id}/acknowledge` — Acknowledges an active incident, notifies Slack, and cancels any pending/active PagerDuty alert.
-- `POST /api/incidents/{id}/close` — Closes an incident manually and resets monitoring state for that domain.
+- `POST /api/incidents/{id}/close` — Closes an incident manually and resets monitoring state for that domain. Closing a security incident closes its open findings (see File Scans in docs/API_SPECS.md).
 - `POST /api/incidents/{id}/ignore` — Adds the site to the monitor ignore list, closes the incident, and cancels PagerDuty.
 
 **Authentication error responses:**
@@ -378,6 +378,9 @@ a daily reminder while it lasts and a message when it recovers.
 | ------------------------- | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------- |
 | `agentWpDataInterval`     | `JMAN_AGENTWPDATAINTERVAL`     | `60`    | How often agents collect each site's plugins and core, in minutes. Negative turns it off.         |
 | `agentScanInterval`       | `JMAN_AGENTSCANINTERVAL`       | `60`    | How often agents scan each site's files for signs of compromise, in minutes. Negative turns it off. |
+| `scanSlackSeverity`       | `JMAN_SCANSLACKSEVERITY`       | `high`  | Lowest scan finding severity that alerts in Slack (`low`, `medium`, `high`, `critical` or `off`). |
+| `scanPagerDutySeverity`   | `JMAN_SCANPAGERDUTYSEVERITY`   | `critical` | Lowest scan finding severity that pages in PagerDuty, or `off`.                                |
+| `slackSecurityChannel`    | `JMAN_SLACKSECURITYCHANNEL`    |         | Slack channel for security alerts. Defaults to `slackMonitorChannel`.                             |
 | `agentServerStaleMinutes` | `JMAN_AGENTSERVERSTALEMINUTES` | `30`    | Warn when a server's agent hasn't called in for this long.                                        |
 | `agentSiteStaleMinutes`   | `JMAN_AGENTSITESTALEMINUTES`   | `180`   | Warn when an agent site's WordPress data hasn't been collected successfully for this long.        |
 

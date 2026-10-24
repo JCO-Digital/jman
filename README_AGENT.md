@@ -147,7 +147,7 @@ The rules flag:
 
 | Rule               | Severity | What                                                                                            |
 | ------------------ | -------- | ----------------------------------------------------------------------------------------------- |
-| `uploads-php`      | high     | A new or changed PHP file (`.php`, `.phtml`, `.phar`, …) under `wp-content/uploads`. Empty files and data files whose first statement is `exit` or `die` (as Sucuri keeps its logs) aren't flagged until that changes; WPML's compiled templates (`uploads/cache/wpml/twig/`) are low. |
+| `uploads-php`      | high     | A new or changed PHP file (`.php`, `.phtml`, `.phar`, …) under `wp-content/uploads`. Empty files and data files whose first statement is `exit` or `die` (as Sucuri keeps its logs) aren't flagged until that changes. WPML's compiled templates (`uploads/cache/wpml/twig/`) are flagged like any other PHP file: a cache directory that's rewritten anyway is a good place to hide a shell. |
 | `auto-prepend`     | high     | A new or changed `.user.ini` or `.htaccess` that sets `auto_prepend_file` or `auto_append_file` |
 | `mu-plugin-change` | medium   | A new or changed file directly in `wp-content/mu-plugins` (not in its subdirectories)          |
 | `dropin-change`    | medium   | A new or changed drop-in (`object-cache.php`, `advanced-cache.php`, `db.php`, …)                |

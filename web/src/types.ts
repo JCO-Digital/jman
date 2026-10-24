@@ -1008,9 +1008,17 @@ export interface ReportResult {
 
 export type IncidentStatus = "open" | "acknowledged" | "resolved" | "closed";
 
+/** uptime follows a monitor check; security groups a site's scan findings. */
+export type IncidentType = "uptime" | "security";
+
 export interface Incident {
 	id: number;
+	type: IncidentType;
 	check_id: string;
+	/** Security incidents only. */
+	site_id?: string;
+	/** Security incidents only: the worst open finding's severity. */
+	severity?: ScanSeverity;
 	domain: string;
 	status: IncidentStatus;
 	error_message: string;
@@ -1029,6 +1037,70 @@ export interface IncidentsResponse {
 	incidents: Incident[];
 	total: number;
 	active_count: number;
+	active_by_type?: Partial<Record<IncidentType, number>>;
+}
+
+// ---------------------------------------------------------------------------
+// File scan findings (jman-agent) and their triage
+// ---------------------------------------------------------------------------
+
+export type ScanSeverity = "low" | "medium" | "high" | "critical";
+
+/**
+ * open needs looking at; closed was dismissed or its incident closed;
+ * allowlisted has a trusted hash; acknowledged has a trusted path.
+ */
+export type ScanFindingStatus =
+	| "open"
+	| "closed"
+	| "allowlisted"
+	| "acknowledged";
+
+export interface ScanFinding {
+	id: number;
+	site_id: string;
+	engine: string;
+	rule: string;
+	severity: ScanSeverity;
+	path: string;
+	sha256?: string;
+	snippet?: string;
+	detail?: string;
+	rule_set_version: string;
+	first_seen_at: string;
+	last_seen_at: string;
+	incident_id?: number;
+	status: ScanFindingStatus;
+	status_by?: string;
+	status_at?: string;
+}
+
+export interface ScanAllowlistEntry {
+	id: number;
+	sha256: string;
+	reason: string;
+	site_id: string;
+	rule: string;
+	path: string;
+	snippet?: string;
+	removed: boolean;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export interface ScanPathAck {
+	id: number;
+	site_id: string;
+	rule: string;
+	path: string;
+	reason: string;
+	removed: boolean;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
 }
 
 // ---------------------------------------------------------------------------

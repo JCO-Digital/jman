@@ -829,6 +829,54 @@ func initAPISchema() error {
 				"rule_set_version": "TEXT NOT NULL DEFAULT ''",
 				"first_seen_at":    "DATETIME NOT NULL",
 				"last_seen_at":     "DATETIME NOT NULL",
+				// The security incident the finding belongs to. Low findings
+				// and allowlisted or acknowledged ones don't get one.
+				"incident_id": "INTEGER",
+				// open, closed (dismissed, or its incident closed),
+				// allowlisted (hash) or acknowledged (path); status_by and
+				// status_at say who changed it last and when.
+				"status":    "TEXT NOT NULL DEFAULT 'open'",
+				"status_by": "TEXT NOT NULL DEFAULT ''",
+				"status_at": "DATETIME",
+			},
+		},
+		{
+			// scan_allowlist holds file hashes trusted on every site.
+			// site_id, rule, path and snippet describe the finding an entry
+			// was made from. Removing an entry only sets removed, so
+			// updated_by and updated_at record who removed it.
+			Name: "scan_allowlist",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"sha256":     "TEXT NOT NULL",
+				"reason":     "TEXT NOT NULL",
+				"site_id":    "TEXT NOT NULL DEFAULT ''",
+				"rule":       "TEXT NOT NULL DEFAULT ''",
+				"path":       "TEXT NOT NULL DEFAULT ''",
+				"snippet":    "TEXT NOT NULL DEFAULT ''",
+				"removed":    "BOOLEAN NOT NULL DEFAULT 0",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT NOT NULL DEFAULT ''",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT NOT NULL DEFAULT ''",
+			},
+		},
+		{
+			// scan_path_acks acknowledges a state rule's findings (a stray
+			// or foreign-owned file) for one path on one site, whatever
+			// the file's content. Removal works as in scan_allowlist.
+			Name: "scan_path_acks",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":    "TEXT NOT NULL",
+				"rule":       "TEXT NOT NULL",
+				"path":       "TEXT NOT NULL",
+				"reason":     "TEXT NOT NULL",
+				"removed":    "BOOLEAN NOT NULL DEFAULT 0",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT NOT NULL DEFAULT ''",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT NOT NULL DEFAULT ''",
 			},
 		},
 		{
@@ -1002,8 +1050,14 @@ func initAPISchema() error {
 				"resolved_by":     "TEXT",
 				"resolved_at":     "DATETIME",
 				"pd_triggered":    "BOOLEAN DEFAULT 0",
-				"created_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
-				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				// uptime or security. A security incident groups a site's
+				// scan findings (scan_findings.incident_id); site_id and
+				// severity (its worst finding's) are only set for those.
+				"type":       "TEXT NOT NULL DEFAULT 'uptime'",
+				"site_id":    "TEXT",
+				"severity":   "TEXT NOT NULL DEFAULT ''",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
 	}
@@ -1128,6 +1182,26 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_findings_last_seen_at ON scan_findings(last_seen_at);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_findings_incident_id ON scan_findings(incident_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_findings_sha256 ON scan_findings(sha256);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_allowlist_sha256 ON scan_allowlist(sha256);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_path_acks_site_id ON scan_path_acks(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_incidents_site_id ON incidents(site_id);")
 	if err != nil {
 		return err
 	}
