@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.10.3 (2026-10-24)
+## 7.11.0 (2026-10-24)
+
+#### Features
+
+- security incidents and triage for scan findings (b4970de)
+
+### v7.10.3 (2026-10-24)
 
 #### Bug Fixes
 
