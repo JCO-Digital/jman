@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.11.1 (2026-10-25)
+## 7.12.0 (2026-10-25)
+
+#### Features
+
+- mark scan findings cleared when the agent sees them fixed (3003513)
+
+### v7.11.1 (2026-10-25)
 
 #### Bug Fixes
 
