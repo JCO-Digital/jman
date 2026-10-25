@@ -185,9 +185,24 @@ async function acknowledgeIncident(inc: Incident) {
 }
 
 async function closeIncident(inc: Incident) {
+	let present = "";
+	try {
+		const open = (
+			await scanStore.fetchFindings({
+				incident_id: inc.id,
+				status: "open",
+				limit: 1000,
+			})
+		).filter((f) => !f.cleared_at);
+		present = open.length
+			? `${open.length} open finding${open.length === 1 ? " still holds" : "s still hold"}: the agent hasn't seen the file${open.length === 1 ? "" : "s"} removed or fixed, and won't flag ${open.length === 1 ? "it" : "them"} again unless ${open.length === 1 ? "it changes" : "they change"}. `
+			: "The agent found every open finding's file removed or fixed. ";
+	} catch {
+		// Closing doesn't depend on the warning.
+	}
 	if (
 		!(await confirm(
-			`Close the security incident for ${inc.domain}? Its open findings are closed too. If a file with the same content is found again, the incident reopens.`,
+			`Close the security incident for ${inc.domain}? ${present}Its open findings are closed too; if a file with the same content is found again, the incident reopens.`,
 			{ confirmLabel: "Close incident" },
 		))
 	) {

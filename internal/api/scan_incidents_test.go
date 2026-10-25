@@ -235,3 +235,46 @@ func TestSecuritySlackMessage(t *testing.T) {
 		t.Fatalf("message = %s", msg)
 	}
 }
+
+// The agent reporting that flagged files are gone marks their findings
+// cleared without closing anything; finding one again undoes that.
+func TestScanFindingsCleared(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{504, 8, "clean.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(504)
+	report := func(s models.AgentScan) {
+		t.Helper()
+		s.RuleSetVersion = "4"
+		postAgentReport(t, 8, models.AgentReportSite{SiteID: site, Scan: &s})
+	}
+	shell := models.ScanFinding{Engine: "builtin", Rule: "uploads-php", Severity: "high", Path: "wp-content/uploads/a.php", SHA256: "aaa"}
+	foreign := models.ScanFinding{Engine: "builtin", Rule: "foreign-owner", Severity: "medium", Path: "wp-content/b"}
+	report(models.AgentScan{Findings: []models.ScanFinding{shell, foreign}})
+
+	// Replaced content clears only the finding for the old content.
+	report(models.AgentScan{Cleared: []models.ScanCleared{
+		{Path: shell.Path, Rule: "uploads-php", SHA256: "other", Detail: "replaced"},
+		{Path: shell.Path, Detail: "removed"},
+	}})
+	active := securityIncidents(t, "active")
+	if len(active) != 1 || active[0].ErrorMessage != "2 open findings: 1 uploads-php, 1 foreign-owner (1 cleared)" {
+		t.Fatalf("active = %+v", active)
+	}
+	if f := findingByPath(t, listScanFindings(t, ""), shell.Path); f.ClearedAt == nil || f.ClearedDetail != "removed" || f.Status != models.ScanFindingOpen {
+		t.Fatalf("removed finding = %+v", f)
+	}
+
+	report(models.AgentScan{Cleared: []models.ScanCleared{{Path: foreign.Path, Rule: "foreign-owner", Detail: "now owned by the site's owner"}}})
+	if active := securityIncidents(t, "active"); len(active) != 1 || !strings.HasSuffix(active[0].ErrorMessage, "(all cleared)") {
+		t.Fatalf("active after clearing all = %+v", active)
+	}
+
+	// The same file back isn't cleared any more.
+	report(models.AgentScan{Findings: []models.ScanFinding{shell}})
+	if f := findingByPath(t, listScanFindings(t, ""), shell.Path); f.ClearedAt != nil || f.ClearedDetail != "" {
+		t.Fatalf("finding found again = %+v", f)
+	}
+	if active := securityIncidents(t, "active"); len(active) != 1 || active[0].ErrorMessage != "2 open findings: 1 uploads-php, 1 foreign-owner (1 cleared)" {
+		t.Fatalf("active after the file came back = %+v", active)
+	}
+}

@@ -223,8 +223,23 @@ type AgentScan struct {
 	Findings   []ScanFinding `json:"findings,omitempty"`
 	// FindingsOmitted counts findings left out to keep the report small.
 	FindingsOmitted int `json:"findings_omitted,omitempty"`
+	// Cleared lists what the baseline flagged that no longer holds: a file
+	// that was removed or replaced, an owner that was fixed, a file that's
+	// readable again. Empty when the scan had no baseline to compare with.
+	Cleared []ScanCleared `json:"cleared,omitempty"`
 	// Error is set when the scan failed; nothing else is then meaningful.
 	Error string `json:"error,omitempty"`
+}
+
+// ScanCleared says the findings for a path no longer apply.
+type ScanCleared struct {
+	Path string `json:"path"`
+	// Rule limits it to one rule's findings, and SHA256 to the findings
+	// for that content. Empty, they match every finding for the path.
+	Rule   string `json:"rule,omitempty"`
+	SHA256 string `json:"sha256,omitempty"`
+	// Detail says what changed, such as "removed" or "replaced".
+	Detail string `json:"detail"`
 }
 
 // SiteScan is the latest file scan jman-api holds for a site.
@@ -255,6 +270,12 @@ type StoredScanFinding struct {
 	Status   string  `json:"status"`
 	StatusBy string  `json:"status_by,omitempty"`
 	StatusAt *string `json:"status_at,omitempty"`
+	// ClearedAt is when the agent found that the finding no longer holds
+	// (the file was removed, replaced, chowned, …), and ClearedDetail
+	// what it found. Clearing doesn't close anything: an attacker can
+	// remove their own files too.
+	ClearedAt     *string `json:"cleared_at,omitempty"`
+	ClearedDetail string  `json:"cleared_detail,omitempty"`
 }
 
 // Scan finding statuses. An open finding needs looking at; a closed one

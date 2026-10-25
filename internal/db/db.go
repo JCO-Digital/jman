@@ -838,6 +838,11 @@ func initAPISchema() error {
 				"status":    "TEXT NOT NULL DEFAULT 'open'",
 				"status_by": "TEXT NOT NULL DEFAULT ''",
 				"status_at": "DATETIME",
+				// When the agent found the finding no longer holds (the file
+				// was removed, replaced, chowned, …), and what it found.
+				// Reporting the finding again clears these.
+				"cleared_at":     "DATETIME",
+				"cleared_detail": "TEXT NOT NULL DEFAULT ''",
 			},
 		},
 		{

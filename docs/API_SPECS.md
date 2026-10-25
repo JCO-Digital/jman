@@ -425,6 +425,8 @@ A finding is identified by its site, rule, path and `sha256`, so reporting the s
 
 Each finding also has a `status`: `open`, `closed` (dismissed, or its incident was closed), `allowlisted` (its hash is on the allowlist) or `acknowledged` (its path is acknowledged for the site), with `status_by` and `status_at`, and the `incident_id` of the security incident it's in. A closed finding reported again is open again.
 
+`cleared_at` and `cleared_detail` are set when the agent reports that the finding no longer holds: the file was `removed`, `replaced`, is `no longer flagged` (still on disk, such as a foreign-owned file given back to the site's owner), `now owned by the site's owner` or `now readable`. Clearing doesn't change the status or close anything; finding the file again unsets it. An incident's summary counts its cleared findings, such as "2 open findings: 2 uploads-php (1 cleared)".
+
 `GET /api/scan/findings` takes these filters as well: `?incident_id=`, `?status=`, `?sha256=` and `?unassigned=1` (findings without an incident).
 
 `GET /api/scan/sites` returns the latest scan of every scanned site: `site_id`, `scanned_at`, `rule_set_version`, `entries` (files in the baseline), `omitted`, `duration_ms`, `error` (set when the last scan failed) and `rebaselined_at`.

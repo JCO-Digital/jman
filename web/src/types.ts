@@ -1073,6 +1073,13 @@ export interface ScanFinding {
 	status: ScanFindingStatus;
 	status_by?: string;
 	status_at?: string;
+	/**
+	 * When the agent found the finding no longer holds (the file was
+	 * removed, replaced, chowned, …), and what it found. Nothing is closed
+	 * because of it.
+	 */
+	cleared_at?: string;
+	cleared_detail?: string;
 }
 
 export interface ScanAllowlistEntry {

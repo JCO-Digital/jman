@@ -94,6 +94,13 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	if prev != nil {
 		fmt.Fprintln(out, "  compared with the baseline of the last reported scan")
 		findings = scan.Evaluate(prev.Entries, walk.Entries, id.UID, userName)
+		for _, c := range clearedSince(prev, walk, id.UID, sitePath) {
+			what := c.Path
+			if c.Rule != "" {
+				what += " (" + c.Rule + ")"
+			}
+			fmt.Fprintf(out, "  cleared: %s: %s\n", what, c.Detail)
+		}
 	} else {
 		fmt.Fprintln(out, "  no baseline yet: a first scan, which only flags stray, foreign-owned and unreadable files")
 		findings = scan.EvaluateFirst(walk.Entries, id.UID, userName)

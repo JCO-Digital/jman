@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"time"
@@ -167,12 +168,31 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 	} else {
 		result.PrevFingerprint = prev.Fingerprint
 		result.Findings = scan.Evaluate(prev.Entries, walk.Entries, id.UID, userName)
+		result.Cleared = clearedSince(prev, walk, id.UID, sitePath)
 	}
 	result.DurationMs = time.Since(start).Milliseconds()
 	if len(result.Findings) > 0 || result.Rebaselined {
 		verb.LogPrintf(verb.Verbose, "%s: scanned %d file(s), %d finding(s), rebaselined=%t", site.Domain, result.Entries, len(result.Findings), result.Rebaselined)
 	}
 	return result, state
+}
+
+// maxScanCleared bounds the cleared paths one site's scan reports.
+const maxScanCleared = 1000
+
+// clearedSince returns what the site's previous baseline flagged that no
+// longer holds. The agent checks, as root, whether a path the walk no
+// longer records is still there; the result only words the report.
+func clearedSince(prev *scan.State, walk *scan.Result, ownerUID uint32, sitePath string) []models.ScanCleared {
+	exists := func(p string) bool {
+		_, err := os.Lstat(filepath.Join(sitePath, filepath.FromSlash(p)))
+		return err == nil
+	}
+	cleared := scan.Cleared(prev.Entries, walk.Entries, ownerUID, walk.Omitted == 0, exists)
+	if len(cleared) > maxScanCleared {
+		cleared = cleared[:maxScanCleared]
+	}
+	return cleared
 }
 
 // saveScans saves the baselines of the reported scans and marks their

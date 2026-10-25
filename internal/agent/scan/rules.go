@@ -152,3 +152,78 @@ func Fingerprint(entries []Entry) string {
 	}
 	return hex.EncodeToString(h.Sum(nil))
 }
+
+// Details of cleared findings.
+const (
+	ClearedRemoved  = "removed"
+	ClearedFixed    = "no longer flagged"
+	ClearedReplaced = "replaced"
+	ClearedOwner    = "now owned by the site's owner"
+	ClearedReadable = "now readable"
+)
+
+// Cleared returns what the previous baseline flagged that the walk shows
+// no longer holds. exists reports whether a path is still on disk: a file
+// the walk stopped recording was removed, or no longer interesting (a
+// foreign-owned file given back to the site's owner). complete is false
+// when the walk hit its caps, so a missing path proves nothing.
+func Cleared(prev map[string]Entry, cur []Entry, ownerUID uint32, complete bool, exists func(string) bool) []models.ScanCleared {
+	var cleared []models.ScanCleared
+	seen := make(map[string]bool, len(cur))
+	for _, e := range cur {
+		seen[e.Path] = true
+		old, ok := prev[e.Path]
+		if !ok {
+			continue
+		}
+		if old.UID != ownerUID && e.UID == ownerUID {
+			cleared = append(cleared, models.ScanCleared{Path: e.Path, Rule: RuleForeignOwner, Detail: ClearedOwner})
+		}
+		if old.Unreadable && !e.Unreadable {
+			cleared = append(cleared, models.ScanCleared{Path: e.Path, Rule: RuleUnreadable, Detail: ClearedReadable})
+		}
+		if !old.Dir && signature(old) != signature(e) {
+			for _, rule := range changeRules(old) {
+				cleared = append(cleared, models.ScanCleared{Path: e.Path, Rule: rule, SHA256: old.SHA256, Detail: ClearedReplaced})
+			}
+		}
+	}
+	if !complete {
+		return cleared
+	}
+	var gone []string
+	for p := range prev {
+		if !seen[p] {
+			gone = append(gone, p)
+		}
+	}
+	sort.Strings(gone)
+	for _, p := range gone {
+		detail := ClearedRemoved
+		if exists(p) {
+			detail = ClearedFixed
+		}
+		cleared = append(cleared, models.ScanCleared{Path: p, Detail: detail})
+	}
+	return cleared
+}
+
+// changeRules are the change rules whose findings for a file are about its
+// content.
+func changeRules(e Entry) []string {
+	var rules []string
+	switch {
+	case isUploadsPHP(e.Path):
+		rules = append(rules, RuleUploadsPHP)
+	case isMuPlugin(e.Path):
+		rules = append(rules, RuleMuPlugin)
+	case isDropin(e.Path):
+		rules = append(rules, RuleDropin)
+	case isConfig(e.Path):
+		rules = append(rules, RuleConfig)
+	}
+	if len(e.Directives) > 0 {
+		rules = append(rules, RuleAutoPrepend)
+	}
+	return rules
+}

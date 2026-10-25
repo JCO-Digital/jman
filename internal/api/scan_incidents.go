@@ -110,6 +110,15 @@ func triageScanFindings(siteID string, alert bool) {
 			alertSecurityIncident(id, added[id], reopened[id])
 		}
 	}
+	// A finding reported again after it was cleared isn't cleared any
+	// more, which the summary of its incident should show.
+	if active, err := db.GetActiveSecurityIncident(siteID); err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+	} else if active != nil && added[active.ID] == nil {
+		if err := db.RefreshSecurityIncident(active.ID); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
+	}
 }
 
 // securityIncidentFor returns the security incident a finding goes in, and
