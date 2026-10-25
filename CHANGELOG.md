@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.11.0 (2026-10-24)
+### 7.11.1 (2026-10-25)
+
+#### Bug Fixes
+
+- web: show a scan finding's full path in its details (c1adcca)
+
+## v7.11.0 (2026-10-24)
 
 #### Features
 
