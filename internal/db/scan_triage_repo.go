@@ -195,7 +195,7 @@ func RefreshSecurityIncident(id int64) error {
 
 // summarizeScanFindings returns the worst severity of the open findings
 // (of all, when none is open), and a summary such as "3 open findings:
-// 2 uploads-php, 1 foreign-owner", worst rule first.
+// 2 uploads-php, 1 foreign-owner (1 cleared)", worst rule first.
 func summarizeScanFindings(findings []models.StoredScanFinding) (string, string) {
 	var open []models.StoredScanFinding
 	for _, f := range findings {
@@ -240,6 +240,20 @@ func summarizeScanFindings(findings []models.StoredScanFinding) (string, string)
 	summary := fmt.Sprintf("%d %s", len(counted), label)
 	if len(parts) > 0 {
 		summary += ": " + strings.Join(parts, ", ")
+	}
+	cleared := 0
+	for _, f := range counted {
+		if f.ClearedAt != nil {
+			cleared++
+		}
+	}
+	switch {
+	case cleared > 0 && cleared == len(counted) && len(counted) > 1:
+		summary += " (all cleared)"
+	case cleared == 1 && len(counted) == 1:
+		summary += " (cleared)"
+	case cleared > 0:
+		summary += fmt.Sprintf(" (%d cleared)", cleared)
 	}
 	return severity, summary
 }

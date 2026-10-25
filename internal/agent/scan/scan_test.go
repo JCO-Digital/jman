@@ -390,3 +390,53 @@ func TestEvaluateSkipsGuardedDataFiles(t *testing.T) {
 		t.Errorf("after losing its guard, flagged %q", got)
 	}
 }
+
+func TestCleared(t *testing.T) {
+	const owner = 1000
+	prev := map[string]Entry{
+		"wp-content/uploads/shell.php":   {Path: "wp-content/uploads/shell.php", UID: owner, SHA256: "a"},
+		"wp-content/uploads/edited.php":  {Path: "wp-content/uploads/edited.php", UID: owner, SHA256: "b"},
+		"wp-content/uploads/same.php":    {Path: "wp-content/uploads/same.php", UID: owner, SHA256: "c"},
+		"dump.sql":                       {Path: "dump.sql", UID: owner, Size: 10},
+		"wp-content/root-file":           {Path: "wp-content/root-file", UID: 0, Size: 1},
+		"wp-content/chowned":             {Path: "wp-content/chowned", UID: 0, Size: 1},
+		"wp-content/locked":              {Path: "wp-content/locked", UID: owner, Unreadable: true},
+		"wp-content/uploads/.user.ini":   {Path: "wp-content/uploads/.user.ini", UID: owner, SHA256: "d", Directives: []string{"auto_prepend_file=x"}},
+		"wp-content/uploads/still-there": {Path: "wp-content/uploads/still-there", UID: 0, Size: 1},
+	}
+	cur := []Entry{
+		{Path: "wp-content/uploads/edited.php", UID: owner, SHA256: "b2"},
+		{Path: "wp-content/uploads/same.php", UID: owner, SHA256: "c"},
+		{Path: "wp-content/root-file", UID: owner, Size: 1},
+		{Path: "wp-content/locked", UID: owner},
+		{Path: "wp-content/uploads/.user.ini", UID: owner, SHA256: "d2"},
+		{Path: "wp-content/uploads/still-there", UID: 0, Size: 1},
+	}
+	// wp-content/chowned was given to the owner, so the walk stopped
+	// recording it; it's still on disk.
+	exists := func(p string) bool { return p == "wp-content/chowned" }
+
+	var got []string
+	for _, c := range Cleared(prev, cur, owner, true, exists) {
+		got = append(got, c.Path+"|"+c.Rule+"|"+c.SHA256+"|"+c.Detail)
+	}
+	want := []string{
+		"wp-content/uploads/edited.php|uploads-php|b|replaced",
+		"wp-content/root-file|foreign-owner||now owned by the site's owner",
+		"wp-content/locked|unreadable||now readable",
+		"wp-content/uploads/.user.ini|auto-prepend|d|replaced",
+		"dump.sql|||removed",
+		"wp-content/chowned|||no longer flagged",
+		"wp-content/uploads/shell.php|||removed",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("cleared:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+
+	// A walk that hit its caps doesn't prove anything is gone.
+	for _, c := range Cleared(prev, cur, owner, false, exists) {
+		if c.Detail == ClearedRemoved || c.Detail == ClearedFixed {
+			t.Errorf("incomplete walk cleared %+v", c)
+		}
+	}
+}

@@ -17,6 +17,8 @@ const (
 	maxScanFindingSnippet = 2048
 	maxScanFindingDetail  = 2048
 	maxScanFindingPath    = 4096
+	maxAgentScanCleared   = 1000
+	maxScanClearedDetail  = 200
 )
 
 var validScanSeverities = map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
@@ -67,6 +69,8 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 			}
 		}
 
+		applyScanCleared(siteID, s.Cleared, scannedAt)
+
 		findings := s.Findings
 		if len(findings) > maxAgentScanFindings {
 			verb.LogPrintf(verb.Normal, "Agent reported %d scan findings for site %s; keeping the first %d", len(findings), siteID, maxAgentScanFindings)
@@ -92,6 +96,41 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 
 	if err := db.RecordSiteScan(siteID, s, scannedAt); err != nil {
 		verb.LogPrintf(verb.Normal, "%v", err)
+	}
+}
+
+// applyScanCleared marks the site's findings the agent found no longer
+// hold as cleared. It doesn't close anything: an attacker can remove their
+// own files as well.
+func applyScanCleared(siteID string, cleared []models.ScanCleared, at time.Time) {
+	if len(cleared) == 0 {
+		return
+	}
+	if len(cleared) > maxAgentScanCleared {
+		verb.LogPrintf(verb.Normal, "Agent reported %d cleared scan paths for site %s; keeping the first %d", len(cleared), siteID, maxAgentScanCleared)
+		cleared = cleared[:maxAgentScanCleared]
+	}
+	scanTriageMu.Lock()
+	defer scanTriageMu.Unlock()
+	touched := map[int64]bool{}
+	for _, c := range cleared {
+		if c.Path == "" || len(c.Path) > maxScanFindingPath {
+			continue
+		}
+		c.Detail = truncateUTF8(c.Detail, maxScanClearedDetail)
+		incidents, err := db.ClearScanFindings(siteID, c, at)
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+			continue
+		}
+		for _, id := range incidents {
+			touched[id] = true
+		}
+	}
+	for id := range touched {
+		if err := db.RefreshSecurityIncident(id); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
 	}
 }
 

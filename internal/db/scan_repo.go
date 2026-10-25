@@ -63,7 +63,8 @@ func RecordSiteScan(siteID string, s *models.AgentScan, scannedAt time.Time) err
 
 // UpsertScanFinding stores a finding, or updates when it was last seen if
 // the site already has the same one. A closed finding reported again is
-// open again; allowlisted and acknowledged ones keep their status.
+// open again; allowlisted and acknowledged ones keep their status. One
+// that was cleared isn't any more.
 func UpsertScanFinding(siteID string, f models.ScanFinding, ruleSetVersion string, seenAt time.Time) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
@@ -80,7 +81,9 @@ func UpsertScanFinding(siteID string, f models.ScanFinding, ruleSetVersion strin
 		last_seen_at = excluded.last_seen_at,
 		status = CASE WHEN scan_findings.status = 'closed' THEN 'open' ELSE scan_findings.status END,
 		status_by = CASE WHEN scan_findings.status = 'closed' THEN '' ELSE scan_findings.status_by END,
-		status_at = CASE WHEN scan_findings.status = 'closed' THEN excluded.last_seen_at ELSE scan_findings.status_at END;
+		status_at = CASE WHEN scan_findings.status = 'closed' THEN excluded.last_seen_at ELSE scan_findings.status_at END,
+		cleared_at = NULL,
+		cleared_detail = '';
 	`, siteID, f.Engine, f.Rule, f.Severity, f.Path, f.SHA256, f.Snippet, f.Detail, ruleSetVersion, seenAt, seenAt)
 	if err != nil {
 		return fmt.Errorf("failed to store scan finding for site %s: %w", siteID, err)
@@ -101,14 +104,17 @@ type ScanFindingFilter struct {
 }
 
 const scanFindingColumns = `id, site_id, engine, rule, severity, path, sha256, snippet, detail, rule_set_version,
-	first_seen_at, last_seen_at, incident_id, status, status_by, status_at`
+	first_seen_at, last_seen_at, incident_id, status, status_by, status_at, cleared_at, cleared_detail`
 
 func scanScanFinding(row interface{ Scan(...any) error }) (models.StoredScanFinding, error) {
 	var f models.StoredScanFinding
 	var incidentID sql.NullInt64
-	var statusAt sql.NullString
+	var statusAt, clearedAt sql.NullString
 	err := row.Scan(&f.ID, &f.SiteID, &f.Engine, &f.Rule, &f.Severity, &f.Path, &f.SHA256, &f.Snippet, &f.Detail, &f.RuleSetVersion,
-		&f.FirstSeenAt, &f.LastSeenAt, &incidentID, &f.Status, &f.StatusBy, &statusAt)
+		&f.FirstSeenAt, &f.LastSeenAt, &incidentID, &f.Status, &f.StatusBy, &statusAt, &clearedAt, &f.ClearedDetail)
+	if clearedAt.Valid {
+		f.ClearedAt = &clearedAt.String
+	}
 	if incidentID.Valid {
 		f.IncidentID = &incidentID.Int64
 	}
@@ -233,4 +239,33 @@ func ListSiteScans() ([]models.SiteScan, error) {
 		return nil, fmt.Errorf("error iterating site scans: %w", err)
 	}
 	return scans, nil
+}
+
+// ClearScanFindings marks a site's findings that match c as cleared, and
+// returns the incidents they belong to.
+func ClearScanFindings(siteID string, c models.ScanCleared, at time.Time) ([]int64, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := dbConn.Query(`
+	UPDATE scan_findings SET cleared_at = ?, cleared_detail = ?
+	WHERE site_id = ? AND path = ? AND cleared_at IS NULL AND engine != 'api'
+		AND (? = '' OR rule = ?) AND (? = '' OR sha256 = ?)
+	RETURNING incident_id`, at, c.Detail, siteID, c.Path, c.Rule, c.Rule, c.SHA256, c.SHA256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to clear scan findings for site %s: %w", siteID, err)
+	}
+	defer rows.Close()
+	var incidents []int64
+	for rows.Next() {
+		var id sql.NullInt64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		if id.Valid {
+			incidents = append(incidents, id.Int64)
+		}
+	}
+	return incidents, rows.Err()
 }

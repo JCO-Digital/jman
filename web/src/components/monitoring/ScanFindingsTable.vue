@@ -190,6 +190,13 @@ function canAllowlist(f: ScanFinding): boolean {
 								>
 									{{ f.status }}
 								</span>
+								<span
+									v-if="f.cleared_at"
+									class="status-badge badge-sm success cleared"
+									:title="`The agent found this ${formatTime(f.cleared_at)}`"
+								>
+									{{ f.cleared_detail || "cleared" }}
+								</span>
 							</td>
 							<td v-if="canTriage" class="text-right">
 								<div
@@ -245,6 +252,13 @@ function canAllowlist(f: ScanFinding): boolean {
 											}}</code>
 										</dd>
 									</template>
+									<template v-if="f.cleared_at">
+										<dt>Cleared</dt>
+										<dd>
+											{{ f.cleared_detail || "cleared" }},
+											{{ formatTime(f.cleared_at) }}
+										</dd>
+									</template>
 									<dt>Seen</dt>
 									<dd>
 										{{ formatTime(f.first_seen_at) }} –
@@ -276,6 +290,10 @@ function canAllowlist(f: ScanFinding): boolean {
 
 .row-muted {
 	opacity: 0.6;
+}
+
+.cleared {
+	margin-left: var(--space-2);
 }
 
 .path-cell {
