@@ -225,6 +225,14 @@ function canAllowlist(f: ScanFinding): boolean {
 						<tr v-if="expanded.has(f.id)" class="detail-row">
 							<td :colspan="99">
 								<dl class="finding-detail">
+									<template v-if="f.path">
+										<dt>Path</dt>
+										<dd>
+											<code class="break-all">{{
+												f.path
+											}}</code>
+										</dd>
+									</template>
 									<template v-if="f.detail">
 										<dt>Detail</dt>
 										<dd class="pre-line">{{ f.detail }}</dd>
@@ -321,7 +329,7 @@ function canAllowlist(f: ScanFinding): boolean {
 	white-space: pre-line;
 }
 
-.hash {
+.break-all {
 	word-break: break-all;
 }
 
