@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.12.0 (2026-10-25)
+## 7.13.0 (2026-10-26)
+
+#### Features
+
+- check core and plugin files against wordpress.org checksums (add24c0)
+
+## v7.12.0 (2026-10-25)
 
 #### Features
 
