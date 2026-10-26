@@ -23,7 +23,9 @@ const maxCheckScanFindings = 50
 // site. It returns how many sites failed. With fromWPOrg, core and plugin
 // checksums come straight from wordpress.org rather than through jman-api,
 // for trying the checks before jman-api serves them.
-func CheckScan(ctx context.Context, cfg Config, domain string, fromWPOrg bool, out io.Writer) (int, error) {
+// With content, it searches all PHP files for malicious code too, as the
+// nightly scan does.
+func CheckScan(ctx context.Context, cfg Config, domain string, fromWPOrg, content bool, out io.Writer) (int, error) {
 	client := NewClient(cfg)
 	checksums = client
 	if fromWPOrg {
@@ -56,7 +58,7 @@ func CheckScan(ctx context.Context, cfg Config, domain string, fromWPOrg bool, o
 	failed := 0
 	for _, site := range sites {
 		fmt.Fprintf(out, "\n%s\n", site.Domain)
-		if !checkScanSite(ctx, cfg.StateDir, site, out) {
+		if !checkScanSite(ctx, cfg.StateDir, site, content, out) {
 			failed++
 		}
 	}
@@ -68,7 +70,7 @@ func CheckScan(ctx context.Context, cfg Config, domain string, fromWPOrg bool, o
 	return failed, nil
 }
 
-func checkScanSite(ctx context.Context, stateDir string, site models.AgentManifestSite, out io.Writer) bool {
+func checkScanSite(ctx context.Context, stateDir string, site models.AgentManifestSite, content bool, out io.Writer) bool {
 	sitePath, err := resolvePath(site.Domain, site.SiteUser)
 	if err != nil {
 		fmt.Fprintf(out, "  FAILED: %v\n", err)
@@ -87,7 +89,9 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 		fmt.Fprintf(out, "  baseline unreadable, the service would replace it: %v\n", err)
 	}
 	start := time.Now()
-	walk, err := runScan(ctx, id, sitePath, scanOptions(ctx, prev, site.Domain))
+	opts := scanOptions(ctx, prev, site.Domain)
+	opts.Content = content
+	walk, err := runScan(ctx, id, sitePath, opts)
 	if err != nil {
 		fmt.Fprintf(out, "  FAILED: %v\n", err)
 		return false
@@ -95,10 +99,11 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	if (!walk.CoreChecked && walk.CoreVersion != "") || len(walk.PluginsChecked) < len(walk.Plugins) {
 		// The service only checks against the versions in the baseline;
 		// here the versions just found will do.
-		opts := scanOptions(ctx, &scan.State{CoreVersion: walk.CoreVersion, CoreLocale: walk.CoreLocale, Plugins: walk.Plugins}, site.Domain)
-		if opts.Core != nil || len(opts.Plugins) > 0 {
-			if again, err := runScan(ctx, id, sitePath, opts); err == nil {
-				walk = again
+		again := scanOptions(ctx, &scan.State{CoreVersion: walk.CoreVersion, CoreLocale: walk.CoreLocale, Plugins: walk.Plugins}, site.Domain)
+		again.Content, again.Watch = opts.Content, opts.Watch
+		if again.Core != nil || len(again.Plugins) > 0 {
+			if res, err := runScan(ctx, id, sitePath, again); err == nil {
+				walk = res
 			}
 		}
 	}

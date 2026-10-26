@@ -207,6 +207,7 @@ func TestEvaluateFlagsChangesOnly(t *testing.T) {
 	want := []string{
 		"mu-plugin-change wp-content/mu-plugins/new.php",
 		"stray-file db.sql",
+		"suspicious-code wp-content/uploads/index.php",
 		"uploads-php wp-content/uploads/index.php",
 	}
 	if got := evaluate(baseline.Entries, changed.Entries, owner); !slices.Equal(got, want) {
@@ -324,7 +325,7 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	baseline := NewState(res.Entries)
 	writeFile(t, root, "wp-content/uploads/wpallimport/index.php", "<?php system($_GET['c']);")
 	again, _ := Walk(root, owner, Options{})
-	if got := evaluate(baseline.Entries, again.Entries, owner); !slices.Equal(got, []string{"uploads-php wp-content/uploads/wpallimport/index.php"}) {
+	if got := evaluate(baseline.Entries, again.Entries, owner); !slices.Equal(got, []string{"suspicious-code wp-content/uploads/wpallimport/index.php", "uploads-php wp-content/uploads/wpallimport/index.php"}) {
 		t.Errorf("after filling an empty upload, flagged %q", got)
 	}
 }
@@ -386,7 +387,7 @@ func TestEvaluateSkipsGuardedDataFiles(t *testing.T) {
 
 	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-failedlogins.php", "<?php system($_GET['c']); exit(0); ?>")
 	lost, _ := Walk(root, owner, Options{})
-	if got := evaluate(baseline.Entries, lost.Entries, owner); !slices.Equal(got, []string{"uploads-php wp-content/uploads/sucuri/sucuri-failedlogins.php"}) {
+	if got := evaluate(baseline.Entries, lost.Entries, owner); !slices.Equal(got, []string{"suspicious-code wp-content/uploads/sucuri/sucuri-failedlogins.php", "uploads-php wp-content/uploads/sucuri/sucuri-failedlogins.php"}) {
 		t.Errorf("after losing its guard, flagged %q", got)
 	}
 }

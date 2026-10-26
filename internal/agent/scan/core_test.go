@@ -102,6 +102,8 @@ func TestWalkChecksCore(t *testing.T) {
 		"high core-modified wp-includes/load.php",
 		"high core-unknown-file radio.php",
 		"high core-unknown-file wp-includes/class-wp-cache.php",
+		"high suspicious-code wp-includes/class-wp-cache.php",
+		"high suspicious-code wp-includes/load.php",
 		"medium core-unknown-file wp-includes/images/favicon.ico",
 	}
 	if !slices.Equal(got, wantFindings) {

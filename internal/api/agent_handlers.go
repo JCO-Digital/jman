@@ -43,9 +43,10 @@ func AgentManifestHandler(w http.ResponseWriter, r *http.Request) {
 		APIVersion: config.AppVersion,
 		// Agents of this version and later collect WordPress data; older
 		// ones ignore the field and stay on the SSH refresh.
-		WPDataIntervalMinutes: config.AgentWPDataIntervalMinutes(),
-		CollectUsers:          true,
-		ScanIntervalMinutes:   config.AgentScanIntervalMinutes(),
+		WPDataIntervalMinutes:      config.AgentWPDataIntervalMinutes(),
+		CollectUsers:               true,
+		ScanIntervalMinutes:        config.AgentScanIntervalMinutes(),
+		ContentScanIntervalMinutes: config.AgentContentScanIntervalMinutes(),
 	}
 	for _, site := range sites {
 		// SpinupWP sites go through deploying -> deployed (or failed), and

@@ -74,6 +74,10 @@ type AppConfig struct {
 	// site's files for signs of compromise (default 60; negative turns
 	// scanning off).
 	AgentScanInterval int `toml:"agentScanInterval" mapstructure:"agentScanInterval"`
+	// AgentContentScanInterval is how often, in minutes, a site's scan
+	// searches all its PHP files for malicious code (default 1440, a day,
+	// run at night; negative turns it off).
+	AgentContentScanInterval int `toml:"agentContentScanInterval" mapstructure:"agentContentScanInterval"`
 	// ScanSlackSeverity and ScanPagerDutySeverity are the lowest severity of
 	// a scan finding that alerts in Slack (default "high") and PagerDuty
 	// (default "critical"); "off" turns that alert off. Findings below both
@@ -213,6 +217,8 @@ func loadConfig() error {
 		"slackTasksChannel":          "SLACKTASKSCHANNEL",
 		"slackSecurityChannel":       "SLACKSECURITYCHANNEL",
 		"scanSlackSeverity":          "SCANSLACKSEVERITY",
+		"agentScanInterval":          "AGENTSCANINTERVAL",
+		"agentContentScanInterval":   "AGENTCONTENTSCANINTERVAL",
 		"scanPagerDutySeverity":      "SCANPAGERDUTYSEVERITY",
 		"pagerdutyRoutingKey":        "PAGERDUTYROUTINGKEY",
 		"pagerdutyEscalationMinutes": "PAGERDUTYESCALATIONMINUTES",
@@ -296,6 +302,19 @@ func AgentScanIntervalMinutes() int {
 		return 60
 	}
 	return Cfg.AgentScanInterval
+}
+
+// AgentContentScanIntervalMinutes returns how often a site's PHP files are
+// all searched for malicious code, or 0 if that's turned off (as it is
+// with scanning).
+func AgentContentScanIntervalMinutes() int {
+	switch {
+	case AgentScanIntervalMinutes() == 0 || Cfg.AgentContentScanInterval < 0:
+		return 0
+	case Cfg.AgentContentScanInterval == 0:
+		return 1440
+	}
+	return Cfg.AgentContentScanInterval
 }
 
 // ScanSeverityRank orders scan finding severities, from 1 for low to 4 for

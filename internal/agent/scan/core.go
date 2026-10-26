@@ -29,6 +29,13 @@ type Options struct {
 	// Plugins, by slug, are the checksums of the plugin versions the site
 	// last had; each plugin that still has that version is checked.
 	Plugins map[string]*PluginChecksums `json:"plugins,omitempty"`
+	// Content makes the walk search every PHP file in wp-content and the
+	// site directory for the content rules, not only the ones it reads
+	// anyway and Watch.
+	Content bool `json:"content,omitempty"`
+	// Watch are files the content rules flagged before, which the walk
+	// reads and searches again.
+	Watch []string `json:"watch,omitempty"`
 }
 
 // maxCoreModified is how many core files may differ from their checksums
