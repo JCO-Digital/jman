@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -85,7 +86,8 @@ func TestScanRebaselinesThenReportsChanges(t *testing.T) {
 	if second == nil || second.Rebaselined || second.PrevFingerprint != first.Fingerprint {
 		t.Fatalf("second scan = %+v, want one compared against the first", second)
 	}
-	if len(second.Findings) != 1 || second.Findings[0].Rule != scan.RuleUploadsPHP || second.Findings[0].Snippet == "" {
+	// A new upload is flagged, and so is what it does.
+	if len(second.Findings) != 2 || second.Findings[0].Rule != scan.RuleUploadsPHP || second.Findings[0].Snippet == "" || second.Findings[1].Rule != scan.RuleSuspicious {
 		t.Fatalf("second scan findings = %+v", second.Findings)
 	}
 	saveScans(stateDir, done, later)
@@ -166,7 +168,8 @@ func TestRunScanChildPrintsTheWalk(t *testing.T) {
 	}
 }
 
-// A first scan records a baseline but still reports what's already wrong.
+// A first scan records a baseline but still reports what's already wrong:
+// a stray file, and code that looks malicious, but not the upload as new.
 func TestFirstScanReportsStateRules(t *testing.T) {
 	root, stateDir := t.TempDir(), t.TempDir()
 	writeSiteFile(t, root, "backup.sql", "dump")
@@ -176,7 +179,38 @@ func TestFirstScanReportsStateRules(t *testing.T) {
 
 	scans, _ := collectScansForSites(context.Background(), stateDir, scanManifest("a.example"), time.Now())
 	first := scans["id-a"]
-	if first == nil || !first.Rebaselined || len(first.Findings) != 1 || first.Findings[0].Rule != scan.RuleStrayFile || first.Findings[0].Path != "backup.sql" {
-		t.Fatalf("first scan = %+v, want only the stray file", first)
+	var got []string
+	for _, f := range first.Findings {
+		got = append(got, f.Rule+" "+f.Path)
+	}
+	want := []string{"stray-file backup.sql", "suspicious-code wp-content/uploads/x.php"}
+	if first == nil || !first.Rebaselined || !slices.Equal(got, want) {
+		t.Fatalf("first scan findings = %q, want %q", got, want)
+	}
+}
+
+func TestContentDue(t *testing.T) {
+	day := 24 * time.Hour
+	night := time.Date(2026, 10, 27, 2, 0, 0, 0, time.Local)
+	noon := time.Date(2026, 10, 27, 12, 0, 0, 0, time.Local)
+	at := func(t time.Time) *scan.State { return &scan.State{ContentScannedAt: t.UTC().Format(time.RFC3339)} }
+	for _, c := range []struct {
+		name     string
+		prev     *scan.State
+		interval time.Duration
+		now      time.Time
+		want     bool
+	}{
+		{"off", nil, 0, night, false},
+		{"never, at night", nil, day, night, true},
+		{"never, by day", nil, day, noon, false},
+		{"last night", at(night.Add(-day)), day, night, true},
+		{"a bit earlier last night", at(night.Add(-day + 30*time.Minute)), day, night, true},
+		{"tonight already", at(night.Add(-time.Hour)), day, night, false},
+		{"hourly by day", at(noon.Add(-time.Hour)), time.Hour, noon, true},
+	} {
+		if got := contentDue(c.prev, c.interval, c.now); got != c.want {
+			t.Errorf("%s: due = %t, want %t", c.name, got, c.want)
+		}
 	}
 }

@@ -22,6 +22,9 @@ type State struct {
 	// against their checksums.
 	CoreVersion string `json:"core_version,omitempty"`
 	CoreLocale  string `json:"core_locale,omitempty"`
+	// ContentScannedAt is when the walk last searched every PHP file for
+	// the content rules (RFC 3339).
+	ContentScannedAt string `json:"content_scanned_at,omitempty"`
 	// Plugins are the plugin versions at the last scan, by slug, which the
 	// next scan checks against their checksums.
 	Plugins map[string]string `json:"plugins,omitempty"`
@@ -65,7 +68,7 @@ func LoadState(stateDir, siteID string) (*State, error) {
 func NewState(entries []Entry) *State {
 	s := &State{RuleSetVersion: RuleSetVersion, Fingerprint: Fingerprint(entries), Entries: make(map[string]Entry, len(entries))}
 	for _, e := range entries {
-		e.Head = ""
+		e.Head, e.ContentDetail = "", ""
 		s.Entries[e.Path] = e
 	}
 	return s
@@ -137,4 +140,17 @@ func SaveState(stateDir, siteID string, s *State) error {
 		return err
 	}
 	return os.Rename(tmp.Name(), p)
+}
+
+// Watched returns the files the content rules flagged in the baseline,
+// which the next walk searches again.
+func (s *State) Watched() []string {
+	var paths []string
+	for p, e := range s.Entries {
+		if len(e.Content) > 0 {
+			paths = append(paths, p)
+		}
+	}
+	sort.Strings(paths)
+	return paths
 }

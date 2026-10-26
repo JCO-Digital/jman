@@ -106,10 +106,15 @@ func cachedFetch(key string, fetch func() (cachedChecksums, error)) (cachedCheck
 }
 
 // scanOptions returns the walk options for a site whose last baseline is
-// prev: the checksums of the WordPress and plugin versions it had then.
+// prev: the files the content rules flagged then, and the checksums of the
+// WordPress and plugin versions it had.
 func scanOptions(ctx context.Context, prev *scan.State, domain string) scan.Options {
 	var opts scan.Options
-	if prev == nil || checksums == nil {
+	if prev == nil {
+		return opts
+	}
+	opts.Watch = prev.Watched()
+	if checksums == nil {
 		return opts
 	}
 	if prev.CoreVersion != "" {
@@ -188,7 +193,7 @@ func collectScansForSites(ctx context.Context, stateDir string, manifest *models
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
-			result, state := scanSite(ctx, stateDir, site)
+			result, state := scanSite(ctx, stateDir, site, time.Duration(manifest.ContentScanIntervalMinutes)*time.Minute)
 			mu.Lock()
 			results[site.SiteID] = result
 			states[site.SiteID] = state
@@ -220,10 +225,31 @@ func collectScansForSites(ctx context.Context, stateDir string, manifest *models
 	return results, done
 }
 
+// contentWindowEnd is the hour (server time) before which daily content
+// scans run.
+const contentWindowEnd = 6
+
+// contentDue reports whether a site's scan should search all its PHP files
+// for malicious code: once every interval, and for daily or rarer scans
+// only at night.
+func contentDue(prev *scan.State, interval time.Duration, now time.Time) bool {
+	if interval <= 0 {
+		return false
+	}
+	if prev != nil && prev.ContentScannedAt != "" {
+		// An hour's slack keeps a daily scan at about the same time of night.
+		if t, err := time.Parse(time.RFC3339, prev.ContentScannedAt); err == nil && now.Sub(t) < interval-time.Hour {
+			return false
+		}
+	}
+	return interval < 24*time.Hour || now.Hour() < contentWindowEnd
+}
+
 // scanSite scans one site as its owner and compares the result with its
-// baseline. It returns the scan to report and the new baseline, which is
-// nil when the scan failed.
-func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSite) (*models.AgentScan, *scan.State) {
+// baseline, searching all its PHP files for malicious code when that's due
+// (see contentDue). It returns the scan to report and the new baseline,
+// which is nil when the scan failed.
+func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSite, contentInterval time.Duration) (*models.AgentScan, *scan.State) {
 	start := time.Now()
 	result := &models.AgentScan{ScannedAt: start.UTC().Format(time.RFC3339), RuleSetVersion: scan.RuleSetVersion}
 	fail := func(err error) (*models.AgentScan, *scan.State) {
@@ -248,7 +274,9 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 		prev = nil
 	}
 
-	walk, err := runScan(ctx, id, sitePath, scanOptions(ctx, prev, site.Domain))
+	opts := scanOptions(ctx, prev, site.Domain)
+	opts.Content = contentDue(prev, contentInterval, start)
+	walk, err := runScan(ctx, id, sitePath, opts)
 	if err != nil {
 		return fail(err)
 	}
@@ -261,6 +289,12 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 	scan.CarryChecksums(prev, walk)
 	state := scan.NewState(walk.Entries)
 	state.CoreVersion, state.CoreLocale, state.Plugins = walk.CoreVersion, walk.CoreLocale, walk.Plugins
+	switch {
+	case walk.ContentChecked:
+		state.ContentScannedAt = start.UTC().Format(time.RFC3339)
+	case prev != nil:
+		state.ContentScannedAt = prev.ContentScannedAt
+	}
 
 	result.Fingerprint = state.Fingerprint
 	result.Entries = len(walk.Entries)

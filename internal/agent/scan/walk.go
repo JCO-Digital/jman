@@ -60,6 +60,11 @@ type Entry struct {
 	// pluginRule), for a core or plugin file checked against wordpress.org's
 	// checksums.
 	Checksum string `json:"checksum,omitempty"`
+	// Content names the content rules a PHP file matches (see
+	// contentPatterns), and ContentDetail quotes where. The detail isn't
+	// kept in the baseline.
+	Content       []string `json:"content,omitempty"`
+	ContentDetail string   `json:"content_detail,omitempty"`
 }
 
 // Result is what a walk found.
@@ -81,6 +86,9 @@ type Result struct {
 	Plugins        map[string]string `json:"plugins,omitempty"`
 	PluginsChecked map[string]bool   `json:"plugins_checked,omitempty"`
 	PluginNotes    []string          `json:"plugin_notes,omitempty"`
+	// ContentChecked is set when the walk searched every PHP file in
+	// wp-content and the site directory for the content rules.
+	ContentChecked bool `json:"content_checked,omitempty"`
 }
 
 // Walk looks through the site directory root and records the files that
@@ -91,8 +99,12 @@ type Result struct {
 // they don't have (see coreRule and pluginRule). It never follows symlinks
 // and opens only regular files.
 func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
-	res := &Result{Entries: []Entry{}}
+	res := &Result{Entries: []Entry{}, ContentChecked: opts.Content}
 	res.CoreVersion, res.CoreLocale = readCoreVersion(root)
+	watch := make(map[string]bool, len(opts.Watch))
+	for _, p := range opts.Watch {
+		watch[p] = true
+	}
 	var sums map[string]string
 	if c := opts.Core; c != nil {
 		if c.Version == res.CoreVersion && c.Locale == res.CoreLocale {
@@ -211,7 +223,8 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 					e.Symlink = "?"
 				}
 			} else if info.Mode().IsRegular() {
-				readTracked(full, rel, &e)
+				body := readTracked(full, rel, &e, IsPHPPath(rel))
+				checkContent(&e, body)
 			}
 			if !foreign && !isStrayFile(rel) {
 				checksumOnly[rel] = true
@@ -220,9 +233,13 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 			return nil
 		}
 
+		// verified is set for a plugin file that matches its checksum: the
+		// content rules trust it.
+		verified := false
 		if slug, inner := pluginOf(rel); pluginSums[slug] != nil && IsPHPPath(rel) && info.Mode().IsRegular() && !isTracked(rel) {
-			readTracked(full, rel, &e)
+			body := readTracked(full, rel, &e, true)
 			if e.Checksum = pluginRule(inner, pluginSums[slug], e); e.Checksum != "" {
+				checkContent(&e, body)
 				if e.Checksum == RulePluginModified {
 					pluginModified[slug]++
 				} else {
@@ -235,6 +252,7 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 				return nil
 			}
 			e.SHA256, e.Head = "", ""
+			verified = true
 		}
 
 		if info.Mode()&fs.ModeSymlink != 0 {
@@ -249,11 +267,26 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 			return nil
 		}
 
+		// The content rules search the PHP files the walk reads anyway, the
+		// ones flagged before, and, on a content scan, every PHP file in
+		// wp-content and the site directory.
+		wantContent := IsPHPPath(rel) && !verified && (isTracked(rel) || watch[rel] || (opts.Content && isContentArea(rel)))
+		if info.Mode().IsRegular() && (isTracked(rel) || wantContent) {
+			body := readTracked(full, rel, &e, wantContent)
+			checkContent(&e, body)
+			switch {
+			case isTracked(rel) || len(e.Content) > 0:
+				add(e, true)
+			case isStrayFile(rel) || foreign:
+				// Recorded as it would be without reading it.
+				e.SHA256, e.Head = "", ""
+				add(e, false)
+			}
+			return nil
+		}
+
 		switch {
 		case isTracked(rel):
-			if info.Mode().IsRegular() {
-				readTracked(full, rel, &e)
-			}
 			add(e, true)
 		case isStrayFile(rel) || foreign:
 			add(e, false)
@@ -315,44 +348,61 @@ func recordSymlink(rel string, uid, ownerUID uint32) bool {
 	return isTracked(rel) || isStrayFile(rel) || (uid != ownerUID && uid != 0)
 }
 
+// checkContent sets the content rules a PHP file's body matches. A data
+// file that exits first runs nothing, so it isn't searched.
+func checkContent(e *Entry, body []byte) {
+	if isGuarded(string(body[:min(len(body), headBytes)])) {
+		return
+	}
+	if matches := matchContent(body); len(matches) > 0 {
+		e.Content, e.ContentDetail = contentFlags(matches)
+	}
+}
+
 // readTracked fills in a tracked file's hash, head and PHP directives, or
-// marks it unreadable.
-func readTracked(full, rel string, e *Entry) {
+// marks it unreadable. With keepBody, it returns the file's first
+// maxContentBytes for the content rules.
+func readTracked(full, rel string, e *Entry, keepBody bool) []byte {
 	// O_NOFOLLOW and O_NONBLOCK keep a file swapped for a symlink or a FIFO
 	// since the walk saw it from being followed or blocking the walk.
 	fd, err := syscall.Open(full, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
 	if err != nil {
 		e.Unreadable = true
-		return
+		return nil
 	}
 	f := os.NewFile(uintptr(fd), full)
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		e.Unreadable = true
-		return
+		return nil
 	}
 	e.Size = info.Size()
 	if e.Size > maxHashBytes {
 		// Too large to hash, but its start still shows what it is.
-		head := make([]byte, headBytes)
-		n, _ := io.ReadFull(f, head)
+		start := make([]byte, max(headBytes, maxContentBytes))
+		n, _ := io.ReadFull(f, start)
 		if !hasSecrets(rel) {
-			e.Head = strings.ToValidUTF8(string(head[:n]), "\uFFFD")
+			e.Head = strings.ToValidUTF8(string(start[:min(n, headBytes)]), "\uFFFD")
 		}
-		return
+		if keepBody {
+			return start[:n]
+		}
+		return nil
 	}
 
 	h := sha256.New()
-	var head bytes.Buffer
-	var ini bytes.Buffer
+	var head, ini, body bytes.Buffer
 	w := io.MultiWriter(h, &cappedWriter{buf: &head, max: headBytes})
 	if isPHPIni(rel) {
 		w = io.MultiWriter(w, &cappedWriter{buf: &ini, max: maxIniBytes})
 	}
+	if keepBody {
+		w = io.MultiWriter(w, &cappedWriter{buf: &body, max: maxContentBytes})
+	}
 	if _, err := io.Copy(w, io.LimitReader(f, maxHashBytes)); err != nil {
 		e.Unreadable = true
-		return
+		return nil
 	}
 	e.SHA256 = hex.EncodeToString(h.Sum(nil))
 	if !hasSecrets(rel) {
@@ -361,6 +411,7 @@ func readTracked(full, rel string, e *Entry) {
 	if isPHPIni(rel) {
 		e.Directives = phpDirectives(ini.Bytes())
 	}
+	return body.Bytes()
 }
 
 // cappedWriter keeps the first max bytes written to it.

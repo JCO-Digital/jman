@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"path"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +16,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "5"
+const RuleSetVersion = "6"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -34,6 +35,7 @@ const (
 	RuleCoreUnknown    = "core-unknown-file"
 	RulePluginModified = "plugin-modified"
 	RulePluginUnknown  = "plugin-unknown-file"
+	RuleSuspicious     = "suspicious-code"
 )
 
 var severities = map[string]string{
@@ -49,6 +51,8 @@ var severities = map[string]string{
 	RuleCoreUnknown:    "high",
 	RulePluginModified: "high",
 	RulePluginUnknown:  "high",
+	// RuleSuspicious's severity is that of the worst content rule matched.
+	RuleSuspicious: "low",
 }
 
 // isCoreRule reports whether a checksum rule is one of core's.
@@ -133,6 +137,10 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 					flag(RulePluginUnknown, change+" PHP file that isn't part of the plugin's release on wordpress.org")
 				}
 			}
+			if len(e.Content) > 0 && (changed || !slices.Equal(old.Content, e.Content)) {
+				flag(RuleSuspicious, e.ContentDetail)
+				findings[len(findings)-1].Severity = contentSeverity(e.Content)
+			}
 		}
 
 		// A root-owned symlink is the server's own doing (SpinupWP links
@@ -155,7 +163,7 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 // stateRules flag a state rather than a change, so they're worth
 // reporting on a first scan too, when there's nothing to compare against.
 // (The service's first scan has no checksums for core files yet.)
-var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RulePluginModified: true, RulePluginUnknown: true}
+var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RulePluginModified: true, RulePluginUnknown: true, RuleSuspicious: true}
 
 // EvaluateFirst returns what the rules flag on a scan without a baseline:
 // only the state rules. The change rules stay quiet until there is a
@@ -259,6 +267,9 @@ func changeRules(e Entry) []string {
 	}
 	if e.Checksum != "" {
 		rules = append(rules, e.Checksum)
+	}
+	if len(e.Content) > 0 {
+		rules = append(rules, RuleSuspicious)
 	}
 	return rules
 }

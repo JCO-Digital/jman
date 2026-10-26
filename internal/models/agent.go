@@ -90,6 +90,10 @@ type AgentManifest struct {
 	// for signs of compromise. Zero means don't: jman-api versions that
 	// predate scanning don't send it.
 	ScanIntervalMinutes int `json:"scan_interval_minutes,omitempty"`
+	// ContentScanIntervalMinutes is how often a site's scan searches all
+	// its PHP files for malicious code. Scans at least a day apart run
+	// between midnight and 06:00 server time. Zero means don't.
+	ContentScanIntervalMinutes int `json:"content_scan_interval_minutes,omitempty"`
 }
 
 // TrafficTopEntry is a single ranked entry (a page path or a referrer) in a

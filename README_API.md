@@ -378,6 +378,7 @@ a daily reminder while it lasts and a message when it recovers.
 | ------------------------- | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------- |
 | `agentWpDataInterval`     | `JMAN_AGENTWPDATAINTERVAL`     | `60`    | How often agents collect each site's plugins and core, in minutes. Negative turns it off.         |
 | `agentScanInterval`       | `JMAN_AGENTSCANINTERVAL`       | `60`    | How often agents scan each site's files for signs of compromise, in minutes. Negative turns it off. |
+| `agentContentScanInterval` | `JMAN_AGENTCONTENTSCANINTERVAL` | `1440` | How often a site's scan searches all its PHP files for malicious code, in minutes. Daily or rarer scans run between midnight and 06:00 server time. Negative turns it off. |
 | `scanSlackSeverity`       | `JMAN_SCANSLACKSEVERITY`       | `high`  | Lowest scan finding severity that alerts in Slack (`low`, `medium`, `high`, `critical` or `off`). |
 | `scanPagerDutySeverity`   | `JMAN_SCANPAGERDUTYSEVERITY`   | `critical` | Lowest scan finding severity that pages in PagerDuty, or `off`.                                |
 | `slackSecurityChannel`    | `JMAN_SLACKSECURITYCHANNEL`    |         | Slack channel for security alerts. Defaults to `slackMonitorChannel`.                             |

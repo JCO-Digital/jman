@@ -21,6 +21,7 @@ var (
 	flagCheckWP    bool
 	flagCheckScan  bool
 	flagWPOrg      bool
+	flagContent    bool
 	flagSite       string
 	flagConfigPath string
 	flagScanSite   string
@@ -42,6 +43,7 @@ func run() int {
 	flag.BoolVar(&flagCheckWP, "check-wp", false, "Collect WordPress data (plugins, core) as each site's owner once and print the result, without reporting it")
 	flag.BoolVar(&flagCheckScan, "check-scan", false, "Scan each site's files as its owner once and print what the rules flag, without reporting it or changing any baseline")
 	flag.BoolVar(&flagWPOrg, "wporg", false, "With --check-scan, get core and plugin checksums straight from wordpress.org instead of through jman-api")
+	flag.BoolVar(&flagContent, "content", false, "With --check-scan, also search all PHP files for malicious code, as the nightly scan does")
 	flag.StringVar(&flagSite, "site", "", "With --check-wp or --check-scan, only check this domain")
 	flag.StringVar(&flagConfigPath, "config", "", "Path to config.toml (default: /etc/jman-agent/config.toml, or $XDG_CONFIG_HOME/jman-agent/config.toml)")
 	flag.StringVar(&flagScanSite, agent.ScanSiteFlag, "", "Internal: scan this site directory as the current user and print the result (used by the agent itself)")
@@ -89,7 +91,7 @@ func run() int {
 	}
 
 	if flagCheckScan {
-		failed, err := agent.CheckScan(context.Background(), cfg, flagSite, flagWPOrg, os.Stdout)
+		failed, err := agent.CheckScan(context.Background(), cfg, flagSite, flagWPOrg, flagContent, os.Stdout)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			return 1
