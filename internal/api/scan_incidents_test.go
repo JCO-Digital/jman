@@ -6,13 +6,17 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/sitestate"
 	"github.com/JCO-Digital/jman/internal/utils"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
 func listIncidents(t *testing.T, query string) IncidentsResponse {
@@ -276,5 +280,64 @@ func TestScanFindingsCleared(t *testing.T) {
 	}
 	if active := securityIncidents(t, "active"); len(active) != 1 || active[0].ErrorMessage != "2 open findings: 1 uploads-php, 1 foreign-owner (1 cleared)" {
 		t.Fatalf("active after the file came back = %+v", active)
+	}
+}
+
+// Administrators that appear without jman creating them raise a finding;
+// the ones jman created, and a site's first users, don't.
+func TestNewAdminFindings(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{505, 8, "admins.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(505)
+	apply := func(users ...models.SiteUser) {
+		t.Helper()
+		if _, err := sitestate.ApplyUsers(site, wpcli.NewSiteUsers(users, nil), sitestate.SourceAgent, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	owner := models.SiteUser{ID: 1, Login: "owner", Email: "o@example.com", Roles: "administrator"}
+	editor := models.SiteUser{ID: 2, Login: "editor", Email: "e@example.com", Roles: "editor"}
+	apply(owner, editor)
+	if f := listScanFindings(t, ""); len(f) != 0 {
+		t.Fatalf("findings for the first users: %+v", f)
+	}
+
+	// jman created this one.
+	if err := db.SaveSiteUpdateLedgerEntry(&models.SiteUpdateLedgerEntry{SiteID: site, UpdateType: "user", Status: models.LedgerCreated,
+		DataJSON: `{"action":"user_create","login":"JCO","email":"jco@example.com","role":"administrator"}`, UpdatedBy: "niklas", UpdatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	jco := models.SiteUser{ID: 3, Login: "jco", Email: "jco@example.com", Roles: "administrator"}
+	staff := models.SiteUser{ID: 5, Login: "anna", Email: "Anna@JCO.fi", Roles: "administrator"}
+	config.Cfg.TrustedAdminDomains = []string{"jco.fi"}
+	t.Cleanup(func() { config.Cfg.TrustedAdminDomains = nil })
+	hidden := models.SiteUser{ID: 4, Login: "wpsvc_1d4e", Email: "x@example.net", Roles: "administrator", Registered: "2026-04-07 00:48:40"}
+	promoted := editor
+	promoted.Roles = "editor,administrator"
+	apply(owner, promoted, jco, hidden, staff)
+
+	findings := listScanFindings(t, "")
+	var got []string
+	for _, f := range findings {
+		got = append(got, f.Rule+" "+f.Path+" "+f.Severity)
+	}
+	slices.Sort(got)
+	want := []string{"new-admin users/anna medium", "new-admin users/editor high", "new-admin users/wpsvc_1d4e high"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("findings = %q, want %q", got, want)
+	}
+	if active := securityIncidents(t, "active"); len(active) != 1 || active[0].Severity != "high" {
+		t.Fatalf("incidents = %+v", active)
+	}
+
+	// Acknowledging an account keeps it from being reported again.
+	f := findingByPath(t, findings, "users/editor")
+	if w := postJSON(t, AddScanPathAcksHandler, "POST", "/api/scan/acks", map[string]any{"finding_ids": []int64{f.ID}, "reason": "the client's own admin"}); w.Code != http.StatusOK {
+		t.Fatalf("ack: %d %s", w.Code, w.Body.String())
+	}
+	apply(owner, editor, jco, hidden, staff)
+	apply(owner, promoted, jco, hidden, staff)
+	if f := findingByPath(t, listScanFindings(t, ""), "users/editor"); f.Status != models.ScanFindingAcknowledged {
+		t.Fatalf("acknowledged admin = %+v", f)
 	}
 }

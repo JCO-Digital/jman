@@ -86,6 +86,11 @@ type AppConfig struct {
 	ScanSlackSeverity     string `toml:"scanSlackSeverity" mapstructure:"scanSlackSeverity"`
 	ScanPagerDutySeverity string `toml:"scanPagerDutySeverity" mapstructure:"scanPagerDutySeverity"`
 	SlackSecurityChannel  string `toml:"slackSecurityChannel" mapstructure:"slackSecurityChannel"`
+	// TrustedAdminDomains are email domains (and their subdomains) whose
+	// administrators, when they appear on a site without jman creating
+	// them, are medium rather than high: an incident, but no Slack alert.
+	// An email is easy to fake, so the finding is still raised.
+	TrustedAdminDomains []string `toml:"trustedAdminDomains" mapstructure:"trustedAdminDomains"`
 	// AgentServerStaleMinutes and AgentSiteStaleMinutes are how long a
 	// server's agent may go without calling in (default 30), and a site
 	// without a successful WordPress data collection (default 180),

@@ -230,7 +230,8 @@ func RemoveScanAllowlistHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // AddScanPathAcksHandler handles POST /api/scan/acks: it acknowledges the
-// paths of stray, foreign-owned or unreadable files on their sites, so
+// paths of stray, foreign-owned or unreadable files on their sites, or
+// administrators jman didn't create (new-admin, path "users/<login>"), so
 // those rules don't flag them again, and marks the findings acknowledged.
 // An incident left without open findings is closed.
 func AddScanPathAcksHandler(w http.ResponseWriter, r *http.Request) {
@@ -240,7 +241,7 @@ func AddScanPathAcksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, f := range findings {
 		if !scanStateRules[f.Rule] {
-			WriteError(w, http.StatusUnprocessableEntity, "Only stray-file, foreign-owner and unreadable findings can be acknowledged by path; allowlist the file's hash instead")
+			WriteError(w, http.StatusUnprocessableEntity, "Only stray-file, foreign-owner, unreadable and new-admin findings can be acknowledged by path; allowlist the file's hash instead")
 			return
 		}
 	}

@@ -148,6 +148,12 @@ func ApplyCore(siteID string, core models.SiteCore, src Source, observedAt time.
 	return true, nil
 }
 
+// NewAdminsHook, when set, is called with the users that became
+// administrators of a site since its users were last stored: new users and
+// promoted ones. jman-api sets it to raise findings for the ones it didn't
+// create. A site's first stored users are a baseline and don't call it.
+var NewAdminsHook func(siteID string, admins []models.SiteUser, src Source)
+
 // ApplyUsers stores a site's observed users and returns whether it did (it
 // skips users observed before the stored ones). User changes aren't
 // written to the update ledger.
@@ -162,10 +168,47 @@ func ApplyUsers(siteID string, users models.SiteUsers, src Source, observedAt ti
 	if hasKnown && observedAt.Before(knownAt) {
 		return false, nil
 	}
+	var known models.SiteUsers
+	if hasKnown && NewAdminsHook != nil {
+		if known, _, err = db.GetSiteUsers(siteID); err != nil {
+			return false, err
+		}
+	}
 	if err := db.ReplaceSiteUsers(siteID, users, observedAt); err != nil {
 		return false, err
 	}
+	if hasKnown && NewAdminsHook != nil {
+		if admins := NewAdmins(known.Users, users.Users); len(admins) > 0 {
+			NewAdminsHook(siteID, admins, src)
+		}
+	}
 	return true, nil
+}
+
+// NewAdmins returns the users in cur who are administrators and weren't in
+// prev, by user ID.
+func NewAdmins(prev, cur []models.SiteUser) []models.SiteUser {
+	wasAdmin := make(map[int]bool, len(prev))
+	for _, u := range prev {
+		wasAdmin[u.ID] = IsAdmin(u)
+	}
+	var admins []models.SiteUser
+	for _, u := range cur {
+		if IsAdmin(u) && !wasAdmin[u.ID] {
+			admins = append(admins, u)
+		}
+	}
+	return admins
+}
+
+// IsAdmin reports whether a user has the administrator role.
+func IsAdmin(u models.SiteUser) bool {
+	for _, role := range strings.Split(u.Roles, ",") {
+		if strings.TrimSpace(role) == "administrator" {
+			return true
+		}
+	}
+	return false
 }
 
 // StoredHash returns the models.WPDataHash of the plugins, core state and

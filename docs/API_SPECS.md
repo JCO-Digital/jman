@@ -425,6 +425,8 @@ A finding is identified by its site, rule, path and `sha256`, so reporting the s
 
 Each finding also has a `status`: `open`, `closed` (dismissed, or its incident was closed), `allowlisted` (its hash is on the allowlist) or `acknowledged` (its path is acknowledged for the site), with `status_by` and `status_at`, and the `incident_id` of the security incident it's in. A closed finding reported again is open again.
 
+`new-admin` (high, engine `api`) is jman-api's own: a user who became an administrator of a site (new, or promoted) since its users were last collected, that jman didn't create (no `created` user entry in the site's update ledger, and no user create job running for that login). Its path is `users/<login>` and its snippet describes the account. A site's first collected users are a baseline. It's medium instead of high when the account's email is in one of the `trustedAdminDomains` (or a subdomain), as for the agency's own staff. It can be acknowledged by path like a stray file; allowlisting doesn't apply.
+
 `cleared_at` and `cleared_detail` are set when the agent reports that the finding no longer holds: the file was `removed`, `replaced`, is `no longer flagged` (still on disk, such as a foreign-owned file given back to the site's owner), `now owned by the site's owner` or `now readable`. Clearing doesn't change the status or close anything; finding the file again unsets it. An incident's summary counts its cleared findings, such as "2 open findings: 2 uploads-php (1 cleared)".
 
 `GET /api/scan/findings` takes these filters as well: `?incident_id=`, `?status=`, `?sha256=` and `?unassigned=1` (findings without an incident).
