@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/agent/scan"
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
@@ -96,4 +100,80 @@ func (c *Client) postReport(ctx context.Context, body []byte) error {
 		return fmt.Errorf("report request failed: status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+// errChecksumsUnknown is returned when wordpress.org has no checksums for
+// a release.
+var errChecksumsUnknown = errors.New("wordpress.org has no checksums for this release")
+
+// FetchCoreChecksums returns the checksums of a WordPress release, which
+// jman-api fetches from wordpress.org and caches.
+func (c *Client) FetchCoreChecksums(ctx context.Context, version, locale string) (*scan.CoreChecksums, error) {
+	q := url.Values{"version": {version}, "locale": {locale}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.APIURL+"/agent/core-checksums?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Agent-Token", c.cfg.Token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reach jman-api: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return nil, errChecksumsUnknown
+	default:
+		return nil, fmt.Errorf("core checksums request failed: status %d", resp.StatusCode)
+	}
+	var sums scan.CoreChecksums
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 16<<20)).Decode(&sums); err != nil {
+		return nil, fmt.Errorf("failed to decode core checksums: %w", err)
+	}
+	if sums.Version != version || sums.Locale != locale || len(sums.MD5) == 0 {
+		return nil, fmt.Errorf("jman-api sent checksums for %s (%s), not %s (%s)", sums.Version, sums.Locale, version, locale)
+	}
+	return &sums, nil
+}
+
+// FetchPluginChecksums returns the SHA-256 checksums of a plugin release's
+// PHP files, which jman-api fetches from wordpress.org and caches.
+func (c *Client) FetchPluginChecksums(ctx context.Context, slug, version string) (*scan.PluginChecksums, error) {
+	q := url.Values{"slug": {slug}, "version": {version}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.cfg.APIURL+"/agent/plugin-checksums?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("X-Agent-Token", c.cfg.Token)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to reach jman-api: %w", err)
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+	case http.StatusNotFound:
+		return nil, errChecksumsUnknown
+	default:
+		return nil, fmt.Errorf("plugin checksums request failed: status %d", resp.StatusCode)
+	}
+	var sums scan.PluginChecksums
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(&sums); err != nil {
+		return nil, fmt.Errorf("failed to decode plugin checksums: %w", err)
+	}
+	if sums.Slug != slug || sums.Version != version || len(sums.SHA256) == 0 {
+		return nil, fmt.Errorf("jman-api sent checksums for %s %s, not %s %s", sums.Slug, sums.Version, slug, version)
+	}
+	// Only PHP files are checked.
+	for p := range sums.SHA256 {
+		if !scan.IsPHPPath(p) {
+			delete(sums.SHA256, p)
+		}
+	}
+	return &sums, nil
 }

@@ -40,6 +40,7 @@ const backlogCatchUpInterval = 30 * time.Second
 // until ctx is cancelled.
 func RunService(ctx context.Context, cfg Config, version string) error {
 	client := NewClient(cfg)
+	checksums = client
 	normalInterval := time.Duration(cfg.ReportIntervalMinutes) * time.Minute
 
 	// A resettable timer (rather than a fixed ticker) lets each cycle choose
@@ -90,6 +91,7 @@ func RunService(ctx context.Context, cfg Config, version string) error {
 // RunOnce performs a single collection-and-report cycle, for --once/cron use.
 func RunOnce(cfg Config, version string) error {
 	client := NewClient(cfg)
+	checksums = client
 	hasBacklog, err := collectAndReport(context.Background(), client, cfg, version)
 	if err == nil && hasBacklog {
 		verb.LogPrintf(verb.Normal, "Backlog remains uncollected — run again soon (or use --service) to continue catching up")

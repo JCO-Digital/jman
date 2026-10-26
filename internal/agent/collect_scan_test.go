@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,8 +30,8 @@ func stubScan(t *testing.T, roots map[string]string) {
 	resolveIdentity = func(string, string) (siteIdentity, error) {
 		return siteIdentity{UID: uint32(os.Getuid()), GID: uint32(os.Getgid())}, nil
 	}
-	runScan = func(_ context.Context, id siteIdentity, sitePath string) (*scan.Result, error) {
-		return scan.Walk(sitePath, id.UID)
+	runScan = func(_ context.Context, id siteIdentity, sitePath string, opts scan.Options) (*scan.Result, error) {
+		return scan.Walk(sitePath, id.UID, opts)
 	}
 	scanCanRun = func() error { return nil }
 	lastScanMu.Lock()
@@ -153,7 +154,7 @@ func TestRunScanChildPrintsTheWalk(t *testing.T) {
 	root := t.TempDir()
 	writeSiteFile(t, root, "wp-content/uploads/x.php", "<?php")
 	var out bytes.Buffer
-	if err := RunScanChild(root, &out); err != nil {
+	if err := RunScanChild(root, strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)
 	}
 	var res scan.Result
