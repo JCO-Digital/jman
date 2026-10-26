@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/user"
@@ -45,6 +46,100 @@ var scanCanRun = func() error {
 		return fmt.Errorf("jman-agent isn't running as root, so it can't scan as each site's owner")
 	}
 	return nil
+}
+
+// checksumSource fetches wordpress.org's checksums of WordPress and plugin
+// releases through jman-api.
+type checksumSource interface {
+	FetchCoreChecksums(ctx context.Context, version, locale string) (*scan.CoreChecksums, error)
+	FetchPluginChecksums(ctx context.Context, slug, version string) (*scan.PluginChecksums, error)
+}
+
+// checksums is set by Run and CheckScan to their jman-api client; while
+// it's nil, core and plugin files aren't checked.
+var checksums checksumSource
+
+// checksumUnknownRetry is how long the agent remembers that a release has
+// no checksums (a premium or custom plugin, usually) before asking again.
+const checksumUnknownRetry = 6 * time.Hour
+
+// maxChecksumCache bounds how many releases' checksums the agent keeps; the
+// cache starts over when it's full.
+const maxChecksumCache = 2000
+
+// checksumCache keeps the checksums fetched for each release, which don't
+// change, and the releases that have none.
+type cachedChecksums struct {
+	core    *scan.CoreChecksums
+	plugin  *scan.PluginChecksums
+	unknown time.Time // set when the release has none
+}
+
+var (
+	checksumCache   = map[string]cachedChecksums{}
+	checksumCacheMu sync.Mutex
+)
+
+// cachedFetch returns a release's checksums from the cache or fetch. It
+// reports false when there are none to check against.
+func cachedFetch(key string, fetch func() (cachedChecksums, error)) (cachedChecksums, bool, error) {
+	checksumCacheMu.Lock()
+	c, ok := checksumCache[key]
+	checksumCacheMu.Unlock()
+	if ok && (c.unknown.IsZero() || time.Since(c.unknown) < checksumUnknownRetry) {
+		return c, c.unknown.IsZero(), nil
+	}
+	c, err := fetch()
+	if errors.Is(err, errChecksumsUnknown) {
+		c, err = cachedChecksums{unknown: time.Now()}, nil
+	}
+	if err != nil {
+		return c, false, err
+	}
+	checksumCacheMu.Lock()
+	if len(checksumCache) >= maxChecksumCache {
+		checksumCache = map[string]cachedChecksums{}
+	}
+	checksumCache[key] = c
+	checksumCacheMu.Unlock()
+	return c, c.unknown.IsZero(), nil
+}
+
+// scanOptions returns the walk options for a site whose last baseline is
+// prev: the checksums of the WordPress and plugin versions it had then.
+func scanOptions(ctx context.Context, prev *scan.State, domain string) scan.Options {
+	var opts scan.Options
+	if prev == nil || checksums == nil {
+		return opts
+	}
+	if prev.CoreVersion != "" {
+		c, ok, err := cachedFetch("core|"+prev.CoreVersion+"|"+prev.CoreLocale, func() (cachedChecksums, error) {
+			sums, err := checksums.FetchCoreChecksums(ctx, prev.CoreVersion, prev.CoreLocale)
+			return cachedChecksums{core: sums}, err
+		})
+		if err != nil {
+			verb.LogPrintf(verb.Verbose, "%s: not checking core files: %v", domain, err)
+		} else if ok {
+			opts.Core = c.core
+		}
+	}
+	for slug, version := range prev.Plugins {
+		c, ok, err := cachedFetch("plugin|"+slug+"|"+version, func() (cachedChecksums, error) {
+			sums, err := checksums.FetchPluginChecksums(ctx, slug, version)
+			return cachedChecksums{plugin: sums}, err
+		})
+		if err != nil {
+			verb.LogPrintf(verb.Verbose, "%s: not checking plugin %s: %v", domain, slug, err)
+			continue
+		}
+		if ok {
+			if opts.Plugins == nil {
+				opts.Plugins = map[string]*scan.PluginChecksums{}
+			}
+			opts.Plugins[slug] = c.plugin
+		}
+	}
+	return opts
 }
 
 // scanDone is a site whose scan goes in this cycle's report. Its baseline
@@ -153,11 +248,19 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 		prev = nil
 	}
 
-	walk, err := runScan(ctx, id, sitePath)
+	walk, err := runScan(ctx, id, sitePath, scanOptions(ctx, prev, site.Domain))
 	if err != nil {
 		return fail(err)
 	}
+	if walk.CoreNote != "" {
+		verb.LogPrintf(verb.Verbose, "%s: core files not checked: %s", site.Domain, walk.CoreNote)
+	}
+	for _, note := range walk.PluginNotes {
+		verb.LogPrintf(verb.Verbose, "%s: plugin not checked: %s", site.Domain, note)
+	}
+	scan.CarryChecksums(prev, walk)
 	state := scan.NewState(walk.Entries)
+	state.CoreVersion, state.CoreLocale, state.Plugins = walk.CoreVersion, walk.CoreLocale, walk.Plugins
 
 	result.Fingerprint = state.Fingerprint
 	result.Entries = len(walk.Entries)

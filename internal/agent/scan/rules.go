@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,32 +15,45 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "4"
+const RuleSetVersion = "5"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
 
 // Rules and their severities.
 const (
-	RuleUploadsPHP   = "uploads-php"
-	RuleMuPlugin     = "mu-plugin-change"
-	RuleDropin       = "dropin-change"
-	RuleConfig       = "config-change"
-	RuleAutoPrepend  = "auto-prepend"
-	RuleForeignOwner = "foreign-owner"
-	RuleStrayFile    = "stray-file"
-	RuleUnreadable   = "unreadable"
+	RuleUploadsPHP     = "uploads-php"
+	RuleMuPlugin       = "mu-plugin-change"
+	RuleDropin         = "dropin-change"
+	RuleConfig         = "config-change"
+	RuleAutoPrepend    = "auto-prepend"
+	RuleForeignOwner   = "foreign-owner"
+	RuleStrayFile      = "stray-file"
+	RuleUnreadable     = "unreadable"
+	RuleCoreModified   = "core-modified"
+	RuleCoreUnknown    = "core-unknown-file"
+	RulePluginModified = "plugin-modified"
+	RulePluginUnknown  = "plugin-unknown-file"
 )
 
 var severities = map[string]string{
-	RuleUploadsPHP:   "high",
-	RuleMuPlugin:     "medium",
-	RuleDropin:       "medium",
-	RuleConfig:       "medium",
-	RuleAutoPrepend:  "high",
-	RuleForeignOwner: "medium",
-	RuleStrayFile:    "low",
-	RuleUnreadable:   "low",
+	RuleUploadsPHP:     "high",
+	RuleMuPlugin:       "medium",
+	RuleDropin:         "medium",
+	RuleConfig:         "medium",
+	RuleAutoPrepend:    "high",
+	RuleForeignOwner:   "medium",
+	RuleStrayFile:      "low",
+	RuleUnreadable:     "low",
+	RuleCoreModified:   "high",
+	RuleCoreUnknown:    "high",
+	RulePluginModified: "high",
+	RulePluginUnknown:  "high",
+}
+
+// isCoreRule reports whether a checksum rule is one of core's.
+func isCoreRule(rule string) bool {
+	return rule == RuleCoreModified || rule == RuleCoreUnknown
 }
 
 // signature is what has to change for a tracked file to count as changed:
@@ -102,6 +116,23 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 			if len(e.Directives) > 0 && changed {
 				flag(RuleAutoPrepend, strings.Join(e.Directives, "\n"))
 			}
+			if e.Checksum != "" && (changed || old.Checksum != e.Checksum) {
+				switch e.Checksum {
+				case RuleCoreModified:
+					flag(RuleCoreModified, change+" core file that differs from WordPress's checksum")
+				case RuleCoreUnknown:
+					flag(RuleCoreUnknown, change+" file that isn't part of WordPress core")
+					if !isPHP(path.Base(e.Path)) {
+						// Leftovers from old releases are more likely than
+						// shells outside PHP files.
+						findings[len(findings)-1].Severity = "medium"
+					}
+				case RulePluginModified:
+					flag(RulePluginModified, change+" plugin file that differs from its checksum on wordpress.org")
+				case RulePluginUnknown:
+					flag(RulePluginUnknown, change+" PHP file that isn't part of the plugin's release on wordpress.org")
+				}
+			}
 		}
 
 		// A root-owned symlink is the server's own doing (SpinupWP links
@@ -123,7 +154,8 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 
 // stateRules flag a state rather than a change, so they're worth
 // reporting on a first scan too, when there's nothing to compare against.
-var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true}
+// (The service's first scan has no checksums for core files yet.)
+var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RulePluginModified: true, RulePluginUnknown: true}
 
 // EvaluateFirst returns what the rules flag on a scan without a baseline:
 // only the state rules. The change rules stay quiet until there is a
@@ -224,6 +256,9 @@ func changeRules(e Entry) []string {
 	}
 	if len(e.Directives) > 0 {
 		rules = append(rules, RuleAutoPrepend)
+	}
+	if e.Checksum != "" {
+		rules = append(rules, e.Checksum)
 	}
 	return rules
 }

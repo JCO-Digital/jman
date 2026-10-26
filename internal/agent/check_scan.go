@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/agent/scan"
+	"github.com/JCO-Digital/jman/internal/fetch/wporg"
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
@@ -19,9 +20,16 @@ const maxCheckScanFindings = 50
 // flag, without reporting anything to jman-api, self-updating or changing
 // any baseline. A site without a baseline gets what its first scan would
 // report. It ignores the manifest's scan interval. domain limits it to one
-// site. It returns how many sites failed.
-func CheckScan(ctx context.Context, cfg Config, domain string, out io.Writer) (int, error) {
-	manifest, err := NewClient(cfg).FetchManifest(ctx)
+// site. It returns how many sites failed. With fromWPOrg, core and plugin
+// checksums come straight from wordpress.org rather than through jman-api,
+// for trying the checks before jman-api serves them.
+func CheckScan(ctx context.Context, cfg Config, domain string, fromWPOrg bool, out io.Writer) (int, error) {
+	client := NewClient(cfg)
+	checksums = client
+	if fromWPOrg {
+		checksums = wporgChecksums{}
+	}
+	manifest, err := client.FetchManifest(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to fetch manifest: %w", err)
 	}
@@ -79,11 +87,47 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 		fmt.Fprintf(out, "  baseline unreadable, the service would replace it: %v\n", err)
 	}
 	start := time.Now()
-	walk, err := runScan(ctx, id, sitePath)
+	walk, err := runScan(ctx, id, sitePath, scanOptions(ctx, prev, site.Domain))
 	if err != nil {
 		fmt.Fprintf(out, "  FAILED: %v\n", err)
 		return false
 	}
+	if (!walk.CoreChecked && walk.CoreVersion != "") || len(walk.PluginsChecked) < len(walk.Plugins) {
+		// The service only checks against the versions in the baseline;
+		// here the versions just found will do.
+		opts := scanOptions(ctx, &scan.State{CoreVersion: walk.CoreVersion, CoreLocale: walk.CoreLocale, Plugins: walk.Plugins}, site.Domain)
+		if opts.Core != nil || len(opts.Plugins) > 0 {
+			if again, err := runScan(ctx, id, sitePath, opts); err == nil {
+				walk = again
+			}
+		}
+	}
+	switch {
+	case walk.CoreChecked:
+		fmt.Fprintf(out, "  core:    WordPress %s (%s), checked against its checksums\n", walk.CoreVersion, walk.CoreLocale)
+	case walk.CoreNote != "":
+		fmt.Fprintf(out, "  core:    not checked: %s\n", walk.CoreNote)
+	case walk.CoreVersion != "":
+		fmt.Fprintf(out, "  core:    WordPress %s (%s), not checked: no checksums from jman-api\n", walk.CoreVersion, walk.CoreLocale)
+	}
+	if len(walk.Plugins) > 0 {
+		var unchecked []string
+		for slug := range walk.Plugins {
+			if !walk.PluginsChecked[slug] {
+				unchecked = append(unchecked, slug)
+			}
+		}
+		slices.Sort(unchecked)
+		fmt.Fprintf(out, "  plugins: %d of %d checked against their checksums", len(walk.PluginsChecked), len(walk.Plugins))
+		if len(unchecked) > 0 {
+			fmt.Fprintf(out, "; no checksums for %s", strings.Join(unchecked, ", "))
+		}
+		fmt.Fprintln(out)
+		for _, note := range walk.PluginNotes {
+			fmt.Fprintf(out, "           %s\n", note)
+		}
+	}
+	scan.CarryChecksums(prev, walk)
 	fmt.Fprintf(out, "  scanned: %d file(s) recorded", len(walk.Entries))
 	if walk.Omitted > 0 {
 		fmt.Fprintf(out, ", %d omitted", walk.Omitted)
@@ -130,4 +174,42 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 		fmt.Fprintf(out, "  [%s] %s %s: %s\n", f.Severity, f.Rule, f.Path, detail)
 	}
 	return true
+}
+
+// wporgChecksums fetches checksums straight from wordpress.org, keeping
+// what jman-api would send.
+type wporgChecksums struct{}
+
+func (wporgChecksums) FetchCoreChecksums(_ context.Context, version, locale string) (*scan.CoreChecksums, error) {
+	all, err := wporg.GetCoreChecksums(version, locale)
+	if err != nil {
+		return nil, err
+	}
+	if all == nil {
+		return nil, errChecksumsUnknown
+	}
+	sums := &scan.CoreChecksums{Version: version, Locale: locale, MD5: map[string]string{}}
+	for p, sum := range all {
+		if !strings.HasPrefix(p, "wp-content/") {
+			sums.MD5[p] = sum
+		}
+	}
+	return sums, nil
+}
+
+func (wporgChecksums) FetchPluginChecksums(_ context.Context, slug, version string) (*scan.PluginChecksums, error) {
+	all, err := wporg.GetPluginChecksums(slug, version)
+	if err != nil {
+		return nil, err
+	}
+	if all == nil {
+		return nil, errChecksumsUnknown
+	}
+	sums := &scan.PluginChecksums{Slug: slug, Version: version, SHA256: map[string][]string{}}
+	for p, sum := range all {
+		if scan.IsPHPPath(p) {
+			sums.SHA256[p] = sum
+		}
+	}
+	return sums, nil
 }

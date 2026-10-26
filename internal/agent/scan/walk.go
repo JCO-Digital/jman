@@ -6,10 +6,12 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 )
@@ -54,6 +56,10 @@ type Entry struct {
 	// Head is the start of a tracked file, for snippets. It isn't kept in
 	// the baseline.
 	Head string `json:"head,omitempty"`
+	// Checksum is the checksum rule the file breaks (see coreRule and
+	// pluginRule), for a core or plugin file checked against wordpress.org's
+	// checksums.
+	Checksum string `json:"checksum,omitempty"`
 }
 
 // Result is what a walk found.
@@ -61,14 +67,67 @@ type Result struct {
 	Entries []Entry `json:"entries"`
 	// Omitted counts files left out because the caps were reached.
 	Omitted int `json:"omitted,omitempty"`
+	// CoreVersion and CoreLocale are the WordPress version and package
+	// locale in wp-includes/version.php ("" when there is none).
+	CoreVersion string `json:"core_version,omitempty"`
+	CoreLocale  string `json:"core_locale,omitempty"`
+	// CoreChecked is set when core files were checked against checksums,
+	// and CoreNote says why they weren't when checksums were given.
+	CoreChecked bool   `json:"core_checked,omitempty"`
+	CoreNote    string `json:"core_note,omitempty"`
+	// Plugins are the versions of the plugins in wp-content/plugins, by
+	// slug, PluginsChecked the ones checked against checksums, and
+	// PluginNotes why one wasn't when checksums were given.
+	Plugins        map[string]string `json:"plugins,omitempty"`
+	PluginsChecked map[string]bool   `json:"plugins_checked,omitempty"`
+	PluginNotes    []string          `json:"plugin_notes,omitempty"`
 }
 
 // Walk looks through the site directory root and records the files that
 // matter to the rules: tracked files (see isTracked) with their hashes,
 // stray files, and anything not owned by ownerUID or that can't be read.
-// It never follows symlinks and opens only regular files.
-func Walk(root string, ownerUID uint32) (*Result, error) {
+// With checksums for the site's WordPress and plugin versions in opts, it
+// also records the core and plugin files that differ from them, and files
+// they don't have (see coreRule and pluginRule). It never follows symlinks
+// and opens only regular files.
+func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 	res := &Result{Entries: []Entry{}}
+	res.CoreVersion, res.CoreLocale = readCoreVersion(root)
+	var sums map[string]string
+	if c := opts.Core; c != nil {
+		if c.Version == res.CoreVersion && c.Locale == res.CoreLocale {
+			sums = c.MD5
+			res.CoreChecked = true
+		} else {
+			// Updated since the last scan: the next scan checks against
+			// the new version.
+			res.CoreNote = "WordPress " + res.CoreVersion + " (" + res.CoreLocale + ") isn't the version the checksums are for"
+		}
+	}
+	var elsewhere []string
+	res.Plugins, elsewhere = readPluginVersions(root)
+	for _, p := range elsewhere {
+		res.PluginNotes = append(res.PluginNotes, p+" doesn't update from wordpress.org")
+	}
+	pluginSums := map[string]*PluginChecksums{}
+	for slug, sums := range opts.Plugins {
+		switch v, ok := res.Plugins[slug]; {
+		case !ok:
+		case sums.Version == v:
+			pluginSums[slug] = sums
+			if res.PluginsChecked == nil {
+				res.PluginsChecked = map[string]bool{}
+			}
+			res.PluginsChecked[slug] = true
+		default:
+			res.PluginNotes = append(res.PluginNotes, fmt.Sprintf("%s %s isn't the version the checksums are for", slug, v))
+		}
+	}
+	// checksumOnly holds the entries recorded only for the checksum rules.
+	checksumOnly := map[string]bool{}
+	coreModified := 0
+	pluginModified := map[string]int{}
+	pluginUnknown := map[string]int{}
 	tracked, other := 0, 0
 	add := func(e Entry, isTracked bool) {
 		switch {
@@ -133,6 +192,51 @@ func Walk(root string, ownerUID uint32) (*Result, error) {
 			return nil
 		}
 
+		if sums != nil && isCoreArea(rel) && !isTracked(rel) {
+			if info.Mode()&fs.ModeSymlink != 0 || !info.Mode().IsRegular() {
+				// Core has no symlinks or special files.
+				e.Checksum = coreRule(rel, sums, func() (string, bool) { return "", false })
+			} else {
+				e.Checksum = coreRule(rel, sums, func() (string, bool) { return fileMD5(full) })
+			}
+			if e.Checksum == RuleCoreModified {
+				coreModified++
+			}
+		}
+		if e.Checksum != "" {
+			if info.Mode()&fs.ModeSymlink != 0 {
+				if target, err := os.Readlink(full); err == nil {
+					e.Symlink = target
+				} else {
+					e.Symlink = "?"
+				}
+			} else if info.Mode().IsRegular() {
+				readTracked(full, rel, &e)
+			}
+			if !foreign && !isStrayFile(rel) {
+				checksumOnly[rel] = true
+			}
+			add(e, true)
+			return nil
+		}
+
+		if slug, inner := pluginOf(rel); pluginSums[slug] != nil && IsPHPPath(rel) && info.Mode().IsRegular() && !isTracked(rel) {
+			readTracked(full, rel, &e)
+			if e.Checksum = pluginRule(inner, pluginSums[slug], e); e.Checksum != "" {
+				if e.Checksum == RulePluginModified {
+					pluginModified[slug]++
+				} else {
+					pluginUnknown[slug]++
+				}
+				if !foreign {
+					checksumOnly[rel] = true
+				}
+				add(e, true)
+				return nil
+			}
+			e.SHA256, e.Head = "", ""
+		}
+
 		if info.Mode()&fs.ModeSymlink != 0 {
 			if recordSymlink(rel, e.UID, ownerUID) {
 				if target, err := os.Readlink(full); err == nil {
@@ -159,7 +263,48 @@ func Walk(root string, ownerUID uint32) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Mid-update, or not the version the checksums are for: leave the
+	// rules out rather than flag half of core or a plugin.
+	if coreModified > maxCoreModified {
+		res.dropChecksums(checksumOnly, func(e Entry) bool { return isCoreRule(e.Checksum) })
+		res.CoreChecked = false
+		res.CoreNote = fmt.Sprintf("%d core files differ from the checksums of WordPress %s (%s); an update in progress?", coreModified, res.CoreVersion, res.CoreLocale)
+	}
+	for slug := range pluginSums {
+		var note string
+		switch {
+		case pluginModified[slug] > maxPluginModified:
+			note = fmt.Sprintf("%d files of %s %s differ from its checksums; an update in progress?", pluginModified[slug], slug, res.Plugins[slug])
+		case pluginUnknown[slug] > maxPluginUnknown:
+			note = fmt.Sprintf("%s %s has %d PHP files its wordpress.org release doesn't; another build, such as a premium one?", slug, res.Plugins[slug], pluginUnknown[slug])
+		default:
+			continue
+		}
+		res.dropChecksums(checksumOnly, func(e Entry) bool {
+			s, _ := pluginOf(e.Path)
+			return s == slug && !isCoreRule(e.Checksum)
+		})
+		delete(res.PluginsChecked, slug)
+		res.PluginNotes = append(res.PluginNotes, note)
+	}
+	slices.Sort(res.PluginNotes)
 	return res, nil
+}
+
+// dropChecksums takes the checksum rule off the entries match selects, and
+// drops the ones recorded only for it.
+func (res *Result) dropChecksums(checksumOnly map[string]bool, match func(Entry) bool) {
+	kept := res.Entries[:0]
+	for _, e := range res.Entries {
+		if e.Checksum != "" && match(e) {
+			if checksumOnly[e.Path] {
+				continue
+			}
+			e.Checksum = ""
+		}
+		kept = append(kept, e)
+	}
+	res.Entries = kept
 }
 
 // recordSymlink reports whether the walk records a symlink. A root-owned

@@ -57,7 +57,7 @@ func TestWalkRecordsWhatTheRulesNeed(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := Walk(root, uint32(os.Getuid()))
+	res, err := Walk(root, uint32(os.Getuid()), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestWalkMarksUnreadable(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := Walk(root, uint32(os.Getuid()))
+	res, err := Walk(root, uint32(os.Getuid()), Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestWalkRecordsForeignOwnedFiles(t *testing.T) {
 	root := newSite(t)
 	// Every file is owned by the test's user, so pretend the site belongs
 	// to someone else: everything becomes foreign.
-	res, err := Walk(root, uint32(os.Getuid())+1)
+	res, err := Walk(root, uint32(os.Getuid())+1, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,7 +165,7 @@ func evaluate(prev map[string]Entry, cur []Entry, owner uint32) []string {
 func TestEvaluateFlagsChangesOnly(t *testing.T) {
 	root := newSite(t)
 	owner := uint32(os.Getuid())
-	first, err := Walk(root, owner)
+	first, err := Walk(root, owner, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestEvaluateFlagsChangesOnly(t *testing.T) {
 	}
 
 	// Nothing changed: nothing to flag.
-	again, _ := Walk(root, owner)
+	again, _ := Walk(root, owner, Options{})
 	if got := evaluate(baseline.Entries, again.Entries, owner); len(got) != 0 {
 		t.Errorf("unchanged site flagged %q", got)
 	}
@@ -203,7 +203,7 @@ func TestEvaluateFlagsChangesOnly(t *testing.T) {
 	writeFile(t, root, "wp-content/mu-plugins/new.php", "<?php")
 	writeFile(t, root, "db.sql", "dump")
 	writeFile(t, root, "index.php", "<?php // changed, but not tracked")
-	changed, _ := Walk(root, owner)
+	changed, _ := Walk(root, owner, Options{})
 	want := []string{
 		"mu-plugin-change wp-content/mu-plugins/new.php",
 		"stray-file db.sql",
@@ -295,7 +295,7 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	writeFile(t, root, "wp-content/plugins/y/.env", "SECRET=1")
 	writeFile(t, root, "wp-content/plugins/y/.git/HEAD", "ref")
 	owner := uint32(os.Getuid())
-	res, err := Walk(root, owner)
+	res, err := Walk(root, owner, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	// An empty upload that gets content is flagged.
 	baseline := NewState(res.Entries)
 	writeFile(t, root, "wp-content/uploads/wpallimport/index.php", "<?php system($_GET['c']);")
-	again, _ := Walk(root, owner)
+	again, _ := Walk(root, owner, Options{})
 	if got := evaluate(baseline.Entries, again.Entries, owner); !slices.Equal(got, []string{"uploads-php wp-content/uploads/wpallimport/index.php"}) {
 		t.Errorf("after filling an empty upload, flagged %q", got)
 	}
@@ -365,7 +365,7 @@ func TestEvaluateSkipsGuardedDataFiles(t *testing.T) {
 	big := "<?php\n// datastore=auditqueue;\nexit(0);\n?>\n" + strings.Repeat("x", maxHashBytes)
 	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-auditqueue.php", big)
 
-	first, err := Walk(root, owner)
+	first, err := Walk(root, owner, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,13 +379,13 @@ func TestEvaluateSkipsGuardedDataFiles(t *testing.T) {
 	baseline := NewState(first.Entries)
 	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-failedlogins.php", "<?php exit(0); ?>\n{\"user_login\":\"y\"}\n")
 	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-auditqueue.php", big+"more")
-	again, _ := Walk(root, owner)
+	again, _ := Walk(root, owner, Options{})
 	if got := evaluate(baseline.Entries, again.Entries, owner); len(got) != 0 {
 		t.Errorf("rewritten guarded files flagged: %q", got)
 	}
 
 	writeFile(t, root, "wp-content/uploads/sucuri/sucuri-failedlogins.php", "<?php system($_GET['c']); exit(0); ?>")
-	lost, _ := Walk(root, owner)
+	lost, _ := Walk(root, owner, Options{})
 	if got := evaluate(baseline.Entries, lost.Entries, owner); !slices.Equal(got, []string{"uploads-php wp-content/uploads/sucuri/sucuri-failedlogins.php"}) {
 		t.Errorf("after losing its guard, flagged %q", got)
 	}

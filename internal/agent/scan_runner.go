@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,8 +33,14 @@ const maxScanOutputBytes = 64 << 20
 // runScan is a seam for tests.
 var runScan = runScanChild
 
-// runScanChild scans sitePath as id with a child process.
-func runScanChild(ctx context.Context, id siteIdentity, sitePath string) (*scan.Result, error) {
+// maxScanInputBytes caps what the scan child reads from its stdin: the
+// walk's options, chiefly the site's core and plugin checksums (a few MB
+// for a site with many large plugins).
+const maxScanInputBytes = 64 << 20
+
+// runScanChild scans sitePath as id with a child process, passing it opts
+// on its stdin.
+func runScanChild(ctx context.Context, id siteIdentity, sitePath string, opts scan.Options) (*scan.Result, error) {
 	if id.UID == 0 || id.GID == 0 {
 		// resolveSiteIdentity never returns these; this guards the
 		// invariant against future callers.
@@ -69,6 +76,11 @@ func runScanChild(ctx context.Context, id siteIdentity, sitePath string) (*scan.
 	stdout := &cappedBuffer{max: maxScanOutputBytes}
 	stderr := &cappedBuffer{max: 64 << 10}
 	cmd.Stdout, cmd.Stderr = stdout, stderr
+	input, err := json.Marshal(opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode the scan's options: %w", err)
+	}
+	cmd.Stdin = bytes.NewReader(input)
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("failed to start the scan: %w", err)
@@ -103,13 +115,24 @@ func runScanChild(ctx context.Context, id siteIdentity, sitePath string) (*scan.
 }
 
 // RunScanChild is the --scan-site mode: it walks sitePath as the current
-// user and prints the result as JSON. It refuses to run as root, so a scan
-// can't end up running with the agent's privileges.
-func RunScanChild(sitePath string, out io.Writer) error {
+// user, with the options the agent writes to in, and prints the result as
+// JSON to out. It refuses to run as root, so a scan can't end up running
+// with the agent's privileges.
+func RunScanChild(sitePath string, in io.Reader, out io.Writer) error {
 	if os.Geteuid() == 0 {
 		return fmt.Errorf("refusing to scan as root")
 	}
-	res, err := scan.Walk(sitePath, uint32(os.Getuid()))
+	var opts scan.Options
+	b, err := io.ReadAll(io.LimitReader(in, maxScanInputBytes))
+	if err != nil {
+		return fmt.Errorf("failed to read the scan's options: %w", err)
+	}
+	if len(bytes.TrimSpace(b)) > 0 {
+		if err := json.Unmarshal(b, &opts); err != nil {
+			return fmt.Errorf("failed to parse the scan's options: %w", err)
+		}
+	}
+	res, err := scan.Walk(sitePath, uint32(os.Getuid()), opts)
 	if err != nil {
 		return err
 	}

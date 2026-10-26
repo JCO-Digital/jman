@@ -846,6 +846,21 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// release_checksums caches wordpress.org's checksums of WordPress
+			// (kind "core", name the locale; outside wp-content) and plugin
+			// (kind "plugin", name the slug) releases for jman-agent's scans,
+			// as JSON. Empty data means wordpress.org had none at fetched_at.
+			Name: "release_checksums",
+			Columns: map[string]string{
+				"kind":       "TEXT NOT NULL",
+				"name":       "TEXT NOT NULL",
+				"version":    "TEXT NOT NULL",
+				"data":       "TEXT NOT NULL DEFAULT ''",
+				"fetched_at": "DATETIME NOT NULL",
+			},
+			PrimaryKey: []string{"kind", "name", "version"},
+		},
+		{
 			// scan_allowlist holds file hashes trusted on every site.
 			// site_id, rule, path and snippet describe the finding an entry
 			// was made from. Removing an entry only sets removed, so

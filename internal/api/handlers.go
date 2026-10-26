@@ -68,6 +68,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Agent routes (X-Agent-Token auth, not JWT) ---
 	mux.Handle("GET /api/agent/manifest", AgentAuthMiddleware(AgentManifestHandler))
 	mux.Handle("POST /api/agent/report", AgentAuthMiddleware(AgentReportHandler))
+	mux.Handle("GET /api/agent/core-checksums", AgentAuthMiddleware(AgentCoreChecksumsHandler))
+	mux.Handle("GET /api/agent/plugin-checksums", AgentAuthMiddleware(AgentPluginChecksumsHandler))
 
 	// --- Agent token management (JWT, admin level) ---
 	mux.Handle("GET /api/agent-tokens", admin(ListAgentTokensHandler))

@@ -100,7 +100,7 @@ jman-agent --once
 - `-s`, `--service`: Run as a continuous background service.
 - `--once`: Run a single collection cycle and exit.
 - `--check-wp`: Collect each WordPress site's plugins and core as the service would, print the result (path, the user wp-cli ran as, and the data or why the site was refused), and exit without reporting anything. Exits non-zero if any site failed.
-- `--check-scan`: Scan each site's files as the service would and print what the rules flag, without reporting anything or changing any baseline. A site without a baseline shows what its first scan would report. Exits non-zero if any site failed.
+- `--check-scan`: Scan each site's files as the service would and print what the rules flag, without reporting anything or changing any baseline. A site without a baseline shows what its first scan would report. Exits non-zero if any site failed. With `--wporg`, core and plugin checksums come straight from wordpress.org rather than through jman-api.
 - `--site <domain>`: With `--check-wp` or `--check-scan`, only check this site.
 - `--scan-site <dir>`: Internal. The agent runs itself with this flag, as a site's owner, to scan the site's files (see File Scanning).
 - `--config <path>`: Path to `config.toml` (default: `/etc/jman-agent/config.toml`, or `$XDG_CONFIG_HOME/jman-agent/config.toml` if not root).
@@ -155,8 +155,14 @@ The rules flag:
 | `foreign-owner`    | medium   | A file or directory owned by someone other than the site's owner, except root-owned symlinks    |
 | `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps, and in plugins and themes only `.env` and `.git` are. |
 | `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
+| `core-modified`    | high     | A WordPress core file (outside `wp-content`) that differs from wordpress.org's checksum for the site's version and locale |
+| `core-unknown-file`| high     | A file in `wp-admin` or `wp-includes` that core doesn't have (medium unless it's PHP), or a PHP file in the site directory other than core's and `wp-config.php` |
+| `plugin-modified`  | high     | A PHP file of a plugin in `wp-content/plugins` that differs from wordpress.org's checksum for the plugin's version |
+| `plugin-unknown-file` | high  | A PHP file in such a plugin that its release doesn't have. Empty files and data files that exit first aren't flagged, as in uploads. |
 
 Only changes are reported: a file is flagged when it appears or changes, not on every scan. The baseline lives in `<stateDir>/scan/<site>.json`, readable only by root, and is saved only after the report holding the scan has been sent. With no baseline (the first scan, or after it was lost) the agent records one and only reports `stray-file`, `foreign-owner` and `unreadable`, which describe a state rather than a change; jman-api notes the re-baseline. Findings include the start of the file, except for `wp-config.php`. The agent also reports what the baseline flagged that no longer holds (a file removed or replaced, an owner fixed, a file readable again), so jman-api can show findings as cleared; `--check-scan` prints these as `cleared:`.
+
+Core files are checked against wordpress.org's checksums for the WordPress version and package locale in `wp-includes/version.php` at the previous scan, which the baseline remembers, and the PHP files of each plugin against the checksums of the version in its header at the previous scan. The agent gets them through jman-api (and remembers for 6 hours that a plugin has none) and passes them to the scan child on its stdin. So the checks start with a site's second scan, and after an update core or the plugin is skipped for one scan, keeping the findings it had; it's also skipped when more than 50 of its files differ, as in the middle of an update. A plugin without checksums on wordpress.org isn't checked, and neither is one whose `Update URI` header points elsewhere (or is `false`), or one with more than 20 PHP files its release doesn't have: both are premium builds that reuse a wordpress.org slug. `--check-scan` checks right away, and says which plugins it couldn't check and why; add `--wporg` to get the checksums straight from wordpress.org, before jman-api serves them.
 
 Scans never follow symlinks or open anything but regular files, hash files up to 16 MiB, are limited to 10 minutes per site and run at a lower CPU priority. Walking a 40 GB site with about 75,000 files takes around a second.
 
@@ -218,6 +224,8 @@ Traffic data specifically assumes logs live at `/sites/<domain>/logs` — this p
 
 - `GET /api/agent/manifest`: Returns the list of sites this server's token is scoped to, along with each site's domain and (optionally) Unix user — the agent resolves the actual filesystem path itself, since site layouts vary by hosting provisioning convention.
 - `POST /api/agent/report`: Accepts a batch of collected data for those sites. Reports for sites outside the calling server's own token are rejected.
+- `GET /api/agent/core-checksums?version=&locale=`: The MD5 checksums of a WordPress release outside `wp-content`, which jman-api fetches from wordpress.org and caches (404 when wordpress.org has none; that's remembered for 6 hours).
+- `GET /api/agent/plugin-checksums?slug=&version=`: The SHA-256 checksums of a plugin release (each file's list of accepted hashes), cached the same way. Premium and custom plugins get a 404.
 
 And for admins managing tokens (JWT, admin level):
 

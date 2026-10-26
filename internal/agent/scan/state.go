@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 )
 
 // State is the baseline the agent keeps for a site: what the last
@@ -16,6 +17,14 @@ type State struct {
 	RuleSetVersion string           `json:"rule_set_version"`
 	Fingerprint    string           `json:"fingerprint"`
 	Entries        map[string]Entry `json:"entries"`
+	// CoreVersion and CoreLocale are the site's WordPress version and
+	// package locale at the last scan: the next scan checks core files
+	// against their checksums.
+	CoreVersion string `json:"core_version,omitempty"`
+	CoreLocale  string `json:"core_locale,omitempty"`
+	// Plugins are the plugin versions at the last scan, by slug, which the
+	// next scan checks against their checksums.
+	Plugins map[string]string `json:"plugins,omitempty"`
 }
 
 // siteIDRe guards the state file name, which is built from the site ID
@@ -60,6 +69,46 @@ func NewState(entries []Entry) *State {
 		s.Entries[e.Path] = e
 	}
 	return s
+}
+
+// CarryChecksums keeps the checksum findings of the previous baseline for
+// core and the plugins a walk didn't check (no checksums, or updated
+// since): they're neither new nor cleared until the next check. Those of a
+// plugin that's gone, or of core when there's none, aren't kept.
+func CarryChecksums(prev *State, res *Result) {
+	if prev == nil {
+		return
+	}
+	at := make(map[string]int, len(res.Entries))
+	for i, e := range res.Entries {
+		at[e.Path] = i
+	}
+	paths := make([]string, 0)
+	for p, e := range prev.Entries {
+		if e.Checksum == "" {
+			continue
+		}
+		if isCoreRule(e.Checksum) {
+			if res.CoreChecked || res.CoreVersion == "" {
+				continue
+			}
+		} else {
+			slug, _ := pluginOf(p)
+			if _, present := res.Plugins[slug]; !present || res.PluginsChecked[slug] {
+				continue
+			}
+		}
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	for _, p := range paths {
+		old := prev.Entries[p]
+		if i, ok := at[p]; ok {
+			res.Entries[i].Checksum = old.Checksum
+			continue
+		}
+		res.Entries = append(res.Entries, old)
+	}
 }
 
 // SaveState writes a site's baseline, replacing the old one atomically.
