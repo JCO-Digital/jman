@@ -26,6 +26,10 @@ type contentPattern struct {
 	// find, when set, is used instead of re: it returns where the pattern
 	// first matches, or nil.
 	find func([]byte) []int
+	// inComments makes re match in comments too; other patterns skip
+	// matches on comment lines, such as a doc comment's
+	// "@var $_GET['action'] (string)".
+	inComments bool
 }
 
 // contentPatterns are the built-in content rules, after the ones PHP
@@ -33,9 +37,9 @@ type contentPattern struct {
 // plugins and themes.
 var contentPatterns = []contentPattern{
 	{
-		// Runs code hidden in an encoded string.
-		name: "eval-decoded", severity: "high", hints: []string{"eval"},
-		re: regexp.MustCompile(`(?i)\beval\s*\(\s*(?:@\s*)?(?:base64_decode|gzinflate|gzuncompress|gzdecode|str_rot13|strrev|hex2bin|rawurldecode|urldecode|convert_uudecode)\s*\(`),
+		// Runs code or a command hidden in an encoded string.
+		name: "eval-decoded", severity: "high", hints: []string{"eval", "assert", "exec", "system", "passthru", "popen"},
+		re: regexp.MustCompile(`(?i)(?:^|[^\w>:$\\])(?:eval|assert|shell_exec|system|passthru|exec|popen|proc_open)\s*\(\s*(?:@\s*)?(?:base64_decode|gzinflate|gzuncompress|gzdecode|str_rot13|strrev|hex2bin|rawurldecode|urldecode|convert_uudecode)\s*\(`),
 	},
 	{
 		// Runs what the request sends.
@@ -60,8 +64,8 @@ var contentPatterns = []contentPattern{
 	},
 	{
 		// Names of well-known web shells.
-		name: "webshell", severity: "high", hints: []string{"filesman", "b374k", "c99shell", "r57shell", "wso", "indoxploit", "alfa"},
-		re: regexp.MustCompile(`(?i)\b(?:FilesMan|b374k|c99shell|r57shell|WSO\s?[0-9][0-9.]*|IndoXploit|AlfaShell|ALFA_DATA)\b`),
+		name: "webshell", severity: "high", hints: []string{"filesman", "b374k", "c99shell", "r57shell", "wso", "indoxploit", "alfa"}, inComments: true,
+		re: regexp.MustCompile(`(?i)\b(?:FilesMan|b374k|c99shell|r57shell|WSO\s?[0-9][0-9.]*|IndoXploit|Alfa\s?Shell|ALFA_DATA)\b`),
 	},
 	{
 		// Code spelled out in hex escapes ("\x65\x76\x61\x6c") or chr()
@@ -76,6 +80,106 @@ var contentPatterns = []contentPattern{
 		name: "encoded-payload", severity: "high", hints: nil,
 		find: findEncodedPayload,
 	},
+	// The rules below look for two things in the same file, each common
+	// enough alone. They come from backdoor kits found on managed sites
+	// in 2026, which none of the rules above caught.
+	{
+		// Decodes request input and runs a variable:
+		// $d = base64_decode($_POST['d']); shell_exec($d).
+		name: "exec-decoded-input", severity: "high", hints: []string{"base64_decode"},
+		find: func(b []byte) []int { return findBoth(b, decodedInputRe, execVarRe) },
+	},
+	{
+		// Fetches code from a URL and evals it: eval("?>" . $remote).
+		name: "eval-remote", severity: "high", hints: []string{"eval"},
+		find: func(b []byte) []int { return findAfter(b, remoteFetchRe, evalVarRe, maxFetchDistance) },
+	},
+	{
+		// Fetches code from a URL into a temporary file and includes it.
+		name: "include-remote", severity: "high", hints: []string{"tmpfile", "tempnam", "sys_get_temp_dir"},
+		find: func(b []byte) []int {
+			if !tempFileRe.Match(b) {
+				return nil
+			}
+			return findBoth(b, remoteFetchRe, includeVarRe)
+		},
+	},
+	{
+		// Checks request input against a password hash written into the
+		// file: the door of a password-protected shell or a login bypass.
+		// Plugins keep password hashes in the database.
+		name: "hardcoded-credential", severity: "high", hints: []string{"password_verify", "hash_equals"},
+		find: findHardcodedCredential,
+	},
+	{
+		// Strings cut into pieces to hide them from searches:
+		// 'goo'.'gle'.'bot', 'wp'.'-lo'.'ad.php'. Code doesn't need that.
+		name: "split-strings", severity: "high", hints: []string{"'.'", "' . '", `"."`, `" . "`},
+		re: regexp.MustCompile(`(?:'[^'\\\n]{1,4}'\s*\.\s*){8,}'[^'\\\n]{1,4}'|(?:"[^"\\\n$]{1,4}"\s*\.\s*){8,}"[^"\\\n$]{1,4}"`),
+	},
+}
+
+var (
+	// decodedInputRe matches base64_decode() of request input.
+	decodedInputRe = regexp.MustCompile(`(?i)base64_decode\s*\(\s*(?:@\s*)?(?:isset\s*\(\s*)?\$_(?:GET|POST|REQUEST|COOKIE|SERVER)\b`)
+	// execVarRe matches a function that runs code or commands called on a
+	// variable, not as a method (PDO's ->exec($sql)).
+	execVarRe = regexp.MustCompile(`(?i)(?:^|[^\w>:$\\])(?:eval|assert|shell_exec|system|passthru|exec|popen|proc_open)\s*\(\s*(?:@\s*)?(?:base64_decode\s*\(\s*)?\$[A-Za-z_]`)
+	// evalVarRe matches eval() of a variable, possibly after a short
+	// string such as "?>".
+	evalVarRe = regexp.MustCompile(`(?i)(?:^|[^\w>:$\\])eval\s*\(\s*(?:@\s*)?(?:(?:"[^"\n]{0,16}"|'[^'\n]{0,16}'|\$\w+)\s*\.\s*)?\$\w`)
+	// includeVarRe matches include or require of a variable.
+	includeVarRe = regexp.MustCompile(`(?i)(?:^|[^\w>:$\\])(?:include|require)(?:_once)?\s*\(?\s*\$\w`)
+	// remoteFetchRe matches fetching something over HTTP.
+	remoteFetchRe = regexp.MustCompile(`(?i)\bcurl_exec\s*\(|\bwp_remote_(?:get|post|request|retrieve_body)\s*\(|\b(?:file_get_contents|fopen)\s*\(\s*['"]https?://`)
+	tempFileRe    = regexp.MustCompile(`(?i)\b(?:tmpfile|tempnam|sys_get_temp_dir)\s*\(`)
+
+	bcryptRe        = regexp.MustCompile(`\$2[aby]\$\d\d\$[./A-Za-z0-9]{53}`)
+	hexDigestRe     = regexp.MustCompile(`['"](?:[0-9a-fA-F]{40}|[0-9a-fA-F]{32})['"]`)
+	passwordCheckRe = regexp.MustCompile(`(?i)\bpassword_verify\s*\(`)
+	hashEqualsRe    = regexp.MustCompile(`(?i)\bhash_equals\s*\(`)
+	hashedInputRe   = regexp.MustCompile(`(?i)\b(?:sha1|md5)\s*\(\s*\$_(?:GET|POST|COOKIE|REQUEST)\b|\bhash\s*\(\s*['"]\w+['"]\s*,\s*\$_(?:GET|POST|COOKIE|REQUEST)\b`)
+	requestInputRe  = regexp.MustCompile(`\$_(?:GET|POST|COOKIE|REQUEST)\b`)
+)
+
+// maxFetchDistance is how far before an eval() eval-remote looks for the
+// fetch of what it runs.
+const maxFetchDistance = 2048
+
+// findAfter returns where second first matches within distance bytes after
+// a match of first.
+func findAfter(b []byte, first, second *regexp.Regexp, distance int) []int {
+	for _, loc := range second.FindAllIndex(b, -1) {
+		if first.Match(b[max(0, loc[0]-distance):loc[0]]) {
+			return loc
+		}
+	}
+	return nil
+}
+
+// findBoth returns where second first matches if first matches too.
+func findBoth(b []byte, first, second *regexp.Regexp) []int {
+	if !first.Match(b) {
+		return nil
+	}
+	return second.FindIndex(b)
+}
+
+// findHardcodedCredential returns where a password hash written into the
+// file is, when the file checks request input against it: a bcrypt hash
+// with password_verify(), or a hex digest with hash_equals() of a hashed
+// request value.
+func findHardcodedCredential(b []byte) []int {
+	if !requestInputRe.Match(b) {
+		return nil
+	}
+	if loc := bcryptRe.FindIndex(b); loc != nil && passwordCheckRe.Match(b) {
+		return loc
+	}
+	if loc := hexDigestRe.FindIndex(b); loc != nil && hashEqualsRe.Match(b) && hashedInputRe.Match(b) {
+		return loc
+	}
+	return nil
 }
 
 // dangerousRe matches what decoded code a shell hides: calls that run
@@ -181,10 +285,18 @@ func matchContent(body []byte) []contentMatch {
 			continue
 		}
 		var loc []int
-		if p.find != nil {
+		switch {
+		case p.find != nil:
 			loc = p.find(body)
-		} else {
+		case p.inComments:
 			loc = p.re.FindIndex(body)
+		default:
+			for _, l := range p.re.FindAllIndex(body, -1) {
+				if !onCommentLine(body, l[0]) {
+					loc = l
+					break
+				}
+			}
 		}
 		if loc == nil {
 			continue
@@ -197,6 +309,14 @@ func matchContent(body []byte) []contentMatch {
 		})
 	}
 	return matches
+}
+
+// onCommentLine reports whether the line holding offset i starts as a
+// comment: //, #, /* or a doc comment's *.
+func onCommentLine(b []byte, i int) bool {
+	start := bytes.LastIndexByte(b[:i], '\n') + 1
+	line := bytes.TrimLeft(b[start:i], " \t")
+	return bytes.HasPrefix(line, []byte("//")) || bytes.HasPrefix(line, []byte("#")) || bytes.HasPrefix(line, []byte("*")) || bytes.HasPrefix(line, []byte("/*"))
 }
 
 func containsAny(lower []byte, hints []string) bool {
