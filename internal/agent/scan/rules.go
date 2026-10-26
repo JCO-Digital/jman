@@ -16,7 +16,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "6"
+const RuleSetVersion = "7"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
