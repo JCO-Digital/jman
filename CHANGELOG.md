@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.14.0 (2026-10-26)
+## 7.15.0 (2026-10-26)
+
+#### Features
+
+- agent: content rules for the backdoors found in October (dcbaff6)
+
+## v7.14.0 (2026-10-26)
 
 #### Features
 
