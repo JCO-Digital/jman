@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.13.0 (2026-10-26)
+## 7.14.0 (2026-10-26)
+
+#### Features
+
+- search PHP files for malicious code (content rules) (b2c30e7)
+
+## v7.13.0 (2026-10-26)
 
 #### Features
 
