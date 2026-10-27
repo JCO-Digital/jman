@@ -1,7 +1,12 @@
 import type { ScanSeverity } from "../../types";
 
 /** The rules a path acknowledgement can cover. */
-const stateRules = new Set(["stray-file", "foreign-owner", "unreadable"]);
+const stateRules = new Set([
+	"stray-file",
+	"foreign-owner",
+	"unreadable",
+	"new-admin",
+]);
 
 export function isStateRule(rule: string): boolean {
 	return stateRules.has(rule);

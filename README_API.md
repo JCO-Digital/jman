@@ -382,6 +382,7 @@ a daily reminder while it lasts and a message when it recovers.
 | `scanSlackSeverity`       | `JMAN_SCANSLACKSEVERITY`       | `high`  | Lowest scan finding severity that alerts in Slack (`low`, `medium`, `high`, `critical` or `off`). |
 | `scanPagerDutySeverity`   | `JMAN_SCANPAGERDUTYSEVERITY`   | `critical` | Lowest scan finding severity that pages in PagerDuty, or `off`.                                |
 | `slackSecurityChannel`    | `JMAN_SLACKSECURITYCHANNEL`    |         | Slack channel for security alerts. Defaults to `slackMonitorChannel`.                             |
+| `trustedAdminDomains`     |                                |         | Email domains (e.g. `["jco.fi"]`) whose administrators added outside jman are medium (no Slack alert) rather than high. |
 | `agentServerStaleMinutes` | `JMAN_AGENTSERVERSTALEMINUTES` | `30`    | Warn when a server's agent hasn't called in for this long.                                        |
 | `agentSiteStaleMinutes`   | `JMAN_AGENTSITESTALEMINUTES`   | `180`   | Warn when an agent site's WordPress data hasn't been collected successfully for this long.        |
 
