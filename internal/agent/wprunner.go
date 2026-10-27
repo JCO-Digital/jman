@@ -181,13 +181,24 @@ func (c *cappedBuffer) Write(p []byte) (int, error) {
 // and themes skipped (so a broken plugin can't break collection, and site
 // code beyond WordPress core doesn't run), and returns its stdout.
 func (r *wpRunner) run(ctx context.Context, id siteIdentity, sitePath string, args ...string) (string, error) {
+	return r.exec(ctx, id, sitePath, []string{"--skip-plugins", "--skip-themes"}, args)
+}
+
+// runWithPlugins is run with the site's plugins loaded (themes are still
+// skipped), for the plugin list: premium plugins report their updates only
+// when loaded. They run as the site's owner like everything else here.
+func (r *wpRunner) runWithPlugins(ctx context.Context, id siteIdentity, sitePath string, args ...string) (string, error) {
+	return r.exec(ctx, id, sitePath, []string{"--skip-themes"}, args)
+}
+
+func (r *wpRunner) exec(ctx context.Context, id siteIdentity, sitePath string, skip, args []string) (string, error) {
 	if id.UID == 0 || id.GID == 0 {
 		// resolveSiteIdentity never returns these; this guards the
 		// invariant against future callers.
 		return "", fmt.Errorf("refusing to run wp-cli as root")
 	}
 
-	full := append([]string{"--path=" + sitePath, "--skip-plugins", "--skip-themes"}, args...)
+	full := append(append([]string{"--path=" + sitePath}, skip...), args...)
 	cmd := exec.Command(r.wpPath, full...)
 	cmd.Dir = sitePath
 	cmd.Env = []string{

@@ -155,6 +155,11 @@ func (f *fakeRunner) run(_ context.Context, id siteIdentity, _ string, args ...s
 	return f.out[key], nil
 }
 
+// runWithPlugins answers from the same maps, keyed with a "loaded: " prefix.
+func (f *fakeRunner) runWithPlugins(ctx context.Context, id siteIdentity, sitePath string, args ...string) (string, error) {
+	return f.run(ctx, id, sitePath, append([]string{"loaded:"}, args...)...)
+}
+
 func stubSite(t *testing.T, runner *fakeRunner) {
 	t.Helper()
 	oldPath, oldID, oldRunner := resolvePath, resolveIdentity, newRunner
@@ -174,9 +179,10 @@ const pluginListJSON = `Deprecated: something on line 3
 
 func okRunner() *fakeRunner {
 	return &fakeRunner{out: map[string]string{
-		"plugin list --format=json":       pluginListJSON,
-		"core version":                    "Deprecated: notice\n6.6.1\n",
-		"core check-update --format=json": `[{"version":"6.6.2","update_type":"minor","package_url":"x"},{"version":"6.7.1","update_type":"major","package_url":"y"}]`,
+		"loaded: plugin list --format=json": pluginListJSON,
+		"plugin list --format=json":         pluginListJSON,
+		"core version":                      "Deprecated: notice\n6.6.1\n",
+		"core check-update --format=json":   `[{"version":"6.6.2","update_type":"minor","package_url":"x"},{"version":"6.7.1","update_type":"major","package_url":"y"}]`,
 	}}
 }
 
@@ -214,7 +220,8 @@ func TestCollectSiteWPData(t *testing.T) {
 
 func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	runner := okRunner()
-	runner.fail = map[string]error{"plugin list --format=json": errors.New("wp-cli [plugin list] failed: Error: Error establishing a database connection.")}
+	dbErr := errors.New("wp-cli [plugin list] failed: Error: Error establishing a database connection.")
+	runner.fail = map[string]error{"loaded: plugin list --format=json": dbErr, "plugin list --format=json": dbErr}
 	stubSite(t, runner)
 	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if !strings.Contains(data.Error, "database connection") || data.Hash != "" || data.Plugins != nil {
@@ -236,6 +243,33 @@ func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	resolveIdentity = func(string, string) (siteIdentity, error) { return siteIdentity{UID: 1001, GID: 1001}, nil }
 	data = collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if data.Error != "" || data.Core == nil || data.Core.Version != "6.6.1" || data.Core.MajorUpdate != "" {
+		t.Errorf("data = %+v", data)
+	}
+}
+
+func TestCollectSiteWPDataLoadsPlugins(t *testing.T) {
+	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com", IsWordpress: true}
+
+	// The plugin list comes from the run with plugins loaded, which is the
+	// one where premium plugins report their updates.
+	runner := okRunner()
+	runner.out["loaded: plugin list --format=json"] = `[{"name":"premium","status":"active","version":"1.0","update_version":"1.1","auto_update":"off"}]`
+	stubSite(t, runner)
+	data := collectSiteWPData(context.Background(), runner, site, false)
+	if data.Error != "" || len(data.Plugins) != 1 || data.Plugins[0].Update != "1.1" {
+		t.Errorf("data = %+v", data)
+	}
+	for _, call := range runner.calls {
+		if call == "plugin list --format=json" {
+			t.Error("listed the plugins again after a successful loaded run")
+		}
+	}
+
+	// A broken plugin falls back to listing them skipped.
+	runner = okRunner()
+	runner.fail = map[string]error{"loaded: plugin list --format=json": errors.New("PHP Fatal error: broken plugin")}
+	data = collectSiteWPData(context.Background(), runner, site, false)
+	if data.Error != "" || len(data.Plugins) != 2 {
 		t.Errorf("data = %+v", data)
 	}
 }

@@ -125,7 +125,7 @@ The service runs as `root` by default (see the comments in `jman-agent.service`)
 
 ## WordPress Data
 
-About once an hour (`agentWpDataInterval` in jman-api's config; the agent has no setting of its own), the agent runs `wp plugin list`, `wp core version` and `wp core check-update` for each WordPress site, with other plugins and themes skipped (`--skip-plugins --skip-themes`), so a broken plugin can't break collection and site code beyond WordPress core doesn't run.
+About once an hour (`agentWpDataInterval` in jman-api's config; the agent has no setting of its own), the agent runs `wp plugin list`, `wp core version` and `wp core check-update` for each WordPress site, as the site's owner. `wp plugin list` runs with the site's plugins loaded (themes skipped), because premium plugins report their updates only when loaded; if that fails, for example because of a broken plugin, it runs again with `--skip-plugins`. The other commands always run with plugins and themes skipped (`--skip-plugins --skip-themes`), so site code beyond WordPress core doesn't run for them.
 
 The agent runs as root, but **never runs wp-cli as root**. Each call runs as the Unix user that owns the site's directory (`/sites/<domain>/files`), with that user's primary group, no supplementary groups, a fixed `PATH`, and a fresh environment that doesn't include the agent's own (which holds its token). A site is skipped, and the reason reported to jman-api, if:
 

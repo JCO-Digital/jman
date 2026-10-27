@@ -512,7 +512,7 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plugins, err := wpcli.GetPlugins(*site, false)
+	plugins, err := wpcli.GetPluginsWithUpdates(*site)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SitePluginUpdatesHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get plugins from site")
