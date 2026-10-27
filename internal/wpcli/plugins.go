@@ -22,6 +22,21 @@ func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error
 	return ParsePluginList(res.Output, site.ID)
 }
 
+// GetPluginsWithUpdates lists a site's plugins with the plugins loaded, so
+// premium plugins whose updaters hook into WordPress's update check report
+// their updates too; with --skip-plugins they show none, and the update
+// check WordPress may run during the listing can save the update list
+// without them. If loading the plugins fails (a broken plugin), it lists
+// them again skipped, which still reports their installed state.
+func GetPluginsWithUpdates(site models.CliSite) ([]models.WPPlugin, error) {
+	plugins, err := GetPlugins(site, false)
+	if err == nil {
+		return plugins, nil
+	}
+	verb.PrintErrorf(verb.Normal, "Warning: listing plugins on %s with plugins loaded failed, retrying with them skipped: %v\n", site.Name, err)
+	return GetPlugins(site, true)
+}
+
 // ParsePluginList parses `wp plugin list --format=json` output (with the
 // name, status, version, update_version and auto_update fields) into
 // plugins of the given site.

@@ -70,6 +70,7 @@ var newRunner = func() (wpDataRunner, error) { return newWPRunner() }
 // wpDataRunner runs wp-cli for a site; *wpRunner in production.
 type wpDataRunner interface {
 	run(ctx context.Context, id siteIdentity, sitePath string, args ...string) (string, error)
+	runWithPlugins(ctx context.Context, id siteIdentity, sitePath string, args ...string) (string, error)
 }
 
 // resolvePath and resolveIdentity are seams for tests.
@@ -168,9 +169,14 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 		return fail(err)
 	}
 
-	out, err := runner.run(ctx, id, sitePath, "plugin", "list", "--format=json")
+	// Listed with the plugins loaded so premium plugins report their
+	// updates; if a broken plugin stops that, listed again skipped.
+	out, err := runner.runWithPlugins(ctx, id, sitePath, "plugin", "list", "--format=json")
 	if err != nil {
-		return fail(err)
+		verb.LogPrintf(verb.Normal, "Failed to list plugins for %s with plugins loaded, retrying with them skipped: %v", site.Domain, err)
+		if out, err = runner.run(ctx, id, sitePath, "plugin", "list", "--format=json"); err != nil {
+			return fail(err)
+		}
 	}
 	plugins, err := wpcli.ParsePluginList(out, "")
 	if err != nil {

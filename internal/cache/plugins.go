@@ -107,7 +107,7 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			sitePlugins, err := wpcli.GetPlugins(site, true)
+			sitePlugins, err := wpcli.GetPluginsWithUpdates(site)
 			if err != nil {
 				verb.PrintErrorf(verb.Normal, "Warning: failed to fetch plugins for site %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 				return
@@ -146,7 +146,7 @@ func UpdateSitePluginCache(site models.CliSite) error {
 // RefreshSitePlugins fetches a site's current plugins over WP-CLI and
 // stores them as observed from src.
 func RefreshSitePlugins(site models.CliSite, src sitestate.Source) error {
-	sitePlugins, err := wpcli.GetPlugins(site, true)
+	sitePlugins, err := wpcli.GetPluginsWithUpdates(site)
 	if err != nil {
 		return fmt.Errorf("failed to fetch plugins for site %s: %w", site.Name, err)
 	}

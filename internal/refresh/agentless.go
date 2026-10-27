@@ -120,7 +120,7 @@ func collectSingleSite(site models.ManagedSite) error {
 	}
 
 	// 4. Collect Installed Plugins
-	plugins, plugErr := wpcli.GetPlugins(cliSite, false)
+	plugins, plugErr := wpcli.GetPluginsWithUpdates(cliSite)
 	if plugErr == nil {
 		if _, err := sitestate.ApplyPlugins(site.ID, plugins, sitestate.SourceSSH, time.Now()); err != nil {
 			verb.LogPrintf(verb.Normal, "Agentless collection: failed to save plugins for %s: %v", site.Domain, err)
