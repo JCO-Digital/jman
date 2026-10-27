@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.15.0 (2026-10-26)
+## 7.16.0 (2026-10-27)
+
+#### Features
+
+- api: flag administrators added outside jman (dacfe4a)
+
+## v7.15.0 (2026-10-26)
 
 #### Features
 
