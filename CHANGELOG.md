@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.16.0 (2026-10-27)
+### 7.16.1 (2026-10-27)
+
+#### Bug Fixes
+
+- list plugins with plugins loaded so premium updates stay visible (30cec73)
+
+## v7.16.0 (2026-10-27)
 
 #### Features
 
