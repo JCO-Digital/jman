@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.17.0 (2026-10-28)
+## 7.18.0 (2026-10-28)
+
+#### Features
+
+- agent: look for persistence outside the site's files (3f88cdb)
+
+## v7.17.0 (2026-10-28)
 
 #### Features
 
