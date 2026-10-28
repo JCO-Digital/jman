@@ -16,7 +16,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "8"
+const RuleSetVersion = "9"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -36,6 +36,10 @@ const (
 	RulePluginModified = "plugin-modified"
 	RulePluginUnknown  = "plugin-unknown-file"
 	RuleSuspicious     = "suspicious-code"
+	RulePersistence    = "persistence"
+	RuleStartupChange  = "startup-change"
+	RuleHomeBinary     = "home-binary"
+	RuleDisguised      = "disguised-process"
 )
 
 var severities = map[string]string{
@@ -53,6 +57,12 @@ var severities = map[string]string{
 	RulePluginUnknown:  "high",
 	// RuleSuspicious's severity is that of the worst content rule matched.
 	RuleSuspicious: "low",
+	// Outside the site's files: the site user's crontab, shell startup
+	// files, home directory and processes.
+	RulePersistence:   "high",
+	RuleStartupChange: "medium",
+	RuleHomeBinary:    "high",
+	RuleDisguised:     "high",
 }
 
 // isCoreRule reports whether a checksum rule is one of core's.
@@ -141,6 +151,30 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 				flag(RuleSuspicious, e.ContentDetail)
 				findings[len(findings)-1].Severity = contentSeverity(e.Content)
 			}
+			if len(e.Persist) > 0 && (changed || !slices.Equal(old.Persist, e.Persist)) {
+				flag(RulePersistence, e.PersistDetail)
+			}
+			if (e.Path == CrontabPath || startupFiles[strings.TrimPrefix(e.Path, HomePrefix)] && strings.HasPrefix(e.Path, HomePrefix)) && changed {
+				flag(RuleStartupChange, change+" "+userPathLabel(e.Path))
+			}
+			if e.Binary && (changed || !old.Binary) {
+				what := change + " program"
+				if existed && !old.Binary {
+					// Found on the first scan with the user checks.
+					what = "program"
+				}
+				flag(RuleHomeBinary, what+" in the site user's home directory")
+				if inEditorServer(e.Path) {
+					findings[len(findings)-1].Severity = "low"
+					findings[len(findings)-1].Detail += ", installed by a remote editor (VS Code, Cursor, …) connected as the site user"
+				}
+			}
+			if e.Process && (changed || !old.Process) {
+				flag(RuleDisguised, e.PersistDetail)
+				if inEditorServer(e.Exe) && !isKernelThreadName(strings.TrimPrefix(e.Path, ProcessPrefix)) {
+					findings[len(findings)-1].Severity = "low"
+				}
+			}
 		}
 
 		// A root-owned symlink is the server's own doing (SpinupWP links
@@ -163,7 +197,8 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 // stateRules flag a state rather than a change, so they're worth
 // reporting on a first scan too, when there's nothing to compare against.
 // (The service's first scan has no checksums for core files yet.)
-var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RulePluginModified: true, RulePluginUnknown: true, RuleSuspicious: true}
+var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RulePluginModified: true, RulePluginUnknown: true, RuleSuspicious: true,
+	RulePersistence: true, RuleHomeBinary: true, RuleDisguised: true}
 
 // EvaluateFirst returns what the rules flag on a scan without a baseline:
 // only the state rules. The change rules stay quiet until there is a
@@ -271,5 +306,22 @@ func changeRules(e Entry) []string {
 	if len(e.Content) > 0 {
 		rules = append(rules, RuleSuspicious)
 	}
+	if len(e.Persist) > 0 {
+		rules = append(rules, RulePersistence)
+	}
+	if e.Binary {
+		rules = append(rules, RuleHomeBinary)
+	}
+	if e.Process {
+		rules = append(rules, RuleDisguised)
+	}
 	return rules
+}
+
+// userPathLabel names a path outside the site's files for a finding.
+func userPathLabel(p string) string {
+	if p == CrontabPath {
+		return "crontab of the site user"
+	}
+	return "shell startup file " + p
 }

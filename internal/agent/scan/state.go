@@ -25,6 +25,9 @@ type State struct {
 	// ContentScannedAt is when the walk last searched every PHP file for
 	// the content rules (RFC 3339).
 	ContentScannedAt string `json:"content_scanned_at,omitempty"`
+	// UserChecked is set once the baseline holds the site user's crontab,
+	// startup files, programs and processes (see SeedUserEntries).
+	UserChecked bool `json:"user_checked,omitempty"`
 	// Plugins are the plugin versions at the last scan, by slug, which the
 	// next scan checks against their checksums.
 	Plugins map[string]string `json:"plugins,omitempty"`
@@ -68,7 +71,7 @@ func LoadState(stateDir, siteID string) (*State, error) {
 func NewState(entries []Entry) *State {
 	s := &State{RuleSetVersion: RuleSetVersion, Fingerprint: Fingerprint(entries), Entries: make(map[string]Entry, len(entries))}
 	for _, e := range entries {
-		e.Head, e.ContentDetail = "", ""
+		e.Head, e.ContentDetail, e.PersistDetail = "", "", ""
 		s.Entries[e.Path] = e
 	}
 	return s
@@ -153,4 +156,22 @@ func (s *State) Watched() []string {
 	}
 	sort.Strings(paths)
 	return paths
+}
+
+// SeedUserEntries prepares a baseline from before the user checks for
+// comparing with a walk that has them: each user entry of the walk is put
+// in the baseline as unchanged but without its flags. So the next Evaluate
+// reports what's malicious about them, as a first scan would, but not
+// every crontab and startup file as new.
+func SeedUserEntries(prev *State, cur []Entry) {
+	if prev == nil || prev.UserChecked {
+		return
+	}
+	for _, e := range cur {
+		if !IsUserPath(e.Path) {
+			continue
+		}
+		e.Persist, e.Binary, e.Process = nil, false, false
+		prev.Entries[e.Path] = e
+	}
 }

@@ -36,6 +36,9 @@ type Options struct {
 	// Watch are files the content rules flagged before, which the walk
 	// reads and searches again.
 	Watch []string `json:"watch,omitempty"`
+	// Home, when set, is the site user's home directory: the walk also
+	// records its shell startup files and programs (see WalkHome).
+	Home string `json:"home,omitempty"`
 }
 
 // maxCoreModified is how many core files may differ from their checksums
