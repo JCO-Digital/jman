@@ -91,6 +91,11 @@ type AppConfig struct {
 	// them, are medium rather than high: an incident, but no Slack alert.
 	// An email is easy to fake, so the finding is still raised.
 	TrustedAdminDomains []string `toml:"trustedAdminDomains" mapstructure:"trustedAdminDomains"`
+	// ScanSnippetRetentionDays is how long a scan finding keeps its snippet
+	// and detail after it was closed, allowlisted or acknowledged (default
+	// 90; negative keeps them). They quote the file, which can hold
+	// personal data; the rule, path and hash stay.
+	ScanSnippetRetentionDays int `toml:"scanSnippetRetentionDays" mapstructure:"scanSnippetRetentionDays"`
 	// AgentServerStaleMinutes and AgentSiteStaleMinutes are how long a
 	// server's agent may go without calling in (default 30), and a site
 	// without a successful WordPress data collection (default 180),
@@ -224,6 +229,7 @@ func loadConfig() error {
 		"scanSlackSeverity":          "SCANSLACKSEVERITY",
 		"agentScanInterval":          "AGENTSCANINTERVAL",
 		"agentContentScanInterval":   "AGENTCONTENTSCANINTERVAL",
+		"scanSnippetRetentionDays":   "SCANSNIPPETRETENTIONDAYS",
 		"scanPagerDutySeverity":      "SCANPAGERDUTYSEVERITY",
 		"pagerdutyRoutingKey":        "PAGERDUTYROUTINGKEY",
 		"pagerdutyEscalationMinutes": "PAGERDUTYESCALATIONMINUTES",
@@ -320,6 +326,18 @@ func AgentContentScanIntervalMinutes() int {
 		return 1440
 	}
 	return Cfg.AgentContentScanInterval
+}
+
+// ScanSnippetRetention returns how long a triaged scan finding keeps its
+// snippet and detail, or 0 if they're kept.
+func ScanSnippetRetention() time.Duration {
+	switch {
+	case Cfg.ScanSnippetRetentionDays < 0:
+		return 0
+	case Cfg.ScanSnippetRetentionDays == 0:
+		return 90 * 24 * time.Hour
+	}
+	return time.Duration(Cfg.ScanSnippetRetentionDays) * 24 * time.Hour
 }
 
 // ScanSeverityRank orders scan finding severities, from 1 for low to 4 for

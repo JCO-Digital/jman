@@ -11,6 +11,11 @@ interface Props {
 	canTriage: boolean;
 	/** Shows each finding's site, for lists spanning sites. */
 	showSite?: boolean;
+	/**
+	 * Whether the user may remove snippets (execute level), also from
+	 * findings that can't be triaged any more.
+	 */
+	canRedact?: boolean;
 }
 
 const props = defineProps<Props>();
@@ -19,6 +24,7 @@ const emit = defineEmits<{
 	(e: "allowlist", finding: ScanFinding): void;
 	(e: "acknowledge", findings: ScanFinding[]): void;
 	(e: "dismiss", findings: ScanFinding[]): void;
+	(e: "redact", findings: ScanFinding[]): void;
 }>();
 
 const dataStore = useDataStore();
@@ -102,6 +108,13 @@ function canAllowlist(f: ScanFinding): boolean {
 				@click="emit('dismiss', selectedFindings)"
 			>
 				Dismiss
+			</button>
+			<button
+				class="btn btn-sm btn-text"
+				title="Remove what these findings quote from the files, such as personal data in a log"
+				@click="emit('redact', selectedFindings)"
+			>
+				Remove snippets
 			</button>
 		</div>
 		<div class="table-container">
@@ -252,6 +265,16 @@ function canAllowlist(f: ScanFinding): boolean {
 											}}</code>
 										</dd>
 									</template>
+									<template v-if="f.redacted_at">
+										<dt>Snippet</dt>
+										<dd>
+											removed
+											{{ formatTime(f.redacted_at) }}
+											<template v-if="f.redacted_by">
+												by {{ f.redacted_by }}
+											</template>
+										</dd>
+									</template>
 									<template v-if="f.cleared_at">
 										<dt>Cleared</dt>
 										<dd>
@@ -267,6 +290,18 @@ function canAllowlist(f: ScanFinding): boolean {
 										{{ f.engine }}
 									</dd>
 								</dl>
+								<button
+									v-if="
+										(canRedact ?? canTriage) &&
+										!f.redacted_at &&
+										(f.snippet || f.detail)
+									"
+									class="btn btn-sm btn-text redact"
+									title="Remove what this finding quotes from the file, such as personal data in a log"
+									@click="emit('redact', [f])"
+								>
+									Remove snippet
+								</button>
 								<pre v-if="f.snippet" class="snippet">{{
 									f.snippet
 								}}</pre>
@@ -345,6 +380,10 @@ function canAllowlist(f: ScanFinding): boolean {
 
 .pre-line {
 	white-space: pre-line;
+}
+
+.redact {
+	float: right;
 }
 
 .break-all {

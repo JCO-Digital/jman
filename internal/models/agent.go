@@ -280,6 +280,11 @@ type StoredScanFinding struct {
 	// remove their own files too.
 	ClearedAt     *string `json:"cleared_at,omitempty"`
 	ClearedDetail string  `json:"cleared_detail,omitempty"`
+	// RedactedAt is when the snippet and detail were removed, by hand or
+	// once the finding had been triaged for scanSnippetRetentionDays, and
+	// RedactedBy by whom ("jman-api" when they expired).
+	RedactedAt *string `json:"redacted_at,omitempty"`
+	RedactedBy string  `json:"redacted_by,omitempty"`
 }
 
 // Scan finding statuses. An open finding needs looking at; a closed one

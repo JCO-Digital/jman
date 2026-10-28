@@ -405,3 +405,62 @@ func TestNewAppPasswordFindings(t *testing.T) {
 		t.Fatalf("findings after a password was used: %d", len(f))
 	}
 }
+
+// Snippets can be removed by hand, and expire once a finding has been
+// triaged for the retention period; the finding itself stays.
+func TestScanSnippetRetention(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{507, 8, "logs.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(507)
+	long := time.Now().Add(-200 * 24 * time.Hour)
+	add := func(path string, seen time.Time) models.StoredScanFinding {
+		t.Helper()
+		f := models.ScanFinding{Engine: "builtin", Rule: "stray-file", Severity: "low", Path: path, SHA256: path, Snippet: "user=admin ip=203.0.113.9", Detail: "failed login"}
+		if err := db.UpsertScanFinding(site, f, "9", seen); err != nil {
+			t.Fatal(err)
+		}
+		return findingByPath(t, listScanFindings(t, "?site_id="+site), path)
+	}
+	add("open.log", long)
+	closed := add("closed.log", long)
+	byHand := add("by-hand.log", time.Now())
+	if _, err := db.SetScanFindingStatus([]int64{closed.ID}, models.ScanFindingClosed, "niklas"); err != nil {
+		t.Fatal(err)
+	}
+	redacted := func() map[string]bool {
+		got := map[string]bool{}
+		for _, f := range listScanFindings(t, "?site_id="+site) {
+			got[f.Path] = f.RedactedAt != nil
+			if f.RedactedAt != nil && (f.Snippet != "" || f.Detail != "") {
+				t.Errorf("redacted finding kept its content: %+v", f)
+			}
+		}
+		return got
+	}
+
+	// Closed today: not expired 80 days on, expired 100 days on (the
+	// default is 90). The open one, seen 200 days ago, keeps its snippet.
+	expireScanSnippets(time.Now().Add(80 * 24 * time.Hour))
+	if r := redacted(); r["closed.log"] || r["open.log"] {
+		t.Fatalf("redacted 80 days on: %v", r)
+	}
+	expireScanSnippets(time.Now().Add(100 * 24 * time.Hour))
+	if r := redacted(); !r["closed.log"] || r["open.log"] {
+		t.Fatalf("redacted 100 days on: %v", r)
+	}
+
+	// By hand, at once, whatever the status.
+	w := postJSON(t, RedactScanFindingsHandler, "POST", "/api/scan/findings/redact", map[string]any{"finding_ids": []int64{byHand.ID}})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"redacted":1`) {
+		t.Fatalf("redact: %d %s", w.Code, w.Body.String())
+	}
+	if f := findingByPath(t, listScanFindings(t, "?site_id="+site), "by-hand.log"); f.RedactedAt == nil || f.RedactedBy != "User" || f.Rule != "stray-file" || f.SHA256 == "" {
+		t.Fatalf("redacted by hand = %+v", f)
+	}
+
+	// The same file reported again brings its snippet back.
+	add("by-hand.log", time.Now())
+	if f := findingByPath(t, listScanFindings(t, "?site_id="+site), "by-hand.log"); f.RedactedAt != nil || f.Snippet == "" {
+		t.Fatalf("reported again = %+v", f)
+	}
+}

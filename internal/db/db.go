@@ -848,6 +848,11 @@ func initAPISchema() error {
 				// Reporting the finding again clears these.
 				"cleared_at":     "DATETIME",
 				"cleared_detail": "TEXT NOT NULL DEFAULT ''",
+				// When the snippet and detail were removed (they quote the
+				// file, which can hold personal data), and by whom
+				// ("jman-api" when they expired).
+				"redacted_at": "DATETIME",
+				"redacted_by": "TEXT NOT NULL DEFAULT ''",
 			},
 		},
 		{

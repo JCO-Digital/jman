@@ -80,6 +80,13 @@ export const useScanStore = defineStore("scan", () => {
 		});
 	}
 
+	/** Removes findings' snippets and details, which quote the files. */
+	async function redactFindings(ids: number[]) {
+		return send<{ redacted: number }>("POST", "/scan/findings/redact", {
+			finding_ids: ids,
+		});
+	}
+
 	/** Trusts a finding's file hash on every site. */
 	async function addAllowlist(
 		findingId: number,
@@ -134,6 +141,7 @@ export const useScanStore = defineStore("scan", () => {
 		fetchHistoryIncidents,
 		fetchFindings,
 		closeFindings,
+		redactFindings,
 		addAllowlist,
 		fetchAllowlist,
 		removeAllowlist,

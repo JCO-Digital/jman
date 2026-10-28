@@ -172,6 +172,31 @@ async function dismiss(findings: ScanFinding[]) {
 	}
 }
 
+async function redact(findings: ScanFinding[]) {
+	const n = findings.length;
+	if (
+		!(await confirm(
+			`Remove the snippet${n === 1 ? "" : "s"} of ${n} finding${n === 1 ? "" : "s"}? What ${n === 1 ? "it quotes" : "they quote"} from the files is deleted for good; the rule, path and hash stay.`,
+			{ confirmLabel: "Remove", danger: true },
+		))
+	) {
+		return;
+	}
+	try {
+		const res = await scanStore.redactFindings(findings.map((f) => f.id));
+		toastStore.addToast(
+			`Removed ${res?.redacted ?? 0} snippet(s)`,
+			"success",
+		);
+		await refresh();
+	} catch (e) {
+		toastStore.addToast(
+			e instanceof Error ? e.message : "Failed to remove the snippets",
+			"error",
+		);
+	}
+}
+
 async function acknowledgeIncident(inc: Incident) {
 	try {
 		await incidentStore.acknowledgeIncident(inc.id);
@@ -396,6 +421,7 @@ function changeHistoryLimit(limit: number) {
 						@allowlist="(f) => openTriage('allowlist', [f])"
 						@acknowledge="(fs) => openTriage('acknowledge', fs)"
 						@dismiss="dismiss"
+						@redact="redact"
 					/>
 				</div>
 			</div>
@@ -422,6 +448,7 @@ function changeHistoryLimit(limit: number) {
 				@allowlist="(f) => openTriage('allowlist', [f])"
 				@acknowledge="(fs) => openTriage('acknowledge', fs)"
 				@dismiss="dismiss"
+				@redact="redact"
 			/>
 		</div>
 
@@ -490,6 +517,8 @@ function changeHistoryLimit(limit: number) {
 											incidentFindings[inc.id] ?? []
 										"
 										:can-triage="false"
+										:can-redact="canTriage"
+										@redact="redact"
 									/>
 								</td>
 							</tr>

@@ -449,6 +449,8 @@ New findings alert by severity: `scanSlackSeverity` (default `high`) and above i
 
 `POST /api/scan/findings/close` with `{"finding_ids": [12]}` dismisses findings.
 
+`POST /api/scan/findings/redact` with `{"finding_ids": [12]}` removes the findings' `snippet` and `detail`, whatever their status, and sets `redacted_at` and `redacted_by`. They quote the files, which can hold personal data (a security plugin's log of failed logins, say); the rule, path and hash stay, so the history and reopening by hash still work. A finding reported again gets a fresh snippet. jman-api also removes them daily from findings closed, allowlisted or acknowledged longer ago than `scanSnippetRetentionDays` (`redacted_by` is then `jman-api`); open findings keep theirs.
+
 Each of these closes the incidents it leaves without open findings.
 
 ## Reports (Read-Only)
