@@ -65,6 +65,17 @@ type Entry struct {
 	// kept in the baseline.
 	Content       []string `json:"content,omitempty"`
 	ContentDetail string   `json:"content_detail,omitempty"`
+	// Persist names the persistence patterns a crontab or shell startup
+	// file matches (see persistPatterns); PersistDetail quotes them, or
+	// describes a process. The detail isn't kept in the baseline.
+	Persist       []string `json:"persist,omitempty"`
+	PersistDetail string   `json:"persist_detail,omitempty"`
+	// Binary is set for a program (ELF) in the home directory, Process for
+	// a process that hides what it is (see UserProcesses).
+	Binary  bool `json:"binary,omitempty"`
+	Process bool `json:"process,omitempty"`
+	// Exe is the program a Process runs.
+	Exe string `json:"exe,omitempty"`
 }
 
 // Result is what a walk found.
@@ -321,6 +332,9 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 		res.PluginNotes = append(res.PluginNotes, note)
 	}
 	slices.Sort(res.PluginNotes)
+	if opts.Home != "" {
+		res.Entries = append(res.Entries, WalkHome(filepath.Clean(opts.Home), filepath.Clean(root))...)
+	}
 	return res, nil
 }
 

@@ -91,6 +91,7 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	start := time.Now()
 	opts := scanOptions(ctx, prev, site.Domain)
 	opts.Content = content
+	opts.Home = homeOf(id)
 	walk, err := runScan(ctx, id, sitePath, opts)
 	if err != nil {
 		fmt.Fprintf(out, "  FAILED: %v\n", err)
@@ -100,7 +101,7 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 		// The service only checks against the versions in the baseline;
 		// here the versions just found will do.
 		again := scanOptions(ctx, &scan.State{CoreVersion: walk.CoreVersion, CoreLocale: walk.CoreLocale, Plugins: walk.Plugins}, site.Domain)
-		again.Content, again.Watch = opts.Content, opts.Watch
+		again.Content, again.Watch, again.Home = opts.Content, opts.Watch, opts.Home
 		if again.Core != nil || len(again.Plugins) > 0 {
 			if res, err := runScan(ctx, id, sitePath, again); err == nil {
 				walk = res
@@ -133,6 +134,8 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 		}
 	}
 	scan.CarryChecksums(prev, walk)
+	addUserEntries(walk, id)
+	scan.SeedUserEntries(prev, walk.Entries)
 	fmt.Fprintf(out, "  scanned: %d file(s) recorded", len(walk.Entries))
 	if walk.Omitted > 0 {
 		fmt.Fprintf(out, ", %d omitted", walk.Omitted)
@@ -143,7 +146,7 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	if prev != nil {
 		fmt.Fprintln(out, "  compared with the baseline of the last reported scan")
 		findings = scan.Evaluate(prev.Entries, walk.Entries, id.UID, userName)
-		for _, c := range clearedSince(prev, walk, id.UID, sitePath) {
+		for _, c := range clearedSince(prev, walk, id, sitePath) {
 			what := c.Path
 			if c.Rule != "" {
 				what += " (" + c.Rule + ")"

@@ -276,6 +276,7 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 
 	opts := scanOptions(ctx, prev, site.Domain)
 	opts.Content = contentDue(prev, contentInterval, start)
+	opts.Home = homeOf(id)
 	walk, err := runScan(ctx, id, sitePath, opts)
 	if err != nil {
 		return fail(err)
@@ -287,7 +288,10 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 		verb.LogPrintf(verb.Verbose, "%s: plugin not checked: %s", site.Domain, note)
 	}
 	scan.CarryChecksums(prev, walk)
+	addUserEntries(walk, id)
+	scan.SeedUserEntries(prev, walk.Entries)
 	state := scan.NewState(walk.Entries)
+	state.UserChecked = true
 	state.CoreVersion, state.CoreLocale, state.Plugins = walk.CoreVersion, walk.CoreLocale, walk.Plugins
 	switch {
 	case walk.ContentChecked:
@@ -305,7 +309,7 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 	} else {
 		result.PrevFingerprint = prev.Fingerprint
 		result.Findings = scan.Evaluate(prev.Entries, walk.Entries, id.UID, userName)
-		result.Cleared = clearedSince(prev, walk, id.UID, sitePath)
+		result.Cleared = clearedSince(prev, walk, id, sitePath)
 	}
 	result.DurationMs = time.Since(start).Milliseconds()
 	if len(result.Findings) > 0 || result.Rebaselined {
@@ -320,16 +324,45 @@ const maxScanCleared = 1000
 // clearedSince returns what the site's previous baseline flagged that no
 // longer holds. The agent checks, as root, whether a path the walk no
 // longer records is still there; the result only words the report.
-func clearedSince(prev *scan.State, walk *scan.Result, ownerUID uint32, sitePath string) []models.ScanCleared {
+func clearedSince(prev *scan.State, walk *scan.Result, id siteIdentity, sitePath string) []models.ScanCleared {
 	exists := func(p string) bool {
+		if scan.IsUserPath(p) {
+			ok, err := scan.UserPathExists(p, homeOf(id), id.Username)
+			return err == nil && ok
+		}
 		_, err := os.Lstat(filepath.Join(sitePath, filepath.FromSlash(p)))
 		return err == nil
 	}
-	cleared := scan.Cleared(prev.Entries, walk.Entries, ownerUID, walk.Omitted == 0, exists)
+	cleared := scan.Cleared(prev.Entries, walk.Entries, id.UID, walk.Omitted == 0, exists)
 	if len(cleared) > maxScanCleared {
 		cleared = cleared[:maxScanCleared]
 	}
 	return cleared
+}
+
+// homeOf returns the site user's home directory for the walk, or "" when
+// it has none worth walking.
+func homeOf(id siteIdentity) string {
+	if id.Home == "" || id.Home == "/" {
+		return ""
+	}
+	return id.Home
+}
+
+// addUserEntries adds what the agent reads as root about the site user to a
+// walk: its crontab, and processes that hide what they are.
+func addUserEntries(walk *scan.Result, id siteIdentity) {
+	walk.Entries = append(walk.Entries, readUserEntries(id)...)
+}
+
+// readUserEntries is a seam for tests, which run as a user whose processes
+// (the test binary, run from /tmp) would be flagged.
+var readUserEntries = func(id siteIdentity) []scan.Entry {
+	var entries []scan.Entry
+	if e, ok := scan.ReadCrontab(id.Username, id.UID); ok {
+		entries = append(entries, e)
+	}
+	return append(entries, scan.UserProcesses(id.UID, homeOf(id))...)
 }
 
 // saveScans saves the baselines of the reported scans and marks their
