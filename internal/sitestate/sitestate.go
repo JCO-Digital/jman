@@ -154,6 +154,19 @@ func ApplyCore(siteID string, core models.SiteCore, src Source, observedAt time.
 // create. A site's first stored users are a baseline and don't call it.
 var NewAdminsHook func(siteID string, admins []models.SiteUser, src Source)
 
+// NewAppPassword is an application password that appeared on a site, with
+// its user.
+type NewAppPassword struct {
+	User        models.SiteUser
+	AppPassword models.SiteAppPassword
+}
+
+// NewAppPasswordsHook, when set, is called with the application passwords
+// that appeared on a site since its users were last stored, and when that
+// was. The first users stored with their application passwords are a
+// baseline and don't call it.
+var NewAppPasswordsHook func(siteID string, added []NewAppPassword, src Source, since time.Time)
+
 // ApplyUsers stores a site's observed users and returns whether it did (it
 // skips users observed before the stored ones). User changes aren't
 // written to the update ledger.
@@ -169,7 +182,7 @@ func ApplyUsers(siteID string, users models.SiteUsers, src Source, observedAt ti
 		return false, nil
 	}
 	var known models.SiteUsers
-	if hasKnown && NewAdminsHook != nil {
+	if hasKnown && (NewAdminsHook != nil || NewAppPasswordsHook != nil) {
 		if known, _, err = db.GetSiteUsers(siteID); err != nil {
 			return false, err
 		}
@@ -182,7 +195,32 @@ func ApplyUsers(siteID string, users models.SiteUsers, src Source, observedAt ti
 			NewAdminsHook(siteID, admins, src)
 		}
 	}
+	if hasKnown && NewAppPasswordsHook != nil && known.AppPasswordsCollected && users.AppPasswordsCollected {
+		if added := NewAppPasswords(known.Users, users.Users); len(added) > 0 {
+			NewAppPasswordsHook(siteID, added, src, knownAt)
+		}
+	}
 	return true, nil
+}
+
+// NewAppPasswords returns the application passwords in cur that weren't in
+// prev, by UUID.
+func NewAppPasswords(prev, cur []models.SiteUser) []NewAppPassword {
+	known := map[string]bool{}
+	for _, u := range prev {
+		for _, a := range u.AppPasswords {
+			known[a.UUID] = true
+		}
+	}
+	var added []NewAppPassword
+	for _, u := range cur {
+		for _, a := range u.AppPasswords {
+			if !known[a.UUID] {
+				added = append(added, NewAppPassword{User: u, AppPassword: a})
+			}
+		}
+	}
+	return added
 }
 
 // NewAdmins returns the users in cur who are administrators and weren't in

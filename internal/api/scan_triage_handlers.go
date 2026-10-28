@@ -241,7 +241,7 @@ func AddScanPathAcksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, f := range findings {
 		if !scanStateRules[f.Rule] {
-			WriteError(w, http.StatusUnprocessableEntity, "Only stray-file, foreign-owner, unreadable and new-admin findings can be acknowledged by path; allowlist the file's hash instead")
+			WriteError(w, http.StatusUnprocessableEntity, "Only stray-file, foreign-owner, unreadable, new-admin and new-app-password findings can be acknowledged by path; allowlist the file's hash instead")
 			return
 		}
 	}

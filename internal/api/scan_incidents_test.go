@@ -341,3 +341,67 @@ func TestNewAdminFindings(t *testing.T) {
 		t.Fatalf("acknowledged admin = %+v", f)
 	}
 }
+
+// Application passwords that appear raise a finding, high on an
+// administrator; the first ones collected are a baseline.
+func TestNewAppPasswordFindings(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{506, 8, "apps.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(506)
+	apply := func(collected bool, at time.Time, users ...models.SiteUser) {
+		t.Helper()
+		su := wpcli.NewSiteUsers(users, nil)
+		su.AppPasswordsCollected = collected
+		if _, err := sitestate.ApplyUsers(site, su, sitestate.SourceAgent, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now()
+	admin := models.SiteUser{ID: 1, Login: "admin", Email: "a@example.com", Roles: "administrator"}
+	editor := models.SiteUser{ID: 2, Login: "ed", Email: "e@example.com", Roles: "editor"}
+	integration := models.SiteAppPassword{UUID: "11111111-0000-0000-0000-000000000000", Name: "Zapier", Created: now.Add(-48 * time.Hour).Unix()}
+
+	// Users from an agent that doesn't read application passwords, then
+	// the first ones read: both baselines.
+	apply(false, now.Add(-3*time.Hour), admin, editor)
+	withIntegration := admin
+	withIntegration.AppPasswords = []models.SiteAppPassword{integration}
+	apply(true, now.Add(-2*time.Hour), withIntegration, editor)
+	if f := listScanFindings(t, ""); len(f) != 0 {
+		t.Fatalf("findings for the baseline: %+v", f)
+	}
+
+	// One with a faked creation date on the administrator, one on the editor.
+	forged := models.SiteAppPassword{UUID: "22222222-0000-0000-0000-000000000000", Name: "wordpress_1778988921", Created: 1711152199}
+	edPassword := models.SiteAppPassword{UUID: "33333333-0000-0000-0000-000000000000", Name: "phone", Created: now.Unix()}
+	adminNow := admin
+	adminNow.AppPasswords = []models.SiteAppPassword{integration, forged}
+	editorNow := editor
+	editorNow.AppPasswords = []models.SiteAppPassword{edPassword}
+	apply(true, now.Add(-time.Hour), adminNow, editorNow)
+
+	findings := listScanFindings(t, "")
+	var got []string
+	for _, f := range findings {
+		got = append(got, f.Rule+" "+f.Path+" "+f.Severity)
+	}
+	slices.Sort(got)
+	want := []string{
+		"new-app-password users/admin/app-passwords/22222222-0000-0000-0000-000000000000 high",
+		"new-app-password users/ed/app-passwords/33333333-0000-0000-0000-000000000000 medium",
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("findings = %q, want %q", got, want)
+	}
+	if f := findingByPath(t, findings, want[0][len("new-app-password "):len(want[0])-len(" high")]); !strings.Contains(f.Detail, "faked") || !strings.Contains(f.Snippet, "wordpress_1778988921") {
+		t.Fatalf("forged password finding = %+v", f)
+	}
+
+	// Using a password isn't a new one.
+	used := now.Unix()
+	adminNow.AppPasswords[0].LastUsed = &used
+	apply(true, now, adminNow, editorNow)
+	if f := listScanFindings(t, ""); len(f) != 2 {
+		t.Fatalf("findings after a password was used: %d", len(f))
+	}
+}

@@ -6,6 +6,7 @@ const stateRules = new Set([
 	"foreign-owner",
 	"unreadable",
 	"new-admin",
+	"new-app-password",
 ]);
 
 export function isStateRule(rule: string): boolean {

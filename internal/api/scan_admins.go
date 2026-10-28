@@ -20,8 +20,67 @@ import (
 // attackers keep their way in after a cleanup.
 const ruleNewAdmin = "new-admin"
 
+// ruleNewAppPassword is the finding jman-api raises for an application
+// password that appeared on a site: a REST API login that skips two-factor
+// authentication and survives deleting rogue accounts when it's on a real
+// one. jman never creates them.
+const ruleNewAppPassword = "new-app-password"
+
 func init() {
 	sitestate.NewAdminsHook = reportNewAdmins
+	sitestate.NewAppPasswordsHook = reportNewAppPasswords
+}
+
+// reportNewAppPasswords raises a new-app-password finding for each
+// application password that appeared, high on an administrator and medium
+// on anyone else, and puts them in the site's security incident.
+func reportNewAppPasswords(siteID string, added []sitestate.NewAppPassword, src sitestate.Source, since time.Time) {
+	now := time.Now()
+	reported := 0
+	for _, a := range added {
+		if err := db.UpsertScanFinding(siteID, newAppPasswordFinding(a, src, since), "", now); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+			continue
+		}
+		reported++
+	}
+	if reported > 0 {
+		verb.LogPrintf(verb.Normal, "Site %s has %d new application password(s)", siteID, reported)
+		triageScanFindings(siteID, true)
+	}
+}
+
+// newAppPasswordFinding describes an application password that appeared on
+// a site since since. A creation time before since was written by hand.
+func newAppPasswordFinding(a sitestate.NewAppPassword, src sitestate.Source, since time.Time) models.ScanFinding {
+	u, p := a.User, a.AppPassword
+	sum := sha256.Sum256([]byte("app-password\x00" + p.UUID))
+	created := time.Unix(p.Created, 0).UTC()
+	lastUsed := "never"
+	if p.LastUsed != nil && *p.LastUsed > 0 {
+		lastUsed = time.Unix(*p.LastUsed, 0).UTC().Format(time.RFC3339)
+		if p.LastIP != "" {
+			lastUsed += " from " + p.LastIP
+		}
+	}
+	detail := fmt.Sprintf("application password %q appeared for %s <%s> (%s), seen by %s", p.Name, u.Login, u.Email, u.Roles, src)
+	if p.Created > 0 && created.Before(since.Add(-time.Hour)) {
+		detail += fmt.Sprintf("; it claims to have been created %s, before jman last saw the site's users without it, so the date was faked", created.Format("2006-01-02"))
+	}
+	severity := "medium"
+	if sitestate.IsAdmin(u) {
+		severity = "high"
+	}
+	return models.ScanFinding{
+		Engine:   "api",
+		Rule:     ruleNewAppPassword,
+		Severity: severity,
+		Path:     "users/" + u.Login + "/app-passwords/" + p.UUID,
+		SHA256:   hex.EncodeToString(sum[:]),
+		Snippet: fmt.Sprintf("user: %s <%s> (ID %d, %s)\nname: %s\nuuid: %s\ncreated: %s\nlast used: %s",
+			u.Login, u.Email, u.ID, u.Roles, p.Name, p.UUID, created.Format(time.RFC3339), lastUsed),
+		Detail: detail,
+	}
 }
 
 // reportNewAdmins raises a new-admin finding for each administrator jman

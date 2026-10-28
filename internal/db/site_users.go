@@ -36,29 +36,39 @@ func ReplaceSiteUsers(siteID string, users models.SiteUsers, observedAt time.Tim
 		return fmt.Errorf("failed to clear users for site %s: %w", siteID, err)
 	}
 	for _, u := range users.Users {
+		appPasswords := ""
+		if len(u.AppPasswords) > 0 {
+			b, err := json.Marshal(u.AppPasswords)
+			if err != nil {
+				return fmt.Errorf("failed to encode application passwords of user %d for site %s: %w", u.ID, siteID, err)
+			}
+			appPasswords = string(b)
+		}
 		if _, err := tx.Exec(
-			`INSERT INTO site_users (site_id, user_id, login, email, display_name, roles, registered, post_count)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO site_users (site_id, user_id, login, email, display_name, roles, registered, post_count, app_passwords)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(site_id, user_id) DO UPDATE SET
 				login = excluded.login,
 				email = excluded.email,
 				display_name = excluded.display_name,
 				roles = excluded.roles,
 				registered = excluded.registered,
-				post_count = excluded.post_count`,
-			siteID, u.ID, u.Login, u.Email, u.DisplayName, u.Roles, u.Registered, u.PostCount,
+				post_count = excluded.post_count,
+				app_passwords = excluded.app_passwords`,
+			siteID, u.ID, u.Login, u.Email, u.DisplayName, u.Roles, u.Registered, u.PostCount, appPasswords,
 		); err != nil {
 			return fmt.Errorf("failed to save user %d for site %s: %w", u.ID, siteID, err)
 		}
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO site_user_summary (site_id, excluded_counts, truncated, updated_at)
-		 VALUES (?, ?, ?, ?)
+		`INSERT INTO site_user_summary (site_id, excluded_counts, truncated, app_passwords_collected, updated_at)
+		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(site_id) DO UPDATE SET
 			excluded_counts = excluded.excluded_counts,
 			truncated = excluded.truncated,
+			app_passwords_collected = excluded.app_passwords_collected,
 			updated_at = excluded.updated_at`,
-		siteID, string(countsJSON), users.Truncated, inventoryTimestamp(observedAt),
+		siteID, string(countsJSON), users.Truncated, users.AppPasswordsCollected, inventoryTimestamp(observedAt),
 	); err != nil {
 		return fmt.Errorf("failed to save user summary for site %s: %w", siteID, err)
 	}
@@ -83,7 +93,7 @@ func GetSiteUsers(siteID string) (models.SiteUsers, bool, error) {
 	if err != nil {
 		return models.SiteUsers{}, false, err
 	}
-	return models.SiteUsers{Users: users, ExcludedCounts: summary.ExcludedCounts, Truncated: summary.Truncated}, true, nil
+	return models.SiteUsers{Users: users, ExcludedCounts: summary.ExcludedCounts, Truncated: summary.Truncated, AppPasswordsCollected: summary.AppPasswordsCollected}, true, nil
 }
 
 // GetSiteUser returns one stored user of a site, and false if there's no
@@ -111,7 +121,7 @@ func GetAllSiteUsers() ([]models.SiteUser, error) {
 }
 
 func querySiteUsers(db *sql.DB, where string, args ...any) ([]models.SiteUser, error) {
-	rows, err := db.Query(`SELECT site_id, user_id, login, email, display_name, roles, registered, post_count
+	rows, err := db.Query(`SELECT site_id, user_id, login, email, display_name, roles, registered, post_count, app_passwords
 		FROM site_users `+where+` ORDER BY site_id, user_id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query site users: %w", err)
@@ -122,8 +132,14 @@ func querySiteUsers(db *sql.DB, where string, args ...any) ([]models.SiteUser, e
 	for rows.Next() {
 		var u models.SiteUser
 		var postCount sql.NullInt64
-		if err := rows.Scan(&u.SiteID, &u.ID, &u.Login, &u.Email, &u.DisplayName, &u.Roles, &u.Registered, &postCount); err != nil {
+		var appPasswords string
+		if err := rows.Scan(&u.SiteID, &u.ID, &u.Login, &u.Email, &u.DisplayName, &u.Roles, &u.Registered, &postCount, &appPasswords); err != nil {
 			return nil, fmt.Errorf("failed to scan site user: %w", err)
+		}
+		if appPasswords != "" {
+			if err := json.Unmarshal([]byte(appPasswords), &u.AppPasswords); err != nil {
+				return nil, fmt.Errorf("failed to parse application passwords of user %d: %w", u.ID, err)
+			}
 		}
 		if postCount.Valid {
 			n := int(postCount.Int64)
@@ -166,7 +182,7 @@ func GetAllSiteUserSummaries() ([]models.SiteUserSummary, error) {
 }
 
 func querySiteUserSummaries(db *sql.DB, where string, args ...any) ([]models.SiteUserSummary, error) {
-	rows, err := db.Query(`SELECT site_id, excluded_counts, truncated, updated_at
+	rows, err := db.Query(`SELECT site_id, excluded_counts, truncated, app_passwords_collected, updated_at
 		FROM site_user_summary `+where+` ORDER BY site_id`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query site user summaries: %w", err)
@@ -178,7 +194,7 @@ func querySiteUserSummaries(db *sql.DB, where string, args ...any) ([]models.Sit
 		var s models.SiteUserSummary
 		var counts string
 		var updatedAt sql.NullString
-		if err := rows.Scan(&s.SiteID, &counts, &s.Truncated, &updatedAt); err != nil {
+		if err := rows.Scan(&s.SiteID, &counts, &s.Truncated, &s.AppPasswordsCollected, &updatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan site user summary: %w", err)
 		}
 		if err := json.Unmarshal([]byte(counts), &s.ExcludedCounts); err != nil || s.ExcludedCounts == nil {

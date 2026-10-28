@@ -52,6 +52,14 @@ func WPDataHash(plugins []WPPlugin, core SiteCore, users *SiteUsers) string {
 				line += fmt.Sprintf("\x00p%d", *u.PostCount)
 			}
 			lines = append(lines, line)
+			// Not when last used: a password in use would change the
+			// hash every collection.
+			for _, a := range u.AppPasswords {
+				lines = append(lines, fmt.Sprintf("a\x00%d\x00%s\x00%s\x00%d", u.ID, a.UUID, a.Name, a.Created))
+			}
+		}
+		if users.AppPasswordsCollected {
+			lines = append(lines, "a\x00collected")
 		}
 		for role, n := range users.ExcludedCounts {
 			lines = append(lines, fmt.Sprintf("x\x00%s\x00%d", role, n))
