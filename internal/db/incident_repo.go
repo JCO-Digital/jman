@@ -11,7 +11,7 @@ import (
 // incidentColumns are the columns scanIncident and scanIncidentRows read.
 const incidentColumns = `id, type, COALESCE(check_id, ''), COALESCE(site_id, ''), severity, domain, status,
 		error_message, error_code, down_since, acknowledged_by, acknowledged_at, resolved_by, resolved_at,
-		pd_triggered, created_at, updated_at`
+		pd_triggered, created_at, updated_at, escalation`
 
 // CreateIncident creates a new incident if there is not already an active (open or acknowledged)
 // incident for the check. If an active incident already exists, it updates its error message/code
@@ -403,6 +403,7 @@ func scanIncident(row *sql.Row) (*models.Incident, error) {
 		&inc.PDTriggered,
 		&createdAt,
 		&updatedAt,
+		&inc.Escalation,
 	)
 	if err != nil {
 		return nil, err
@@ -457,6 +458,7 @@ func scanIncidentRows(rows *sql.Rows) (*models.Incident, error) {
 		&inc.PDTriggered,
 		&createdAt,
 		&updatedAt,
+		&inc.Escalation,
 	)
 	if err != nil {
 		return nil, err

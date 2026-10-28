@@ -1019,6 +1019,8 @@ export interface Incident {
 	site_id?: string;
 	/** Security incidents only: the worst open finding's severity. */
 	severity?: ScanSeverity;
+	/** Security incidents only: why it's critical though no finding is. */
+	escalation?: string;
 	domain: string;
 	status: IncidentStatus;
 	error_message: string;

@@ -1083,9 +1083,13 @@ func initAPISchema() error {
 				// uptime or security. A security incident groups a site's
 				// scan findings (scan_findings.incident_id); site_id and
 				// severity (its worst finding's) are only set for those.
-				"type":       "TEXT NOT NULL DEFAULT 'uptime'",
-				"site_id":    "TEXT",
-				"severity":   "TEXT NOT NULL DEFAULT ''",
+				"type":     "TEXT NOT NULL DEFAULT 'uptime'",
+				"site_id":  "TEXT",
+				"severity": "TEXT NOT NULL DEFAULT ''",
+				// Why a security incident is critical though no single
+				// finding is: its findings together (see
+				// models.CorrelateScanFindings).
+				"escalation": "TEXT NOT NULL DEFAULT ''",
 				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},

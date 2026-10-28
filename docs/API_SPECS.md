@@ -692,7 +692,7 @@ curl -fsS -X POST -H "Authorization: Bearer $TOKEN" https://jman.example.com/api
 `POST /monitor/checks/{id}/resume` (Protected: `edit`)
 `POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check, resolving the incident.
 
-Incidents have a `type`: `uptime`, or `security` for a site's file scan findings (see File Scans), which also carry `site_id` and `severity`. `GET /incidents` returns uptime incidents unless `?type=security` or `?type=all`, and `active_by_type` splits `active_count` by type.
+Incidents have a `type`: `uptime`, or `security` for a site's file scan findings (see File Scans), which also carry `site_id`, `severity` and, when it's critical because its findings correlate, `escalation` (why). `GET /incidents` returns uptime incidents unless `?type=security` or `?type=all`, and `active_by_type` splits `active_count` by type.
 
 Monitor history, statuses and incidents carry the `check_id` they belong to. Every site has a default check (path `/`, expecting HTML), created automatically; a check whose site is gone is marked `orphaned_at` and no longer runs (its active incident is resolved, as when pausing). PagerDuty alerts are keyed by check ID (`jman-monitor:check:<id>`).
 
