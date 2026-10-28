@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.18.0 (2026-10-28)
+## 7.19.0 (2026-10-28)
+
+#### Features
+
+- expire scan finding snippets, and remove them by hand (ac95343)
+
+## v7.18.0 (2026-10-28)
 
 #### Features
 
