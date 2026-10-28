@@ -1,6 +1,16 @@
 # Changelog
 
-### 7.16.1 (2026-10-27)
+## 7.17.0 (2026-10-28)
+
+#### Features
+
+- flag application passwords added to sites (48dbc24)
+
+#### Bug Fixes
+
+- agent: include-remote needs the include shortly after the fetch (24767b4)
+
+### v7.16.1 (2026-10-27)
 
 #### Bug Fixes
 
