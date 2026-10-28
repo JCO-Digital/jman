@@ -1080,6 +1080,12 @@ export interface ScanFinding {
 	 */
 	cleared_at?: string;
 	cleared_detail?: string;
+	/**
+	 * When the snippet and detail were removed (by hand, or once the finding
+	 * had been triaged for scanSnippetRetentionDays), and by whom.
+	 */
+	redacted_at?: string;
+	redacted_by?: string;
 }
 
 export interface ScanAllowlistEntry {

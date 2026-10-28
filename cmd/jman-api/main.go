@@ -95,6 +95,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Put scan findings stored before security incidents existed in one.
 	api.TriagePendingScanFindings()
+	// Remove snippets of findings triaged long ago, now and daily.
+	api.StartScanRetention(cmd.Context())
 
 	log.Printf("Starting jman-api (version: %s) on :%s", config.AppVersion, port)
 	return http.ListenAndServe(":"+port, handler)
