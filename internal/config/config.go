@@ -82,7 +82,7 @@ type AppConfig struct {
 	// a scan finding that alerts in Slack (default "high") and PagerDuty
 	// (default "critical"); "off" turns that alert off. Findings below both
 	// only show in the web UI. Slack alerts go to SlackSecurityChannel, or
-	// slackMonitorChannel when it's unset.
+	// slackChannel (with the vulnerability reports) when it's unset.
 	ScanSlackSeverity     string `toml:"scanSlackSeverity" mapstructure:"scanSlackSeverity"`
 	ScanPagerDutySeverity string `toml:"scanPagerDutySeverity" mapstructure:"scanPagerDutySeverity"`
 	SlackSecurityChannel  string `toml:"slackSecurityChannel" mapstructure:"slackSecurityChannel"`

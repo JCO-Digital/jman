@@ -439,7 +439,7 @@ Each finding also has a `status`: `open`, `closed` (dismissed, or its incident w
 
 Findings of medium severity and above are grouped into one security incident per site (`GET /api/incidents?type=security`). Low findings stay out of incidents; the web UI lists them as informational. jman-api never resolves a security incident itself: a person closes it, which closes its open findings. A finding reported again goes back into the incident it was in, reopening it, and so does a new finding whose file hash was in a closed incident of the same site. Other findings join the site's active security incident, or open a new one. Findings stored before security incidents existed are assigned on startup, without alerts.
 
-New findings alert by severity: `scanSlackSeverity` (default `high`) and above in Slack (`slackSecurityChannel`, or `slackMonitorChannel`), `scanPagerDutySeverity` (default `critical`) and above in PagerDuty, keyed `jman-scan:incident:<id>`. Acknowledging or closing the incident resolves its PagerDuty alert.
+New findings alert by severity: `scanSlackSeverity` (default `high`) and above in Slack (`slackSecurityChannel`, or `slackChannel`), `scanPagerDutySeverity` (default `critical`) and above in PagerDuty, keyed `jman-scan:incident:<id>`. Acknowledging or closing the incident resolves its PagerDuty alert.
 
 #### Triage (execute level)
 

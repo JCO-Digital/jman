@@ -262,12 +262,10 @@ func securitySlackMessage(inc *models.Incident, findings []models.StoredScanFind
 }
 
 // securitySlackChannel is where security alerts go: slackSecurityChannel,
-// or the monitor's channel.
+// or slackChannel, where vulnerability reports go too.
 func securitySlackChannel() string {
-	for _, ch := range []string{config.Cfg.SlackSecurityChannel, config.Cfg.SlackMonitorChannel} {
-		if ch != "" {
-			return ch
-		}
+	if config.Cfg.SlackSecurityChannel != "" {
+		return config.Cfg.SlackSecurityChannel
 	}
 	return config.Cfg.SlackChannel
 }
