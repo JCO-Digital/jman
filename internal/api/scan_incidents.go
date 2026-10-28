@@ -22,9 +22,10 @@ var scanTriageMu sync.Mutex
 var scanIncidentMinRank = config.ScanSeverityRank("medium")
 
 // scanStateRules are the rules that describe a file's state rather than a
-// change to it, which a path acknowledgement can cover; for new-admin, the
-// path names the account ("users/<login>").
-var scanStateRules = map[string]bool{"stray-file": true, "foreign-owner": true, "unreadable": true, ruleNewAdmin: true}
+// change to it, which a path acknowledgement can cover; for new-admin and
+// new-app-password, the path names the account or password
+// ("users/<login>", "users/<login>/app-passwords/<uuid>").
+var scanStateRules = map[string]bool{"stray-file": true, "foreign-owner": true, "unreadable": true, ruleNewAdmin: true, ruleNewAppPassword: true}
 
 // scanTriageBy is who status changes jman-api makes on its own are
 // recorded as.

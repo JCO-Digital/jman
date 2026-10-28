@@ -312,6 +312,9 @@ func initInventorySchema() error {
 				"registered":   "TEXT NOT NULL DEFAULT ''",
 				// NULL when the posts weren't counted.
 				"post_count": "INTEGER",
+				// The user's application passwords as JSON, without hashes
+				// ('' when none or not read; see app_passwords_collected).
+				"app_passwords": "TEXT NOT NULL DEFAULT ''",
 			},
 			PrimaryKey: []string{"site_id", "user_id"},
 		},
@@ -323,7 +326,9 @@ func initInventorySchema() error {
 				"site_id":         "TEXT PRIMARY KEY",
 				"excluded_counts": "TEXT NOT NULL DEFAULT '{}'",
 				"truncated":       "BOOLEAN NOT NULL DEFAULT 0",
-				"updated_at":      "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				// Whether the users' application passwords were read.
+				"app_passwords_collected": "BOOLEAN NOT NULL DEFAULT 0",
+				"updated_at":              "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
 		{

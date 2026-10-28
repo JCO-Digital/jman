@@ -257,6 +257,15 @@ func collectSiteUsers(ctx context.Context, runner wpDataRunner, id siteIdentity,
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "Failed to count posts per user at %s: %v", sitePath, err)
 	}
+	// Application passwords only inform the security checks in jman-api, so
+	// a failure leaves them uncollected.
+	out, err = runner.run(ctx, id, sitePath, "eval", wpcli.UserAppPasswordsEval)
+	if err == nil {
+		err = wpcli.SetAppPasswords(&users, out)
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to read application passwords at %s: %v", sitePath, err)
+	}
 	return &users, nil
 }
 

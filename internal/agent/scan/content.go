@@ -101,7 +101,10 @@ var contentPatterns = []contentPattern{
 			if !tempFileRe.Match(b) {
 				return nil
 			}
-			return findBoth(b, remoteFetchRe, includeVarRe)
+			// Shortly after the fetch: a library such as elFinder fetches
+			// URLs, uses temporary files and includes its drivers, far
+			// apart in one large file.
+			return findAfter(b, remoteFetchRe, includeVarRe, maxFetchDistance)
 		},
 	},
 	{
@@ -142,8 +145,8 @@ var (
 	requestInputRe  = regexp.MustCompile(`\$_(?:GET|POST|COOKIE|REQUEST)\b`)
 )
 
-// maxFetchDistance is how far before an eval() eval-remote looks for the
-// fetch of what it runs.
+// maxFetchDistance is how far before an eval() or include eval-remote and
+// include-remote look for the fetch of what it runs.
 const maxFetchDistance = 2048
 
 // findAfter returns where second first matches within distance bytes after

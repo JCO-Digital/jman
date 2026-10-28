@@ -48,6 +48,62 @@ $out = array();
 foreach ((array) $rows as $r) { $out[(string) $r[0]] = (int) $r[1]; }
 echo json_encode((object) $out);`
 
+// UserAppPasswordsEval is PHP for `wp eval` that prints every user's
+// application passwords, as a JSON object of user ID to a list of them,
+// in one query. It leaves out the password hashes.
+const UserAppPasswordsEval = `global $wpdb;
+$rows = $wpdb->get_results($wpdb->prepare("SELECT user_id, meta_value FROM {$wpdb->usermeta} WHERE meta_key = %s", '_application_passwords'), ARRAY_N);
+if ($wpdb->last_error) { WP_CLI::error($wpdb->last_error); }
+$out = array();
+foreach ((array) $rows as $r) {
+	$list = maybe_unserialize($r[1]);
+	if (!is_array($list)) { continue; }
+	foreach ($list as $p) {
+		if (!is_array($p)) { continue; }
+		$out[(string) $r[0]][] = array(
+			'uuid' => isset($p['uuid']) ? (string) $p['uuid'] : '',
+			'name' => isset($p['name']) ? (string) $p['name'] : '',
+			'created' => isset($p['created']) ? (int) $p['created'] : 0,
+			'last_used' => isset($p['last_used']) ? (int) $p['last_used'] : null,
+			'last_ip' => isset($p['last_ip']) ? (string) $p['last_ip'] : '',
+		);
+	}
+}
+echo json_encode((object) $out);`
+
+// maxAppPasswordName caps an application password's stored name.
+const maxAppPasswordName = 200
+
+// SetAppPasswords parses UserAppPasswordsEval output, skipping any PHP
+// notices printed before the JSON, and sets the listed users'
+// application passwords. Users of excluded roles aren't listed, so theirs
+// are left out.
+func SetAppPasswords(su *models.SiteUsers, output string) error {
+	output = strings.TrimSpace(output)
+	idx := strings.Index(output, "{")
+	if idx == -1 {
+		return fmt.Errorf("no JSON object found in application password output")
+	}
+	var raw map[string][]models.SiteAppPassword
+	if err := json.Unmarshal([]byte(output[idx:]), &raw); err != nil {
+		return fmt.Errorf("failed to parse application passwords: %w", err)
+	}
+	for i := range su.Users {
+		list := raw[strconv.Itoa(su.Users[i].ID)]
+		if len(list) > models.MaxAppPasswordsPerUser {
+			list = list[:models.MaxAppPasswordsPerUser]
+		}
+		for j := range list {
+			if len(list[j].Name) > maxAppPasswordName {
+				list[j].Name = strings.ToValidUTF8(list[j].Name[:maxAppPasswordName], "")
+			}
+		}
+		su.Users[i].AppPasswords = list
+	}
+	su.AppPasswordsCollected = true
+	return nil
+}
+
 // GetSiteUsers returns the target site's users, without the excluded
 // roles, which are counted. If the posts can't be counted, the users'
 // post counts are left unknown.
@@ -83,6 +139,15 @@ func GetSiteUsers(site models.CliSite) (models.SiteUsers, error) {
 	}
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "Failed to count posts per user on %s: %v", site.Name, err)
+	}
+	// Application passwords only inform the security checks, so a failure
+	// leaves them uncollected.
+	res, err = RunWP(opts, "eval", UserAppPasswordsEval)
+	if err == nil {
+		err = SetAppPasswords(&su, res.Output)
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to read application passwords on %s: %v", site.Name, err)
 	}
 	return su, nil
 }

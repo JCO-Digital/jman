@@ -47,3 +47,26 @@ func TestWPDataHashPostCounts(t *testing.T) {
 		t.Error("post counts don't change the hash")
 	}
 }
+
+// Application passwords change the hash once they're collected, but using
+// one doesn't.
+func TestWPDataHashAppPasswords(t *testing.T) {
+	core := SiteCore{Version: "6.8.3"}
+	users := &SiteUsers{Users: []SiteUser{{ID: 1, Login: "admin"}}}
+	before := WPDataHash(nil, core, users)
+	users.AppPasswordsCollected = true
+	collected := WPDataHash(nil, core, users)
+	if collected == before {
+		t.Error("collecting application passwords didn't change the hash")
+	}
+	users.Users[0].AppPasswords = []SiteAppPassword{{UUID: "u1", Name: "x", Created: 1}}
+	added := WPDataHash(nil, core, users)
+	if added == collected {
+		t.Error("a new application password didn't change the hash")
+	}
+	used := int64(5)
+	users.Users[0].AppPasswords[0].LastUsed = &used
+	if WPDataHash(nil, core, users) != added {
+		t.Error("using an application password changed the hash")
+	}
+}

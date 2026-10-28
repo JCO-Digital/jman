@@ -2,7 +2,7 @@ package wpcli
 
 import (
 	"os/exec"
-	"slices"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -20,7 +20,7 @@ func TestParseUserList(t *testing.T) {
 		{SiteID: "site-1", ID: 1, Login: "admin", Email: "admin@example.com", DisplayName: "Admin", Roles: "administrator", Registered: "2020-01-02 03:04:05"},
 		{SiteID: "site-1", ID: 7, Login: "ed", Email: "ed@example.com", DisplayName: "Ed", Roles: "editor,author", Registered: "2021-01-01 00:00:00"},
 	}
-	if !slices.Equal(users, want) {
+	if !reflect.DeepEqual(users, want) {
 		t.Errorf("users = %+v", users)
 	}
 
@@ -105,5 +105,19 @@ func TestParseUserDeleteCheck(t *testing.T) {
 	}
 	if !strings.Contains(UserDeleteCheckCode(5, "x"), "base64_decode('eyJyZWFzc2lnbiI6IngiLCJ1c2VyX2lkIjo1fQ==')") {
 		t.Errorf("input isn't passed as base64 JSON:\n%s", UserDeleteCheckCode(5, "x"))
+	}
+}
+
+func TestSetAppPasswords(t *testing.T) {
+	su := NewSiteUsers([]models.SiteUser{{ID: 1, Login: "admin"}, {ID: 7, Login: "ed"}}, nil)
+	out := "PHP Notice: something\n" + `{"1":[{"uuid":"u1","name":"wordpress_1778988921","created":1711152199,"last_used":null,"last_ip":""}],"9":[{"uuid":"u9","name":"subscriber's","created":1}]}`
+	if err := SetAppPasswords(&su, out); err != nil {
+		t.Fatal(err)
+	}
+	if !su.AppPasswordsCollected || len(su.Users[0].AppPasswords) != 1 || su.Users[0].AppPasswords[0].UUID != "u1" || su.Users[0].AppPasswords[0].LastUsed != nil || len(su.Users[1].AppPasswords) != 0 {
+		t.Fatalf("users = %+v", su)
+	}
+	if err := SetAppPasswords(&su, "Error: no database"); err == nil {
+		t.Error("no error for output without JSON")
 	}
 }
