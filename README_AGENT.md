@@ -236,7 +236,7 @@ Traffic data specifically assumes logs live at `/sites/<domain>/logs` — this p
 - `GET /api/agent/manifest`: Returns the list of sites this server's token is scoped to, along with each site's domain and (optionally) Unix user — the agent resolves the actual filesystem path itself, since site layouts vary by hosting provisioning convention.
 - `POST /api/agent/report`: Accepts a batch of collected data for those sites. Reports for sites outside the calling server's own token are rejected.
 - `GET /api/agent/core-checksums?version=&locale=`: The MD5 checksums of a WordPress release outside `wp-content`, which jman-api fetches from wordpress.org and caches (404 when wordpress.org has none; that's remembered for 6 hours).
-- `GET /api/agent/plugin-checksums?slug=&version=`: The SHA-256 checksums of a plugin release (each file's list of accepted hashes), cached the same way. Premium and custom plugins get a 404.
+- `GET /api/agent/plugin-checksums?slug=&version=`: The SHA-256 checksums of a plugin release (each file's list of accepted hashes), cached the same way. For J&Co Digital's `jcore-*` plugins, which aren't on wordpress.org, jman-api builds them from the plugin's GitHub release zip and tag. Premium and custom plugins get a 404.
 
 And for admins managing tokens (JWT, admin level):
 
