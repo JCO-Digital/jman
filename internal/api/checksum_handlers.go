@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/db"
+	"github.com/JCO-Digital/jman/internal/fetch/jcore"
 	"github.com/JCO-Digital/jman/internal/fetch/wporg"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
@@ -103,7 +104,8 @@ func AgentCoreChecksumsHandler(w http.ResponseWriter, r *http.Request) {
 
 // AgentPluginChecksumsHandler handles GET /api/agent/plugin-checksums: the
 // SHA-256 checksums of a plugin release (?slug=&version=) for jman-agent's
-// scans. 404 when wordpress.org has none, as for premium plugins.
+// scans, from wordpress.org, or for J&Co Digital's jcore-* plugins from
+// their GitHub releases. 404 when there are none, as for premium plugins.
 func AgentPluginChecksumsHandler(w http.ResponseWriter, r *http.Request) {
 	slug, version := r.URL.Query().Get("slug"), r.URL.Query().Get("version")
 	if !utils.IsValidSlug(slug) || !pluginVersionRe.MatchString(version) {
@@ -112,6 +114,10 @@ func AgentPluginChecksumsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	data, err := releaseChecksums("plugin", slug, version, func() (any, error) {
 		sums, err := wporg.GetPluginChecksums(slug, version)
+		if sums == nil && err == nil {
+			// J&Co Digital's own plugins publish on GitHub instead.
+			sums, err = jcore.GetPluginChecksums(slug, version)
+		}
 		if sums == nil || err != nil {
 			return nil, err
 		}
