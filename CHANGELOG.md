@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.19.0 (2026-10-28)
+## 7.20.0 (2026-10-28)
+
+#### Features
+
+- api: checksums for JCORE plugins from their GitHub releases (d93706b)
+
+## v7.19.0 (2026-10-28)
 
 #### Features
 
