@@ -322,6 +322,7 @@ export const useMonitorStore = defineStore("monitor", () => {
 
 	return {
 		checks,
+		checksFetched,
 		rules,
 		fetchRules,
 		previewRule,

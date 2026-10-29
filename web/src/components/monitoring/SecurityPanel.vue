@@ -12,16 +12,25 @@ import LoadingSpinner from "../LoadingSpinner.vue";
 import Pagination from "../Pagination.vue";
 import ScanFindingsTable from "./ScanFindingsTable.vue";
 import ScanTriageModal from "./ScanTriageModal.vue";
+import SectionBar from "./SectionBar.vue";
+import EmptyState from "./EmptyState.vue";
 import { severityClass } from "./scan";
+import type { Section } from "./sections";
+import { useRouteSection } from "../../composables/useRouteSection";
 import type { Incident, ScanFinding } from "../../types";
 
-type Section = "incidents" | "informational" | "history" | "allowlist" | "acks";
-const sections: { key: Section; label: string }[] = [
-	{ key: "incidents", label: "Incidents" },
-	{ key: "informational", label: "Informational" },
-	{ key: "history", label: "History" },
-	{ key: "allowlist", label: "Allowlist" },
-	{ key: "acks", label: "Acknowledged paths" },
+type SectionKey =
+	| "incidents"
+	| "informational"
+	| "history"
+	| "allowlist"
+	| "acks";
+const sectionKeys: SectionKey[] = [
+	"incidents",
+	"informational",
+	"history",
+	"allowlist",
+	"acks",
 ];
 
 const scanStore = useScanStore();
@@ -32,7 +41,20 @@ const toastStore = useToastStore();
 const { confirm } = useConfirm();
 const route = useRoute();
 
-const section = ref<Section>("incidents");
+const section = useRouteSection(sectionKeys, "incidents");
+const sections = computed<Section<SectionKey>[]>(() => [
+	{
+		key: "incidents",
+		label: "Incidents",
+		count: scanStore.activeIncidents.length,
+	},
+	{ key: "informational", label: "Informational" },
+	{ key: "history", label: "History" },
+	{ key: "allowlist", label: "Allowlist" },
+	{ key: "acks", label: "Acknowledged paths" },
+]);
+/** Sites with a file scan, for the empty state; null until loaded. */
+const scannedSites = ref<number | null>(null);
 const loading = ref(false);
 const canTriage = computed(() => authStore.canExecute);
 
@@ -41,7 +63,7 @@ const expanded = ref(new Set<number>());
 const incidentFindings = ref<Record<number, ScanFinding[]>>({});
 const informational = ref<ScanFinding[]>([]);
 const historyPage = ref(1);
-const historyLimit = ref(20);
+const historyLimit = ref(50);
 const showRemoved = ref(false);
 
 const triageMode = ref<"allowlist" | "acknowledge" | null>(null);
@@ -54,6 +76,10 @@ const historyTotalPages = computed(() =>
 onMounted(async () => {
 	const id = Number(route.query.incident);
 	if (id) expanded.value.add(id);
+	scanStore
+		.fetchScannedSiteCount()
+		.then((n) => (scannedSites.value = n))
+		.catch(() => {});
 	await refresh();
 });
 
@@ -299,27 +325,7 @@ function changeHistoryLimit(limit: number) {
 
 <template>
 	<div class="security-panel">
-		<div class="flex-row section-bar">
-			<div class="segmented">
-				<button
-					v-for="s in sections"
-					:key="s.key"
-					class="btn btn-sm"
-					:class="section === s.key ? 'btn-primary' : 'btn-outline'"
-					@click="section = s.key"
-				>
-					{{ s.label }}
-					<span
-						v-if="
-							s.key === 'incidents' &&
-							scanStore.activeIncidents.length
-						"
-						class="count"
-					>
-						{{ scanStore.activeIncidents.length }}
-					</span>
-				</button>
-			</div>
+		<SectionBar v-model="section" :sections="sections">
 			<label
 				v-if="section === 'allowlist' || section === 'acks'"
 				class="checkbox-label"
@@ -328,21 +334,24 @@ function changeHistoryLimit(limit: number) {
 				Show removed
 			</label>
 			<LoadingSpinner v-if="loading" small />
-		</div>
+		</SectionBar>
 
 		<!-- Active incidents -->
 		<template v-if="section === 'incidents'">
-			<div
+			<EmptyState
 				v-if="!loading && scanStore.activeIncidents.length === 0"
-				class="card empty-state"
+				class="card"
+				icon="🛡️"
+				title="No security incidents"
 			>
-				<div class="empty-icon">🛡️</div>
-				<h3>No security incidents</h3>
-				<p class="sub-text">
-					Findings of medium severity and above open an incident. Low
-					ones are under Informational.
-				</p>
-			</div>
+				<template v-if="scannedSites !== null">
+					Scanning {{ scannedSites }} site{{
+						scannedSites === 1 ? "" : "s"
+					}}.
+				</template>
+				Findings of medium severity and above open an incident. Low ones
+				are under Informational.
+			</EmptyState>
 			<div
 				v-for="inc in scanStore.activeIncidents"
 				:key="inc.id"
@@ -684,21 +693,6 @@ function changeHistoryLimit(limit: number) {
 	font-size: var(--font-size-xs);
 }
 
-.section-bar {
-	margin-bottom: var(--space-4);
-}
-
-.segmented {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-2);
-
-	.count {
-		margin-left: var(--space-1);
-		font-weight: 700;
-	}
-}
-
 .section-hint {
 	margin: 0 0 var(--space-3);
 }
@@ -706,16 +700,6 @@ function changeHistoryLimit(limit: number) {
 .empty-state {
 	text-align: center;
 	padding: var(--space-8) var(--space-6);
-
-	h3 {
-		margin: 0 0 var(--space-2);
-		color: var(--text-heading);
-	}
-}
-
-.empty-icon {
-	font-size: 36px;
-	margin-bottom: var(--space-3);
 }
 
 .incident-card {
