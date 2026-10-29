@@ -1264,6 +1264,10 @@ func initAPISchema() error {
 		return fmt.Errorf("failed to migrate monitoring to checks: %w", err)
 	}
 
+	if err := SkipAutoVulnTasks(apiDB.DB); err != nil {
+		return fmt.Errorf("failed to skip auto-generated vulnerability tasks: %w", err)
+	}
+
 	return nil
 }
 

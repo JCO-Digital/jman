@@ -36,8 +36,7 @@ type alertSite struct {
 // api.db vuln_alerts table, so each vulnerability is alerted only once.
 //
 // On the very first run every current vulnerability is recorded without
-// sending, so enabling alerting doesn't flood the channel with the backlog
-// (which the daily per-site report already covers).
+// sending, so enabling alerting doesn't flood the channel with the backlog.
 func AlertNewVulnerabilities() error {
 	matcher, err := db.NewVulnIgnoreMatcher()
 	if err != nil {

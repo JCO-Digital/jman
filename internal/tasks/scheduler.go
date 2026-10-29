@@ -2,11 +2,8 @@ package tasks
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"html"
 	"log"
-	"sort"
 	"strings"
 	"time"
 
@@ -16,7 +13,6 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/utils"
-	"github.com/JCO-Digital/jman/internal/vuln"
 )
 
 // StartScheduler starts the background routine for tasks in the API process.
@@ -107,199 +103,6 @@ func pruneSiteTraffic() error {
 		return fmt.Errorf("failed to finalize completed daily rollups: %w", err)
 	}
 	return db.PruneOldSiteTrafficHourly(time.Now().Add(-siteTrafficHourlyRetention))
-}
-
-// SyncVulnerabilities checks for vulnerabilities and updates or creates tasks
-// accordingly. Called by internal/refresh's slow tick right after it fetches
-// fresh vulnerability data, rather than on this package's own hourly ticker —
-// keeping it to a single call site avoids two independent tickers racing the
-// same check-then-insert task creation for a site.
-func SyncVulnerabilities() error {
-	matcher, err := db.NewVulnIgnoreMatcher()
-	if err != nil {
-		log.Printf("Warning: failed to load ignore entries: %v", err)
-	}
-
-	// Build the site-centric vulnerability map using existing logic
-	reports, err := vuln.ProcessVulnerabilities(matcher)
-	if err != nil {
-		return err
-	}
-
-	// Group vulnerabilities by site
-	type siteVulnLink struct {
-		Report models.VulnReport
-		Vuln   models.Vulnerability
-	}
-	siteVulns := make(map[string][]siteVulnLink)
-	for _, report := range reports {
-		if report.Suppressed {
-			continue
-		}
-		for _, v := range report.Vulnerabilities {
-			if v.Suppressed {
-				continue
-			}
-			for _, site := range v.Sites {
-				if site.Suppressed {
-					continue
-				}
-				siteVulns[site.SiteID] = append(siteVulns[site.SiteID], siteVulnLink{report, v})
-			}
-		}
-	}
-
-	// Look up the configured default assignee once for this run — applied
-	// only to newly-created tasks, not to updates of existing open tasks,
-	// so a manual reassignment/unassignment is never overwritten.
-	defaultAssignee := ""
-	if setting, err := db.GetSetting(db.SystemSettingsUserID, db.DefaultVulnAssigneeSettingKey); err != nil {
-		log.Printf("Warning: failed to load default vuln assignee setting: %v", err)
-	} else if setting != nil {
-		if v, ok := setting.Value.(string); ok {
-			defaultAssignee = v
-		}
-	}
-
-	// Load site names for titles
-	sites, _ := cache.GetFastSiteList()
-	siteNameMap := make(map[string]string)
-	for _, s := range sites {
-		siteNameMap[s.ID] = s.Name
-	}
-
-	for siteID, links := range siteVulns {
-		var maxCvss float64
-		var totalVulns int
-		var uuids []string
-		pluginMap := make(map[string]*models.VulnPlugin)
-
-		for _, link := range links {
-			totalVulns++
-			uuids = append(uuids, link.Vuln.Uuid)
-
-			// Find CVSS
-			var cvss float64
-			if link.Vuln.Impact != nil && link.Vuln.Impact.Cvss != nil {
-				fmt.Sscanf(link.Vuln.Impact.Cvss.Score, "%f", &cvss)
-			}
-			if cvss > maxCvss {
-				maxCvss = cvss
-			}
-
-			siteVersion := ""
-			for _, site := range link.Vuln.Sites {
-				if site.SiteID == siteID {
-					siteVersion = site.Version
-					break
-				}
-			}
-
-			// Group for description
-			pluginName := html.UnescapeString(link.Report.PluginName)
-			if _, ok := pluginMap[link.Report.Slug]; !ok {
-				score := cvss
-				pluginMap[link.Report.Slug] = &models.VulnPlugin{
-					PluginName: pluginName,
-					Version:    siteVersion,
-					Cvss:       &score,
-				}
-			} else {
-				if cvss > *pluginMap[link.Report.Slug].Cvss {
-					score := cvss
-					pluginMap[link.Report.Slug].Cvss = &score
-				}
-			}
-		}
-
-		// Apply thresholds
-		if maxCvss < config.Cfg.CVSSThreshold && float64(totalVulns) < config.Cfg.VulnThreshold {
-			continue
-		}
-
-		// Check for existing open task
-		task, err := db.GetOpenVulnerabilityTask(siteID)
-		if err != nil {
-			log.Printf("Error looking for existing task: %v", err)
-			continue
-		}
-
-		// Determine priority
-		priority := models.TaskPriorityLow
-		if maxCvss >= 7.0 {
-			priority = models.TaskPriorityHigh
-		} else if maxCvss >= 4.0 {
-			priority = models.TaskPriorityMedium
-		}
-
-		// Prepare description
-		siteName := siteNameMap[siteID]
-		if siteName == "" {
-			siteName = fmt.Sprintf("Site %s", siteID)
-		}
-
-		plugins := make([]*models.VulnPlugin, 0, len(pluginMap))
-		for _, p := range pluginMap {
-			plugins = append(plugins, p)
-		}
-		// Deterministic order (map iteration isn't) so the description text
-		// is stable across ticks when nothing actually changed — otherwise
-		// every re-run reshuffles the plugin list and looks like a change.
-		sort.Slice(plugins, func(i, j int) bool {
-			if *plugins[i].Cvss != *plugins[j].Cvss {
-				return *plugins[i].Cvss > *plugins[j].Cvss
-			}
-			return plugins[i].PluginName < plugins[j].PluginName
-		})
-
-		description := "Automated vulnerability report.\n\n"
-		for _, p := range plugins {
-			description += fmt.Sprintf("- %s (%s) Max CVSS: %.1f\n", p.PluginName, p.Version, *p.Cvss)
-		}
-
-		metadataJSON, _ := json.Marshal(map[string]interface{}{"vuln_uuids": uuids})
-		metadataStr := string(metadataJSON)
-
-		if task != nil {
-			// Update existing task
-			before := *task
-			task.Priority = priority
-			task.Description = &description
-			task.Metadata = &metadataStr
-			if err := db.SaveTask(task, "system"); err != nil {
-				log.Printf("Error updating vuln task for site %s: %v", siteID, err)
-			} else {
-				NotifyTaskChange(&before, task, "system")
-			}
-		} else {
-			// Create new task
-			now := time.Now()
-			due := now.Add(7 * 24 * time.Hour)
-
-			newTask := &models.Task{
-				Type:         models.TaskTypeOneTime,
-				Status:       models.TaskStatusPending,
-				Priority:     priority,
-				Title:        fmt.Sprintf("Security Vulnerabilities - %s", siteName),
-				Description:  &description,
-				SiteID:       &siteID,
-				Metadata:     &metadataStr,
-				ReminderDate: &now,
-				DueDate:      &due,
-			}
-			if defaultAssignee != "" {
-				assignee := defaultAssignee
-				newTask.AssignedTo = &assignee
-			}
-			if err := db.SaveTask(newTask, "system"); err != nil {
-				log.Printf("Error creating vuln task for site %s: %v", siteID, err)
-			} else {
-				NotifyTaskChange(nil, newTask, "system")
-			}
-		}
-	}
-
-	return nil
 }
 
 // processReminders sends Slack notifications for due tasks.

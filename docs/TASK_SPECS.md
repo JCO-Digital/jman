@@ -14,7 +14,7 @@ A Task consists of the following fields:
 - **Status**: `pending`, `in_progress`, `completed`, `skipped`, `overdue`.
 - **Priority**: `low`, `medium`, `high`.
 - **Title**: Short summary.
-- **Description**: Detailed information (can be auto-generated for vulnerabilities).
+- **Description**: Detailed information.
 - **Linkage**:
     - `site_id`: Reference to a site.
     - `server_id`: Reference to a server.
@@ -42,20 +42,13 @@ When a task of type `repeating` or `dynamic` is marked as `completed`:
 
 ## Background Automation (Scheduler)
 
-The `jman-api` process runs a background task scheduler (every hour) for reminders and cleanup, plus a separate refresh scheduler whose slow tick (default every 30 minutes, see `README_API.md`) drives vulnerability syncing right after it fetches fresh vulnerability data.
+The `jman-api` process runs a background task scheduler (every hour) for reminders and cleanup.
 
-### 1. Vulnerability Syncing
-- Runs as part of the refresh scheduler's slow tick (not the hourly task tick), immediately after vulnerability data is fetched — see `README_API.md`'s "Data Refresh" section.
-- Scans for vulnerabilities across all sites.
-- If vulnerabilities exceed configured thresholds (`CVSSThreshold` or `VulnThreshold`):
-    - **Update**: If an open vulnerability task for the site already exists, it updates the description, priority, and metadata. `assigned_to` is left untouched.
-    - **Create**: If no open task exists, it creates a new `one-time` task. If a default assignee is configured (`GET/POST /vuln-settings`, admin only — see `API_SPECS.md`), the new task's `assigned_to` is set to that user.
-- **Priority Mapping**:
-    - CVSS >= 7.0: `high`
-    - CVSS >= 4.0: `medium`
-    - Otherwise: `low`
-- In the same step, a one-off Slack alert is posted to `slackChannel` for each newly found vulnerability with CVSS >= `CVSSThreshold`, listing the sites it is installed on. Each vulnerability is alerted only once.
-- Once a day, on the first slow tick at or after `vulnReportTime` (default `10:00`, server local time), a per-site vulnerability report (plugin/CVSS breakdown) is posted to `slackChannel`, skipping sites whose report is unchanged since it was last sent. This is independent of the Task Reminders below, and replaces what used to be a separate `jman vuln sites --slack` cron job.
+### 1. Vulnerability Syncing (removed)
+- Vulnerability Tasks are no longer created automatically: one Task per site didn't match how vulnerable plugins are updated (per plugin, across sites), and the daily per-site Slack report is gone too. See `docs/vuln-workflow.md` for what replaces them.
+- On upgrade, the one-time `skip_auto_vuln_tasks` migration marks the open Tasks the old sync created (`Security Vulnerabilities - <site>`, created by `system`) as `skipped`, without notifications.
+- The one-off Slack alert for each newly found vulnerability is unchanged; it runs on the refresh scheduler's slow tick (see `README_API.md`).
+- Vulnerability Tasks can still be created by hand.
 
 ### 2. Task Reminders
 - Sends Slack notifications for `pending` tasks that have reached their `reminder_date`.
@@ -71,7 +64,7 @@ The `jman-api` process runs a background task scheduler (every hour) for reminde
 
 ## Assignment & Change Notifications
 
-Unlike the reminders above (which fire later, once `reminder_date` arrives), this notifies the assignee immediately whenever a task is created, edited, or (re)assigned — via `POST /tasks`, `PATCH /tasks/{id}`, `POST /tasks/{id}/complete`, and the automated vulnerability sync above.
+Unlike the reminders above (which fire later, once `reminder_date` arrives), this notifies the assignee immediately whenever a task is created, edited, or (re)assigned — via `POST /tasks`, `PATCH /tasks/{id}`, and `POST /tasks/{id}/complete`.
 
 - **No self-notifications**: if the person making the change is the task's assignee, nothing is sent.
 - **No assignee, no notification**: an unassigned task never triggers this (it's still covered by the Task Reminders above once assigned and due).

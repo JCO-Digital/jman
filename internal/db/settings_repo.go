@@ -15,11 +15,6 @@ import (
 // settings are stored under this sentinel instead.
 const SystemSettingsUserID = "system"
 
-// DefaultVulnAssigneeSettingKey is the global setting key holding the
-// username that newly-created vulnerability Tasks are auto-assigned to.
-// An empty value means vulnerability Tasks are left unassigned.
-const DefaultVulnAssigneeSettingKey = "default_vuln_assignee"
-
 // GetSetting retrieves a specific setting for a user by key.
 func GetSetting(userID, key string) (*models.Setting, error) {
 	db := GetAPIDB()
