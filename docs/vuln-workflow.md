@@ -142,9 +142,13 @@ Only new-vulnerability alerts, for:
 3. A new vulnerability on a muted plugin (which also lifts the mute)
 
 `vuln_alerts` dedups per UUID, so cases 2 and 3 need dedup per
-(uuid, kind, site). Keep the seeding so the first run doesn't send the
-backlog. Today the alert covers plugins only; core is added. The alert keeps
-the `cvssThreshold` filter.
+(uuid, kind, site): `vuln_alert_sites`, built from the open exposures, so
+ignores, suppression and backports apply. Keep the seeding so the first run
+doesn't send the backlog. Core is alerted like plugins. Both alerts keep the
+`cvssThreshold` filter, except that a new vulnerability that lifted a mute is
+alerted whatever its score, with the site marked "mute lifted" (case 3 is
+part of case 1's message, not a separate one). A site's records are dropped a
+day after it stops being affected, so a reinstall or downgrade alerts again.
 
 Removed: `SendSiteReports`, `runDailySiteReport`, `vulnReportTime`, the
 `vuln_site_report_last_date` setting.
@@ -227,13 +231,13 @@ create-task actions. The Monitoring nav badge also counts red exposures.
 2. **Data** (PR #109, done): parse plugin `closed*` fields, `vuln_exposures` sync with fix
    state and overdue tiers, read API (`GET /api/vulns/exposures`, summary
    count for badges).
-3. **UI and mutes** (3a PR #110, done; 3b `feat/vuln-tab`):
+3. **UI and mutes** (3a PR #110, 3b PR #112, done):
    a. Monitoring layout: Summary and area tabs, shared
       sub-bar/toolbar/empty state, `UptimePanel`, Rules as a section, URL
       redirects. The Summary gets its vulnerability card in 3b.
    b. Vulnerabilities tab, nav and tab badges, `vuln_mutes` with the
       lifecycle above, manual task creation.
-4. **Slack:** per-site dedup, newly affected site and muted-plugin alerts,
+4. **Slack** (`feat/vuln-alerts`): per-site dedup, newly affected site and muted-plugin alerts,
    core alerts.
 
 ## Open questions

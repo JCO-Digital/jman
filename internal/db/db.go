@@ -478,6 +478,20 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// vuln_alert_sites records which vulnerabilities have been
+			// alerted (or seeded) per plugin (or core) and site, so a known
+			// vulnerability reaching another site is alerted once for it.
+			Name: "vuln_alert_sites",
+			Columns: map[string]string{
+				"kind":    "TEXT NOT NULL",
+				"slug":    "TEXT NOT NULL",
+				"site_id": "TEXT NOT NULL",
+				"uuid":    "TEXT NOT NULL",
+				"sent_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"kind", "slug", "site_id", "uuid"},
+		},
+		{
 			// vuln_exposures has one row per site running a vulnerable
 			// version of a plugin (or of core), open until the site no
 			// longer runs an affected version. site_id is a soft reference

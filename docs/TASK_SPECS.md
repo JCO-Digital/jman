@@ -47,7 +47,7 @@ The `jman-api` process runs a background task scheduler (every hour) for reminde
 ### 1. Vulnerability Syncing (removed)
 - Vulnerability Tasks are no longer created automatically: one Task per site didn't match how vulnerable plugins are updated (per plugin, across sites), and the daily per-site Slack report is gone too. See `docs/vuln-workflow.md` for what replaces them.
 - On upgrade, the one-time `skip_auto_vuln_tasks` migration marks the open Tasks the old sync created (`Security Vulnerabilities - <site>`, created by `system`) as `skipped`, without notifications.
-- The one-off Slack alert for each newly found vulnerability is unchanged; it runs on the refresh scheduler's slow tick (see `README_API.md`).
+- One-off Slack alerts for new vulnerabilities and newly affected sites run on the refresh scheduler's slow tick (see `README_API.md`).
 - Vulnerability Tasks can still be created by hand.
 
 ### 2. Task Reminders
