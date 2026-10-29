@@ -478,6 +478,29 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// vuln_exposures has one row per site running a vulnerable
+			// version of a plugin (or of core), open until the site no
+			// longer runs an affected version. site_id is a soft reference
+			// into inventory.db. See docs/vuln-workflow.md.
+			Name: "vuln_exposures",
+			Columns: map[string]string{
+				"id":                   "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"kind":                 "TEXT NOT NULL",
+				"slug":                 "TEXT NOT NULL",
+				"site_id":              "TEXT NOT NULL",
+				"version":              "TEXT NOT NULL DEFAULT ''",
+				"vuln_uuids":           "TEXT NOT NULL DEFAULT '[]'",
+				"max_cvss":             "REAL",
+				"fix_state":            "TEXT NOT NULL",
+				"fixed_in":             "TEXT NOT NULL DEFAULT ''",
+				"possible_fix_version": "TEXT NOT NULL DEFAULT ''",
+				"fix_available_since":  "DATETIME",
+				"first_seen_at":        "DATETIME NOT NULL",
+				"last_seen_at":         "DATETIME NOT NULL",
+				"resolved_at":          "DATETIME",
+			},
+		},
+		{
 			// monitor_checks holds everything the uptime monitor checks. A
 			// default check belongs to a site (in inventory.db, so site_id
 			// is a soft reference) and takes its host from the site.
@@ -1232,6 +1255,15 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_scan_path_acks_site_id ON scan_path_acks(site_id);")
+	if err != nil {
+		return err
+	}
+	// At most one open exposure per plugin (or core) and site.
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vuln_exposures_open ON vuln_exposures(kind, slug, site_id) WHERE resolved_at IS NULL;")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_vuln_exposures_resolved_at ON vuln_exposures(resolved_at);")
 	if err != nil {
 		return err
 	}

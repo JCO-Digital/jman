@@ -1,7 +1,7 @@
 // Package refresh keeps jman-api's cached SpinupWP/plugin/vulnerability data
 // fresh with an in-process scheduler, replacing the external `jman fetch`
-// cron job that jman-api previously depended on. Its slow tick also sends
-// new-vulnerability Slack alerts.
+// cron job that jman-api previously depended on. Its slow tick also syncs
+// vulnerability exposures and sends new-vulnerability Slack alerts.
 package refresh
 
 import (
@@ -103,8 +103,9 @@ func runFastTick() {
 // (a single unreachable server over SSH), not something that should page
 // anyone.
 //
-// On success, it sends a one-off Slack alert for each newly found
-// vulnerability, right after the data that feeds them is fetched.
+// On success, it syncs vulnerability exposures (see vuln.SyncVulnExposures)
+// and sends a one-off Slack alert for each newly found vulnerability, right
+// after the data that feeds them is fetched.
 func runSlowTick() {
 	if err := cache.RunFullRefresh(slowTTL()); err != nil {
 		log.Printf("Refresh scheduler: full refresh failed: %v", err)
@@ -116,6 +117,9 @@ func runSlowTick() {
 		log.Printf("Refresh scheduler: agentless collection error: %v", err)
 	}
 
+	if err := vuln.SyncVulnExposures(); err != nil {
+		log.Printf("Refresh scheduler: vuln exposure sync failed: %v", err)
+	}
 	if err := vuln.AlertNewVulnerabilities(); err != nil {
 		log.Printf("Refresh scheduler: new vuln Slack alerts failed: %v", err)
 	}

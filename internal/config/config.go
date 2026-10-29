@@ -53,10 +53,17 @@ type AppConfig struct {
 	// RefreshFastInterval/RefreshSlowInterval are the tick intervals, in
 	// minutes, for the refresh scheduler's cheap (servers/sites) and
 	// expensive (plugins/vulnerabilities/core versions) work respectively.
-	RefreshFastInterval int               `toml:"refreshFastInterval" mapstructure:"refreshFastInterval"`
-	RefreshSlowInterval int               `toml:"refreshSlowInterval" mapstructure:"refreshSlowInterval"`
-	CVSSThreshold       float64           `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
-	VulnThreshold       float64           `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	RefreshFastInterval int     `toml:"refreshFastInterval" mapstructure:"refreshFastInterval"`
+	RefreshSlowInterval int     `toml:"refreshSlowInterval" mapstructure:"refreshSlowInterval"`
+	CVSSThreshold       float64 `toml:"cvssThreshold" mapstructure:"cvssThreshold"`
+	VulnThreshold       float64 `toml:"vulnThreshold" mapstructure:"vulnThreshold"`
+	// Days a fix-available vulnerability exposure may stay open before it is
+	// overdue, by its highest CVSS: critical (≥9), high (≥7), medium (≥4,
+	// and unscored) and low.
+	VulnDueCriticalDays int               `toml:"vulnDueCriticalDays" mapstructure:"vulnDueCriticalDays"`
+	VulnDueHighDays     int               `toml:"vulnDueHighDays" mapstructure:"vulnDueHighDays"`
+	VulnDueMediumDays   int               `toml:"vulnDueMediumDays" mapstructure:"vulnDueMediumDays"`
+	VulnDueLowDays      int               `toml:"vulnDueLowDays" mapstructure:"vulnDueLowDays"`
 	KnockdPorts         string            `toml:"knockdPorts" mapstructure:"knockdPorts"`
 	KnockdTimeout       int               `toml:"knockdTimeout" mapstructure:"knockdTimeout"`
 	BehindProxy         bool              `toml:"behindProxy" mapstructure:"behindProxy"`
@@ -191,6 +198,10 @@ func loadConfig() error {
 	viper.SetDefault("refreshSlowInterval", 30)
 	viper.SetDefault("cvssThreshold", 7.0)
 	viper.SetDefault("vulnThreshold", 7.0)
+	viper.SetDefault("vulnDueCriticalDays", 2)
+	viper.SetDefault("vulnDueHighDays", 7)
+	viper.SetDefault("vulnDueMediumDays", 14)
+	viper.SetDefault("vulnDueLowDays", 30)
 	viper.SetDefault("knockdPorts", "")
 	viper.SetDefault("knockdTimeout", 60)
 	// Default to trusting proxy headers only from loopback, the common case
@@ -241,6 +252,10 @@ func loadConfig() error {
 		"refreshSlowInterval":        "REFRESHSLOWINTERVAL",
 		"cvssThreshold":              "CVSSTHRESHOLD",
 		"vulnThreshold":              "VULNTHRESHOLD",
+		"vulnDueCriticalDays":        "VULNDUECRITICALDAYS",
+		"vulnDueHighDays":            "VULNDUEHIGHDAYS",
+		"vulnDueMediumDays":          "VULNDUEMEDIUMDAYS",
+		"vulnDueLowDays":             "VULNDUELOWDAYS",
 		"knockdPorts":                "KNOCKDPORTS",
 		"knockdTimeout":              "KNOCKDTIMEOUT",
 		"allowedOrigins":             "ALLOWEDORIGINS",
