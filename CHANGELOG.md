@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.24.0 (2026-10-29)
+## 7.25.0 (2026-10-29)
+
+#### Features
+
+- api: alert newly affected sites and mute-lifting vulnerabilities (3d285ff)
+
+## v7.24.0 (2026-10-29)
 
 #### Features
 
