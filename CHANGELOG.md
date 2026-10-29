@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.23.0 (2026-10-29)
+## 7.24.0 (2026-10-29)
+
+#### Features
+
+- Vulnerabilities tab under Monitoring, with mutes (e47983b)
+
+## v7.23.0 (2026-10-29)
 
 #### Features
 
