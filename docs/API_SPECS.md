@@ -894,15 +894,79 @@ Returns exposures grouped by plugin, or by core version.
 - `closed*` and `last_updated` come from the plugin's wpvulnerability.net record.
 - Groups with overdue sites come first, then by highest CVSS; overdue sites come first in a group.
 
+- An open exposure with a mute has it in `mute` (see below). A muted site never counts toward `overdue_count`, and the group's `muted_count` counts its muted sites.
+
 `GET /vulns/exposures/summary` (Protected: `basic`)
 
-Counts the open exposures, for badges.
+Counts the open exposures, for badges. `overdue` and `no_fix` leave muted exposures out; `needs_review` counts mutes past their review date.
 
 **Response (200 OK)**
 
 ```json
-{ "groups": 14, "exposures": 52, "overdue": 3, "no_fix": 9 }
+{ "groups": 14, "exposures": 52, "overdue": 3, "no_fix": 9, "muted": 4, "needs_review": 1 }
 ```
+
+### Vulnerability Mutes
+
+A mute accepts the risk of one plugin (or core) exposure on one site, with a reason: the exposure doesn't count as overdue. jman-api lifts a mute on its slow tick when:
+
+- a vulnerability applies that wasn't there when it was muted or last confirmed,
+- it was muted while there was no fix, and a fix (`fix_available`) or a new `possible_fix_version` shows up,
+- the site is no longer affected (and wasn't resolved within the last 24 hours, so a site missing from one refresh keeps its mute).
+
+90 days after it was made or last confirmed, an active mute becomes `needs_review`: it still keeps the exposure from counting as overdue until someone confirms it again or unmutes it. Lifted mutes are kept.
+
+`GET /vulns/mutes` (Protected: `basic`)
+
+Returns the open mutes (`active` and `needs_review`), soonest review first; with `?status=lifted`, the mutes lifted in the last `?days=` days (default 30, max 365), newest first.
+
+**Mute Object**
+
+```json
+{
+	"id": 3,
+	"kind": "plugin",
+	"slug": "gigpress",
+	"site_id": "uuid",
+	"reason": "Waiting for the client to test 2.3.11 on staging",
+	"status": "active",
+	"fix_state_at_mute": "fix_available",
+	"vuln_uuids_at_mute": ["..."],
+	"possible_fix_at_mute": "",
+	"review_at": "datetime",
+	"lifted_at": null,
+	"lifted_reason": "",
+	"created_at": "datetime",
+	"created_by": "username",
+	"updated_at": "datetime",
+	"updated_by": "username",
+	"site_name": "example.com",
+	"name": "GigPress",
+	"version": "2.3.10"
+}
+```
+
+`site_name`, `name` and (for an open exposure) `version` are only set by this endpoint. `updated_by` is `system` when jman-api lifted the mute or put it up for review.
+
+`POST /vulns/mutes` (Protected: `execute`)
+
+Mutes the open exposure of a plugin (or core, slug `wordpress`) on a site.
+
+**Request Body**
+
+```json
+{ "kind": "plugin", "slug": "gigpress", "site_id": "uuid", "reason": "..." }
+```
+
+Returns `201 Created` with the mute; `400` without a reason, `404` if the site has no open exposure for it, `409` if it is already muted.
+
+`POST /vulns/mutes/{id}/confirm` (Protected: `execute`)
+
+Keeps an open mute for another 90 days with a new `reason` (`{ "reason": "..." }`), recording the exposure as it is now. Returns the mute; `409` if the site is no longer affected.
+
+`DELETE /vulns/mutes/{id}` (Protected: `execute`)
+
+Lifts an open mute (`lifted_reason` "Unmuted by <user>"). Returns `204 No Content`; `404` if it isn't open.
 
 ### Vulnerability Backport Rules
 

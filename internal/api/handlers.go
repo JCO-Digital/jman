@@ -66,6 +66,10 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/vulns/core", basic(CoreVulnsHandler))
 	mux.Handle("GET /api/vulns/exposures", basic(ListVulnExposuresHandler))
 	mux.Handle("GET /api/vulns/exposures/summary", basic(VulnExposureSummaryHandler))
+	mux.Handle("GET /api/vulns/mutes", basic(ListVulnMutesHandler))
+	mux.Handle("POST /api/vulns/mutes", execute(MuteVulnExposureHandler))
+	mux.Handle("POST /api/vulns/mutes/{id}/confirm", execute(ConfirmVulnMuteHandler))
+	mux.Handle("DELETE /api/vulns/mutes/{id}", execute(UnmuteVulnHandler))
 
 	// --- Agent routes (X-Agent-Token auth, not JWT) ---
 	mux.Handle("GET /api/agent/manifest", AgentAuthMiddleware(AgentManifestHandler))

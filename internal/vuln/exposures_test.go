@@ -68,6 +68,8 @@ func TestCoreObservations(t *testing.T) {
 	reports := []models.CoreVulnReport{{Version: "6.4.1", Vulnerabilities: []models.Vulnerability{
 		testVuln("c1", "6.1", models.PluginSite{SiteID: "minor"}, models.PluginSite{SiteID: "major"},
 			models.PluginSite{SiteID: "none"}, models.PluginSite{SiteID: "ignored", Suppressed: true}),
+		// The core feed reuses UUIDs across vulnerabilities.
+		testVuln("c1", "7.5", models.PluginSite{SiteID: "minor"}),
 	}}}
 	cores := map[string]models.SiteCore{
 		"minor": {SiteID: "minor", MinorUpdate: "6.4.7", MajorUpdate: "6.8.3"},
@@ -85,6 +87,9 @@ func TestCoreObservations(t *testing.T) {
 		}
 	}
 	check("minor", models.VulnFixAvailable, "6.4.7")
+	if o := got[exposureKey{"core", "wordpress", "minor"}]; len(o.VulnUUIDs) != 1 || *o.MaxCvss != 7.5 {
+		t.Errorf("minor: uuids %v cvss %v, want one UUID and CVSS 7.5", o.VulnUUIDs, o.MaxCvss)
+	}
 	check("major", models.VulnFixAvailable, "6.8.3")
 	check("none", models.VulnNoFix, "")
 }
@@ -210,7 +215,7 @@ func TestGroupExposures(t *testing.T) {
 		return d
 	}
 
-	groups := groupExposures(exposures, map[string]string{"s1": "Bravo", "s2": "Alpha"}, details, now)
+	groups := groupExposures(exposures, map[string]string{"s1": "Bravo", "s2": "Alpha"}, nil, details, now)
 
 	var names []string
 	for _, g := range groups {
@@ -233,8 +238,25 @@ func TestGroupExposures(t *testing.T) {
 		t.Errorf("late vulnerabilities = %+v, want x2 (known, scored) then x1 (unknown)", late.Vulnerabilities)
 	}
 
-	summary := SummarizeExposures(exposures, now)
+	summary := SummarizeExposures(exposures, nil, now)
 	if summary != (models.VulnExposureSummary{Groups: 5, Exposures: 6, Overdue: 1, NoFix: 4}) {
 		t.Errorf("summary = %+v", summary)
+	}
+}
+
+func TestVulnDisplayName(t *testing.T) {
+	src := func(name string) models.Source { return models.Source{Name: name, Link: "https://x/" + name} }
+	for _, tt := range []struct {
+		v    models.Vulnerability
+		want string
+	}{
+		{models.Vulnerability{Name: "P [p] < 2.0", Source: []models.Source{src("CVE-1"), src("P <= 1.9 - XSS")}}, "P <= 1.9 - XSS"},
+		{models.Vulnerability{Name: "P [p] < 2.0", Source: []models.Source{src("CVE-1")}}, "P [p] < 2.0"},
+		{models.Vulnerability{Name: "6.4.1", Source: []models.Source{src("CVE-2018-14028")}}, "CVE-2018-14028"},
+		{models.Vulnerability{Name: "6.4.1"}, "6.4.1"},
+	} {
+		if got, _ := vulnDisplayName(tt.v); got != tt.want {
+			t.Errorf("vulnDisplayName(%q) = %q, want %q", tt.v.Name, got, tt.want)
+		}
 	}
 }

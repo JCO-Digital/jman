@@ -134,3 +134,13 @@ func ResolveVulnExposures(ids []int64, at time.Time) error {
 	}
 	return nil
 }
+
+// GetOpenVulnExposure returns the open exposure of a plugin (or core) on a
+// site, or nil if there is none.
+func GetOpenVulnExposure(kind, slug, siteID string) (*models.VulnExposure, error) {
+	exposures, err := queryVulnExposures(`resolved_at IS NULL AND kind = ? AND slug = ? AND site_id = ?`, kind, slug, siteID)
+	if err != nil || len(exposures) == 0 {
+		return nil, err
+	}
+	return &exposures[0], nil
+}

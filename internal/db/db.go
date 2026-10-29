@@ -501,6 +501,30 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// vuln_mutes accepts the risk of one plugin (or core) exposure
+			// on one site; see models.VulnMute. Lifted mutes are kept for
+			// the record.
+			Name: "vuln_mutes",
+			Columns: map[string]string{
+				"id":                   "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"kind":                 "TEXT NOT NULL",
+				"slug":                 "TEXT NOT NULL",
+				"site_id":              "TEXT NOT NULL",
+				"reason":               "TEXT NOT NULL",
+				"status":               "TEXT NOT NULL DEFAULT 'active'",
+				"fix_state_at_mute":    "TEXT NOT NULL DEFAULT ''",
+				"vuln_uuids_at_mute":   "TEXT NOT NULL DEFAULT '[]'",
+				"possible_fix_at_mute": "TEXT NOT NULL DEFAULT ''",
+				"review_at":            "DATETIME NOT NULL",
+				"lifted_at":            "DATETIME",
+				"lifted_reason":        "TEXT NOT NULL DEFAULT ''",
+				"created_at":           "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":           "TEXT NOT NULL DEFAULT ''",
+				"updated_at":           "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by":           "TEXT NOT NULL DEFAULT ''",
+			},
+		},
+		{
 			// monitor_checks holds everything the uptime monitor checks. A
 			// default check belongs to a site (in inventory.db, so site_id
 			// is a soft reference) and takes its host from the site.
@@ -1264,6 +1288,11 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_vuln_exposures_resolved_at ON vuln_exposures(resolved_at);")
+	if err != nil {
+		return err
+	}
+	// At most one open mute per plugin (or core) and site.
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vuln_mutes_open ON vuln_mutes(kind, slug, site_id) WHERE status != 'lifted';")
 	if err != nil {
 		return err
 	}

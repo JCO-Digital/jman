@@ -6,8 +6,10 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
+	"github.com/JCO-Digital/jman/internal/verb"
 )
 
 // groupDetails is the feed data an exposure group shows next to its sites.
@@ -21,18 +23,36 @@ type groupDetails struct {
 }
 
 // BuildExposureGroups groups exposures into one group per plugin, or per
-// core version, with site names, vulnerability details from the cached feed
-// and each site's overdue state at now. Groups with overdue sites come
-// first, then by highest CVSS and name; within a group, overdue sites come
-// first, then by site name.
+// core version, with site names, vulnerability details from the cached feed,
+// each site's overdue state at now and its open mute. Groups with unmuted
+// overdue sites come first, then by highest CVSS and name; within a group,
+// unmuted overdue sites come first and muted ones last, then by site name.
 func BuildExposureGroups(exposures []models.VulnExposure, now time.Time) []models.VulnExposureGroup {
-	siteNames := map[string]string{}
+	return groupExposures(exposures, siteNames(), openMutesByKey(), loadGroupDetails, now)
+}
+
+func siteNames() map[string]string {
+	names := map[string]string{}
 	if sites, err := cache.GetFastSiteList(); err == nil {
 		for _, s := range sites {
-			siteNames[s.ID] = s.Name
+			names[s.ID] = s.Name
 		}
 	}
-	return groupExposures(exposures, siteNames, loadGroupDetails, now)
+	return names
+}
+
+// openMutesByKey returns the open mutes by plugin (or core) and site. A
+// failure to read them is logged and treated as no mutes.
+func openMutesByKey() map[exposureKey]models.VulnMute {
+	mutes, err := db.ListOpenVulnMutes()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to load vulnerability mutes: %v\n", err)
+	}
+	byKey := make(map[exposureKey]models.VulnMute, len(mutes))
+	for _, m := range mutes {
+		byKey[exposureKey{m.Kind, m.Slug, m.SiteID}] = m
+	}
+	return byKey
 }
 
 // loadGroupDetails reads a group's feed data from the vulnerability cache.
@@ -76,7 +96,7 @@ func loadGroupDetails(kind, slug, coreVersion string) groupDetails {
 	return d
 }
 
-func groupExposures(exposures []models.VulnExposure, siteNames map[string]string,
+func groupExposures(exposures []models.VulnExposure, siteNames map[string]string, mutes map[exposureKey]models.VulnMute,
 	details func(kind, slug, coreVersion string) groupDetails, now time.Time) []models.VulnExposureGroup {
 	type groupKey struct{ Kind, Slug, Version string }
 	groups := map[groupKey]*models.VulnExposureGroup{}
@@ -100,6 +120,10 @@ func groupExposures(exposures []models.VulnExposure, siteNames map[string]string
 			site.SiteName = e.SiteID
 		}
 		site.DueAt, site.Overdue = ExposureDue(e, now)
+		if m, ok := mutes[keyOf(e)]; ok && e.ResolvedAt == nil {
+			site.Mute = &m
+			g.MutedCount++
+		}
 		g.Sites = append(g.Sites, site)
 
 		if e.MaxCvss != nil && (g.MaxCvss == nil || *e.MaxCvss > *g.MaxCvss) {
@@ -111,7 +135,7 @@ func groupExposures(exposures []models.VulnExposure, siteNames map[string]string
 		} else {
 			g.NoFixCount++
 		}
-		if site.Overdue {
+		if site.Overdue && site.Mute == nil {
 			g.OverdueCount++
 		}
 	}
@@ -136,10 +160,14 @@ func groupExposures(exposures []models.VulnExposure, siteNames map[string]string
 			return cvssOrZero(g.Vulnerabilities[i].Cvss) > cvssOrZero(g.Vulnerabilities[j].Cvss)
 		})
 		sort.SliceStable(g.Sites, func(i, j int) bool {
-			if g.Sites[i].Overdue != g.Sites[j].Overdue {
-				return g.Sites[i].Overdue
+			a, b := g.Sites[i], g.Sites[j]
+			if (a.Mute != nil) != (b.Mute != nil) {
+				return b.Mute != nil
 			}
-			return g.Sites[i].SiteName < g.Sites[j].SiteName
+			if a.Overdue != b.Overdue {
+				return a.Overdue
+			}
+			return a.SiteName < b.SiteName
 		})
 		result = append(result, *g)
 	}
@@ -181,9 +209,18 @@ func cvssOrZero(score *float64) float64 {
 }
 
 // SummarizeExposures counts open exposures at now: groups, exposures,
-// overdue ones and no-fix ones.
-func SummarizeExposures(exposures []models.VulnExposure, now time.Time) models.VulnExposureSummary {
+// unmuted overdue and no-fix ones, muted ones, and mutes needing review.
+func SummarizeExposures(exposures []models.VulnExposure, mutes []models.VulnMute, now time.Time) models.VulnExposureSummary {
 	var s models.VulnExposureSummary
+	muted := make(map[exposureKey]bool, len(mutes))
+	for _, m := range mutes {
+		if m.Open() {
+			muted[exposureKey{m.Kind, m.Slug, m.SiteID}] = true
+		}
+		if m.Status == models.VulnMuteNeedsReview {
+			s.NeedsReview++
+		}
+	}
 	groups := map[string]bool{}
 	for _, e := range exposures {
 		if e.ResolvedAt != nil {
@@ -195,6 +232,10 @@ func SummarizeExposures(exposures []models.VulnExposure, now time.Time) models.V
 		}
 		groups[key] = true
 		s.Exposures++
+		if muted[keyOf(e)] {
+			s.Muted++
+			continue
+		}
 		if _, overdue := ExposureDue(e, now); overdue {
 			s.Overdue++
 		}
@@ -204,4 +245,32 @@ func SummarizeExposures(exposures []models.VulnExposure, now time.Time) models.V
 	}
 	s.Groups = len(groups)
 	return s
+}
+
+// DescribeMutes fills in each mute's site name, plugin (or core) name and,
+// for an open mute, the installed version, for listing.
+func DescribeMutes(mutes []models.VulnMute) {
+	names := siteNames()
+	versions := map[exposureKey]string{}
+	if open, err := db.ListOpenVulnExposures(); err == nil {
+		for _, e := range open {
+			versions[keyOf(e)] = e.Version
+		}
+	}
+	for i := range mutes {
+		m := &mutes[i]
+		m.SiteName = names[m.SiteID]
+		if m.SiteName == "" {
+			m.SiteName = m.SiteID
+		}
+		k := exposureKey{m.Kind, m.Slug, m.SiteID}
+		m.Version = versions[k]
+		if m.Kind == models.VulnExposureCore {
+			m.Name = "WordPress core"
+		} else if info, _, err := db.GetPluginInfo(m.Slug); err == nil && info != nil && info.Name != "" {
+			m.Name = utils.CleanHTML(info.Name)
+		} else {
+			m.Name = m.Slug
+		}
+	}
 }

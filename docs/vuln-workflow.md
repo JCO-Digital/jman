@@ -94,12 +94,13 @@ unmuted red exposures. No Slack, no PagerDuty.
 
 ### Mutes
 
-New table `vuln_mutes`, soft delete like `scan_path_acks`:
+New table `vuln_mutes`; lifted mutes are kept for the record:
 
 - Scope: one plugin (or core) on one site: `kind`, `slug`, `site_id`
-- `reason` required; `created_by/at`, `updated_by/at`, `removed`
-- `fix_state_at_mute`, `vuln_uuids_at_mute`, `latest_version_at_mute`
-- `review_at` = created + 90 days
+- `reason` required; `created_by/at`, `updated_by/at`
+- `fix_state_at_mute`, `vuln_uuids_at_mute`, `possible_fix_at_mute`: the
+  exposure when muted or last confirmed
+- `review_at` = muted or last confirmed + 90 days
 - Status: `active` | `needs_review` | `lifted` (+ `lifted_reason`)
 
 Lifecycle:
@@ -109,12 +110,14 @@ Lifecycle:
 - **Lifted automatically** when a new vulnerability applies that wasn't in
   `vuln_uuids_at_mute`, for any mute.
 - **Lifted automatically for no-fix mutes** when the item becomes fix
-  available, or a newer version than `latest_version_at_mute` appears. This
-  trigger does not apply to fix-available mutes, because every release would
-  lift them.
+  available, or its `possible_fix_version` (a newer version outside every
+  affected range) changes from `possible_fix_at_mute`. This trigger does not
+  apply to fix-available mutes, because every release would lift them.
+- **Lifted automatically** when the site is no longer affected, unless the
+  exposure was resolved within the 24-hour reopen window.
 - **After 90 days**, the mute goes to `needs_review`: it shows again but
-  doesn't count toward red until someone re-confirms it with a reason (which
-  starts a new 90 days) or lets it lapse.
+  doesn't count toward red until someone confirms it again with a reason
+  (which starts a new 90 days) or unmutes it.
 - A mute covers only that site; installing the plugin on another site is a
   newly affected site.
 
@@ -219,12 +222,12 @@ create-task actions. The Monitoring nav badge also counts red exposures.
 
 ## Phases
 
-1. **Cut the noise** (PR #107): remove the daily report and `SyncVulnerabilities`, and
+1. **Cut the noise** (PR #107, done): remove the daily report and `SyncVulnerabilities`, and
    bulk-close the open auto-generated tasks. This doesn't depend on the rest.
-2. **Data** (`feat/vuln-exposures`): parse plugin `closed*` fields, `vuln_exposures` sync with fix
+2. **Data** (PR #109, done): parse plugin `closed*` fields, `vuln_exposures` sync with fix
    state and overdue tiers, read API (`GET /api/vulns/exposures`, summary
    count for badges).
-3. **UI and mutes:**
+3. **UI and mutes** (3a PR #110, done; 3b `feat/vuln-tab`):
    a. Monitoring layout: Summary and area tabs, shared
       sub-bar/toolbar/empty state, `UptimePanel`, Rules as a section, URL
       redirects. The Summary gets its vulnerability card in 3b.

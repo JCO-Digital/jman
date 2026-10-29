@@ -6,6 +6,7 @@ import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
 import { useIncidentStore } from "./stores/incidents";
+import { useVulnStore } from "./stores/vulns";
 import { useUserStore } from "./stores/user";
 import { useUpdateJobsStore } from "./stores/updateJobs";
 import { useNotificationStore } from "./stores/notifications";
@@ -26,6 +27,7 @@ authStore.initialize();
 
 const monitorStore = useMonitorStore();
 const incidentStore = useIncidentStore();
+const vulnStore = useVulnStore();
 
 let monitorIntervalId: ReturnType<typeof setInterval> | null = null;
 let dataIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -34,13 +36,15 @@ const startIntervals = () => {
 	stopIntervals();
 	if (!authStore.isAuthenticated) return;
 
-	// Initial active incidents fetch
+	// Initial active incidents and overdue vulnerabilities fetch
 	incidentStore.fetchActiveCount();
+	vulnStore.fetchSummary();
 
 	// Monitor history & incidents refresh
 	monitorIntervalId = setInterval(() => {
 		monitorStore.fetchHistory();
 		incidentStore.fetchActiveCount();
+		vulnStore.fetchSummary();
 	}, settingsStore.monitorRefreshInterval * 1000);
 
 	// General data refresh (sites, servers, plugins, etc.)
