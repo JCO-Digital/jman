@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.21.0 (2026-10-29)
+## 7.22.0 (2026-10-29)
+
+#### Features
+
+- api: drop the daily vuln report and auto-generated vuln tasks (e86397f)
+
+## v7.21.0 (2026-10-29)
 
 #### Features
 

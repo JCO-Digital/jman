@@ -10,7 +10,7 @@ import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import MonitorCheckFormModal from "./MonitorCheckFormModal.vue";
 import HeartbeatCheckFormModal from "./HeartbeatCheckFormModal.vue";
-import MonitorRulesModal from "./MonitorRulesModal.vue";
+import PanelToolbar from "./PanelToolbar.vue";
 import type { MonitorCheck } from "../../types";
 
 const props = defineProps<{
@@ -61,7 +61,6 @@ const search = ref("");
 const stateFilter = ref<"" | CheckState>("");
 const formVisible = ref(false);
 const heartbeatFormVisible = ref(false);
-const rulesVisible = ref(false);
 const editing = ref<MonitorCheck | null>(null);
 const busyId = ref<string | null>(null);
 
@@ -290,7 +289,7 @@ async function remove(c: MonitorCheck) {
 
 <template>
 	<div class="card">
-		<div class="checks-toolbar">
+		<PanelToolbar>
 			<input
 				v-model="search"
 				type="search"
@@ -317,15 +316,7 @@ async function remove(c: MonitorCheck) {
 					<AppIcon name="x" size="14" />
 				</button>
 			</span>
-			<span class="spacer"></span>
-			<button
-				class="btn btn-outline btn-sm"
-				title="Start new sites' checks paused, by server or host pattern"
-				@click="rulesVisible = true"
-			>
-				Rules
-			</button>
-			<template v-if="authStore.canEdit">
+			<template v-if="authStore.canEdit" #actions>
 				<button
 					class="btn btn-outline btn-sm"
 					title="A job reports in; alerts when it fails or doesn't"
@@ -340,7 +331,7 @@ async function remove(c: MonitorCheck) {
 					Add Check
 				</button>
 			</template>
-		</div>
+		</PanelToolbar>
 
 		<div
 			v-if="isLoading && !monitorStore.checks.length"
@@ -521,26 +512,10 @@ async function remove(c: MonitorCheck) {
 			@close="heartbeatFormVisible = false"
 			@saved="monitorStore.fetchCheckStatuses()"
 		/>
-		<MonitorRulesModal
-			:visible="rulesVisible"
-			@close="rulesVisible = false"
-		/>
 	</div>
 </template>
 
 <style scoped>
-.checks-toolbar {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 8px;
-	margin-bottom: 16px;
-}
-
-.checks-toolbar .input-field {
-	max-width: 240px;
-}
-
 .site-filter {
 	display: inline-flex;
 	align-items: center;
@@ -550,10 +525,6 @@ async function remove(c: MonitorCheck) {
 	border-radius: 999px;
 	background: var(--bg-body);
 	border: 1px solid var(--border-color);
-}
-
-.spacer {
-	flex: 1;
 }
 
 .check-cell {
