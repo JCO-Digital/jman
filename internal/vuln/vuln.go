@@ -4,50 +4,11 @@ import (
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/cache"
-	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
-	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/verb"
-	"github.com/JCO-Digital/jman/internal/vulnview"
 	"github.com/hashicorp/go-version"
 )
-
-// SendSiteReports sends jman-api's per-site vulnerability summary to Slack:
-// one message per site whose highest plugin CVSS reaches the configured
-// cvssThreshold or whose number of vulnerabilities reaches vulnThreshold.
-// Ignored sites, plugins and vulnerabilities are left out.
-func SendSiteReports() error {
-	matcher, err := db.NewVulnIgnoreMatcher()
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
-	}
-	reports, err := ProcessVulnerabilities(matcher)
-	if err != nil {
-		return err
-	}
-
-	names := map[string]string{}
-	if sites, err := cache.GetFastSiteList(); err == nil {
-		for _, s := range sites {
-			names[s.ID] = s.Name
-		}
-	} else {
-		verb.LogPrintf(verb.Normal, "Warning: failed to load the site list, site names may be missing: %v\n", err)
-	}
-
-	sites := vulnview.SitesOverThreshold(reports, config.Cfg.CVSSThreshold, config.Cfg.VulnThreshold)
-	for _, sv := range sites {
-		name := names[sv.SiteID]
-		if name == "" {
-			name = fmt.Sprintf("Site ID: %s", sv.SiteID)
-		}
-		message := vulnview.FormatSiteReport(fmt.Sprintf("%s (%d Vulnerabilities)", name, sv.TotalVulns), sv.Plugins, false)
-		slack.SendMessage(message, false)
-	}
-	verb.LogPrintf(verb.Verbose, "%d sites match the vulnerability report criteria\n", len(sites))
-	return nil
-}
 
 // IsVersionAffected checks if a specific version is within the range defined by a vulnerability operator.
 func IsVersionAffected(ver string, op models.Operator) bool {

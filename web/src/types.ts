@@ -851,10 +851,6 @@ export interface DashboardSettings {
 	layout: DashboardWidgetType[];
 }
 
-export interface VulnSettings {
-	defaultAssignee: string;
-}
-
 export interface Task {
 	id: number;
 	type: TaskType;

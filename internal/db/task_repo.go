@@ -348,30 +348,3 @@ func DeleteTask(id int) error {
 	_, err := database.Exec("DELETE FROM tasks WHERE id = ?", id)
 	return err
 }
-
-// GetOpenVulnerabilityTask finds an active (non-completed) vulnerability task for a site (by UUID).
-func GetOpenVulnerabilityTask(siteID string) (*models.Task, error) {
-	database := GetAPIDB()
-	if database == nil {
-		return nil, fmt.Errorf("database not initialized")
-	}
-
-	query := `
-	SELECT
-		id, type, status, priority, title, description,
-		site_id, server_id, organization_id, plugin_slug,
-		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
-	FROM tasks
-	WHERE site_id = ? AND status != 'completed' AND status != 'skipped' AND title LIKE 'Security Vulnerabilities%'
-	LIMIT 1`
-
-	t, err := scanTaskRow(database.QueryRow(query, siteID))
-	if err == sql.ErrNoRows {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to find open vuln task: %w", err)
-	}
-	return t, nil
-}

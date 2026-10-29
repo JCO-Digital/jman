@@ -330,19 +330,16 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
 - A **fast tick** (default every 5 minutes) refreshes the SpinupWP servers/sites cache.
 - A **slow tick** (default every 30 minutes) refreshes installed plugins, plugin metadata,
   plugin vulnerabilities, and WordPress core versions/vulnerabilities — the more expensive
-  work, since it fans out over SSH/wp-cli to every managed site. On success, it also syncs
-  vulnerability findings into Tasks (creating/updating a `Task` per affected site — see
-  `docs/TASK_SPECS.md`) and posts a one-off Slack alert (`slackChannel`) for each newly
-  found vulnerability with CVSS >= `cvssThreshold`, listing the sites it is installed on.
-  Each vulnerability is alerted only once (tracked in the `api.db` `vuln_alerts` table);
-  on the first run after upgrading, existing vulnerabilities are recorded without alerting.
-- Once a day, on the first slow tick at or after `vulnReportTime` (server local time),
-  the per-site vulnerability summary is posted to Slack (`slackChannel`). Sites whose
-  report is identical to one already sent are skipped.
+  work, since it fans out over SSH/wp-cli to every managed site. On success, it also posts
+  a one-off Slack alert (`slackChannel`) for each newly found vulnerability with CVSS >=
+  `cvssThreshold`, listing the sites it is installed on. Each vulnerability is alerted only
+  once (tracked in the `api.db` `vuln_alerts` table); on the first run after upgrading,
+  existing vulnerabilities are recorded without alerting.
 
 If you have an external cron or systemd-timer job running `jman fetch` or
-`jman vuln sites --slack` against this host, remove it: `jman-api` does both itself, and
-current `jman` versions no longer have either.
+`jman vuln sites --slack` against this host, remove it: `jman-api` refreshes the data
+itself, and current `jman` versions no longer have either. There is no daily per-site
+vulnerability report any more, and no vulnerability Tasks are created automatically.
 
 Configuration (in `config.toml` or as `JMAN_*` environment variables):
 
@@ -351,7 +348,6 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 | `refreshDisabled`     | `JMAN_REFRESHDISABLED`     | `false` | Disable both refresh schedulers. |
 | `refreshFastInterval` | `JMAN_REFRESHFASTINTERVAL` | `5`     | Fast-tick interval, in minutes.  |
 | `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30`    | Slow-tick interval, in minutes.  |
-| `vulnReportTime`      | `JMAN_VULNREPORTTIME`      | `10:00` | Daily per-site vuln report time. |
 
 ### Agent collection
 
