@@ -332,10 +332,18 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
   plugin vulnerabilities, and WordPress core versions/vulnerabilities — the more expensive
   work, since it fans out over SSH/wp-cli to every managed site. On success, it syncs
   vulnerability exposures (one per site running a vulnerable plugin or core version, see
-  `GET /vulns/exposures` in `docs/API_SPECS.md`) and posts a one-off Slack alert (`slackChannel`) for each newly found vulnerability with CVSS >=
-  `cvssThreshold`, listing the sites it is installed on. Each vulnerability is alerted only
-  once (tracked in the `api.db` `vuln_alerts` table); on the first run after upgrading,
-  existing vulnerabilities are recorded without alerting.
+  `GET /vulns/exposures` in `docs/API_SPECS.md`) and posts one-off Slack alerts
+  (`slackChannel`), for plugins and WordPress core:
+  - a **new vulnerability** with CVSS >= `cvssThreshold`, listing the sites it is on. One
+    that lifts a mute is alerted whatever its score, with the site marked "mute lifted".
+  - **newly affected sites**: an already alerted vulnerability with CVSS >= `cvssThreshold`
+    reaching another site (the plugin was installed or downgraded there), one message per
+    plugin or core version.
+
+  Alerts are tracked per vulnerability (`vuln_alerts`) and per site (`vuln_alert_sites`).
+  A site's records are forgotten a day after it stops being affected, so a later reinstall
+  or downgrade is alerted again. On the first run after upgrading, existing exposures are
+  recorded without alerting.
 
 If you have an external cron or systemd-timer job running `jman fetch` or
 `jman vuln sites --slack` against this host, remove it: `jman-api` refreshes the data

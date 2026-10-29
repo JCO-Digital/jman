@@ -20,6 +20,10 @@ func SnapshotMute(m *models.VulnMute, e models.VulnExposure, now time.Time) {
 	m.Status = models.VulnMuteActive
 }
 
+// MuteLiftNewVuln is the lifted reason of a mute lifted because a new
+// vulnerability applies; the new-vulnerability alert marks those sites.
+const MuteLiftNewVuln = "A new vulnerability applies"
+
 // muteLiftReason says why a mute no longer holds for its exposure, or ""
 // if it still does. Any vulnerability that wasn't there when the mute was
 // made lifts it. A mute made while there was no fix is also lifted when a
@@ -32,7 +36,7 @@ func muteLiftReason(m models.VulnMute, e models.VulnExposure) string {
 	}
 	for _, u := range e.VulnUUIDs {
 		if !known[u] {
-			return "A new vulnerability applies"
+			return MuteLiftNewVuln
 		}
 	}
 	if m.FixStateAtMute != models.VulnNoFix {
