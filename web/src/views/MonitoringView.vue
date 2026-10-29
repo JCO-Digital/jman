@@ -2,21 +2,25 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useIncidentStore } from "../stores/incidents";
+import { useVulnStore } from "../stores/vulns";
 import ViewHeader from "../components/ViewHeader.vue";
 import AppIcon from "../components/AppIcon.vue";
 import MonitoringSummary from "../components/monitoring/MonitoringSummary.vue";
 import UptimePanel from "../components/monitoring/UptimePanel.vue";
 import SecurityPanel from "../components/monitoring/SecurityPanel.vue";
+import VulnerabilitiesPanel from "../components/monitoring/VulnerabilitiesPanel.vue";
 
 const incidentStore = useIncidentStore();
+const vulnStore = useVulnStore();
 const route = useRoute();
 const router = useRouter();
 
-type Tab = "summary" | "uptime" | "security";
+type Tab = "summary" | "uptime" | "security" | "vulnerabilities";
 const tabs: { key: Tab; label: string }[] = [
 	{ key: "summary", label: "Summary" },
 	{ key: "uptime", label: "Uptime" },
 	{ key: "security", label: "Security" },
+	{ key: "vulnerabilities", label: "Vulnerabilities" },
 ];
 
 // Tabs from before the areas had sections, still in bookmarks and old
@@ -53,6 +57,7 @@ watch(
 function tabCount(tab: Tab): number {
 	if (tab === "uptime") return incidentStore.activeByType.uptime ?? 0;
 	if (tab === "security") return incidentStore.activeByType.security ?? 0;
+	if (tab === "vulnerabilities") return vulnStore.summary?.overdue ?? 0;
 	return 0;
 }
 
@@ -65,6 +70,7 @@ const panel = ref<{ refresh: () => unknown } | null>(null);
 
 function refresh() {
 	incidentStore.fetchActiveCount();
+	vulnStore.fetchSummary();
 	panel.value?.refresh();
 }
 </script>
@@ -107,6 +113,10 @@ function refresh() {
 			"
 		/>
 		<SecurityPanel v-else-if="activeTab === 'security'" ref="panel" />
+		<VulnerabilitiesPanel
+			v-else-if="activeTab === 'vulnerabilities'"
+			ref="panel"
+		/>
 	</div>
 </template>
 

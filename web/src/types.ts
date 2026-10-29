@@ -1245,3 +1245,100 @@ export interface SiteUserList {
 	/** "" if the users were never read. */
 	updated_at: string;
 }
+
+// ─── Vulnerability exposures (GET /api/vulns/exposures) ─────────────────────
+
+export type VulnExposureKind = "plugin" | "core";
+export type VulnFixState = "fix_available" | "no_fix";
+export type VulnMuteStatus = "active" | "needs_review" | "lifted";
+
+/** One site running a vulnerable version of a plugin or of core. */
+export interface VulnExposure {
+	id: number;
+	kind: VulnExposureKind;
+	slug: string;
+	site_id: string;
+	version: string;
+	vuln_uuids: string[];
+	max_cvss: number | null;
+	fix_state: VulnFixState;
+	/** Lowest version fixing every vulnerability; fix-available only. */
+	fixed_in?: string;
+	/** No-fix only: a newer version outside every affected range. */
+	possible_fix_version?: string;
+	fix_available_since: string | null;
+	first_seen_at: string;
+	last_seen_at: string;
+	resolved_at: string | null;
+}
+
+/** Accepted risk of one plugin (or core) exposure on one site. */
+export interface VulnMute {
+	id: number;
+	kind: VulnExposureKind;
+	slug: string;
+	site_id: string;
+	reason: string;
+	status: VulnMuteStatus;
+	fix_state_at_mute: VulnFixState;
+	vuln_uuids_at_mute: string[];
+	possible_fix_at_mute?: string;
+	review_at: string;
+	lifted_at: string | null;
+	lifted_reason?: string;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+	/** Set in GET /api/vulns/mutes. */
+	site_name?: string;
+	name?: string;
+	version?: string;
+}
+
+export interface VulnExposureSite extends VulnExposure {
+	site_name: string;
+	due_at: string | null;
+	/** Past due; a muted site never counts toward overdue totals. */
+	overdue: boolean;
+	mute?: VulnMute;
+}
+
+export interface VulnExposureVuln {
+	uuid: string;
+	name: string;
+	cvss: number | null;
+	fixed_in?: string;
+	unfixed: boolean;
+	link?: string;
+}
+
+/** A vulnerable plugin, or core version, with its exposed sites. */
+export interface VulnExposureGroup {
+	kind: VulnExposureKind;
+	slug: string;
+	/** Core groups only. */
+	version?: string;
+	name: string;
+	closed: boolean;
+	closed_reason?: string;
+	closed_date?: string;
+	last_updated?: string;
+	max_cvss: number | null;
+	fix_available_count: number;
+	no_fix_count: number;
+	/** Unmuted overdue sites. */
+	overdue_count: number;
+	muted_count: number;
+	vulnerabilities: VulnExposureVuln[];
+	sites: VulnExposureSite[];
+}
+
+export interface VulnExposureSummary {
+	groups: number;
+	exposures: number;
+	overdue: number;
+	no_fix: number;
+	muted: number;
+	needs_review: number;
+}

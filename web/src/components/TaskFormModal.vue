@@ -9,6 +9,13 @@ import type { Task, TaskType, TaskPriority } from "../types";
 
 const props = defineProps<{
 	task?: Task | null;
+	/** Prefilled fields for a new task. */
+	defaults?: Partial<
+		Pick<
+			Task,
+			"title" | "description" | "priority" | "site_id" | "plugin_slug"
+		>
+	>;
 }>();
 
 const emit = defineEmits<{
@@ -75,6 +82,14 @@ function resetForm() {
 		form.interval = "";
 		form.due_date = "";
 		form.reminder_date = "";
+		const d = props.defaults;
+		if (d) {
+			form.title = d.title ?? "";
+			form.description = d.description ?? "";
+			form.priority = d.priority ?? "medium";
+			form.site_id = d.site_id ?? "";
+			form.plugin_slug = d.plugin_slug ?? "";
+		}
 	}
 }
 

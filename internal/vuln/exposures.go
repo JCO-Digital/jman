@@ -46,7 +46,8 @@ type observedExposure struct {
 //
 // An exposure is only resolved when its kind's data was processed and its
 // vulnerability data is readable, so a failed fetch doesn't resolve (and
-// later reopen) everything.
+// later reopen) everything. Mutes are then lifted or put up for review as
+// the exposures now stand (see planMuteLifecycle).
 func SyncVulnExposures() error {
 	matcher, err := db.NewVulnIgnoreMatcher()
 	if err != nil {
@@ -118,7 +119,7 @@ func SyncVulnExposures() error {
 	}
 	verb.LogPrintf(verb.Verbose, "Vulnerability exposures: %d new, %d updated, %d resolved\n",
 		len(plan.Inserts), len(plan.Updates), len(plan.Resolves))
-	return nil
+	return syncVulnMutes(now)
 }
 
 // exposureDataReadable reports whether the vulnerability data an exposure
@@ -298,10 +299,16 @@ func coreObservations(reports []models.CoreVulnReport, cores map[string]models.S
 	return observed
 }
 
+// vulnUUIDs returns the vulnerabilities' distinct UUIDs, sorted. The core
+// feed reuses a UUID for several vulnerabilities, hence the dedup.
 func vulnUUIDs(vs []models.Vulnerability) []string {
+	seen := make(map[string]bool, len(vs))
 	uuids := make([]string, 0, len(vs))
 	for _, v := range vs {
-		uuids = append(uuids, v.Uuid)
+		if !seen[v.Uuid] {
+			seen[v.Uuid] = true
+			uuids = append(uuids, v.Uuid)
+		}
 	}
 	sort.Strings(uuids)
 	return uuids
@@ -404,7 +411,8 @@ func ExposureDue(e models.VulnExposure, now time.Time) (*time.Time, bool) {
 
 // vulnDisplayName returns the most readable name for a vulnerability (the
 // first non-CVE source name, which says what kind of vulnerability it is)
-// and the first source link.
+// and the first source link. Core vulnerabilities are named by their
+// version only, so one with nothing but CVE sources is named by its CVE.
 func vulnDisplayName(v models.Vulnerability) (name, link string) {
 	name, named := v.Name, false
 	for _, source := range v.Source {
@@ -414,6 +422,9 @@ func vulnDisplayName(v models.Vulnerability) (name, link string) {
 		if link == "" && source.Link != "" {
 			link = source.Link
 		}
+	}
+	if !named && len(v.Source) > 0 && strings.Trim(v.Name, "0123456789.") == "" {
+		name = v.Source[0].Name
 	}
 	return name, link
 }

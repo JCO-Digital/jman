@@ -3,9 +3,11 @@ import { computed, onMounted, ref } from "vue";
 import { useIncidentStore } from "../../stores/incidents";
 import { useMonitorStore } from "../../stores/monitor";
 import { useScanStore } from "../../stores/scan";
+import { useVulnStore } from "../../stores/vulns";
 import { useToastStore } from "../../stores/toast";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import { severityClass } from "./scan";
+import { cvssSeverity, formatCvss } from "./vuln";
 
 /** How many of an area's most urgent items a card lists. */
 const topN = 5;
@@ -13,6 +15,7 @@ const topN = 5;
 const incidentStore = useIncidentStore();
 const monitorStore = useMonitorStore();
 const scanStore = useScanStore();
+const vulnStore = useVulnStore();
 const toastStore = useToastStore();
 
 const loading = ref(false);
@@ -38,6 +41,9 @@ const securityTop = computed(() =>
 		)
 		.slice(0, topN),
 );
+const vulnOverdue = computed(() => vulnStore.summary?.overdue ?? 0);
+// Groups come sorted by the API: overdue first, then by CVSS.
+const vulnTop = computed(() => vulnStore.openGroups.slice(0, topN));
 const runningChecks = computed(
 	() => monitorStore.checks.filter((c) => c.enabled).length,
 );
@@ -51,6 +57,8 @@ async function refresh() {
 			incidentStore.fetchActiveIncidents(1, topN),
 			scanStore.fetchActiveIncidents(),
 			monitorStore.ensureChecks(),
+			vulnStore.fetchOpenGroups(),
+			vulnStore.fetchSummary(),
 			scanStore
 				.fetchScannedSiteCount()
 				.then((n) => (scannedSites.value = n)),
@@ -174,6 +182,79 @@ function since(iso: string): string {
 					class="btn btn-text btn-sm"
 				>
 					Open Security →
+				</RouterLink>
+			</footer>
+		</section>
+
+		<!-- Vulnerabilities -->
+		<section class="card area-card">
+			<header class="area-head">
+				<h2>Vulnerabilities</h2>
+				<span
+					class="area-count"
+					:class="vulnOverdue ? 'count-alert' : 'count-clear'"
+				>
+					{{
+						vulnOverdue ? `${vulnOverdue} overdue` : "None overdue"
+					}}
+				</span>
+			</header>
+			<ul v-if="vulnTop.length" class="area-items">
+				<li
+					v-for="g in vulnTop"
+					:key="`${g.kind}:${g.slug}:${g.version}`"
+				>
+					<RouterLink
+						:to="{
+							path: '/monitoring',
+							query: { tab: 'vulnerabilities' },
+						}"
+						class="item-link"
+					>
+						<span
+							class="status-badge badge-sm"
+							:class="severityClass(cvssSeverity(g.max_cvss))"
+						>
+							{{ formatCvss(g.max_cvss) }}
+						</span>
+						<span class="font-medium">{{ g.name }}</span>
+						<span class="sub-text item-meta">
+							<template v-if="g.overdue_count"
+								>{{ g.overdue_count }} overdue ·
+							</template>
+							{{ g.sites.length }} site{{
+								g.sites.length === 1 ? "" : "s"
+							}}
+						</span>
+					</RouterLink>
+				</li>
+			</ul>
+			<p v-else class="sub-text watching">
+				No site runs a plugin or core version with a known
+				vulnerability.
+			</p>
+			<p
+				v-if="
+					vulnStore.summary &&
+					(vulnStore.summary.muted || vulnStore.summary.needs_review)
+				"
+				class="sub-text watching"
+			>
+				{{ vulnStore.summary.muted }} muted<template
+					v-if="vulnStore.summary.needs_review"
+					>, {{ vulnStore.summary.needs_review }} need
+					review</template
+				>.
+			</p>
+			<footer class="area-foot">
+				<RouterLink
+					:to="{
+						path: '/monitoring',
+						query: { tab: 'vulnerabilities' },
+					}"
+					class="btn btn-text btn-sm"
+				>
+					Open Vulnerabilities →
 				</RouterLink>
 			</footer>
 		</section>

@@ -4,6 +4,7 @@ import { RouterLink, useRoute } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
 import { useIncidentStore } from "../stores/incidents";
+import { useVulnStore } from "../stores/vulns";
 import LoadingSpinner from "./LoadingSpinner.vue";
 import AppIcon from "./AppIcon.vue";
 import packageInfo from "../../package.json";
@@ -12,6 +13,12 @@ const route = useRoute();
 const authStore = useAuthStore();
 const dataStore = useDataStore();
 const incidentStore = useIncidentStore();
+const vulnStore = useVulnStore();
+
+/** Open incidents plus unmuted overdue vulnerability exposures. */
+const monitoringCount = computed(
+	() => incidentStore.activeCount + (vulnStore.summary?.overdue ?? 0),
+);
 
 const emit = defineEmits<{
 	(e: "logout"): void;
@@ -123,13 +130,10 @@ onUnmounted(() => {
 				>
 					{{ link.label }}
 					<span
-						v-if="
-							link.showIncidentBadge &&
-							incidentStore.activeCount > 0
-						"
+						v-if="link.showIncidentBadge && monitoringCount > 0"
 						class="nav-badge"
 					>
-						{{ incidentStore.activeCount }}
+						{{ monitoringCount }}
 					</span>
 				</RouterLink>
 			</div>
@@ -192,10 +196,7 @@ onUnmounted(() => {
 				@click="menuOpen = true"
 			>
 				<AppIcon name="menu" size="22" />
-				<span
-					v-if="incidentStore.activeCount > 0"
-					class="menu-toggle-dot"
-				></span>
+				<span v-if="monitoringCount > 0" class="menu-toggle-dot"></span>
 			</button>
 			<span class="mobile-bar-title">{{ currentSection }}</span>
 			<button
@@ -246,13 +247,10 @@ onUnmounted(() => {
 					>
 						{{ link.label }}
 						<span
-							v-if="
-								link.showIncidentBadge &&
-								incidentStore.activeCount > 0
-							"
+							v-if="link.showIncidentBadge && monitoringCount > 0"
 							class="nav-badge"
 						>
-							{{ incidentStore.activeCount }}
+							{{ monitoringCount }}
 						</span>
 					</RouterLink>
 					<div class="nav-drawer-divider"></div>

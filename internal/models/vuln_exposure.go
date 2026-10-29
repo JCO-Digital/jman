@@ -50,13 +50,58 @@ type VulnExposure struct {
 	ResolvedAt        *time.Time `json:"resolved_at"`
 }
 
+// Vulnerability mute statuses.
+const (
+	VulnMuteActive = "active"
+	// VulnMuteNeedsReview is a mute past its review date: it still hides
+	// the exposure from the overdue count until someone confirms it again
+	// or unmutes it.
+	VulnMuteNeedsReview = "needs_review"
+	VulnMuteLifted      = "lifted"
+)
+
+// VulnMuteReviewDays is how long a mute holds before it needs review.
+const VulnMuteReviewDays = 90
+
+// VulnMute accepts the risk of one plugin (or core) exposure on one site
+// for a while: the exposure doesn't count as overdue. A mute is lifted
+// when a new vulnerability applies, when a no-fix exposure gets a fix or a
+// possibly fixing version, when the exposure is gone, or by hand.
+type VulnMute struct {
+	ID     int64  `json:"id"`
+	Kind   string `json:"kind"`
+	Slug   string `json:"slug"`
+	SiteID string `json:"site_id"`
+	Reason string `json:"reason"`
+	Status string `json:"status"`
+	// The exposure as it was when the mute was made or last confirmed.
+	FixStateAtMute    string     `json:"fix_state_at_mute"`
+	VulnUUIDsAtMute   []string   `json:"vuln_uuids_at_mute"`
+	PossibleFixAtMute string     `json:"possible_fix_at_mute,omitempty"`
+	ReviewAt          time.Time  `json:"review_at"`
+	LiftedAt          *time.Time `json:"lifted_at"`
+	LiftedReason      string     `json:"lifted_reason,omitempty"`
+	AuditFields
+	// Set by the API only.
+	SiteName string `json:"site_name,omitempty"`
+	Name     string `json:"name,omitempty"`
+	Version  string `json:"version,omitempty"`
+}
+
+// Open reports whether the mute still applies (active or needing review).
+func (m VulnMute) Open() bool {
+	return m.Status == VulnMuteActive || m.Status == VulnMuteNeedsReview
+}
+
 // VulnExposureSite is an exposure as the API returns it, with the site's
-// name and its overdue state.
+// name, its overdue state and its open mute, if any. A muted exposure is
+// never counted as overdue.
 type VulnExposureSite struct {
 	VulnExposure
 	SiteName string     `json:"site_name"`
 	DueAt    *time.Time `json:"due_at"`
 	Overdue  bool       `json:"overdue"`
+	Mute     *VulnMute  `json:"mute,omitempty"`
 }
 
 // VulnExposureVuln describes one vulnerability in an exposure group.
@@ -83,19 +128,24 @@ type VulnExposureGroup struct {
 	ClosedReason string `json:"closed_reason,omitempty"`
 	ClosedDate   string `json:"closed_date,omitempty"`
 	// LastUpdated is when the plugin was last updated, per the feed.
-	LastUpdated       *time.Time         `json:"last_updated,omitempty"`
-	MaxCvss           *float64           `json:"max_cvss"`
-	FixAvailableCount int                `json:"fix_available_count"`
-	NoFixCount        int                `json:"no_fix_count"`
-	OverdueCount      int                `json:"overdue_count"`
-	Vulnerabilities   []VulnExposureVuln `json:"vulnerabilities"`
-	Sites             []VulnExposureSite `json:"sites"`
+	LastUpdated       *time.Time `json:"last_updated,omitempty"`
+	MaxCvss           *float64   `json:"max_cvss"`
+	FixAvailableCount int        `json:"fix_available_count"`
+	NoFixCount        int        `json:"no_fix_count"`
+	// OverdueCount counts unmuted overdue sites.
+	OverdueCount    int                `json:"overdue_count"`
+	MutedCount      int                `json:"muted_count"`
+	Vulnerabilities []VulnExposureVuln `json:"vulnerabilities"`
+	Sites           []VulnExposureSite `json:"sites"`
 }
 
-// VulnExposureSummary counts open exposures, for badges.
+// VulnExposureSummary counts open exposures, for badges. Overdue and NoFix
+// leave muted exposures out.
 type VulnExposureSummary struct {
-	Groups    int `json:"groups"`
-	Exposures int `json:"exposures"`
-	Overdue   int `json:"overdue"`
-	NoFix     int `json:"no_fix"`
+	Groups      int `json:"groups"`
+	Exposures   int `json:"exposures"`
+	Overdue     int `json:"overdue"`
+	NoFix       int `json:"no_fix"`
+	Muted       int `json:"muted"`
+	NeedsReview int `json:"needs_review"`
 }
