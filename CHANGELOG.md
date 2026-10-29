@@ -1,6 +1,13 @@
 # Changelog
 
-## 7.22.0 (2026-10-29)
+## 7.23.0 (2026-10-29)
+
+#### Features
+
+- web: uniform Monitoring layout with a summary tab (c2ffdb7)
+- api: track vulnerability exposures per plugin and site (26d2e34)
+
+## v7.22.0 (2026-10-29)
 
 #### Features
 
