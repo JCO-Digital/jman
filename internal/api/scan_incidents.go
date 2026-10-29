@@ -105,11 +105,18 @@ func triageScanFindings(siteID string, alert bool) {
 	}
 
 	for _, id := range order {
+		wasCritical := false
+		if before, err := db.GetIncidentByID(id); err == nil && before != nil {
+			wasCritical = before.Severity == "critical" && !reopened[id]
+		}
 		if err := db.RefreshSecurityIncident(id); err != nil {
 			verb.LogPrintf(verb.Normal, "%v", err)
 		}
 		if alert {
 			alertSecurityIncident(id, added[id], reopened[id])
+			if !wasCritical {
+				alertEscalation(id)
+			}
 		}
 	}
 	// A finding reported again after it was cleared isn't cleared any
@@ -203,6 +210,34 @@ func alertSecurityIncident(id int64, findings []models.StoredScanFinding, reopen
 	}
 }
 
+// alertEscalation alerts about a security incident that became critical
+// because its findings correlate: in Slack and, at the default threshold,
+// PagerDuty.
+func alertEscalation(id int64) {
+	inc, err := db.GetIncidentByID(id)
+	if err != nil || inc == nil || inc.Severity != "critical" || inc.Escalation == "" {
+		return
+	}
+	critical := config.ScanSeverityRank("critical")
+	if rank := config.ScanSlackAlertRank(); rank > 0 && critical >= rank {
+		msg := fmt.Sprintf("🔴 *Security* — incident on *%s* is now critical: %s", inc.Domain, inc.Escalation)
+		if base := strings.TrimSuffix(config.Cfg.WebURL, "/"); base != "" {
+			msg += fmt.Sprintf(" (<%s/monitoring?tab=security&incident=%d|incident #%d>)", base, inc.ID, inc.ID)
+		}
+		if err := slack.SendMessageToChannel(msg, securitySlackChannel(), true); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to send Slack escalation for %s: %v", inc.Domain, err)
+		}
+	}
+	if rank := config.ScanPagerDutyAlertRank(); rank > 0 && critical >= rank && pagerduty.Enabled() && !inc.PDTriggered {
+		summary := fmt.Sprintf("Security incident on %s: %s", inc.Domain, inc.Escalation)
+		if err := pagerduty.TriggerSecurityEvent(inc.ID, inc.Domain, summary); err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to trigger PagerDuty for security incident %d: %v", inc.ID, err)
+		} else if err := db.SetIncidentPDTriggered(inc.ID, true); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
+	}
+}
+
 // maxSlackScanFindings caps how many findings one Slack alert lists.
 const maxSlackScanFindings = 10
 
@@ -227,12 +262,10 @@ func securitySlackMessage(inc *models.Incident, findings []models.StoredScanFind
 }
 
 // securitySlackChannel is where security alerts go: slackSecurityChannel,
-// or the monitor's channel.
+// or slackChannel, where vulnerability reports go too.
 func securitySlackChannel() string {
-	for _, ch := range []string{config.Cfg.SlackSecurityChannel, config.Cfg.SlackMonitorChannel} {
-		if ch != "" {
-			return ch
-		}
+	if config.Cfg.SlackSecurityChannel != "" {
+		return config.Cfg.SlackSecurityChannel
 	}
 	return config.Cfg.SlackChannel
 }

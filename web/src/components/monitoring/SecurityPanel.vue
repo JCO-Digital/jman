@@ -412,6 +412,9 @@ function changeHistoryLimit(limit: number) {
 						</button>
 					</div>
 				</div>
+				<p v-if="inc.escalation" class="escalation">
+					<strong>Critical:</strong> {{ inc.escalation }}
+				</p>
 				<div v-if="expanded.has(inc.id)" class="incident-body">
 					<LoadingSpinner v-if="!incidentFindings[inc.id]" small />
 					<ScanFindingsTable
@@ -672,6 +675,15 @@ function changeHistoryLimit(limit: number) {
 </template>
 
 <style scoped>
+.escalation {
+	margin: var(--space-2) 0 0;
+	padding: var(--space-2) var(--space-3);
+	border-radius: var(--radius-sm);
+	background: var(--error-bg);
+	color: var(--error-text);
+	font-size: var(--font-size-xs);
+}
+
 .section-bar {
 	margin-bottom: var(--space-4);
 }

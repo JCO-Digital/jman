@@ -439,7 +439,7 @@ Each finding also has a `status`: `open`, `closed` (dismissed, or its incident w
 
 Findings of medium severity and above are grouped into one security incident per site (`GET /api/incidents?type=security`). Low findings stay out of incidents; the web UI lists them as informational. jman-api never resolves a security incident itself: a person closes it, which closes its open findings. A finding reported again goes back into the incident it was in, reopening it, and so does a new finding whose file hash was in a closed incident of the same site. Other findings join the site's active security incident, or open a new one. Findings stored before security incidents existed are assigned on startup, without alerts.
 
-New findings alert by severity: `scanSlackSeverity` (default `high`) and above in Slack (`slackSecurityChannel`, or `slackMonitorChannel`), `scanPagerDutySeverity` (default `critical`) and above in PagerDuty, keyed `jman-scan:incident:<id>`. Acknowledging or closing the incident resolves its PagerDuty alert.
+New findings alert by severity: `scanSlackSeverity` (default `high`) and above in Slack (`slackSecurityChannel`, or `slackChannel`), `scanPagerDutySeverity` (default `critical`) and above in PagerDuty, keyed `jman-scan:incident:<id>`. Acknowledging or closing the incident resolves its PagerDuty alert.
 
 #### Triage (execute level)
 
@@ -692,7 +692,7 @@ curl -fsS -X POST -H "Authorization: Bearer $TOKEN" https://jman.example.com/api
 `POST /monitor/checks/{id}/resume` (Protected: `edit`)
 `POST /incidents/{id}/pause` (Protected: `edit`): pauses the incident's check, resolving the incident.
 
-Incidents have a `type`: `uptime`, or `security` for a site's file scan findings (see File Scans), which also carry `site_id` and `severity`. `GET /incidents` returns uptime incidents unless `?type=security` or `?type=all`, and `active_by_type` splits `active_count` by type.
+Incidents have a `type`: `uptime`, or `security` for a site's file scan findings (see File Scans), which also carry `site_id`, `severity` and, when it's critical because its findings correlate, `escalation` (why). `GET /incidents` returns uptime incidents unless `?type=security` or `?type=all`, and `active_by_type` splits `active_count` by type.
 
 Monitor history, statuses and incidents carry the `check_id` they belong to. Every site has a default check (path `/`, expecting HTML), created automatically; a check whose site is gone is marked `orphaned_at` and no longer runs (its active incident is resolved, as when pausing). PagerDuty alerts are keyed by check ID (`jman-monitor:check:<id>`).
 

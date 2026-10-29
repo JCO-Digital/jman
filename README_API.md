@@ -381,7 +381,7 @@ a daily reminder while it lasts and a message when it recovers.
 | `agentContentScanInterval` | `JMAN_AGENTCONTENTSCANINTERVAL` | `1440` | How often a site's scan searches all its PHP files for malicious code, in minutes. Daily or rarer scans run between midnight and 06:00 server time. Negative turns it off. |
 | `scanSlackSeverity`       | `JMAN_SCANSLACKSEVERITY`       | `high`  | Lowest scan finding severity that alerts in Slack (`low`, `medium`, `high`, `critical` or `off`). |
 | `scanPagerDutySeverity`   | `JMAN_SCANPAGERDUTYSEVERITY`   | `critical` | Lowest scan finding severity that pages in PagerDuty, or `off`.                                |
-| `slackSecurityChannel`    | `JMAN_SLACKSECURITYCHANNEL`    |         | Slack channel for security alerts. Defaults to `slackMonitorChannel`.                             |
+| `slackSecurityChannel`    | `JMAN_SLACKSECURITYCHANNEL`    |         | Slack channel for security alerts. Defaults to `slackChannel`, where vulnerability reports go.                             |
 | `scanSnippetRetentionDays` | `JMAN_SCANSNIPPETRETENTIONDAYS` | `90` | Days a scan finding keeps its snippet and detail after it was closed, allowlisted or acknowledged. Negative keeps them. |
 | `trustedAdminDomains`     |                                |         | Email domains (e.g. `["jco.fi"]`) whose administrators added outside jman are medium (no Slack alert) rather than high. |
 | `agentServerStaleMinutes` | `JMAN_AGENTSERVERSTALEMINUTES` | `30`    | Warn when a server's agent hasn't called in for this long.                                        |

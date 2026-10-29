@@ -176,7 +176,8 @@ func ReopenIncident(id int64) error {
 }
 
 // RefreshSecurityIncident recomputes a security incident's severity (its
-// worst open finding's, or worst finding's when none is open) and summary.
+// worst open finding's, or worst finding's when none is open; critical
+// when its open findings correlate) and summary.
 func RefreshSecurityIncident(id int64) error {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
@@ -187,7 +188,11 @@ func RefreshSecurityIncident(id int64) error {
 		return err
 	}
 	severity, summary := summarizeScanFindings(findings)
-	if _, err := dbConn.Exec(`UPDATE incidents SET severity = ?, error_message = ?, updated_at = ? WHERE id = ?`, severity, summary, time.Now(), id); err != nil {
+	escalation := models.CorrelateScanFindings(findings)
+	if escalation != "" {
+		severity = "critical"
+	}
+	if _, err := dbConn.Exec(`UPDATE incidents SET severity = ?, error_message = ?, escalation = ?, updated_at = ? WHERE id = ?`, severity, summary, escalation, time.Now(), id); err != nil {
 		return fmt.Errorf("failed to update security incident %d: %w", id, err)
 	}
 	return nil

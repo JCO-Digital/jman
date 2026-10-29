@@ -464,3 +464,39 @@ func TestScanSnippetRetention(t *testing.T) {
 		t.Fatalf("reported again = %+v", f)
 	}
 }
+
+// An incident becomes critical when its findings correlate, and drops back
+// when one of them is dismissed.
+func TestSecurityIncidentEscalation(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{508, 8, "escalate.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(508)
+	path := "wp-content/uploads/2026/10/x.php"
+	postAgentReport(t, 8, models.AgentReportSite{SiteID: site, Scan: &models.AgentScan{RuleSetVersion: "9", Findings: []models.ScanFinding{
+		{Engine: "builtin", Rule: "uploads-php", Severity: "high", Path: path, SHA256: "aaa"},
+	}}})
+	if active := securityIncidents(t, "active"); len(active) != 1 || active[0].Severity != "high" || active[0].Escalation != "" {
+		t.Fatalf("incident with one finding = %+v", active)
+	}
+
+	postAgentReport(t, 8, models.AgentReportSite{SiteID: site, Scan: &models.AgentScan{RuleSetVersion: "9", Findings: []models.ScanFinding{
+		{Engine: "builtin", Rule: "suspicious-code", Severity: "high", Path: path, SHA256: "aaa", Detail: "exec-request (line 1): system($_GET"},
+	}}})
+	active := securityIncidents(t, "active")
+	if len(active) != 1 || active[0].Severity != "critical" || !strings.Contains(active[0].Escalation, path) {
+		t.Fatalf("incident after the content matched = %+v", active)
+	}
+
+	var code models.StoredScanFinding
+	for _, f := range listScanFindings(t, "?site_id="+site) {
+		if f.Rule == "suspicious-code" {
+			code = f
+		}
+	}
+	if w := postJSON(t, CloseScanFindingsHandler, "POST", "/api/scan/findings/close", map[string]any{"finding_ids": []int64{code.ID}}); w.Code != http.StatusOK {
+		t.Fatalf("dismiss: %d %s", w.Code, w.Body.String())
+	}
+	if active := securityIncidents(t, "active"); len(active) != 1 || active[0].Severity != "high" || active[0].Escalation != "" {
+		t.Fatalf("incident after dismissing = %+v", active)
+	}
+}
