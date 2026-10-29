@@ -1,6 +1,16 @@
 # Changelog
 
-## 7.20.0 (2026-10-28)
+## 7.21.0 (2026-10-29)
+
+#### Features
+
+- escalate security incidents whose findings correlate (83dbd69)
+
+#### Bug Fixes
+
+- api: send security alerts to slackChannel when no security channel is set (828d5a5)
+
+## v7.20.0 (2026-10-28)
 
 #### Features
 
