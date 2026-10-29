@@ -330,8 +330,9 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
 - A **fast tick** (default every 5 minutes) refreshes the SpinupWP servers/sites cache.
 - A **slow tick** (default every 30 minutes) refreshes installed plugins, plugin metadata,
   plugin vulnerabilities, and WordPress core versions/vulnerabilities — the more expensive
-  work, since it fans out over SSH/wp-cli to every managed site. On success, it also posts
-  a one-off Slack alert (`slackChannel`) for each newly found vulnerability with CVSS >=
+  work, since it fans out over SSH/wp-cli to every managed site. On success, it syncs
+  vulnerability exposures (one per site running a vulnerable plugin or core version, see
+  `GET /vulns/exposures` in `docs/API_SPECS.md`) and posts a one-off Slack alert (`slackChannel`) for each newly found vulnerability with CVSS >=
   `cvssThreshold`, listing the sites it is installed on. Each vulnerability is alerted only
   once (tracked in the `api.db` `vuln_alerts` table); on the first run after upgrading,
   existing vulnerabilities are recorded without alerting.
@@ -348,6 +349,10 @@ Configuration (in `config.toml` or as `JMAN_*` environment variables):
 | `refreshDisabled`     | `JMAN_REFRESHDISABLED`     | `false` | Disable both refresh schedulers. |
 | `refreshFastInterval` | `JMAN_REFRESHFASTINTERVAL` | `5`     | Fast-tick interval, in minutes.  |
 | `refreshSlowInterval` | `JMAN_REFRESHSLOWINTERVAL` | `30`    | Slow-tick interval, in minutes.  |
+| `vulnDueCriticalDays` | `JMAN_VULNDUECRITICALDAYS` | `2`     | Days before a fix-available exposure with CVSS ≥ 9 is overdue. |
+| `vulnDueHighDays`     | `JMAN_VULNDUEHIGHDAYS`     | `7`     | Same, for CVSS ≥ 7. |
+| `vulnDueMediumDays`   | `JMAN_VULNDUEMEDIUMDAYS`   | `14`    | Same, for CVSS ≥ 4 and unscored. |
+| `vulnDueLowDays`      | `JMAN_VULNDUELOWDAYS`      | `30`    | Same, for CVSS < 4. |
 
 ### Agent collection
 

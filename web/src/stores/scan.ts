@@ -61,6 +61,12 @@ export const useScanStore = defineStore("scan", () => {
 		historyTotal.value = data.total;
 	}
 
+	/** The number of sites with a file scan. */
+	async function fetchScannedSiteCount(): Promise<number> {
+		const data = await getJSON<{ scans: unknown[] | null }>("/scan/sites");
+		return data.scans?.length ?? 0;
+	}
+
 	async function fetchFindings(q: ScanFindingQuery): Promise<ScanFinding[]> {
 		const params = new URLSearchParams();
 		for (const [k, v] of Object.entries(q)) {
@@ -139,6 +145,7 @@ export const useScanStore = defineStore("scan", () => {
 		pathAcks,
 		fetchActiveIncidents,
 		fetchHistoryIncidents,
+		fetchScannedSiteCount,
 		fetchFindings,
 		closeFindings,
 		redactFindings,

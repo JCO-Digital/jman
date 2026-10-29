@@ -831,6 +831,79 @@ Returns a single plugin report. Note that if active vulnerabilities are found, t
 - A vulnerability whose affected sites are all patched is excluded from the response, so `"patched_sites"` only appears while some site is still affected.
 - In `GET /vulns/core`, a vulnerability is excluded from a core version's report if a backport rule covers that version.
 
+### Vulnerability Exposures
+
+An exposure is one site running a vulnerable version of a plugin (or of WordPress core). jman-api syncs them on the refresh scheduler's slow tick: an exposure opens when a site runs an affected version and resolves when it no longer does (it updated, removed the plugin, or an ignore entry or backport rule now covers it). See `docs/vuln-workflow.md`.
+
+`GET /vulns/exposures` (Protected: `basic`)
+
+Returns exposures grouped by plugin, or by core version.
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `status` | string | `open` (default) or `resolved`. |
+| `days` | int | For `resolved`: how many days back to list, 1–365 (default 30). |
+
+**Response (200 OK)**
+
+```json
+[
+	{
+		"kind": "plugin",
+		"slug": "gigpress",
+		"name": "GigPress",
+		"closed": true,
+		"closed_reason": "security-issue",
+		"closed_date": "2022-12-27",
+		"last_updated": "2021-12-03T19:40:00Z",
+		"max_cvss": 7.2,
+		"fix_available_count": 1,
+		"no_fix_count": 1,
+		"overdue_count": 1,
+		"vulnerabilities": [
+			{ "uuid": "...", "name": "GigPress <= 2.3.10 - SQL Injection", "cvss": 7.2, "fixed_in": "2.3.11", "unfixed": false, "link": "https://..." }
+		],
+		"sites": [
+			{
+				"id": 12,
+				"kind": "plugin",
+				"slug": "gigpress",
+				"site_id": "uuid",
+				"site_name": "example.com",
+				"version": "2.3.10",
+				"vuln_uuids": ["..."],
+				"max_cvss": 7.2,
+				"fix_state": "fix_available",
+				"fixed_in": "2.3.11",
+				"fix_available_since": "datetime",
+				"due_at": "datetime",
+				"overdue": true,
+				"first_seen_at": "datetime",
+				"last_seen_at": "datetime",
+				"resolved_at": null
+			}
+		]
+	}
+]
+```
+
+- Core groups have `kind` `core`, `slug` `wordpress` and the core `version`; there is one group per installed core version.
+- `fix_state` is `fix_available` when every applicable vulnerability has a fixed version (for core: the site has a core update), with the lowest one in `fixed_in`. Otherwise it is `no_fix`, and `possible_fix_version` may name a newer available version outside every affected range, which may or may not fix them.
+- A fix-available exposure is due `vulnDue*Days` after `fix_available_since`, by its highest CVSS (see `README_API.md`), and `overdue` after that. No-fix exposures are never due.
+- `closed*` and `last_updated` come from the plugin's wpvulnerability.net record.
+- Groups with overdue sites come first, then by highest CVSS; overdue sites come first in a group.
+
+`GET /vulns/exposures/summary` (Protected: `basic`)
+
+Counts the open exposures, for badges.
+
+**Response (200 OK)**
+
+```json
+{ "groups": 14, "exposures": 52, "overdue": 3, "no_fix": 9 }
+```
+
 ### Vulnerability Backport Rules
 
 `GET /vuln-backports` (Protected: `basic`)

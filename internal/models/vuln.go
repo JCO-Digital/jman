@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/utils"
 )
@@ -76,12 +77,34 @@ type Vulnerability struct {
 }
 
 type VulnData struct {
-	Name          *string         `json:"name"`
-	Plugin        string          `json:"plugin"`
-	Link          *string         `json:"link"`
-	Latest        *string         `json:"latest"`
+	Name   *string `json:"name"`
+	Plugin string  `json:"plugin"`
+	Link   *string `json:"link"`
+	// Latest is the Unix timestamp of the plugin's last update, as a string;
+	// it is not a version.
+	Latest *string `json:"latest"`
+	// Closed is set when the plugin was closed on wordpress.org, with the
+	// reason (e.g. "security-issue") and date ("2006-01-02") it was closed.
+	Closed        FeedFlag        `json:"closed"`
+	ClosedReason  *string         `json:"closed_reason,omitempty"`
+	ClosedDate    *string         `json:"closed_date,omitempty"`
 	Vulnerability []Vulnerability `json:"vulnerability"`
 	Suppressed    bool            `json:"suppressed"`
+}
+
+// FeedFlag is a boolean the wpvulnerability.net feed sends as a number
+// (1), a string ("1") or not at all. Anything but 1/"1"/true is false.
+type FeedFlag bool
+
+// UnmarshalJSON accepts the number, string and boolean forms of the flag.
+func (f *FeedFlag) UnmarshalJSON(data []byte) error {
+	switch strings.Trim(string(data), `"`) {
+	case "1", "true":
+		*f = true
+	default:
+		*f = false
+	}
+	return nil
 }
 
 type VulnResponse struct {

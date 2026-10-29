@@ -64,6 +64,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	mux.Handle("GET /api/vulns", basic(VulnsHandler))
 	mux.Handle("GET /api/vulns/core", basic(CoreVulnsHandler))
+	mux.Handle("GET /api/vulns/exposures", basic(ListVulnExposuresHandler))
+	mux.Handle("GET /api/vulns/exposures/summary", basic(VulnExposureSummaryHandler))
 
 	// --- Agent routes (X-Agent-Token auth, not JWT) ---
 	mux.Handle("GET /api/agent/manifest", AgentAuthMiddleware(AgentManifestHandler))

@@ -165,7 +165,11 @@ const startTimeLabel = computed(() => {
 					v-if="effectiveSiteId"
 					:to="{
 						path: '/monitoring',
-						query: { tab: 'checks', site: effectiveSiteId },
+						query: {
+							tab: 'uptime',
+							section: 'checks',
+							site: effectiveSiteId,
+						},
 					}"
 					class="btn btn-text font-sm"
 					title="Manage this site's monitor checks"
