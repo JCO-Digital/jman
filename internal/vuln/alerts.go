@@ -164,17 +164,7 @@ func collectNewVulnAlerts(reports []models.VulnReport, siteMeta map[string]model
 // formatNewVulnAlert renders a vulnerability-centric alert: the vulnerability,
 // its plugin and CVSS, and the sites it is installed on.
 func formatNewVulnAlert(a newVulnAlert) string {
-	// Prefer the first non-CVE source name, as formatReport does.
-	vName, named := a.Vuln.Name, false
-	link := ""
-	for _, source := range a.Vuln.Source {
-		if !named && !strings.HasPrefix(source.Name, "CVE") {
-			vName, named = source.Name, true
-		}
-		if link == "" && source.Link != "" {
-			link = source.Link
-		}
-	}
+	vName, link := vulnDisplayName(a.Vuln)
 	pluginName := a.PluginName
 	if pluginName == "" {
 		pluginName = a.PluginSlug

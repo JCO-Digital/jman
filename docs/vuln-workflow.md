@@ -75,8 +75,9 @@ next to the label ("closed, last updated 2021").
 
 A fix-available exposure turns red when `fix_available_since` is older than N
 days, where N depends on the highest CVSS among its vulnerabilities.
-Unscored vulnerabilities use the medium tier. Proposed defaults, as config
-keys:
+Unscored vulnerabilities use the medium tier. Defaults, set with
+`vulnDueCriticalDays`, `vulnDueHighDays`, `vulnDueMediumDays` and
+`vulnDueLowDays`:
 
 | CVSS                 | N       |
 | -------------------- | ------- |
@@ -218,9 +219,9 @@ create-task actions. The Monitoring nav badge also counts red exposures.
 
 ## Phases
 
-1. **Cut the noise:** remove the daily report and `SyncVulnerabilities`, and
+1. **Cut the noise** (PR #107): remove the daily report and `SyncVulnerabilities`, and
    bulk-close the open auto-generated tasks. This doesn't depend on the rest.
-2. **Data:** parse plugin `closed*` fields, `vuln_exposures` sync with fix
+2. **Data** (`feat/vuln-exposures`): parse plugin `closed*` fields, `vuln_exposures` sync with fix
    state and overdue tiers, read API (`GET /api/vulns/exposures`, summary
    count for badges).
 3. **UI and mutes:**
@@ -234,6 +235,7 @@ create-task actions. The Monitoring nav badge also counts red exposures.
 
 ## Open questions
 
-- The CVSS tiers and N values above are proposals.
+- The CVSS tier defaults above are a first guess; tune them once real data
+  is in.
 - Is the red count combined with the active incident count in one Monitoring
   nav badge, or shown as a second badge?
