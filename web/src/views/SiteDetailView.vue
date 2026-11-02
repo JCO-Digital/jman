@@ -23,9 +23,16 @@ import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
 import SiteUsersCard from "../components/SiteUsersCard.vue";
-import CoreVulnerabilityList from "../components/CoreVulnerabilityList.vue";
+import VulnerabilityList from "../components/VulnerabilityList.vue";
 import BackportRuleModal from "../components/BackportRuleModal.vue";
-import { type CoreVulnItem, cvssOf, maxCoreVulnCvss } from "../utils/coreVuln";
+import {
+	type VulnListItem,
+	compareVersions,
+	cvssOf,
+	fixedInAll,
+	maxVulnCvss,
+	toVulnListItem,
+} from "../utils/vulnList";
 import {
 	availablePluginUpdate,
 	formatBytes,
@@ -454,13 +461,88 @@ const sitePlugins = computed(() => {
 			(v) => v.slug === plugin.name,
 		);
 
+		const vulnItems = vulns.map(toVulnListItem);
 		return {
 			...plugin,
 			vulnerabilities: vulns,
+			vulnItems,
 			suppressed: vulns.length > 0 && vulns.every((v) => v.suppressed),
 		};
 	});
 });
+
+const vulnerablePlugins = computed(() =>
+	sitePlugins.value.filter((p) => p.vulnerabilities.length > 0),
+);
+
+// Plugins whose vulnerabilities are shown in a row under theirs.
+const openVulnRows = ref(new Set<string>());
+const allVulnRowsOpen = computed(
+	() =>
+		vulnerablePlugins.value.length > 0 &&
+		vulnerablePlugins.value.every((p) => openVulnRows.value.has(p.name)),
+);
+function toggleVulnRow(name: string) {
+	const open = new Set(openVulnRows.value);
+	if (!open.delete(name)) open.add(name);
+	openVulnRows.value = open;
+}
+// The whole Vulns cell toggles (the badge alone is a small target); the
+// rest of the row still opens the plugin page. A click on the button inside
+// (or Enter on it) bubbles here too.
+function onVulnCellClick(
+	event: MouseEvent,
+	plugin: { name: string; vulnerabilities: unknown[] },
+) {
+	if (!plugin.vulnerabilities.length) return;
+	event.stopPropagation();
+	toggleVulnRow(plugin.name);
+}
+function toggleAllVulnRows() {
+	openVulnRows.value = allVulnRowsOpen.value
+		? new Set()
+		: new Set(vulnerablePlugins.value.map((p) => p.name));
+}
+
+/** Whether updating fixes a plugin's vulnerabilities, in one line. */
+function pluginFixNote(plugin: {
+	version: string;
+	update: string;
+	vulnItems: VulnListItem[];
+}): string {
+	const items = plugin.vulnItems;
+	const n = items.length;
+	const fixedIn = fixedInAll(items);
+	const noFix = items.filter((i) => i.unfixed || !i.fixedIn).length;
+	// What fixes the rest, after an update that fixes some.
+	const rest = fixedIn
+		? `all are fixed in ${fixedIn}`
+		: `${noFix} ${noFix === 1 ? "has" : "have"} no known fixed version`;
+	const update = availablePluginUpdate(plugin);
+	if (update) {
+		const fixed = items.filter(
+			(i) =>
+				!i.unfixed &&
+				i.fixedIn &&
+				compareVersions(update, i.fixedIn) >= 0,
+		).length;
+		if (fixed === n) {
+			return `Updating to ${update} fixes ${n === 1 ? "it" : `all ${n}`}.`;
+		}
+		if (fixed > 0) {
+			return `Updating to ${update} fixes ${fixed} of ${n}; ${rest}.`;
+		}
+		return fixedIn
+			? `Fixed in ${fixedIn}; the available update (${update}) doesn't fix ${n === 1 ? "it" : "them"}.`
+			: `The available update (${update}) doesn't fix ${n === 1 ? "it" : "them"}; ${rest}.`;
+	}
+	if (fixedIn) {
+		return `Fixed in ${fixedIn}; no update is available on this site yet.`;
+	}
+	return noFix === n
+		? `No fixed version is known${n === 1 ? "" : " for any of them"}.`
+		: `${noFix} of ${n} have no known fixed version.`;
+}
 
 // Vulnerabilities in the site's WordPress core version. Suppressed ones (the
 // site, its server or the vulnerability is ignored) stay listed but marked.
@@ -474,7 +556,7 @@ const coreVulnsSuppressed = computed(
 		coreVulns.value.length > 0 &&
 		coreVulns.value.every((v) => v.suppressed),
 );
-const coreVulnItems = computed<CoreVulnItem[]>(() =>
+const coreVulnItems = computed<VulnListItem[]>(() =>
 	coreVulns.value.map((v) => ({
 		uuid: v.uuid,
 		name: v.name,
@@ -483,15 +565,25 @@ const coreVulnItems = computed<CoreVulnItem[]>(() =>
 		suppressed: v.suppressed,
 	})),
 );
-const coreVulnsMaxCvss = computed(() => maxCoreVulnCvss(coreVulnItems.value));
+const coreVulnsMaxCvss = computed(() => maxVulnCvss(coreVulnItems.value));
 
-// "Mark patched…" on a core vulnerability: a backport rule for the site's
-// installed version.
-const coreBackportTarget = ref<CoreVulnItem | null>(null);
-const showCoreBackportModal = ref(false);
-function openCoreBackport(item: CoreVulnItem) {
-	coreBackportTarget.value = item;
-	showCoreBackportModal.value = true;
+// "Mark patched…" on a core or plugin vulnerability: a backport rule for
+// the version installed on this site.
+const backportTarget = ref<{
+	type: "core" | "plugin";
+	slug: string;
+	item: VulnListItem;
+	version: string;
+} | null>(null);
+const showBackportModal = ref(false);
+function openBackport(
+	type: "core" | "plugin",
+	slug: string,
+	item: VulnListItem,
+	version: string,
+) {
+	backportTarget.value = { type, slug, item, version };
+	showBackportModal.value = true;
 }
 
 /** Where the site's plugin and core data comes from, and how fresh it is. */
@@ -1246,10 +1338,18 @@ const unlinkOrganization = async () => {
 				</div>
 
 				<div v-if="coreVulnItems.length" class="mt-4">
-					<CoreVulnerabilityList
+					<VulnerabilityList
 						:items="coreVulnItems"
 						:can-mark-patched="authStore.canEdit"
-						@mark-patched="openCoreBackport"
+						@mark-patched="
+							(item: VulnListItem) =>
+								openBackport(
+									'core',
+									'',
+									item,
+									site!.wp_core!.version,
+								)
+						"
 					/>
 				</div>
 			</section>
@@ -1257,42 +1357,66 @@ const unlinkOrganization = async () => {
 			<section class="card mt-4">
 				<div class="card-header">
 					<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
-					<div v-if="canManagePlugins" class="plugin-card-actions">
+					<div
+						v-if="canManagePlugins || vulnerablePlugins.length"
+						class="plugin-card-actions"
+					>
 						<button
-							class="btn btn-outline btn-sm"
-							:disabled="pluginUpdatesStore.isChecking(site.id)"
-							@click="checkPluginUpdates"
+							v-if="vulnerablePlugins.length"
+							class="btn btn-text btn-sm"
+							@click="toggleAllVulnRows"
 						>
-							<span
-								v-if="pluginUpdatesStore.isChecking(site.id)"
-								class="spinner spinner-small"
-							></span>
 							{{
-								pluginUpdatesStore.isChecking(site.id)
-									? "Checking…"
-									: "Check for updates"
+								allVulnRowsOpen
+									? "Hide vulnerabilities"
+									: `Show vulnerabilities (${vulnerablePlugins.length} ${vulnerablePlugins.length === 1 ? "plugin" : "plugins"})`
 							}}
 						</button>
-						<button
-							v-if="vulnerableUpdatable.length"
-							class="btn btn-outline btn-sm"
-							@click="updatePlugins(vulnerableUpdatable, true)"
-						>
-							Update vulnerable ({{ vulnerableUpdatable.length }})
-						</button>
-						<button
-							v-if="updatablePlugins.length"
-							class="btn btn-primary btn-sm"
-							@click="updatePlugins(updatablePlugins, false)"
-						>
-							Update all ({{ updatablePlugins.length }})
-						</button>
-						<button
-							class="btn btn-primary btn-sm"
-							@click="showInstallModal = true"
-						>
-							Install plugin
-						</button>
+						<template v-if="canManagePlugins">
+							<button
+								class="btn btn-outline btn-sm"
+								:disabled="
+									pluginUpdatesStore.isChecking(site.id)
+								"
+								@click="checkPluginUpdates"
+							>
+								<span
+									v-if="
+										pluginUpdatesStore.isChecking(site.id)
+									"
+									class="spinner spinner-small"
+								></span>
+								{{
+									pluginUpdatesStore.isChecking(site.id)
+										? "Checking…"
+										: "Check for updates"
+								}}
+							</button>
+							<button
+								v-if="vulnerableUpdatable.length"
+								class="btn btn-outline btn-sm"
+								@click="
+									updatePlugins(vulnerableUpdatable, true)
+								"
+							>
+								Update vulnerable ({{
+									vulnerableUpdatable.length
+								}})
+							</button>
+							<button
+								v-if="updatablePlugins.length"
+								class="btn btn-primary btn-sm"
+								@click="updatePlugins(updatablePlugins, false)"
+							>
+								Update all ({{ updatablePlugins.length }})
+							</button>
+							<button
+								class="btn btn-primary btn-sm"
+								@click="showInstallModal = true"
+							>
+								Install plugin
+							</button>
+						</template>
 					</div>
 				</div>
 				<div class="table-container">
@@ -1338,77 +1462,139 @@ const unlinkOrganization = async () => {
 									No plugins found.
 								</td>
 							</tr>
-							<tr
+							<template
 								v-for="plugin in sitePlugins"
 								:key="plugin.name"
-								class="clickable-row"
-								@click="goToPlugin(plugin.name)"
 							>
-								<td class="font-medium">
-									{{ plugin.name }}
-									<span
-										v-if="
-											dataStore.isPluginLocked(
-												site.id,
-												plugin.name,
-											)
-										"
-										class="status-badge badge-sm warning"
-										:title="
-											siteLocks.plugins.get(plugin.name)
-												?.comment ||
-											siteLocks.site?.comment ||
-											'Update-locked: fix releases only'
-										"
+								<tr
+									class="clickable-row"
+									@click="goToPlugin(plugin.name)"
+								>
+									<td class="font-medium">
+										{{ plugin.name }}
+										<span
+											v-if="
+												dataStore.isPluginLocked(
+													site.id,
+													plugin.name,
+												)
+											"
+											class="status-badge badge-sm warning"
+											:title="
+												siteLocks.plugins.get(
+													plugin.name,
+												)?.comment ||
+												siteLocks.site?.comment ||
+												'Update-locked: fix releases only'
+											"
+										>
+											<AppIcon name="lock" size="11" />
+											Locked
+										</span>
+									</td>
+									<td class="text-muted">
+										{{ plugin.version }}
+										<span
+											v-if="availablePluginUpdate(plugin)"
+											class="plugin-update-available"
+											:title="`Update available: ${availablePluginUpdate(plugin)}`"
+										>
+											→
+											{{ availablePluginUpdate(plugin) }}
+										</span>
+									</td>
+									<td>
+										<span
+											:class="[
+												'status-badge',
+												'badge-sm',
+												plugin.status.toLowerCase(),
+											]"
+										>
+											{{ plugin.status }}
+										</span>
+									</td>
+									<td
+										:class="{
+											'vuln-toggle-cell':
+												plugin.vulnerabilities.length >
+												0,
+										}"
+										@click="onVulnCellClick($event, plugin)"
 									>
-										<AppIcon name="lock" size="11" />
-										Locked
-									</span>
-								</td>
-								<td class="text-muted">
-									{{ plugin.version }}
-									<span
-										v-if="availablePluginUpdate(plugin)"
-										class="plugin-update-available"
-										:title="`Update available: ${availablePluginUpdate(plugin)}`"
-									>
-										→ {{ availablePluginUpdate(plugin) }}
-									</span>
-								</td>
-								<td>
-									<span
-										:class="[
-											'status-badge',
-											'badge-sm',
-											plugin.status.toLowerCase(),
-										]"
-									>
-										{{ plugin.status }}
-									</span>
-								</td>
-								<td>
-									<span
-										v-if="plugin.vulnerabilities.length > 0"
-										class="status-badge badge-sm"
-										:class="
-											plugin.suppressed
-												? 'warning'
-												: 'error'
-										"
-										:title="`${plugin.vulnerabilities.length} vulnerabilities detected${plugin.suppressed ? ' (Suppressed)' : ''}`"
-									>
-										{{ plugin.vulnerabilities.length }}
-									</span>
-									<span v-else class="text-muted">—</span>
-								</td>
-								<td v-if="canManagePlugins">
-									<PluginRowActions
-										:site-id="site.id"
-										:site-name="site.domain"
-										:plugin="plugin"
-									/>
-								</td>
-							</tr>
+										<button
+											v-if="
+												plugin.vulnerabilities.length >
+												0
+											"
+											class="vuln-toggle"
+											:class="{
+												open: openVulnRows.has(
+													plugin.name,
+												),
+											}"
+											:aria-expanded="
+												openVulnRows.has(plugin.name)
+											"
+											:title="`${plugin.vulnerabilities.length} vulnerabilities${plugin.suppressed ? ' (suppressed)' : ''}: show them here`"
+										>
+											<span
+												class="status-badge badge-sm"
+												:class="
+													plugin.suppressed
+														? 'warning'
+														: 'error'
+												"
+											>
+												{{
+													plugin.vulnerabilities
+														.length
+												}}
+											</span>
+											<AppIcon
+												name="chevron-right"
+												size="12"
+												class="chevron"
+											/>
+										</button>
+										<span v-else class="text-muted">—</span>
+									</td>
+									<td v-if="canManagePlugins">
+										<PluginRowActions
+											:site-id="site.id"
+											:site-name="site.domain"
+											:plugin="plugin"
+										/>
+									</td>
+								</tr>
+								<tr
+									v-if="openVulnRows.has(plugin.name)"
+									class="vuln-detail-row"
+								>
+									<td :colspan="canManagePlugins ? 5 : 4">
+										<div class="vuln-detail">
+											<p class="vuln-detail-note">
+												{{ pluginFixNote(plugin) }}
+											</p>
+											<VulnerabilityList
+												:items="plugin.vulnItems"
+												:can-mark-patched="
+													authStore.canEdit
+												"
+												@mark-patched="
+													(item: VulnListItem) =>
+														openBackport(
+															'plugin',
+															plugin.name,
+															item,
+															plugin.version,
+														)
+												"
+											/>
+										</div>
+									</td>
+								</tr>
+							</template>
 						</tbody>
 					</table>
 				</div>
@@ -1551,13 +1737,13 @@ const unlinkOrganization = async () => {
 		/>
 
 		<BackportRuleModal
-			v-if="coreBackportTarget && site?.wp_core"
-			v-model="showCoreBackportModal"
-			type="core"
-			slug=""
-			:vuln-uuid="coreBackportTarget.uuid"
-			:vuln-name="coreBackportTarget.name"
-			:version="site.wp_core.version"
+			v-if="backportTarget"
+			v-model="showBackportModal"
+			:type="backportTarget.type"
+			:slug="backportTarget.slug"
+			:vuln-uuid="backportTarget.item.uuid"
+			:vuln-name="backportTarget.item.name"
+			:version="backportTarget.version"
 		/>
 		<UpdateLockModal
 			v-if="site"
