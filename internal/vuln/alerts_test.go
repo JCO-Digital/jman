@@ -43,7 +43,9 @@ func TestPlanVulnAlerts(t *testing.T) {
 		{Kind: "plugin", Slug: "zeta", SiteID: "s2", Version: "1.1", VulnUUIDs: []string{"known-high", "new-high"},
 			FixState: models.VulnNoFix},
 		{Kind: "plugin", Slug: "zeta", SiteID: "s3", Version: "1.0", VulnUUIDs: []string{"known-low", "lifting"}},
-		{Kind: "core", Slug: "wordpress", SiteID: "s1", Version: "6.4.1", VulnUUIDs: []string{"unknown-core"}},
+		{Kind: "core", Slug: "wordpress", SiteID: "s1", Version: "6.4.1", VulnUUIDs: []string{"unknown-core", "new-low"},
+			FixState: models.VulnFixAvailable, FixedIn: "6.4.7"},
+		{Kind: "core", Slug: "wordpress", SiteID: "s2", Version: "6.4.1", VulnUUIDs: []string{"unknown-core"}},
 	}
 	alertedUUIDs := map[string]bool{"known-high": true, "known-low": true, "done": true}
 	alertedSites := map[db.VulnAlertSite]bool{{Kind: "plugin", Slug: "zeta", SiteID: "s1", UUID: "done"}: true}
@@ -81,11 +83,76 @@ func TestPlanVulnAlerts(t *testing.T) {
 	for _, r := range plan.Silent {
 		silent[r.SiteID+"/"+r.UUID] = true
 	}
-	// new-low (below threshold), known-low on Charlie (below threshold) and
-	// the core vulnerability with no data (no score).
-	want := map[string]bool{"s1/new-low": true, "s3/known-low": true, "s1/unknown-core": true}
+	// new-low (below threshold) and known-low on Charlie (below threshold).
+	// Core is alerted whatever the score.
+	want := map[string]bool{"s1/new-low": true, "s3/known-low": true}
 	if !reflect.DeepEqual(silent, want) {
 		t.Errorf("silent = %v, want %v", silent, want)
+	}
+
+	// One core alert for 6.4.1: both vulnerabilities (one with no data, one
+	// below the threshold) once, both sites once, a record per site and
+	// vulnerability.
+	if len(plan.NewCore) != 1 {
+		t.Fatalf("core alerts = %+v, want one", plan.NewCore)
+	}
+	c := plan.NewCore[0]
+	var coreIDs, coreSites []string
+	for _, v := range c.Vulns {
+		coreIDs = append(coreIDs, v.Uuid)
+	}
+	for _, site := range c.Sites {
+		coreSites = append(coreSites, site.Name)
+	}
+	if c.Version != "6.4.1" || !reflect.DeepEqual(coreIDs, []string{"unknown-core", "new-low"}) ||
+		!reflect.DeepEqual(coreSites, []string{"Alpha", "Bravo"}) || len(c.Records) != 3 {
+		t.Errorf("core alert = %+v", c)
+	}
+	if c.Sites[1].FixedIn != "6.4.7" {
+		t.Errorf("Bravo's fix = %+v, want 6.4.7", c.Sites[1])
+	}
+}
+
+func TestFormatNewCoreAlert(t *testing.T) {
+	core := func(id, score, name, link string) models.Vulnerability {
+		v := testVuln(id, score)
+		if score == "" {
+			v.Impact = nil
+		}
+		v.Name = name
+		v.Source = []models.Source{{Id: id, Name: name, Link: link}}
+		return v
+	}
+	var vulns []models.Vulnerability
+	vulns = append(vulns,
+		core("a", "", "WordPress Core 6.6.0 - 7.1.3 - Authenticated (Contributor+) Stored Cross-Site Scripting via Blocks", "https://example.com/a"),
+		core("b", "8.1", "CVE-2026-1", "https://example.com/b"),
+		core("c", "", "WordPress Core 4.9.0 - 7.1.3 - Unauthenticated Information Exposure via Customizer", "https://example.com/c"),
+	)
+	for _, id := range []string{"d", "e", "f", "g"} {
+		vulns = append(vulns, core(id, "", "WordPress Core 6.0 - 7.1.3 - Authenticated (Editor+) Thing "+id, ""))
+	}
+	msg := utils.StripANSI(formatNewCoreAlert(newCoreAlert{
+		Version: "6.9.10",
+		Vulns:   vulns,
+		Sites: []newCoreSite{
+			{Name: "Alpha", FixState: models.VulnFixAvailable, FixedIn: "6.9.11"},
+			{Name: "Bravo", FixState: models.VulnNoFix, MuteLifted: true},
+		},
+	}))
+	for _, want := range []string{
+		"New core vulnerabilities: 7 new vulnerabilities (max CVSS 8.1, 1 unauthenticated)",
+		"Core: WordPress 6.9.10",
+		// Scored first, then unauthenticated, then by role.
+		"- CVSS 8.1 CVE-2026-1 https://example.com/b\n    - Unauthenticated: Information Exposure via Customizer https://example.com/c\n    - Contributor+: Stored Cross-Site Scripting via Blocks https://example.com/a",
+		"- …and 2 more",
+		"Installed on 2 sites:",
+		"- Alpha: update to 6.9.11\n",
+		"- Bravo: no update available mute lifted",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message missing %q:\n%s", want, msg)
+		}
 	}
 }
 

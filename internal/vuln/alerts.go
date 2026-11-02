@@ -2,6 +2,7 @@ package vuln
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -59,8 +60,28 @@ type newSite struct {
 	FixedIn  string
 }
 
+// newCoreAlert is a WordPress core version with vulnerabilities that haven't
+// been alerted before, and the sites running it. Core is alerted per version
+// whatever the scores: the core feed scores few of its vulnerabilities, and
+// one update fixes them all.
+type newCoreAlert struct {
+	Version string
+	Vulns   []models.Vulnerability
+	Sites   []newCoreSite
+	Records []db.VulnAlertSite
+}
+
+type newCoreSite struct {
+	Name     string
+	FixState string
+	FixedIn  string
+	// MuteLifted marks a site whose mute these vulnerabilities lifted.
+	MuteLifted bool
+}
+
 type vulnAlertPlan struct {
 	New      []newVulnAlert
+	NewCore  []newCoreAlert
 	NewSites []newSitesAlert
 	// Silent are recorded without an alert: below cvssThreshold.
 	Silent []db.VulnAlertSite
@@ -69,9 +90,12 @@ type vulnAlertPlan struct {
 // AlertNewVulnerabilities sends the one-off Slack alerts for the open
 // vulnerability exposures (see SyncVulnExposures, which runs first):
 //
-//   - a vulnerability never alerted before, at or above cvssThreshold,
-//     listing its sites; one that lifted a mute is alerted whatever its
-//     score, and the site is marked;
+//   - a plugin vulnerability never alerted before, at or above
+//     cvssThreshold, listing its sites; one that lifted a mute is alerted
+//     whatever its score, and the site is marked;
+//   - a WordPress core version with vulnerabilities never alerted before,
+//     whatever their scores, one message per version listing the most
+//     serious and the sites running it;
 //   - an alerted vulnerability on a site it wasn't on before, at or above
 //     cvssThreshold, one message per plugin (or core version) listing the
 //     newly affected sites.
@@ -127,6 +151,23 @@ func AlertNewVulnerabilities() error {
 		}
 		if err := db.RecordVulnAlert(a.Vuln.Uuid, a.PluginSlug, a.Cvss); err != nil {
 			verb.LogPrintf(verb.Normal, "Warning: failed to record vuln alert %s: %v\n", a.Vuln.Uuid, err)
+		}
+		if err := db.RecordVulnAlertSites(a.Records); err != nil {
+			verb.LogPrintf(verb.Normal, "Warning: %v\n", err)
+		}
+	}
+	for _, a := range plan.NewCore {
+		message := formatNewCoreAlert(a)
+		fmt.Println(message)
+		if err := slack.SendMessage(message, true); err != nil {
+			verb.LogPrintf(verb.Normal, "Warning: failed to send new core vulnerability alert for WordPress %s: %v\n", a.Version, err)
+			continue // retried on the next scan
+		}
+		for _, v := range a.Vulns {
+			score, _ := cvssScore(v)
+			if err := db.RecordVulnAlert(v.Uuid, models.CoreExposureSlug, score); err != nil {
+				verb.LogPrintf(verb.Normal, "Warning: failed to record vuln alert %s: %v\n", v.Uuid, err)
+			}
 		}
 		if err := db.RecordVulnAlertSites(a.Records); err != nil {
 			verb.LogPrintf(verb.Normal, "Warning: %v\n", err)
@@ -254,6 +295,9 @@ func planVulnAlerts(exposures []models.VulnExposure, alertedUUIDs map[string]boo
 
 	newByVuln := map[string]*newVulnAlert{}
 	var newOrder []string
+	newCore := map[string]*newCoreAlert{}
+	newCoreVulns := map[string]map[string]bool{} // version -> UUIDs listed
+	var newCoreOrder []string
 	newSitesByGroup := map[groupKey]*newSitesAlert{}
 	var newSitesOrder []groupKey
 
@@ -262,6 +306,7 @@ func planVulnAlerts(exposures []models.VulnExposure, alertedUUIDs map[string]boo
 		name := siteName(siteNames, e.SiteID)
 		var known []db.VulnAlertSite
 		var knownCvss *float64
+		coreSiteAdded := false
 		for _, u := range e.VulnUUIDs {
 			rec := db.VulnAlertSite{Kind: e.Kind, Slug: e.Slug, SiteID: e.SiteID, UUID: u}
 			if alertedSites[rec] {
@@ -272,6 +317,30 @@ func planVulnAlerts(exposures []models.VulnExposure, alertedUUIDs map[string]boo
 				if score, ok := cvssScore(d.Vulns[u]); ok && (knownCvss == nil || score > *knownCvss) {
 					knownCvss = &score
 				}
+				continue
+			}
+			if e.Kind == models.VulnExposureCore {
+				c, ok := newCore[e.Version]
+				if !ok {
+					c = &newCoreAlert{Version: e.Version}
+					newCore[e.Version] = c
+					newCoreVulns[e.Version] = map[string]bool{}
+					newCoreOrder = append(newCoreOrder, e.Version)
+				}
+				if !newCoreVulns[e.Version][u] {
+					newCoreVulns[e.Version][u] = true
+					v, found := d.Vulns[u]
+					if !found {
+						v = models.Vulnerability{Uuid: u, Name: u}
+					}
+					c.Vulns = append(c.Vulns, v)
+				}
+				if !coreSiteAdded {
+					coreSiteAdded = true
+					c.Sites = append(c.Sites, newCoreSite{Name: name, FixState: e.FixState, FixedIn: e.FixedIn,
+						MuteLifted: muteLifted[keyOf(e)]})
+				}
+				c.Records = append(c.Records, rec)
 				continue
 			}
 			id := e.Kind + "\x00" + e.Slug + "\x00" + u
@@ -320,6 +389,9 @@ func planVulnAlerts(exposures []models.VulnExposure, alertedUUIDs map[string]boo
 		} else {
 			plan.Silent = append(plan.Silent, a.Records...)
 		}
+	}
+	for _, v := range newCoreOrder {
+		plan.NewCore = append(plan.NewCore, *newCore[v])
 	}
 	for _, k := range newSitesOrder {
 		plan.NewSites = append(plan.NewSites, *newSitesByGroup[k])
@@ -382,6 +454,148 @@ func formatNewSitesAlert(a newSitesAlert) string {
 		}
 		fmt.Fprintf(&sb, "    %s %s %s: %s, CVSS %s, %s\n", verb.Gray("-"), s.Name, verb.Gray("("+s.Version+")"),
 			plural(s.Vulns, "vulnerability"), vulnview.ColorCvss(s.Cvss), fix)
+	}
+	return sb.String()
+}
+
+// coreAlertListLimit is how many vulnerabilities a core alert lists.
+const coreAlertListLimit = 5
+
+var (
+	coreNamePrefixRE = regexp.MustCompile(`^WordPress Core\s+[\d.]+\s*-\s*[\d.]+\s*-\s*`)
+	accessPrefixRE   = regexp.MustCompile(`^(Unauthenticated|Authenticated(?:\s*\(([^)]+)\))?)\s+`)
+)
+
+// coreVulnTitle splits a core vulnerability's display name ("WordPress
+// Core 6.6.0 - 7.1.3 - Authenticated (Contributor+) Stored XSS via …")
+// into who can exploit it ("Contributor+", "Unauthenticated", or "") and
+// what it is.
+func coreVulnTitle(v models.Vulnerability) (access, title string) {
+	name, _ := vulnDisplayName(v)
+	name = utils.CleanHTML(name)
+	title = coreNamePrefixRE.ReplaceAllString(name, "")
+	if m := accessPrefixRE.FindStringSubmatch(title); m != nil {
+		switch {
+		case m[2] != "":
+			access = m[2]
+		case strings.HasPrefix(m[1], "Unauth"):
+			access = "Unauthenticated"
+		default:
+			access = "Authenticated"
+		}
+		title = title[len(m[0]):]
+	}
+	if title == "" {
+		title = name
+	}
+	return access, title
+}
+
+// accessRank orders who can exploit a vulnerability, easiest first.
+func accessRank(access string) int {
+	switch strings.ToLower(access) {
+	case "unauthenticated":
+		return 0
+	case "subscriber+", "customer+":
+		return 1
+	case "contributor+":
+		return 2
+	case "author+":
+		return 3
+	case "editor+", "shop manager+":
+		return 4
+	case "custom+", "authenticated":
+		return 5
+	case "administrator+", "admin+":
+		return 6
+	}
+	return 7
+}
+
+// formatNewCoreAlert renders a core version's new vulnerabilities: how many
+// and how bad, the most serious few, and the sites running the version.
+func formatNewCoreAlert(a newCoreAlert) string {
+	type item struct {
+		access, title, link string
+		cvss                float64
+		scored              bool
+	}
+	items := make([]item, 0, len(a.Vulns))
+	unauth := 0
+	var maxCvss float64
+	scoredAny := false
+	for _, v := range a.Vulns {
+		access, title := coreVulnTitle(v)
+		_, link := vulnDisplayName(v)
+		score, ok := cvssScore(v)
+		items = append(items, item{access, title, link, score, ok})
+		if access == "Unauthenticated" {
+			unauth++
+		}
+		if ok && (!scoredAny || score > maxCvss) {
+			maxCvss, scoredAny = score, true
+		}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		if a.scored != b.scored {
+			return a.scored
+		}
+		if a.cvss != b.cvss {
+			return a.cvss > b.cvss
+		}
+		if ra, rb := accessRank(a.access), accessRank(b.access); ra != rb {
+			return ra < rb
+		}
+		return a.title < b.title
+	})
+
+	var summary []string
+	if scoredAny {
+		summary = append(summary, "max CVSS "+vulnview.ColorCvss(maxCvss))
+	}
+	if unauth > 0 {
+		summary = append(summary, fmt.Sprintf("%d unauthenticated", unauth))
+	}
+	head := plural(len(items), "new vulnerability")
+	if len(summary) > 0 {
+		head += " (" + strings.Join(summary, ", ") + ")"
+	}
+
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "%s %s\n", verb.Bold("New core vulnerabilities:"), verb.Yellow(head))
+	fmt.Fprintf(&sb, "  %s\n", alertSubject(models.VulnExposureCore, models.CoreExposureSlug, "WordPress "+a.Version))
+	if len(items) > 1 {
+		fmt.Fprintf(&sb, "  %s\n", verb.Bold("Most serious:"))
+	}
+	for i, it := range items {
+		if i == coreAlertListLimit {
+			fmt.Fprintf(&sb, "    %s …and %d more\n", verb.Gray("-"), len(items)-i)
+			break
+		}
+		line := it.title
+		if it.access != "" {
+			line = it.access + ": " + line
+		}
+		if it.scored {
+			line = "CVSS " + vulnview.ColorCvss(it.cvss) + " " + line
+		}
+		if it.link != "" {
+			line += " " + verb.Cyan(it.link)
+		}
+		fmt.Fprintf(&sb, "    %s %s\n", verb.Gray("-"), line)
+	}
+	fmt.Fprintf(&sb, "  %s\n", verb.Bold(fmt.Sprintf("Installed on %s:", plural(len(a.Sites), "site"))))
+	for _, s := range a.Sites {
+		fix := "no update available"
+		if s.FixState == models.VulnFixAvailable {
+			fix = "update to " + s.FixedIn
+		}
+		fmt.Fprintf(&sb, "    %s %s: %s", verb.Gray("-"), s.Name, fix)
+		if s.MuteLifted {
+			fmt.Fprintf(&sb, " %s", verb.Yellow("mute lifted"))
+		}
+		sb.WriteString("\n")
 	}
 	return sb.String()
 }

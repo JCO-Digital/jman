@@ -28,7 +28,11 @@ version has.
 
 State is kept per (kind, slug, site), where kind is `plugin` or `core`. For
 core, the slug is `wordpress` and the installed version decides which
-vulnerabilities apply. A site's exposure resolves automatically when it no
+vulnerabilities apply. Core vulnerabilities get their own UUIDs from their
+source IDs, since the feed shares one UUID between all of a version's (see
+`models.NormalizeCoreVulnerabilities`); the first sync after that change
+moved the stored per-version UUIDs in mutes and alert records over
+(`migrateCoreVulnIDs`), so it neither lifted mutes nor re-alerted. A site's exposure resolves automatically when it no
 longer runs an affected version (it updated, deleted the plugin, or a backport
 rule or ignore entry now covers it). The group resolves when no site is left.
 
@@ -144,9 +148,12 @@ Only new-vulnerability alerts, for:
 `vuln_alerts` dedups per UUID, so cases 2 and 3 need dedup per
 (uuid, kind, site): `vuln_alert_sites`, built from the open exposures, so
 ignores, suppression and backports apply. Keep the seeding so the first run
-doesn't send the backlog. Core is alerted like plugins. Both alerts keep the
-`cvssThreshold` filter, except that a new vulnerability that lifted a mute is
-alerted whatever its score, with the site marked "mute lifted" (case 3 is
+doesn't send the backlog. New core vulnerabilities are alerted per core
+version, whatever their scores: the core feed scores few of them, and one
+update fixes them all (`formatNewCoreAlert`). New plugin vulnerabilities and
+newly affected sites (plugin or core) keep the `cvssThreshold` filter,
+except that a new vulnerability that lifted a mute is alerted whatever its
+score, with the site marked "mute lifted" (case 3 is
 part of case 1's message, not a separate one). A site's records are dropped a
 day after it stops being affected, so a reinstall or downgrade alerts again.
 

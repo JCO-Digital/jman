@@ -42,12 +42,15 @@ func setupRunnerTest(t *testing.T) {
 		return &models.CliSite{ID: siteID, Name: "example.com"}, nil
 	}
 	refreshPluginCache = func(models.CliSite) error { return nil }
+	oldSync := syncSiteExposures
+	syncSiteExposures = func(string) error { return nil }
 	t.Cleanup(func() {
 		// Stop any runner a test started (its context is already cancelled)
 		// and wait for it before restoring the package state it reads.
 		q.close()
 		running.Wait()
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
+		syncSiteExposures = oldSync
 		updateCore, refreshCore, cachedCoreVersion = oldUpdateCore, oldRefreshCore, oldCachedCore
 		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
 		pluginVulnerable, pluginFixedIn = oldVulnerable, oldFixedIn
@@ -471,5 +474,27 @@ func TestRunPluginUpdateWritesVulnStatus(t *testing.T) {
 	ledger, _ := db.GetSiteUpdateLedger(testSite)
 	if len(ledger) != 1 || ledger[0].Status != models.LedgerVuln {
 		t.Errorf("ledger = %+v, want one vuln entry", ledger)
+	}
+}
+
+func TestRunSyncsSiteExposuresAfterPluginJob(t *testing.T) {
+	setupRunnerTest(t)
+	var synced []string
+	syncSiteExposures = func(siteID string) error {
+		synced = append(synced, siteID)
+		return nil
+	}
+	updatePlugins = func(_ models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"}}, nil
+	}
+
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"})
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+
+	if len(synced) != 1 || synced[0] != job.SiteID {
+		t.Errorf("synced exposures for %v, want once for %s", synced, job.SiteID)
 	}
 }

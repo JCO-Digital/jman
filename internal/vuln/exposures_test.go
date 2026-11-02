@@ -2,6 +2,7 @@ package vuln
 
 import (
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -258,5 +259,51 @@ func TestVulnDisplayName(t *testing.T) {
 		if got, _ := vulnDisplayName(tt.v); got != tt.want {
 			t.Errorf("vulnDisplayName(%q) = %q, want %q", tt.v.Name, got, tt.want)
 		}
+	}
+}
+
+func TestGroupExposuresExpandsCoreFeedUUID(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	// Stored before core vulnerabilities had their own UUIDs.
+	exposures := []models.VulnExposure{
+		{Kind: "core", Slug: "wordpress", SiteID: "s1", Version: "6.9.10", VulnUUIDs: []string{"feed"}, FixState: models.VulnNoFix},
+	}
+	details := func(kind, slug, coreVersion string) groupDetails {
+		return groupDetails{
+			Name: "WordPress " + coreVersion,
+			Vulns: map[string]models.Vulnerability{
+				"a": {Uuid: "a", FeedUuid: "feed", Name: "First"},
+				"b": {Uuid: "b", FeedUuid: "feed", Name: "Second"},
+			},
+			ByFeedUUID: map[string][]string{"feed": {"a", "b"}},
+		}
+	}
+	groups := groupExposures(exposures, map[string]string{"s1": "Site"}, nil, details, now)
+	var got []string
+	for _, v := range groups[0].Vulnerabilities {
+		got = append(got, v.UUID)
+	}
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, []string{"a", "b"}) {
+		t.Errorf("vulnerabilities = %v, want the feed UUID expanded to a and b", got)
+	}
+}
+
+func TestOnlySiteLeavesOtherSitesAlone(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	open := []models.VulnExposure{
+		{ID: 1, Kind: "plugin", Slug: "a", SiteID: "s1", Version: "1.0", VulnUUIDs: []string{"x"}},
+		{ID: 2, Kind: "plugin", Slug: "a", SiteID: "s2", Version: "1.0", VulnUUIDs: []string{"x"}},
+	}
+	// s1 was updated and is no longer affected; s2's data isn't part of a
+	// site sync's observations either way.
+	observed := map[exposureKey]observedExposure{}
+	evaluated := map[string]bool{"plugin": true}
+	readable := func(models.VulnExposure) bool { return true }
+
+	obs, siteOpen, siteRecent := onlySite("s1", observed, open, nil)
+	plan := planExposureSync(siteOpen, siteRecent, obs, evaluated, readable, now)
+	if !reflect.DeepEqual(plan.Resolves, []int64{1}) || len(plan.Inserts) != 0 || len(plan.Updates) != 0 {
+		t.Errorf("plan = %+v, want only s1's exposure resolved", plan)
 	}
 }

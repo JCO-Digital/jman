@@ -25,7 +25,9 @@ func ValidateVulnBackport(rule models.VulnBackport) ([]string, error) {
 			return []string{fmt.Sprintf("No vulnerability data for WordPress %s; the rule could not be verified.", rule.MinVersion)}, nil
 		}
 		for _, v := range resp.Data.Vulnerability {
-			if v.Uuid == rule.VulnUUID {
+			// A rule may name the feed's UUID, shared by all of the
+			// version's vulnerabilities (see coreVulnIgnored).
+			if v.Uuid == rule.VulnUUID || v.FeedUuid == rule.VulnUUID {
 				return nil, nil
 			}
 		}
