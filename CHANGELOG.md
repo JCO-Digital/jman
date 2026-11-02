@@ -1,6 +1,21 @@
 # Changelog
 
-## 7.25.0 (2026-10-29)
+## 7.26.0 (2026-11-02)
+
+#### Features
+
+- vuln: alert new core vulnerabilities per WordPress version (f639c47)
+- web: count core vulnerabilities in the sites list (ec51fb0)
+- web: show plugin vulnerabilities in the site view (0f30422)
+- web: show WordPress core vulnerabilities in the site view (74ad790)
+
+#### Bug Fixes
+
+- show updated sites as no longer vulnerable right away (4847c25)
+- web: keep the vulnerability toggle transparent in dark mode (fb6457f)
+- vuln: give each core vulnerability its own UUID (a496dee)
+
+## v7.25.0 (2026-10-29)
 
 #### Features
 
