@@ -1,7 +1,10 @@
 package models
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"sort"
 	"strings"
 
 	"github.com/JCO-Digital/jman/internal/utils"
@@ -63,7 +66,11 @@ type Operator struct {
 }
 
 type Vulnerability struct {
-	Uuid        string       `json:"uuid"`
+	Uuid string `json:"uuid"`
+	// FeedUuid is the UUID the feed gave a WordPress core vulnerability,
+	// which it shares with the version's other vulnerabilities; see
+	// NormalizeCoreVulnerabilities. Empty for plugins.
+	FeedUuid    string       `json:"feed_uuid,omitempty"`
 	Name        string       `json:"name"`
 	Description *string      `json:"description"`
 	Operator    Operator     `json:"operator"`
@@ -189,6 +196,76 @@ func SanitizeVulnerabilities(vulns []Vulnerability) {
 			sanitizeStringPtr(&v.Source[j].Description)
 		}
 	}
+}
+
+// NormalizeCoreVulnerabilities gives each WordPress core vulnerability its
+// own UUID and name. The wpvulnerability.net core feed lists all of a
+// version's vulnerabilities under one UUID, named after the version; only
+// their sources tell them apart.
+//
+// The UUID is derived from the source IDs, so a vulnerability keeps it
+// across core versions and feed refreshes. The feed's UUID moves to
+// FeedUuid, which ignore entries and backport rules made before this may
+// still use. The name is the first source name that isn't a bare CVE ID,
+// or else the first source name. Entries with the same sources are merged.
+// Entries are normalized in place; normalizing twice changes nothing.
+func NormalizeCoreVulnerabilities(vulns []Vulnerability) []Vulnerability {
+	out := vulns[:0]
+	seen := make(map[string]bool, len(vulns))
+	for _, v := range vulns {
+		if v.FeedUuid == "" {
+			if len(v.Source) == 0 {
+				// Nothing to tell it apart by; keep it as the feed has it.
+				if !seen[v.Uuid] {
+					seen[v.Uuid] = true
+					out = append(out, v)
+				}
+				continue
+			}
+			v.FeedUuid = v.Uuid
+			v.Uuid = coreVulnUUID(v.Source)
+			v.Name = coreVulnName(v.Source, v.Name)
+		}
+		if seen[v.Uuid] {
+			continue
+		}
+		seen[v.Uuid] = true
+		out = append(out, v)
+	}
+	return out
+}
+
+// coreVulnUUID hashes a core vulnerability's source IDs (or, lacking IDs,
+// links and names) into a stable 64-character hex ID like the feed's.
+func coreVulnUUID(sources []Source) string {
+	keys := make([]string, 0, len(sources))
+	for _, s := range sources {
+		switch {
+		case s.Id != "":
+			keys = append(keys, "id:"+s.Id)
+		case s.Link != "":
+			keys = append(keys, "link:"+s.Link)
+		default:
+			keys = append(keys, "name:"+s.Name)
+		}
+	}
+	sort.Strings(keys)
+	sum := sha256.Sum256([]byte("wordpress-core\n" + strings.Join(keys, "\n")))
+	return hex.EncodeToString(sum[:])
+}
+
+func coreVulnName(sources []Source, fallback string) string {
+	for _, s := range sources {
+		if s.Name != "" && !strings.HasPrefix(s.Name, "CVE-") {
+			return s.Name
+		}
+	}
+	for _, s := range sources {
+		if s.Name != "" {
+			return s.Name
+		}
+	}
+	return fallback
 }
 
 // SanitizeVulnData normalizes a plugin vulnerability payload, including the

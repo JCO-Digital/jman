@@ -23,6 +23,9 @@ import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useConfirm } from "../composables/useConfirm";
 import NotesWidget from "../components/NotesWidget.vue";
 import SiteUsersCard from "../components/SiteUsersCard.vue";
+import CoreVulnerabilityList from "../components/CoreVulnerabilityList.vue";
+import BackportRuleModal from "../components/BackportRuleModal.vue";
+import { type CoreVulnItem, cvssOf, maxCoreVulnCvss } from "../utils/coreVuln";
 import {
 	availablePluginUpdate,
 	formatBytes,
@@ -458,6 +461,38 @@ const sitePlugins = computed(() => {
 		};
 	});
 });
+
+// Vulnerabilities in the site's WordPress core version. Suppressed ones (the
+// site, its server or the vulnerability is ignored) stay listed but marked.
+const coreVulns = computed(
+	() =>
+		dataStore.enrichedSites.find((s) => s.id === siteId.value)
+			?.coreVulnerabilities ?? [],
+);
+const coreVulnsSuppressed = computed(
+	() =>
+		coreVulns.value.length > 0 &&
+		coreVulns.value.every((v) => v.suppressed),
+);
+const coreVulnItems = computed<CoreVulnItem[]>(() =>
+	coreVulns.value.map((v) => ({
+		uuid: v.uuid,
+		name: v.name,
+		link: v.source.find((s) => s.link)?.link,
+		cvss: cvssOf(v),
+		suppressed: v.suppressed,
+	})),
+);
+const coreVulnsMaxCvss = computed(() => maxCoreVulnCvss(coreVulnItems.value));
+
+// "Mark patched…" on a core vulnerability: a backport rule for the site's
+// installed version.
+const coreBackportTarget = ref<CoreVulnItem | null>(null);
+const showCoreBackportModal = ref(false);
+function openCoreBackport(item: CoreVulnItem) {
+	coreBackportTarget.value = item;
+	showCoreBackportModal.value = true;
+}
 
 /** Where the site's plugin and core data comes from, and how fresh it is. */
 const wpDataSource = computed(() => {
@@ -1146,6 +1181,26 @@ const unlinkOrganization = async () => {
 						>
 							Major update available
 						</span>
+						<span
+							v-if="coreVulns.length"
+							class="status-badge badge-sm"
+							:class="coreVulnsSuppressed ? 'warning' : 'error'"
+							:title="
+								coreVulnsSuppressed
+									? 'All vulnerabilities are suppressed via ignore rules'
+									: undefined
+							"
+						>
+							{{ coreVulns.length }}
+							{{
+								coreVulns.length === 1
+									? "vulnerability"
+									: "vulnerabilities"
+							}}
+							<template v-if="coreVulnsMaxCvss != null">
+								· max {{ coreVulnsMaxCvss.toFixed(1) }}
+							</template>
+						</span>
 					</span>
 				</div>
 
@@ -1188,6 +1243,14 @@ const unlinkOrganization = async () => {
 								: `Update to ${site.wp_core.major_update}`
 						}}
 					</button>
+				</div>
+
+				<div v-if="coreVulnItems.length" class="mt-4">
+					<CoreVulnerabilityList
+						:items="coreVulnItems"
+						:can-mark-patched="authStore.canEdit"
+						@mark-patched="openCoreBackport"
+					/>
 				</div>
 			</section>
 
@@ -1487,6 +1550,15 @@ const unlinkOrganization = async () => {
 			@close="showInstallModal = false"
 		/>
 
+		<BackportRuleModal
+			v-if="coreBackportTarget && site?.wp_core"
+			v-model="showCoreBackportModal"
+			type="core"
+			slug=""
+			:vuln-uuid="coreBackportTarget.uuid"
+			:vuln-name="coreBackportTarget.name"
+			:version="site.wp_core.version"
+		/>
 		<UpdateLockModal
 			v-if="site"
 			v-model="showLockModal"

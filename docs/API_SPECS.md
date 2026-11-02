@@ -831,6 +831,10 @@ Returns a single plugin report. Note that if active vulnerabilities are found, t
 - A vulnerability whose affected sites are all patched is excluded from the response, so `"patched_sites"` only appears while some site is still affected.
 - In `GET /vulns/core`, a vulnerability is excluded from a core version's report if a backport rule covers that version.
 
+**Core vulnerability UUIDs**
+
+The wpvulnerability.net core feed lists all of a version's vulnerabilities under one shared UUID, named after the version. jman gives each one its own `uuid`, derived from its source IDs, so the same vulnerability has the same `uuid` in every core version, and uses the first non-CVE source name as its `name`. The feed's UUID is kept in `feed_uuid`. Ignore entries and backport rules made with a `feed_uuid` still apply, to all of that version's vulnerabilities.
+
 ### Vulnerability Exposures
 
 An exposure is one site running a vulnerable version of a plugin (or of WordPress core). jman-api syncs them on the refresh scheduler's slow tick: an exposure opens when a site runs an affected version and resolves when it no longer does (it updated, removed the plugin, or an ignore entry or backport rule now covers it). See `docs/vuln-workflow.md`.

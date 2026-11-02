@@ -6,6 +6,7 @@ import type {
 	VulnFixState,
 	VulnMute,
 } from "../../types";
+import { sortCoreVulns } from "../../utils/coreVuln";
 
 /** The scan severity matching a CVSS score, for severityClass. */
 export function cvssSeverity(cvss: number | null | undefined): string {
@@ -35,6 +36,8 @@ export function closedLabel(g: VulnExposureGroup): string {
 	return reason ? `Closed: ${reason}` : "Closed";
 }
 
+const TASK_CORE_VULN_LIMIT = 10;
+
 /** Defaults for a task to update (or remove) a vulnerable plugin on a site. */
 export function exposureTaskDefaults(
 	g: VulnExposureGroup,
@@ -45,12 +48,22 @@ export function exposureTaskDefaults(
 		s.fix_state === "fix_available"
 			? `Update ${what} to ${s.fixed_in}`
 			: `Decide on ${what} (no fix)`;
-	const vulns = g.vulnerabilities
-		.filter((v) => s.vuln_uuids.includes(v.uuid))
-		.map(
-			(v) =>
-				`- ${v.name} (${formatCvss(v.cvss)})${v.link ? ` ${v.link}` : ""}`,
-		);
+	let applicable = g.vulnerabilities.filter((v) =>
+		s.vuln_uuids.includes(v.uuid),
+	);
+	// A core version can have dozens, all fixed by the same update: list
+	// the most serious.
+	let more = 0;
+	if (g.kind === "core") {
+		applicable = sortCoreVulns(applicable);
+		more = Math.max(applicable.length - TASK_CORE_VULN_LIMIT, 0);
+		applicable = applicable.slice(0, TASK_CORE_VULN_LIMIT);
+	}
+	const vulns = applicable.map(
+		(v) =>
+			`- ${v.name} (${formatCvss(v.cvss)})${v.link ? ` ${v.link}` : ""}`,
+	);
+	if (more) vulns.push(`- …and ${more} more`);
 	const severity = cvssSeverity(s.max_cvss);
 	const priority: TaskPriority =
 		severity === "critical" || severity === "high"

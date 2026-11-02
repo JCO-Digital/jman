@@ -34,12 +34,12 @@ func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.Plu
 	}
 
 	for _, vulnerability := range vulnResponse.Data.Vulnerability {
-		if matcher != nil && matcher.IsVulnerabilityUUIDIgnored(vulnerability.Uuid) {
+		if coreVulnIgnored(matcher, vulnerability) {
 			continue
 		}
 		// Every site here runs coreVersion, so a backport rule covering it
 		// means none of them are affected.
-		if matcher != nil && matcher.PatchedBy(vulnerability.Uuid, coreVersion) != nil {
+		if corePatchedBy(matcher, vulnerability, coreVersion) != nil {
 			continue
 		}
 
@@ -71,6 +71,34 @@ func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.Plu
 	}
 
 	return report
+}
+
+// coreVulnIgnored reports whether an ignore entry covers a core
+// vulnerability. Entries made before core vulnerabilities had their own
+// UUIDs name the feed's UUID, which covers all of a version's
+// vulnerabilities.
+func coreVulnIgnored(matcher *db.VulnIgnoreMatcher, v models.Vulnerability) bool {
+	if matcher == nil {
+		return false
+	}
+	return matcher.IsVulnerabilityUUIDIgnored(v.Uuid) ||
+		(v.FeedUuid != "" && matcher.IsVulnerabilityUUIDIgnored(v.FeedUuid))
+}
+
+// corePatchedBy returns the backport rule under which coreVersion is not
+// affected by a core vulnerability, matching rules made with the feed's
+// UUID as in coreVulnIgnored.
+func corePatchedBy(matcher *db.VulnIgnoreMatcher, v models.Vulnerability, coreVersion string) *models.VulnBackport {
+	if matcher == nil {
+		return nil
+	}
+	if r := matcher.PatchedBy(v.Uuid, coreVersion); r != nil {
+		return r
+	}
+	if v.FeedUuid != "" {
+		return matcher.PatchedBy(v.FeedUuid, coreVersion)
+	}
+	return nil
 }
 
 // ProcessCoreVulnerabilities loads the cached WordPress core version inventory and vulnerability
