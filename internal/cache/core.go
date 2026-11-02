@@ -208,9 +208,7 @@ func GetCachedCoreVulnerabilities(coreVersion string, ttl ...time.Duration) (*mo
 	if t > 0 {
 		err := ReadJSONCache(filename, &vulnData, t)
 		if err == nil && vulnData.Error == 0 {
-			if vulnData.Data != nil {
-				models.SanitizeVulnerabilities(vulnData.Data.Vulnerability)
-			}
+			normalizeCoreVulnResponse(&vulnData)
 			return &vulnData, nil
 		}
 	}
@@ -225,11 +223,20 @@ func GetCachedCoreVulnerabilities(coreVersion string, ttl ...time.Duration) (*mo
 		verb.PrintErrorf(verb.Normal, "Warning: failed to write core vulnerability cache for %s: %v\n", coreVersion, err)
 	}
 
-	// Sanitize after writing so the cache keeps the raw feed payload and every
-	// read — fresh or cached — is cleaned exactly once.
-	if newVulnData != nil && newVulnData.Data != nil {
-		models.SanitizeVulnerabilities(newVulnData.Data.Vulnerability)
-	}
+	// Normalize after writing so the cache keeps the raw feed payload and
+	// every read — fresh or cached — is cleaned exactly once.
+	normalizeCoreVulnResponse(newVulnData)
 
 	return newVulnData, nil
+}
+
+// normalizeCoreVulnResponse cleans up a core feed payload for display and
+// gives each vulnerability its own UUID (see
+// models.NormalizeCoreVulnerabilities).
+func normalizeCoreVulnResponse(resp *models.CoreVulnResponse) {
+	if resp == nil || resp.Data == nil {
+		return
+	}
+	models.SanitizeVulnerabilities(resp.Data.Vulnerability)
+	resp.Data.Vulnerability = models.NormalizeCoreVulnerabilities(resp.Data.Vulnerability)
 }

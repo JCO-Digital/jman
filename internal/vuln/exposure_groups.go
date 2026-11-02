@@ -20,6 +20,10 @@ type groupDetails struct {
 	ClosedDate   string
 	LastUpdated  *time.Time
 	Vulns        map[string]models.Vulnerability
+	// ByFeedUUID lists the UUIDs of core vulnerabilities by the feed UUID
+	// they share, for exposures stored before core vulnerabilities had
+	// their own UUIDs (see migrateCoreVulnIDs).
+	ByFeedUUID map[string][]string
 }
 
 // BuildExposureGroups groups exposures into one group per plugin, or per
@@ -63,8 +67,12 @@ func loadGroupDetails(kind, slug, coreVersion string) groupDetails {
 	if kind == models.VulnExposureCore {
 		d.Name = "WordPress " + coreVersion
 		if resp, err := cache.GetCachedCoreVulnerabilities(coreVersion); err == nil && resp != nil && resp.Data != nil {
+			d.ByFeedUUID = map[string][]string{}
 			for _, v := range resp.Data.Vulnerability {
 				d.Vulns[v.Uuid] = v
+				if v.FeedUuid != "" {
+					d.ByFeedUUID[v.FeedUuid] = append(d.ByFeedUUID[v.FeedUuid], v.Uuid)
+				}
 			}
 		}
 		return d
@@ -149,11 +157,17 @@ func groupExposures(exposures []models.VulnExposure, siteNames map[string]string
 		seen := map[string]bool{}
 		for _, s := range g.Sites {
 			for _, uuid := range s.VulnUUIDs {
-				if seen[uuid] {
-					continue
+				uuids := []string{uuid}
+				if _, known := d.Vulns[uuid]; !known && len(d.ByFeedUUID[uuid]) > 0 {
+					uuids = d.ByFeedUUID[uuid]
 				}
-				seen[uuid] = true
-				g.Vulnerabilities = append(g.Vulnerabilities, exposureVuln(uuid, d.Vulns))
+				for _, u := range uuids {
+					if seen[u] {
+						continue
+					}
+					seen[u] = true
+					g.Vulnerabilities = append(g.Vulnerabilities, exposureVuln(u, d.Vulns))
+				}
 			}
 		}
 		sort.SliceStable(g.Vulnerabilities, func(i, j int) bool {

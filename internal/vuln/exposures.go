@@ -80,6 +80,8 @@ func SyncVulnExposures() error {
 
 	if reports, err := ProcessCoreVulnerabilities(matcher); err != nil {
 		verb.LogPrintf(verb.Normal, "Warning: core vulnerabilities not processed, core exposures left as they are: %v\n", err)
+	} else if err := migrateCoreVulnIDs(time.Now()); err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: core vulnerability IDs not migrated, core exposures left as they are: %v\n", err)
 	} else {
 		cores := map[string]models.SiteCore{}
 		if all, err := db.GetAllSiteCore(); err == nil {
@@ -299,8 +301,7 @@ func coreObservations(reports []models.CoreVulnReport, cores map[string]models.S
 	return observed
 }
 
-// vulnUUIDs returns the vulnerabilities' distinct UUIDs, sorted. The core
-// feed reuses a UUID for several vulnerabilities, hence the dedup.
+// vulnUUIDs returns the vulnerabilities' distinct UUIDs, sorted.
 func vulnUUIDs(vs []models.Vulnerability) []string {
 	seen := make(map[string]bool, len(vs))
 	uuids := make([]string, 0, len(vs))
