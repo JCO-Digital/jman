@@ -65,6 +65,10 @@ func assertNoPassword(t *testing.T, id int64) {
 
 func TestRunUserCreate(t *testing.T) {
 	refreshes := setupUserTest(t)
+	syncSiteExposures = func(string) error {
+		t.Error("a user job synced vulnerability exposures")
+		return nil
+	}
 	var got []string
 	createUser = func(_ models.CliSite, login, email, role, password string) (int, error) {
 		got = []string{login, email, role, password}

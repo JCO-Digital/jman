@@ -83,6 +83,9 @@ var (
 		}
 		return vuln.PluginFixedInOnSite(siteID, plugin, version, matcher)
 	}
+	// syncSiteExposures re-evaluates a site's vulnerability exposures
+	// (Monitoring) after a job changed its plugins or core.
+	syncSiteExposures = vuln.SyncSiteVulnExposures
 	cachedCoreVersion = func(siteID string) string {
 		cores, err := db.GetAllSiteCore()
 		if err != nil {
@@ -294,10 +297,19 @@ func run(job models.UpdateJob) {
 		runInstall(job, *site)
 	case job.Kind == models.UpdateJobKindUserCreate:
 		runUserCreate(job, *site)
+		return
 	case job.Kind == models.UpdateJobKindUserDelete:
 		runUserDelete(job, *site)
+		return
 	default:
 		runPlugins(job, *site)
+	}
+
+	// The job refreshed the site's plugin (or core) cache: bring its
+	// exposures in line now rather than at the next full sync. The job is
+	// already finished, so this only delays the worker's next job.
+	if err := syncSiteExposures(job.SiteID); err != nil {
+		log.Printf("Update job %d: failed to sync vulnerability exposures for site %s: %v", job.ID, job.SiteID, err)
 	}
 }
 
