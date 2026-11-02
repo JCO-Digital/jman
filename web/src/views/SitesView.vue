@@ -107,6 +107,33 @@ const hasActiveFilters = computed(
 		Boolean(filterFileMods.value),
 );
 
+// The Vulns column counts plugin and WordPress core vulnerabilities.
+function vulnCount(site: EnrichedSite): number {
+	return site.vulnerabilities.length + site.coreVulnerabilities.length;
+}
+
+function vulnsAllSuppressed(site: EnrichedSite): boolean {
+	return (
+		site.vulnerabilities.every((v) => v.suppressed) &&
+		site.coreVulnerabilities.every((v) => v.suppressed)
+	);
+}
+
+function vulnTitle(site: EnrichedSite): string {
+	if (vulnsAllSuppressed(site)) {
+		return "All vulnerabilities are suppressed via ignore rules";
+	}
+	const parts: string[] = [];
+	if (site.vulnerabilities.length) {
+		parts.push(`${site.vulnerabilities.length} in plugins`);
+	}
+	if (site.coreVulnerabilities.length) {
+		parts.push(`${site.coreVulnerabilities.length} in WordPress core`);
+	}
+	const n = vulnCount(site);
+	return `${n} ${n === 1 ? "vulnerability" : "vulnerabilities"}: ${parts.join(", ")}`;
+}
+
 const filteredAndSortedSites = computed(() => {
 	let result = dataStore.enrichedSites;
 
@@ -151,8 +178,8 @@ const filteredAndSortedSites = computed(() => {
 			valA = a.plugins.length;
 			valB = b.plugins.length;
 		} else if (sortKey.value === "vulnerabilities") {
-			valA = a.vulnerabilities.length;
-			valB = b.vulnerabilities.length;
+			valA = vulnCount(a);
+			valB = vulnCount(b);
 		} else if (typeof valA === "string") {
 			valA = valA.toLowerCase();
 			valB = valB.toLowerCase();
@@ -591,24 +618,16 @@ function timeSince(dateString: string) {
 						</td>
 						<td class="col-narrow text-center">
 							<span
-								v-if="site.vulnerabilities.length > 0"
+								v-if="vulnCount(site) > 0"
 								class="status-badge"
 								:class="
-									site.vulnerabilities.every(
-										(v) => v.suppressed,
-									)
+									vulnsAllSuppressed(site)
 										? 'warning'
 										: 'error'
 								"
-								:title="
-									site.vulnerabilities.every(
-										(v) => v.suppressed,
-									)
-										? 'All vulnerabilities are suppressed via ignore rules'
-										: `${site.vulnerabilities.length} vulnerabilities detected`
-								"
+								:title="vulnTitle(site)"
 							>
-								{{ site.vulnerabilities.length }}
+								{{ vulnCount(site) }}
 							</span>
 							<span v-else class="text-muted">—</span>
 						</td>
