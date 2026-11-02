@@ -6,7 +6,7 @@ import type {
 	VulnFixState,
 	VulnMute,
 } from "../../types";
-import { sortCoreVulns } from "../../utils/coreVuln";
+import { sortVulns } from "../../utils/vulnList";
 
 /** The scan severity matching a CVSS score, for severityClass. */
 export function cvssSeverity(cvss: number | null | undefined): string {
@@ -55,7 +55,7 @@ export function exposureTaskDefaults(
 	// the most serious.
 	let more = 0;
 	if (g.kind === "core") {
-		applicable = sortCoreVulns(applicable);
+		applicable = sortVulns(applicable);
 		more = Math.max(applicable.length - TASK_CORE_VULN_LIMIT, 0);
 		applicable = applicable.slice(0, TASK_CORE_VULN_LIMIT);
 	}

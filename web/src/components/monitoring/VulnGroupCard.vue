@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import AppIcon from "../AppIcon.vue";
-import CoreVulnerabilityList from "../CoreVulnerabilityList.vue";
+import VulnerabilityList from "../VulnerabilityList.vue";
 import { severityClass } from "./scan";
 import { closedLabel, cvssSeverity, formatCvss, formatDate } from "./vuln";
 import type {
@@ -102,7 +102,7 @@ function siteCount(n: number) {
 				unlikely; plan to remove or replace it.
 			</p>
 
-			<CoreVulnerabilityList
+			<VulnerabilityList
 				v-if="group.kind === 'core'"
 				:items="group.vulnerabilities"
 				:limit="5"
