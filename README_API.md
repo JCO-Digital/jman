@@ -334,8 +334,12 @@ external `jman fetch` cron job. Two independent schedulers run inside the API pr
   vulnerability exposures (one per site running a vulnerable plugin or core version, see
   `GET /vulns/exposures` in `docs/API_SPECS.md`) and posts one-off Slack alerts
   (`slackChannel`), for plugins and WordPress core:
-  - a **new vulnerability** with CVSS >= `cvssThreshold`, listing the sites it is on. One
-    that lifts a mute is alerted whatever its score, with the site marked "mute lifted".
+  - a **new plugin vulnerability** with CVSS >= `cvssThreshold`, listing the sites it is
+    on. One that lifts a mute is alerted whatever its score, with the site marked "mute
+    lifted".
+  - **new WordPress core vulnerabilities**, whatever their scores (the core feed scores
+    few of them), one message per core version: how many, the highest CVSS and how many
+    need no login, the most serious five, and the sites running it with their update.
   - **newly affected sites**: an already alerted vulnerability with CVSS >= `cvssThreshold`
     reaching another site (the plugin was installed or downgraded there), one message per
     plugin or core version.
