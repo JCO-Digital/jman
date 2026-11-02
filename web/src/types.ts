@@ -261,6 +261,9 @@ export interface VulnerabilitySite {
 
 export interface Vulnerability {
 	uuid: string;
+	// Core only: the feed's UUID, shared by all of a version's
+	// vulnerabilities. Old ignore entries and backport rules may use it.
+	feed_uuid?: string;
 	name: string;
 	description: string | null;
 	operator: {
