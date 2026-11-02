@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -49,6 +50,26 @@ type observedExposure struct {
 // later reopen) everything. Mutes are then lifted or put up for review as
 // the exposures now stand (see planMuteLifecycle).
 func SyncVulnExposures() error {
+	return syncVulnExposures("")
+}
+
+// SyncSiteVulnExposures is SyncVulnExposures for one site's exposures, for
+// right after a job changed the site's plugins or core: without it the site
+// would show its old exposures until the next full sync.
+func SyncSiteVulnExposures(siteID string) error {
+	return syncVulnExposures(siteID)
+}
+
+// exposureSyncMu keeps a site's sync after a job from running at the same
+// time as the full sync: both insert exposures, which must stay one open
+// row per plugin (or core) and site.
+var exposureSyncMu sync.Mutex
+
+// syncVulnExposures syncs every site's exposures, or only siteID's.
+func syncVulnExposures(siteID string) error {
+	exposureSyncMu.Lock()
+	defer exposureSyncMu.Unlock()
+
 	matcher, err := db.NewVulnIgnoreMatcher()
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "Warning: failed to load ignore entries: %v\n", err)
@@ -104,6 +125,9 @@ func SyncVulnExposures() error {
 	if err != nil {
 		return err
 	}
+	if siteID != "" {
+		observed, open, recent = onlySite(siteID, observed, open, recent)
+	}
 
 	plan := planExposureSync(open, recent, observed, evaluated, exposureDataReadable, now)
 	for i := range plan.Inserts {
@@ -122,6 +146,27 @@ func SyncVulnExposures() error {
 	verb.LogPrintf(verb.Verbose, "Vulnerability exposures: %d new, %d updated, %d resolved\n",
 		len(plan.Inserts), len(plan.Updates), len(plan.Resolves))
 	return syncVulnMutes(now)
+}
+
+// onlySite narrows a sync's observations and stored exposures to one site.
+func onlySite(siteID string, observed map[exposureKey]observedExposure, open, recent []models.VulnExposure) (
+	map[exposureKey]observedExposure, []models.VulnExposure, []models.VulnExposure) {
+	obs := map[exposureKey]observedExposure{}
+	for k, o := range observed {
+		if k.SiteID == siteID {
+			obs[k] = o
+		}
+	}
+	filter := func(es []models.VulnExposure) []models.VulnExposure {
+		var out []models.VulnExposure
+		for _, e := range es {
+			if e.SiteID == siteID {
+				out = append(out, e)
+			}
+		}
+		return out
+	}
+	return obs, filter(open), filter(recent)
 }
 
 // exposureDataReadable reports whether the vulnerability data an exposure

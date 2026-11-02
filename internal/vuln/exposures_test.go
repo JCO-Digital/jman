@@ -288,3 +288,22 @@ func TestGroupExposuresExpandsCoreFeedUUID(t *testing.T) {
 		t.Errorf("vulnerabilities = %v, want the feed UUID expanded to a and b", got)
 	}
 }
+
+func TestOnlySiteLeavesOtherSitesAlone(t *testing.T) {
+	now := time.Date(2026, 11, 2, 12, 0, 0, 0, time.UTC)
+	open := []models.VulnExposure{
+		{ID: 1, Kind: "plugin", Slug: "a", SiteID: "s1", Version: "1.0", VulnUUIDs: []string{"x"}},
+		{ID: 2, Kind: "plugin", Slug: "a", SiteID: "s2", Version: "1.0", VulnUUIDs: []string{"x"}},
+	}
+	// s1 was updated and is no longer affected; s2's data isn't part of a
+	// site sync's observations either way.
+	observed := map[exposureKey]observedExposure{}
+	evaluated := map[string]bool{"plugin": true}
+	readable := func(models.VulnExposure) bool { return true }
+
+	obs, siteOpen, siteRecent := onlySite("s1", observed, open, nil)
+	plan := planExposureSync(siteOpen, siteRecent, obs, evaluated, readable, now)
+	if !reflect.DeepEqual(plan.Resolves, []int64{1}) || len(plan.Inserts) != 0 || len(plan.Updates) != 0 {
+		t.Errorf("plan = %+v, want only s1's exposure resolved", plan)
+	}
+}

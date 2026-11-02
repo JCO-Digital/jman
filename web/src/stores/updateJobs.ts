@@ -113,13 +113,29 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		);
 	}
 
+	// Vulnerability reports are reloaded once for jobs finishing together
+	// (a bulk update finishes many in a row).
+	let vulnRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	function scheduleVulnRefresh() {
+		if (vulnRefreshTimer !== null) clearTimeout(vulnRefreshTimer);
+		vulnRefreshTimer = setTimeout(() => {
+			vulnRefreshTimer = null;
+			void dataStore.fetchVulnerabilities();
+		}, 1000);
+	}
+
 	function handleFinished(job: UpdateJob) {
 		if (job.kind === "user_create" || job.kind === "user_delete") {
 			// The job refreshed jman-api's user list for the site.
 			if (siteUsersStore.isLoaded) siteUsersStore.fetchAll(true);
 		} else if (job.kind === "core") {
 			if (job.core) dataStore.applyCoreUpdate(job.site_id, job.core);
+			// Which core vulnerabilities apply depends on the new version.
+			scheduleVulnRefresh();
 		} else {
+			// Which plugin vulnerabilities apply depends on the versions now
+			// installed, which the job refreshed in jman-api.
+			scheduleVulnRefresh();
 			if (job.kind === "plugins") {
 				// Show new versions right away; the reload below confirms them.
 				for (const r of job.results) {
