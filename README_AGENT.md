@@ -42,7 +42,7 @@ make build
 
 ## Generating a Server Token
 
-`jman-agent` authenticates to `jman-api` with a per-server token, not a human login. Admins create and revoke tokens on the jman-ui Settings page.
+`jman-agent` authenticates to `jman-api` with a per-server token, not a human login. Admins create and revoke tokens on the jman-ui Settings page, or create one on the jman-api host with `jman-api agent-token --server <uuid-or-name>`.
 
 A new token (`<id>.<secret>`) is shown **once** — it cannot be retrieved again, only revoked and replaced. Copy it into the agent's config file (below).
 

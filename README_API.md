@@ -48,6 +48,14 @@ A standalone utility that prompts for a password and prints the bcrypt hash to s
 jman-api hashpw
 ```
 
+### `agent-token` — Create a jman-agent token
+
+Creates a token for a server's jman-agent, as the jman-ui Settings page does, and prints it to stdout once. The server is given by its UUID or exact name and must not be logical.
+
+```bash
+jman-api agent-token --server web-1 --description "provisioned by Ansible"
+```
+
 ### `totp-setup` — Configure TOTP for a user
 
 Generates a new TOTP secret for an existing user, prints the base32 secret and an `otpauth://` URI (suitable for QR code generation), and updates `users.toml`.
