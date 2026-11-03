@@ -1,0 +1,5 @@
+# jman-agent config for the make local-dev-agent containers. apiUrl and token
+# come from JMAN_AGENT_API_URL and JMAN_AGENT_TOKEN (see compose.yaml).
+reportIntervalMinutes = 1
+# A development build's version sorts below the releases; never replace it.
+selfUpdateEnabled = false

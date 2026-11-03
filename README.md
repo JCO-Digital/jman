@@ -277,6 +277,30 @@ In addition to the main `jman` CLI, this repository includes sidecar utilities:
 - **Run the API with hot reload:** `make dev-api`
 - **Run the web UI dev server:** `make dev-ui` (see [web/README.md](web/README.md) for frontend-specific details)
 
+### Local development
+
+`make local-dev` starts the whole stack with one command: `jman-api` with hot reload (air), the web UI (Vite) and a `jman` CLI that is already logged in. It creates a throwaway user `admin` with a random password and prints the URLs and credentials. Ctrl-C stops everything. It needs Go, pnpm, curl, jq and openssl. If air isn't installed, a pinned version runs through `go run`.
+
+- **Isolated:** all state (config, `users.toml`, databases, CLI token) is in `./.local-dev/`, never in `~/.config/jman` or the OS keyring. Inherited `JMAN_*` variables are ignored.
+- **No side effects:** there are no SpinupWP, Slack or PagerDuty tokens, and uptime monitoring and the SpinupWP/SSH/vulnerability refresh are off. The seeded fake servers and sites use reserved names (`*.example.test`, `*.invalid`, `192.0.2.x`) that never resolve. jman-api still tries to read their plugins over SSH when the dashboard loads vulnerabilities, so `Cannot connect over SSH` warnings in its log are expected.
+- **CLI:** run `.local-dev/jman <command>`, e.g. `.local-dev/jman search example`.
+- **Login:** the user has no TOTP, so jman-api limits it to the edit level (no user or agent-token admin in the UI).
+- **Ports:** 8080 (API) and 5173 (UI); override them with `LOCAL_DEV_API_PORT` and `LOCAL_DEV_UI_PORT`. Open the UI at `localhost`, not `127.0.0.1`, or its session cookie won't reach the API.
+- **Reset:** `make local-dev-reset` deletes `.local-dev/` and the agent containers' volumes.
+
+#### jman-agent containers
+
+With `make local-dev` running, `make local-dev-agent` (needs Docker) starts two containers, `dev-agent-1` and `dev-agent-2`, that look like SpinupWP servers:
+
+- WordPress sites at `/sites/<domain>/files`, each owned by its own user.
+- nginx access logs, PHP-FPM, and a shared MariaDB.
+- `jman-agent` built from this checkout, reporting every minute to the local jman-api.
+
+It adds the servers and sites to jman-api and creates their agent tokens with `jman-api agent-token`. Run it again after changing the agent code to rebuild it. The sites, databases and scan baselines persist until `make local-dev-agent-down` plus `make local-dev-reset`. Installing WordPress, the checksums and the vulnerability data come from wordpress.org and the WPVulnerability API. The agent reaches jman-api through `host.docker.internal`, because jman-api listens on all interfaces.
+
+- `make local-dev-agent-infect` plants inert files on `alpha.local-dev.test` that match the scan rules: PHP in uploads, an `eval(base64_decode(…))` of an `echo`, an `auto_prepend_file` `.htaccess`, a `.sql` dump, and a comment appended to a core file and a plugin file. `make local-dev-agent-clean` removes them again. Findings appear, and later clear, within a minute or two.
+- `docker compose -p jman-local-dev exec dev-agent-1 jman-agent --check-wp` (or `--check-scan`) checks a server by hand. `docker compose -p jman-local-dev logs -f` follows the logs.
+
 ## License
 
 GPL-3.0-only

@@ -54,6 +54,12 @@
 - **Makefile**: Provides targets for building all binaries (`build`), testing (`test`), and generating shell completions. Releases are distributed only through GitHub, and `jman update` installs them.
 - **LDFlags**: Used during build to inject the application version into `internal/config.AppVersion`.
 
+### Local Development
+
+- `make local-dev` runs jman-api (air), the web UI (Vite) and a logged-in CLI (`.local-dev/jman`) with all state in `./.local-dev/`. The user is `admin`, its password is in `.local-dev/admin-password`, and there are no external tokens. Monitoring and refresh are off. `make local-dev-reset` wipes it.
+- `make local-dev-agent` adds Docker containers that act as SpinupWP-like servers running jman-agent from source. `make local-dev-agent-infect`/`-clean` plant and remove inert scan fixtures. The scripts are in `scripts/local-dev/`.
+- Use these to check API, UI, CLI and agent changes end to end without touching production.
+
 ### Configuration
 
 - **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`.
