@@ -31,6 +31,8 @@ jman-api useradd --username admin --display-name "Admin User"
 | ---------------- | -------- | ----------------------------- |
 | `--username`     | Yes      | Username for the new user     |
 | `--display-name` | Yes      | Display name for the new user |
+| `--level`        | No       | `basic` (default), `edit`, `admin` or `execute` |
+| `--password-stdin` | No     | Read the password from the first line of stdin instead of prompting (for scripts) |
 
 The command will:
 
