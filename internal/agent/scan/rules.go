@@ -266,6 +266,12 @@ func Cleared(prev map[string]Entry, cur []Entry, ownerUID uint32, complete bool,
 			for _, rule := range changeRules(old) {
 				cleared = append(cleared, models.ScanCleared{Path: e.Path, Rule: rule, SHA256: old.SHA256, Detail: ClearedReplaced})
 			}
+		} else if old.Checksum != "" && e.Checksum != "" && old.Checksum != e.Checksum {
+			// The same file now breaks another checksum rule, as when a
+			// newer rule set tells it apart, and that one is reported
+			// instead. Not when no rule applies any more: a walk without
+			// core (no version.php) mustn't clear core findings.
+			cleared = append(cleared, models.ScanCleared{Path: e.Path, Rule: old.Checksum, SHA256: old.SHA256, Detail: ClearedFixed})
 		}
 	}
 	if !complete {

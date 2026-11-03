@@ -224,8 +224,33 @@ func TestWalkTruncatedCore(t *testing.T) {
 		t.Fatalf("findings = %q, want %q", got, want)
 	}
 
-	// Reinstalling core puts both files back and removes the cut one.
+	// A baseline from before the rule (set 10) had it as core-unknown-file:
+	// that finding clears as the new one is raised.
 	prev := NewState(res.Entries)
+	older := NewState(res.Entries)
+	e := older.Entries[speechCut]
+	e.Checksum = RuleCoreUnknown
+	older.Entries[speechCut] = e
+	got = nil
+	for _, f := range Evaluate(older.Entries, res.Entries, owner, func(uint32) string { return "u" }) {
+		got = append(got, f.Severity+" "+f.Rule)
+	}
+	cleared := Cleared(older.Entries, res.Entries, owner, true, func(string) bool { return true })
+	if !slices.Equal(got, []string{"low core-truncated"}) || len(cleared) != 1 || cleared[0].Rule != RuleCoreUnknown || cleared[0].Detail != ClearedFixed {
+		t.Fatalf("from an older baseline: findings %q, cleared %+v", got, cleared)
+	}
+
+	// A walk that found no core (version.php gone) records no rule, and
+	// mustn't clear core findings.
+	nocore := slices.Clone(res.Entries)
+	for i := range nocore {
+		nocore[i].Checksum = ""
+	}
+	if c := Cleared(older.Entries, nocore, owner, true, func(string) bool { return true }); len(c) != 0 {
+		t.Fatalf("cleared without core: %+v", c)
+	}
+
+	// Reinstalling core puts both files back and removes the cut one.
 	if err := os.Remove(root + "/" + speechCut); err != nil {
 		t.Fatal(err)
 	}
@@ -235,7 +260,7 @@ func TestWalkTruncatedCore(t *testing.T) {
 	if f := Evaluate(prev.Entries, fixed.Entries, owner, func(uint32) string { return "u" }); len(f) != 0 {
 		t.Fatalf("findings after reinstall: %+v", f)
 	}
-	cleared := Cleared(prev.Entries, fixed.Entries, owner, true, func(string) bool { return true })
+	cleared = Cleared(prev.Entries, fixed.Entries, owner, true, func(string) bool { return true })
 	if len(cleared) != 1 || cleared[0].Path != speechCut {
 		t.Fatalf("cleared = %+v", cleared)
 	}
