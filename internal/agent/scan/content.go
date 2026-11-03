@@ -295,7 +295,7 @@ func matchContent(body []byte) []contentMatch {
 			loc = p.re.FindIndex(body)
 		default:
 			for _, l := range p.re.FindAllIndex(body, -1) {
-				if !onCommentLine(body, l[0]) {
+				if !onCommentLine(body, skipSpace(body, l)) {
 					loc = l
 					break
 				}
@@ -304,6 +304,7 @@ func matchContent(body []byte) []contentMatch {
 		if loc == nil {
 			continue
 		}
+		loc = []int{skipSpace(body, loc), loc[1]}
 		excerpt := string(body[loc[0]:min(loc[1], loc[0]+maxMatchExcerpt)])
 		matches = append(matches, contentMatch{
 			pattern: p,
@@ -312,6 +313,19 @@ func matchContent(body []byte) []contentMatch {
 		})
 	}
 	return matches
+}
+
+// skipSpace returns where match loc starts once leading whitespace is
+// skipped. Patterns that start with a word boundary, such as
+// (?:^|[^\w>:$\\])eval, take the character before the call, and when that
+// is the newline ending the previous line, the match would otherwise be
+// judged by (and reported on) that line.
+func skipSpace(b []byte, loc []int) int {
+	i := loc[0]
+	for i < loc[1]-1 && (b[i] == ' ' || b[i] == '\t' || b[i] == '\r' || b[i] == '\n') {
+		i++
+	}
+	return i
 }
 
 // onCommentLine reports whether the line holding offset i starts as a

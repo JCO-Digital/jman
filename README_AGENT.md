@@ -42,7 +42,7 @@ make build
 
 ## Generating a Server Token
 
-`jman-agent` authenticates to `jman-api` with a per-server token, not a human login. Admins create and revoke tokens on the jman-ui Settings page.
+`jman-agent` authenticates to `jman-api` with a per-server token, not a human login. Admins create and revoke tokens on the jman-ui Settings page, or create one on the jman-api host with `jman-api agent-token --server <uuid-or-name>`.
 
 A new token (`<id>.<secret>`) is shown **once** — it cannot be retrieved again, only revoked and replaced. Copy it into the agent's config file (below).
 
@@ -157,6 +157,7 @@ The rules flag:
 | `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
 | `core-modified`    | high     | A WordPress core file (outside `wp-content`) that differs from wordpress.org's checksum for the site's version and locale |
 | `core-unknown-file`| high     | A file in `wp-admin` or `wp-includes` that core doesn't have (medium unless it's PHP), or a PHP file in the site directory other than core's and `wp-config.php` |
+| `core-truncated`   | low      | A copy of a core file under its name cut to 100 bytes (with `wordpress/`). `wp core download` unpacks wordpress.org's tarballs this way with wp-cli 2.12 or older: PHP's PharData ignores the long names, which the tarballs keep in pax headers since WordPress 6.7.2. The site is missing core files rather than compromised; reinstalling core (e.g. from the .zip) fixes it. A file under such a name that isn't one of those core files stays `core-unknown-file` |
 | `plugin-modified`  | high     | A PHP file of a plugin in `wp-content/plugins` that differs from wordpress.org's checksum for the plugin's version |
 | `plugin-unknown-file` | high  | A PHP file in such a plugin that its release doesn't have. Empty files and data files that exit first aren't flagged, as in uploads. |
 | `suspicious-code` | by pattern | A PHP file containing code malware uses (rule set 6): `eval-decoded` (eval of base64_decode, gzinflate, …), `exec-request` (request input passed to system, exec, assert, eval, …), `request-call` (`$_POST['f'](…)`), `preg-replace-eval` (the `/e` modifier), `include-non-php` (including an .ico, image or text file), `webshell` (FilesMan, b374k, WSO, …), `encoded-call` (hex escapes or a `chr()` chain that decodes to such a call or request input), `encoded-payload` (a base64 string of 100+ characters that decodes to PHP code or such calls), and pairs that are each common alone (rule set 7): `exec-decoded-input` (base64-decoded request input and a variable run with eval, shell_exec, system, …), `eval-remote` (something fetched over HTTP and a variable eval'd), `include-remote` (something fetched over HTTP, a temporary file, and a variable included within 2 KB after the fetch; rule set 8, as elFinder does all three far apart), `hardcoded-credential` (request input checked against a bcrypt hash with password_verify, or a hashed request value against a hex digest with hash_equals), and `split-strings` (nine or more string pieces of up to four characters joined, like `'goo'.'gle'.'bot'`). All are high; the finding quotes where each matched. Encoded data that isn't code, such as the fonts, images and barcodes libraries embed, isn't flagged. |

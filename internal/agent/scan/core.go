@@ -97,9 +97,10 @@ func isCoreArea(p string) bool {
 }
 
 // coreRule returns the core rule a file in the core area breaks, if any:
-// RuleCoreModified for a core file that differs from its checksum, and
+// RuleCoreModified for a core file that differs from its checksum,
 // RuleCoreUnknown for a file core doesn't have in wp-admin or wp-includes,
-// or a PHP file it doesn't have in the site directory. wp-config.php is
+// or a PHP file it doesn't have in the site directory, and
+// RuleCoreTruncated for a core file unpacked under a cut-short name. wp-config.php is
 // the site's own. readMD5 hashes the file; it's only called for core
 // files.
 func coreRule(p string, sums map[string]string, readMD5 func() (string, bool)) string {
@@ -111,9 +112,46 @@ func coreRule(p string, sums map[string]string, readMD5 func() (string, bool)) s
 		return ""
 	}
 	if strings.Contains(p, "/") || (isPHP(path.Base(p)) && p != "wp-config.php") {
+		if truncatedCoreFile(p, sums, readMD5) {
+			return RuleCoreTruncated
+		}
 		return RuleCoreUnknown
 	}
 	return ""
+}
+
+// truncatedNameLen is how long a path relative to the site directory is
+// when it was cut to the 100 bytes of a tar header's name field, which
+// starts with "wordpress/".
+const truncatedNameLen = 100 - len("wordpress/")
+
+// truncatedCoreFile reports whether p is a core file whose name was cut
+// short when WordPress was unpacked. wordpress.org's tarballs keep names
+// over 100 bytes in pax headers (since 6.7.2), which PHP's PharData, and
+// so `wp core download` up to wp-cli 2.12, ignore: each such file lands
+// under its first 100 bytes, and the last one of those that share them
+// wins. So p is that long, starts a longer core path, and holds exactly
+// that core file.
+func truncatedCoreFile(p string, sums map[string]string, readMD5 func() (string, bool)) bool {
+	if len(p) != truncatedNameLen {
+		return false
+	}
+	var got string
+	for full, want := range sums {
+		if len(full) <= len(p) || !strings.HasPrefix(full, p) {
+			continue
+		}
+		if got == "" {
+			var ok bool
+			if got, ok = readMD5(); !ok {
+				return false
+			}
+		}
+		if got == want {
+			return true
+		}
+	}
+	return false
 }
 
 // fileMD5 returns a regular file's MD5, without following a symlink.

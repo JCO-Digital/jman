@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -159,5 +160,108 @@ func TestWalkSkipsCoreMidUpdate(t *testing.T) {
 	res, _ = Walk(root, owner, Options{Core: many})
 	if res.CoreChecked || len(coreFindings(res.Entries)) != 0 {
 		t.Fatalf("walk mid-update = checked %t, %q", res.CoreChecked, coreFindings(res.Entries))
+	}
+}
+
+// wordpress.org's 7.1.4 tarball keeps these two names in pax headers;
+// unpacked by PharData, both land under their first 100 bytes.
+const (
+	speechModel     = "wp-includes/php-ai-client/src/Providers/Models/SpeechGeneration/Contracts/SpeechGenerationModelInterface.php"
+	speechOperation = "wp-includes/php-ai-client/src/Providers/Models/SpeechGeneration/Contracts/SpeechGenerationOperationModelInterface.php"
+	speechCut       = "wp-includes/php-ai-client/src/Providers/Models/SpeechGeneration/Contracts/SpeechGeneration"
+)
+
+func TestCoreRuleTruncated(t *testing.T) {
+	if len("wordpress/"+speechCut) != 100 {
+		t.Fatalf("fixture is %d bytes with wordpress/, want 100", len("wordpress/"+speechCut))
+	}
+	sums := map[string]string{
+		speechModel:            md5Of("<?php interface SpeechGenerationModelInterface {}"),
+		speechOperation:        md5Of("<?php interface SpeechGenerationOperationModelInterface {}"),
+		"wp-includes/load.php": md5Of("<?php // load"),
+	}
+	hash := func(s string) func() (string, bool) { return func() (string, bool) { return md5Of(s), true } }
+	for _, c := range []struct {
+		name, path string
+		readMD5    func() (string, bool)
+		want       string
+	}{
+		{"last of the colliding files", speechCut, hash("<?php interface SpeechGenerationOperationModelInterface {}"), RuleCoreTruncated},
+		{"the other one", speechCut, hash("<?php interface SpeechGenerationModelInterface {}"), RuleCoreTruncated},
+		{"other content under the cut name", speechCut, hash("<?php eval($_POST['x']);"), RuleCoreUnknown},
+		{"unreadable or a symlink", speechCut, func() (string, bool) { return "", false }, RuleCoreUnknown},
+		{"shorter prefix of a core path", speechCut[:89], hash("<?php interface SpeechGenerationModelInterface {}"), RuleCoreUnknown},
+		{"90 bytes, but no core path starts with it", "wp-includes/" + strings.Repeat("x", truncatedNameLen-len("wp-includes/")), hash("<?php // load"), RuleCoreUnknown},
+	} {
+		if got := coreRule(c.path, sums, c.readMD5); got != c.want {
+			t.Errorf("%s: coreRule = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+// A site unpacked by PharData: the two interfaces are one file under the
+// cut-short name, holding the second of them. It's reported as low, and
+// clears once core is reinstalled.
+func TestWalkTruncatedCore(t *testing.T) {
+	root := t.TempDir()
+	sums := coreSite(t, root)
+	model := "<?php interface SpeechGenerationModelInterface {}"
+	operation := "<?php interface SpeechGenerationOperationModelInterface {}"
+	sums.MD5[speechModel] = md5Of(model)
+	sums.MD5[speechOperation] = md5Of(operation)
+	writeFile(t, root, speechCut, operation)
+	owner := uint32(os.Getuid())
+
+	res, err := Walk(root, owner, Options{Core: sums})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, f := range EvaluateFirst(res.Entries, owner, func(uint32) string { return "u" }) {
+		got = append(got, f.Severity+" "+f.Rule+" "+f.Path)
+	}
+	if want := []string{"low core-truncated " + speechCut}; !slices.Equal(got, want) {
+		t.Fatalf("findings = %q, want %q", got, want)
+	}
+
+	// A baseline from before the rule (set 10) had it as core-unknown-file:
+	// that finding clears as the new one is raised.
+	prev := NewState(res.Entries)
+	older := NewState(res.Entries)
+	e := older.Entries[speechCut]
+	e.Checksum = RuleCoreUnknown
+	older.Entries[speechCut] = e
+	got = nil
+	for _, f := range Evaluate(older.Entries, res.Entries, owner, func(uint32) string { return "u" }) {
+		got = append(got, f.Severity+" "+f.Rule)
+	}
+	cleared := Cleared(older.Entries, res.Entries, owner, true, func(string) bool { return true })
+	if !slices.Equal(got, []string{"low core-truncated"}) || len(cleared) != 1 || cleared[0].Rule != RuleCoreUnknown || cleared[0].Detail != ClearedFixed {
+		t.Fatalf("from an older baseline: findings %q, cleared %+v", got, cleared)
+	}
+
+	// A walk that found no core (version.php gone) records no rule, and
+	// mustn't clear core findings.
+	nocore := slices.Clone(res.Entries)
+	for i := range nocore {
+		nocore[i].Checksum = ""
+	}
+	if c := Cleared(older.Entries, nocore, owner, true, func(string) bool { return true }); len(c) != 0 {
+		t.Fatalf("cleared without core: %+v", c)
+	}
+
+	// Reinstalling core puts both files back and removes the cut one.
+	if err := os.Remove(root + "/" + speechCut); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, root, speechModel, model)
+	writeFile(t, root, speechOperation, operation)
+	fixed, _ := Walk(root, owner, Options{Core: sums})
+	if f := Evaluate(prev.Entries, fixed.Entries, owner, func(uint32) string { return "u" }); len(f) != 0 {
+		t.Fatalf("findings after reinstall: %+v", f)
+	}
+	cleared = Cleared(prev.Entries, fixed.Entries, owner, true, func(string) bool { return true })
+	if len(cleared) != 1 || cleared[0].Path != speechCut {
+		t.Fatalf("cleared = %+v", cleared)
 	}
 }
