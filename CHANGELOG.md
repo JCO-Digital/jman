@@ -1,6 +1,26 @@
 # Changelog
 
-## 7.26.0 (2026-11-02)
+## 7.27.0 (2026-11-03)
+
+#### Features
+
+- dev: add make local-dev with optional jman-agent containers (0d776f0)
+- cli: keep CLI tokens out of the OS keyring with JMAN_NO_KEYRING (cc01643)
+- api: read the useradd password from stdin with --password-stdin (8fefaff)
+- api: add jman-api agent-token to create agent tokens (88f5462)
+
+#### Bug Fixes
+
+- scan: clear a checksum finding when the file breaks another rule (ad2a8bc)
+- scan: report core files unpacked under cut-short names as core-truncated (fb31422)
+- api: return an empty task list instead of null (897a6ed)
+- scan: match calls on the line after a comment (656e3f7)
+
+#### Documentation
+
+- dev: note the expected SSH warnings for the fake sites (31f2c25)
+
+## v7.26.0 (2026-11-02)
 
 #### Features
 
