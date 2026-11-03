@@ -282,7 +282,7 @@ In addition to the main `jman` CLI, this repository includes sidecar utilities:
 `make local-dev` starts the whole stack with one command: `jman-api` with hot reload (air), the web UI (Vite) and a `jman` CLI that is already logged in. It creates a throwaway user `admin` with a random password and prints the URLs and credentials. Ctrl-C stops everything. It needs Go, pnpm, curl, jq and openssl. If air isn't installed, a pinned version runs through `go run`.
 
 - **Isolated:** all state (config, `users.toml`, databases, CLI token) is in `./.local-dev/`, never in `~/.config/jman` or the OS keyring. Inherited `JMAN_*` variables are ignored.
-- **No side effects:** there are no SpinupWP, Slack or PagerDuty tokens, and uptime monitoring and the SpinupWP/SSH/vulnerability refresh are off. The seeded fake servers and sites use reserved names (`*.example.test`, `*.invalid`, `192.0.2.x`) that never resolve.
+- **No side effects:** there are no SpinupWP, Slack or PagerDuty tokens, and uptime monitoring and the SpinupWP/SSH/vulnerability refresh are off. The seeded fake servers and sites use reserved names (`*.example.test`, `*.invalid`, `192.0.2.x`) that never resolve. jman-api still tries to read their plugins over SSH when the dashboard loads vulnerabilities, so `Cannot connect over SSH` warnings in its log are expected.
 - **CLI:** run `.local-dev/jman <command>`, e.g. `.local-dev/jman search example`.
 - **Login:** the user has no TOTP, so jman-api limits it to the edit level (no user or agent-token admin in the UI).
 - **Ports:** 8080 (API) and 5173 (UI); override them with `LOCAL_DEV_API_PORT` and `LOCAL_DEV_UI_PORT`. Open the UI at `localhost`, not `127.0.0.1`, or its session cookie won't reach the API.

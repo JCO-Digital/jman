@@ -167,8 +167,10 @@ ensure_site() {
 
 # Fake servers and sites so the UI and CLI have something to show. Their
 # domains (.test), SSH hosts (.invalid) and IPs (192.0.2.0/24) are reserved
-# and never resolve, and with the refresh off jman-api doesn't connect to
-# them on its own; a manual `jman wp` or update job just fails to resolve.
+# and never resolve. jman-api still tries to read their plugins over SSH
+# when the dashboard loads vulnerabilities (GET /api/vulns refreshes stale
+# sites), and a manual `jman wp` or update job does too: those fail to
+# resolve and only log "Cannot connect over SSH".
 seed_fake() {
 	local token="$1" web1 web2
 	log "Seeding fake servers and sites..."
