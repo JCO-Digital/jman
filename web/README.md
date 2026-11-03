@@ -38,11 +38,13 @@ pnpm install
 
 ### 2. Environment Setup
 
-By default, the application expects the API to be available at `/api`. You can override this by creating a `.env` file in the root directory:
+By default, the application expects the API to be available at `/api`. You can override this by creating a `.env` file in `web/`:
 
 ```env
-VITE_API_BASE_URL=http://localhost:3000/api
+VITE_API_BASE_URL=http://localhost:8080/api
 ```
+
+jman-api then also needs the UI's origin in `allowedOrigins` (e.g. `["http://localhost:5173"]`). `make local-dev` in the repo root sets up both for you, together with the API and a test user.
 
 ### 3. Run the development server
 

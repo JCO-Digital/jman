@@ -1,4 +1,5 @@
-.PHONY: build dev dev-api prepare install clean test format completions dev-ui build-ui install-ui clean-ui
+.PHONY: build dev dev-api prepare install clean test format completions dev-ui build-ui install-ui clean-ui \
+	local-dev local-dev-reset local-dev-agent local-dev-agent-down local-dev-agent-infect local-dev-agent-clean
 
 # Go build flags
 LDFLAGS := -s -w -X github.com/JCO-Digital/jman/internal/config.AppVersion=$(shell git describe --tags --always --dirty || echo "dev")
@@ -63,3 +64,28 @@ install-ui:
 
 clean-ui:
 	$(MAKE) -C web clean
+
+# Whole stack locally (jman-api with hot reload, web UI, logged-in CLI),
+# isolated in .local-dev/. See README.md, "Local development".
+LOCAL_DEV := scripts/local-dev/local-dev.sh
+
+local-dev:
+	@$(LOCAL_DEV) up
+
+local-dev-reset:
+	@$(LOCAL_DEV) reset
+
+# Docker containers acting as managed servers, each running jman-agent
+# against the local jman-api (needs make local-dev running).
+local-dev-agent:
+	@$(LOCAL_DEV) agent-up
+
+local-dev-agent-down:
+	@$(LOCAL_DEV) agent-down
+
+# Plant or remove inert files that trigger the agent's scan rules.
+local-dev-agent-infect:
+	@$(LOCAL_DEV) infect
+
+local-dev-agent-clean:
+	@$(LOCAL_DEV) clean

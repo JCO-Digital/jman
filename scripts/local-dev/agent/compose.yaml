@@ -1,0 +1,72 @@
+# make local-dev-agent: containers that act as managed servers, each running
+# jman-agent against the jman-api of make local-dev on the host. Run through
+# scripts/local-dev/local-dev.sh, which sets API_PORT, AGENT_ENV_DIR and
+# AGENT_BIN_DIR and creates the per-server token files.
+name: jman-local-dev
+
+x-server: &server
+  build:
+    context: .
+    additional_contexts:
+      agentbin: ${AGENT_BIN_DIR:?run through scripts/local-dev/local-dev.sh}
+  image: jman-local-dev-server
+  init: true
+  depends_on:
+    mariadb:
+      condition: service_healthy
+  # jman-api listens on all interfaces of the host.
+  extra_hosts:
+    - host.docker.internal:host-gateway
+
+services:
+  mariadb:
+    image: mariadb:11.4
+    environment:
+      MARIADB_ROOT_PASSWORD: localdev
+    volumes:
+      - db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+
+  dev-agent-1:
+    <<: *server
+    hostname: dev-agent-1
+    env_file:
+      # JMAN_AGENT_TOKEN, created by local-dev.sh agent-up.
+      - path: ${AGENT_ENV_DIR}/dev-agent-1.env
+        required: false
+    environment:
+      SITES: alpha.local-dev.test beta.local-dev.test
+      DB_ROOT_PASSWORD: localdev
+      JMAN_AGENT_API_URL: http://host.docker.internal:${API_PORT:-8080}/api
+    volumes:
+      - sites-1:/sites
+      - state-1:/var/lib/jman-agent
+      - wpcli-cache:/var/cache/wp-cli
+
+  dev-agent-2:
+    <<: *server
+    hostname: dev-agent-2
+    env_file:
+      # JMAN_AGENT_TOKEN, created by local-dev.sh agent-up.
+      - path: ${AGENT_ENV_DIR}/dev-agent-2.env
+        required: false
+    environment:
+      SITES: gamma.local-dev.test
+      DB_ROOT_PASSWORD: localdev
+      JMAN_AGENT_API_URL: http://host.docker.internal:${API_PORT:-8080}/api
+    volumes:
+      - sites-2:/sites
+      - state-2:/var/lib/jman-agent
+      - wpcli-cache:/var/cache/wp-cli
+
+volumes:
+  db:
+  sites-1:
+  sites-2:
+  state-1:
+  state-2:
+  wpcli-cache:
