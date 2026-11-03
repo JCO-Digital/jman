@@ -73,6 +73,10 @@ func ListTasksHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Failed to retrieve tasks")
 		return
 	}
+	if tasks == nil {
+		// An empty list, not null: jman-ui filters the result.
+		tasks = []models.Task{}
+	}
 
 	WriteJSON(w, http.StatusOK, tasks)
 }
