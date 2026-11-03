@@ -16,7 +16,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "10"
+const RuleSetVersion = "11"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -33,6 +33,7 @@ const (
 	RuleUnreadable     = "unreadable"
 	RuleCoreModified   = "core-modified"
 	RuleCoreUnknown    = "core-unknown-file"
+	RuleCoreTruncated  = "core-truncated"
 	RulePluginModified = "plugin-modified"
 	RulePluginUnknown  = "plugin-unknown-file"
 	RuleSuspicious     = "suspicious-code"
@@ -53,6 +54,7 @@ var severities = map[string]string{
 	RuleUnreadable:     "low",
 	RuleCoreModified:   "high",
 	RuleCoreUnknown:    "high",
+	RuleCoreTruncated:  "low", // a broken install, not a compromise: the file is core's own
 	RulePluginModified: "high",
 	RulePluginUnknown:  "high",
 	// RuleSuspicious's severity is that of the worst content rule matched.
@@ -67,7 +69,7 @@ var severities = map[string]string{
 
 // isCoreRule reports whether a checksum rule is one of core's.
 func isCoreRule(rule string) bool {
-	return rule == RuleCoreModified || rule == RuleCoreUnknown
+	return rule == RuleCoreModified || rule == RuleCoreUnknown || rule == RuleCoreTruncated
 }
 
 // signature is what has to change for a tracked file to count as changed:
@@ -141,6 +143,9 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 						// shells outside PHP files.
 						findings[len(findings)-1].Severity = "medium"
 					}
+				case RuleCoreTruncated:
+					flag(RuleCoreTruncated, change+" copy of a core file under a name cut to 100 bytes when WordPress was unpacked "+
+						"(wp core download with wp-cli 2.12 or older); core files are missing, so reinstall core")
 				case RulePluginModified:
 					flag(RulePluginModified, change+" plugin file that differs from its checksum on wordpress.org")
 				case RulePluginUnknown:
@@ -197,7 +202,7 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 // stateRules flag a state rather than a change, so they're worth
 // reporting on a first scan too, when there's nothing to compare against.
 // (The service's first scan has no checksums for core files yet.)
-var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RulePluginModified: true, RulePluginUnknown: true, RuleSuspicious: true,
+var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RuleCoreTruncated: true, RulePluginModified: true, RulePluginUnknown: true, RuleSuspicious: true,
 	RulePersistence: true, RuleHomeBinary: true, RuleDisguised: true}
 
 // EvaluateFirst returns what the rules flag on a scan without a baseline:
