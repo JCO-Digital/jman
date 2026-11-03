@@ -31,6 +31,8 @@ jman-api useradd --username admin --display-name "Admin User"
 | ---------------- | -------- | ----------------------------- |
 | `--username`     | Yes      | Username for the new user     |
 | `--display-name` | Yes      | Display name for the new user |
+| `--level`        | No       | `basic` (default), `edit`, `admin` or `execute` |
+| `--password-stdin` | No     | Read the password from the first line of stdin instead of prompting (for scripts) |
 
 The command will:
 
@@ -46,6 +48,14 @@ A standalone utility that prompts for a password and prints the bcrypt hash to s
 
 ```bash
 jman-api hashpw
+```
+
+### `agent-token` — Create a jman-agent token
+
+Creates a token for a server's jman-agent, as the jman-ui Settings page does, and prints it to stdout once. The server is given by its UUID or exact name and must not be logical.
+
+```bash
+jman-api agent-token --server web-1 --description "provisioned by Ansible"
 ```
 
 ### `totp-setup` — Configure TOTP for a user
