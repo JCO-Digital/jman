@@ -71,6 +71,10 @@ func TestContentPatterns(t *testing.T) {
 		{`<?php call_user_func($callback, $args);`, nil},
 		{`<?php $wso = get_option('wso_settings');`, nil},
 		{`<?php // eval() is evil, so we don't use it`, nil},
+		// A call on the line after a comment is judged by its own line.
+		{"<?php\n// cache\neval(base64_decode('ZWNobyAxOw=='));", []string{"eval-decoded"}},
+		{"<?php\n# cache\r\nsystem(base64_decode($c));", []string{"eval-decoded"}},
+		{"<?php\n$x = 1;\n// eval(base64_decode('ZWNobyAxOw=='));", nil},
 	} {
 		if got := matchedNames(c.body); !slices.Equal(got, c.want) {
 			t.Errorf("%s\nmatched %q, want %q", c.body, got, c.want)
@@ -139,4 +143,12 @@ func contentEntries(entries []Entry) []string {
 	}
 	slices.Sort(got)
 	return got
+}
+
+func TestContentMatchLine(t *testing.T) {
+	body := "<?php\n// cache\neval(base64_decode('ZWNobyAxOw=='));\n"
+	m := matchContent([]byte(body))
+	if len(m) != 1 || m[0].line != 3 || !strings.HasPrefix(m[0].excerpt, "eval(") {
+		t.Fatalf("matches = %+v, want eval-decoded on line 3 starting at eval(", m)
+	}
 }
