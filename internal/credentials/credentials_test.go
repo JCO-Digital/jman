@@ -70,3 +70,27 @@ func TestFileFallback(t *testing.T) {
 		t.Error("expected the empty file to be removed")
 	}
 }
+
+func TestNoKeyring(t *testing.T) {
+	useTempConfigDir(t)
+	keyring.MockInit()
+	t.Setenv(noKeyringEnv, "1")
+	// A keyring entry must neither shadow the file nor be removed.
+	if err := keyring.Set(keyringService, "https://a.example.com", "from_keyring"); err != nil {
+		t.Fatal(err)
+	}
+
+	where, err := Set("https://a.example.com", "jman_cli_a")
+	if err != nil || where != filePath() {
+		t.Fatalf("Set = %q, %v", where, err)
+	}
+	if got, err := Get("https://a.example.com"); err != nil || got != "jman_cli_a" {
+		t.Errorf("Get = %q, %v", got, err)
+	}
+	if err := Delete("https://a.example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := keyring.Get(keyringService, "https://a.example.com"); err != nil || got != "from_keyring" {
+		t.Errorf("keyring entry after Delete = %q, %v", got, err)
+	}
+}

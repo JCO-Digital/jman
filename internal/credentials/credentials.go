@@ -21,6 +21,13 @@ const keyringService = "jman"
 // fileName is the fallback file in the config directory.
 const fileName = "credentials.json"
 
+// noKeyringEnv, when set to a non-empty value, makes the CLI keep its tokens
+// only in the file, never in the OS keyring. make local-dev sets it so a
+// throwaway CLI never reads or writes the developer's real keyring.
+const noKeyringEnv = "JMAN_NO_KEYRING"
+
+func useKeyring() bool { return os.Getenv(noKeyringEnv) == "" }
+
 // ErrNotFound is returned when there is no token for an API URL.
 var ErrNotFound = errors.New("not logged in")
 
@@ -31,8 +38,10 @@ type fileData struct {
 
 // Get returns the token stored for apiURL, or ErrNotFound.
 func Get(apiURL string) (string, error) {
-	if token, err := keyring.Get(keyringService, apiURL); err == nil {
-		return token, nil
+	if useKeyring() {
+		if token, err := keyring.Get(keyringService, apiURL); err == nil {
+			return token, nil
+		}
 	}
 	data, err := readFile()
 	if err != nil {
@@ -47,10 +56,12 @@ func Get(apiURL string) (string, error) {
 // Set stores token for apiURL, in the OS keyring if possible and in the
 // fallback file otherwise. It reports where the token was stored.
 func Set(apiURL, token string) (string, error) {
-	if err := keyring.Set(keyringService, apiURL, token); err == nil {
-		// Don't leave an older copy behind in the file.
-		_ = removeFromFile(apiURL)
-		return "the system keyring", nil
+	if useKeyring() {
+		if err := keyring.Set(keyringService, apiURL, token); err == nil {
+			// Don't leave an older copy behind in the file.
+			_ = removeFromFile(apiURL)
+			return "the system keyring", nil
+		}
 	}
 	data, err := readFile()
 	if err != nil {
@@ -66,7 +77,9 @@ func Set(apiURL, token string) (string, error) {
 // Delete removes the token for apiURL from both the keyring and the file.
 func Delete(apiURL string) error {
 	// Errors only mean there was no keyring entry or no keyring at all.
-	_ = keyring.Delete(keyringService, apiURL)
+	if useKeyring() {
+		_ = keyring.Delete(keyringService, apiURL)
+	}
 	return removeFromFile(apiURL)
 }
 
