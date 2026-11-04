@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useVulnStore } from "../../stores/vulns";
+import { useAIStore, vulnGroupKey } from "../../stores/ai";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import { useConfirm } from "../../composables/useConfirm";
@@ -24,6 +25,7 @@ type SectionKey = "open" | "resolved" | "muted";
 const sectionKeys: SectionKey[] = ["open", "resolved", "muted"];
 
 const vulnStore = useVulnStore();
+const aiStore = useAIStore();
 const authStore = useAuthStore();
 const toastStore = useToastStore();
 const { confirm } = useConfirm();
@@ -43,7 +45,11 @@ const loading = ref(false);
 const search = ref("");
 const fixFilter = ref<"" | "fix_available" | "no_fix">("");
 const closedOnly = ref(false);
+const sortBy = ref<"default" | "ai">("default");
 const canMute = computed(() => authStore.canExecute);
+const canRank = computed(
+	() => authStore.canExecute && !!aiStore.status?.enabled,
+);
 
 const muteTarget = ref<MuteTarget | null>(null);
 const taskDefaults = ref<ReturnType<typeof exposureTaskDefaults> | null>(null);
@@ -59,6 +65,7 @@ async function refresh() {
 				await Promise.all([
 					vulnStore.fetchOpenGroups(),
 					vulnStore.fetchSummary(),
+					loadAI(),
 				]);
 				break;
 			case "resolved":
@@ -83,6 +90,33 @@ async function refresh() {
 
 defineExpose({ refresh });
 
+/** The AI ranking is optional: failures only hide it. */
+async function loadAI() {
+	try {
+		await Promise.all([aiStore.fetchStatus(), aiStore.fetchVulnRanking()]);
+	} catch (e) {
+		console.error("Failed to load the AI ranking:", e);
+	}
+}
+
+async function rankWithAI() {
+	try {
+		await aiStore.rankVulns();
+		sortBy.value = "ai";
+		toastStore.addToast("Ranked with AI", "success");
+	} catch (e) {
+		toastStore.addToast(
+			e instanceof Error ? e.message : "Failed to rank with AI",
+			"error",
+		);
+	}
+}
+
+const rankedAt = computed(() => {
+	const run = aiStore.vulnRanking;
+	return run ? formatDate(run.finished_at ?? run.created_at) : "";
+});
+
 /** Groups with only the sites matching the search and filters. */
 function filtered(groups: VulnExposureGroup[]): VulnExposureGroup[] {
 	const q = search.value.trim().toLowerCase();
@@ -103,7 +137,13 @@ function filtered(groups: VulnExposureGroup[]): VulnExposureGroup[] {
 	return result;
 }
 
-const openGroups = computed(() => filtered(vulnStore.openGroups));
+const openGroups = computed(() => {
+	const groups = filtered(vulnStore.openGroups);
+	if (sortBy.value !== "ai" || !aiStore.vulnRanks.size) return groups;
+	const rank = (g: VulnExposureGroup) =>
+		aiStore.vulnRanks.get(vulnGroupKey(g))?.rank ?? Number.MAX_SAFE_INTEGER;
+	return [...groups].sort((a, b) => rank(a) - rank(b));
+});
 const resolvedGroups = computed(() => filtered(vulnStore.resolvedGroups));
 
 function groupKey(g: VulnExposureGroup) {
@@ -185,6 +225,28 @@ async function afterMute() {
 					<input v-model="closedOnly" type="checkbox" />
 					Closed plugins only
 				</label>
+				<select
+					v-if="aiStore.vulnRanks.size"
+					v-model="sortBy"
+					class="input-field"
+					title="Order of the groups"
+				>
+					<option value="default">Overdue first</option>
+					<option value="ai">AI priority</option>
+				</select>
+				<button
+					v-if="canRank"
+					class="btn btn-sm btn-outline"
+					:disabled="aiStore.ranking"
+					title="Ask Claude to rank the open groups by urgency. Advisory only."
+					@click="rankWithAI"
+				>
+					{{ aiStore.ranking ? "Ranking…" : "Rank with AI" }}
+				</button>
+				<span v-if="rankedAt" class="sub-text">
+					AI ranking from {{ rankedAt
+					}}{{ aiStore.status?.fake ? " (fake)" : "" }}
+				</span>
 			</PanelToolbar>
 
 			<EmptyState
@@ -207,6 +269,7 @@ async function afterMute() {
 				:key="groupKey(g)"
 				:group="g"
 				:can-mute="canMute"
+				:ai-rank="aiStore.vulnRanks.get(vulnGroupKey(g))"
 				:initially-open="g.overdue_count > 0"
 				@mute="(s) => openMute(g, s)"
 				@confirm="(s, m) => openMute(g, s, m)"

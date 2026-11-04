@@ -1345,3 +1345,71 @@ export interface VulnExposureSummary {
 	muted: number;
 	needs_review: number;
 }
+
+// --- AI gateway (see docs/ai-gateway.md) ---
+
+export type AIRunStatus =
+	| "queued"
+	| "running"
+	| "succeeded"
+	| "failed"
+	| "refused"
+	| "canceled";
+
+export interface AIStatus {
+	enabled: boolean;
+	/** Canned answers instead of the Claude API (local development). */
+	fake: boolean;
+	reason?: string;
+	daily_budget_usd: number;
+	spent_today_usd: number;
+}
+
+export interface AIRun<Output = unknown> {
+	id: string;
+	agent: string;
+	agent_version: string;
+	model: string;
+	status: AIRunStatus;
+	input: unknown;
+	/** Sent through the Message Batches API. */
+	batch: boolean;
+	batch_id?: string;
+	output?: Output;
+	error?: string;
+	refusal_category?: string;
+	reused_from?: string;
+	turns: number;
+	cost_micros: number;
+	requested_by: string;
+	trigger: "api" | "schedule";
+	created_at: string;
+	started_at?: string;
+	finished_at?: string;
+}
+
+export type AIVulnPriority = "P1" | "P2" | "P3" | "P4";
+
+export type AIVulnAction =
+	| "update_now"
+	| "update_this_week"
+	| "remove_plugin"
+	| "mute_candidate"
+	| "investigate";
+
+/** The vuln-rank agent's ranking of one exposure group. */
+export interface AIVulnRank {
+	/** "plugin:<slug>" or "core:<version>". */
+	key: string;
+	rank: number;
+	priority: AIVulnPriority;
+	score: number;
+	action: AIVulnAction;
+	rationale: string;
+	confidence: "low" | "medium" | "high";
+}
+
+export interface AIVulnRanking {
+	rankings: AIVulnRank[];
+	unranked?: string[];
+}

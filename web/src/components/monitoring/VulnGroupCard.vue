@@ -5,6 +5,7 @@ import VulnerabilityList from "../VulnerabilityList.vue";
 import { severityClass } from "./scan";
 import { closedLabel, cvssSeverity, formatCvss, formatDate } from "./vuln";
 import type {
+	AIVulnRank,
 	VulnExposureGroup,
 	VulnExposureSite,
 	VulnMute,
@@ -17,6 +18,8 @@ const props = defineProps<{
 	/** Resolved exposures: no due dates or actions. */
 	resolved?: boolean;
 	initiallyOpen?: boolean;
+	/** The vuln-rank agent's advisory ranking of the group. */
+	aiRank?: AIVulnRank;
 }>();
 
 const emit = defineEmits<{
@@ -45,6 +48,18 @@ const fixLabel = computed(() => {
 		cls: "nofix",
 	};
 });
+
+const aiActions: Record<AIVulnRank["action"], string> = {
+	update_now: "update now",
+	update_this_week: "update this week",
+	remove_plugin: "remove the plugin",
+	mute_candidate: "consider muting",
+	investigate: "investigate",
+};
+
+function aiBadgeClass(priority: AIVulnRank["priority"]) {
+	return priority === "P1" ? "error" : priority === "P2" ? "warning" : "info";
+}
 
 function siteCount(n: number) {
 	return `${n} site${n === 1 ? "" : "s"}`;
@@ -85,6 +100,13 @@ function siteCount(n: number) {
 				>{{ closedLabel(group) }}</span
 			>
 			<span class="spacer"></span>
+			<span
+				v-if="aiRank && !resolved"
+				class="status-badge badge-sm"
+				:class="aiBadgeClass(aiRank.priority)"
+				:title="`AI #${aiRank.rank} (score ${aiRank.score}): ${aiRank.rationale}`"
+				>AI {{ aiRank.priority }}</span
+			>
 			<span class="sub-text">{{ siteCount(group.sites.length) }}</span>
 			<span v-if="group.overdue_count" class="label overdue-label">
 				{{ group.overdue_count }} overdue
@@ -95,6 +117,13 @@ function siteCount(n: number) {
 		</div>
 
 		<div v-if="open" class="group-body">
+			<p v-if="aiRank && !resolved" class="sub-text note">
+				<span class="font-medium"
+					>AI suggests: {{ aiActions[aiRank.action] }}</span
+				>
+				({{ aiRank.priority }}, #{{ aiRank.rank }},
+				{{ aiRank.confidence }} confidence). {{ aiRank.rationale }}
+			</p>
 			<p v-if="group.closed && group.last_updated" class="sub-text note">
 				Closed on wordpress.org{{
 					group.closed_date ? ` on ${group.closed_date}` : ""
