@@ -8,7 +8,8 @@ import (
 
 // forbiddenDeps are packages the jman CLI must not link: it gets its data
 // from jman-api, and the database code belongs to jman-api alone (see
-// docs/cli-api-client.md).
+// docs/cli-api-client.md). The AI gateway and the Claude SDK are jman-api's
+// too (docs/ai-gateway.md).
 var forbiddenDeps = []string{
 	"github.com/JCO-Digital/jman/internal/db",
 	"github.com/JCO-Digital/jman/internal/cache",
@@ -17,6 +18,9 @@ var forbiddenDeps = []string{
 	"github.com/JCO-Digital/jman/internal/vuln",
 	"github.com/JCO-Digital/jman/internal/slack",
 	"github.com/JCO-Digital/jman/internal/api",
+	"github.com/JCO-Digital/jman/internal/ai",
+	"github.com/JCO-Digital/jman/internal/threatintel",
+	"github.com/anthropics/anthropic-sdk-go/",
 	"modernc.org/sqlite",
 }
 

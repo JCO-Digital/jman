@@ -539,6 +539,55 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// ai_runs has one row per call of an AI agent (see
+			// docs/ai-gateway.md). cost_micros is the estimated cost in
+			// millionths of a US dollar.
+			Name: "ai_runs",
+			Columns: map[string]string{
+				"id":                          "TEXT PRIMARY KEY",
+				"agent":                       "TEXT NOT NULL",
+				"agent_version":               "TEXT NOT NULL",
+				"model":                       "TEXT NOT NULL",
+				"status":                      "TEXT NOT NULL",
+				"input":                       "TEXT NOT NULL DEFAULT '{}'",
+				"batch":                       "BOOLEAN NOT NULL DEFAULT 0",
+				"batch_id":                    "TEXT NOT NULL DEFAULT ''",
+				"prompt_state":                "TEXT",
+				"output":                      "TEXT",
+				"error":                       "TEXT NOT NULL DEFAULT ''",
+				"stop_reason":                 "TEXT NOT NULL DEFAULT ''",
+				"refusal_category":            "TEXT NOT NULL DEFAULT ''",
+				"request_hash":                "TEXT NOT NULL DEFAULT ''",
+				"reused_from":                 "TEXT NOT NULL DEFAULT ''",
+				"turns":                       "INTEGER NOT NULL DEFAULT 0",
+				"input_tokens":                "INTEGER NOT NULL DEFAULT 0",
+				"output_tokens":               "INTEGER NOT NULL DEFAULT 0",
+				"cache_read_input_tokens":     "INTEGER NOT NULL DEFAULT 0",
+				"cache_creation_input_tokens": "INTEGER NOT NULL DEFAULT 0",
+				"cost_micros":                 "INTEGER NOT NULL DEFAULT 0",
+				"requested_by":                "TEXT NOT NULL DEFAULT ''",
+				"triggered_by":                "TEXT NOT NULL DEFAULT 'api'",
+				"created_at":                  "DATETIME NOT NULL",
+				"started_at":                  "DATETIME",
+				"finished_at":                 "DATETIME",
+			},
+		},
+		{
+			// ai_run_steps records the tool calls an AI run made.
+			Name: "ai_run_steps",
+			Columns: map[string]string{
+				"run_id":     "TEXT NOT NULL",
+				"seq":        "INTEGER NOT NULL",
+				"turn":       "INTEGER NOT NULL",
+				"tool":       "TEXT NOT NULL",
+				"input":      "TEXT NOT NULL DEFAULT '{}'",
+				"output":     "TEXT NOT NULL DEFAULT ''",
+				"is_error":   "BOOLEAN NOT NULL DEFAULT 0",
+				"created_at": "DATETIME NOT NULL",
+			},
+			PrimaryKey: []string{"run_id", "seq"},
+		},
+		{
 			// monitor_checks holds everything the uptime monitor checks. A
 			// default check belongs to a site (in inventory.db, so site_id
 			// is a soft reference) and takes its host from the site.
@@ -1307,6 +1356,18 @@ func initAPISchema() error {
 	}
 	// At most one open mute per plugin (or core) and site.
 	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vuln_mutes_open ON vuln_mutes(kind, slug, site_id) WHERE status != 'lifted';")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_ai_runs_agent_created ON ai_runs(agent, created_at);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_ai_runs_status ON ai_runs(status);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_ai_runs_request_hash ON ai_runs(request_hash);")
 	if err != nil {
 		return err
 	}

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
 // jman-agent runs as root, but never runs WordPress code as root: every
@@ -186,9 +188,11 @@ func (r *wpRunner) run(ctx context.Context, id siteIdentity, sitePath string, ar
 
 // runWithPlugins is run with the site's plugins loaded (themes are still
 // skipped), for the plugin list: premium plugins report their updates only
-// when loaded. They run as the site's owner like everything else here.
+// when loaded, and some only with their admin-only update checks
+// registered (wpcli.PremiumUpdatesArg). They run as the site's owner like
+// everything else here.
 func (r *wpRunner) runWithPlugins(ctx context.Context, id siteIdentity, sitePath string, args ...string) (string, error) {
-	return r.exec(ctx, id, sitePath, []string{"--skip-themes"}, args)
+	return r.exec(ctx, id, sitePath, []string{"--skip-themes", wpcli.PremiumUpdatesArg()}, args)
 }
 
 func (r *wpRunner) exec(ctx context.Context, id siteIdentity, sitePath string, skip, args []string) (string, error) {

@@ -170,9 +170,19 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 	}
 
 	// Listed with the plugins loaded so premium plugins report their
-	// updates; if a broken plugin stops that, listed again skipped.
-	out, err := runner.runWithPlugins(ctx, id, sitePath, "plugin", "list", "--format=json")
+	// updates, as an administrator, since some (FileBird Pro) check for
+	// updates only when current_user_can('manage_options'), and with the
+	// admin-only update checks of others (Yoast add-ons) registered by
+	// runWithPlugins. If a
+	// broken plugin (or a since-deleted administrator) stops that, listed
+	// again with plugins skipped, where none of it matters.
+	listArgs := []string{"plugin", "list", "--format=json"}
+	if admin := siteAdminUser(ctx, runner, id, sitePath, site); admin > 0 {
+		listArgs = append(listArgs, fmt.Sprintf("--user=%d", admin))
+	}
+	out, err := runner.runWithPlugins(ctx, id, sitePath, listArgs...)
 	if err != nil {
+		forgetAdminUser(site.SiteID)
 		verb.LogPrintf(verb.Normal, "Failed to list plugins for %s with plugins loaded, retrying with them skipped: %v", site.Domain, err)
 		if out, err = runner.run(ctx, id, sitePath, "plugin", "list", "--format=json"); err != nil {
 			return fail(err)
@@ -221,6 +231,57 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 		data.Users = users
 	}
 	return data
+}
+
+// adminUserTTL is how long a site's administrator user ID is reused before
+// it's looked up again, as on the SSH side (wpcli.AdminUsers).
+const adminUserTTL = 24 * time.Hour
+
+type cachedAdminUser struct {
+	id int
+	at time.Time
+}
+
+// adminUsers caches each site's administrator user ID in memory; after a
+// restart it's looked up again on the first collection.
+var (
+	adminUsers   = map[string]cachedAdminUser{}
+	adminUsersMu sync.Mutex
+)
+
+// siteAdminUser returns the site's lowest-numbered administrator user ID,
+// cached for adminUserTTL, or 0 (list without --user) if there is none or
+// it can't be looked up. A failed lookup reuses an expired ID.
+func siteAdminUser(ctx context.Context, runner wpDataRunner, id siteIdentity, sitePath string, site models.AgentManifestSite) int {
+	adminUsersMu.Lock()
+	cached, ok := adminUsers[site.SiteID]
+	adminUsersMu.Unlock()
+	if ok && time.Since(cached.at) < adminUserTTL {
+		return cached.id
+	}
+
+	out, err := runner.run(ctx, id, sitePath, wpcli.AdminUserListArgs()...)
+	var admin int
+	if err == nil {
+		admin, err = wpcli.ParseLowestAdminUserID(out)
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to find an administrator for %s, listing plugins without one: %v", site.Domain, err)
+		return cached.id
+	}
+
+	adminUsersMu.Lock()
+	adminUsers[site.SiteID] = cachedAdminUser{id: admin, at: time.Now()}
+	adminUsersMu.Unlock()
+	return admin
+}
+
+// forgetAdminUser drops a site's cached administrator, so the next
+// collection looks it up again.
+func forgetAdminUser(siteID string) {
+	adminUsersMu.Lock()
+	delete(adminUsers, siteID)
+	adminUsersMu.Unlock()
 }
 
 // collectSiteUsers lists a site's users without the excluded roles, which

@@ -8,13 +8,13 @@
 #   local-dev.sh agent-down    stop them, keeping their volumes    (make local-dev-agent-down)
 #   local-dev.sh infect|clean  plant or remove scan fixtures       (make local-dev-agent-infect / -clean)
 #
-# Nothing here reads or writes ~/.config/jman or the OS keyring, and no
-# SpinupWP, Slack or PagerDuty token is configured. See README.md, "Local
+# Nothing here reads or writes ~/.config/jman, ~/.ssh or the OS keyring, and
+# no SpinupWP, Slack or PagerDuty token is configured. See README.md, "Local
 # development".
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-STATE="$ROOT/.local-dev"
+STATE="${LOCAL_DEV_STATE:-$ROOT/.local-dev}"
 API_PORT="${LOCAL_DEV_API_PORT:-8080}"
 UI_PORT="${LOCAL_DEV_UI_PORT:-5173}"
 # localhost, not 127.0.0.1: the web UI's refresh cookie is SameSite=Strict,
@@ -24,13 +24,24 @@ UI_URL="http://localhost:$UI_PORT"
 DEV_USER="admin"
 AIR_VERSION="v1.67.4"
 COMPOSE_FILE="$ROOT/scripts/local-dev/agent/compose.yaml"
-COMPOSE_PROJECT="jman-local-dev"
+COMPOSE_PROJECT="${LOCAL_DEV_PROJECT:-jman-local-dev}"
+# The containers' bridge interface, named after the project (interface names
+# are at most 15 characters) so a host firewall rule can let the agents
+# reach jman-api; see check_agent_reach.
+AGENT_BRIDGE="${COMPOSE_PROJECT:0:15}"
+SSH_PORT="${LOCAL_DEV_SSH_PORT:-2221}"
+# Your own jman-api settings (gitignored), appended to the generated config.
+EXTRA_CONFIG="${LOCAL_DEV_API_CONFIG:-$ROOT/.local-dev.toml}"
+WP_CLI_VERSION="2.12.0"
 
-# The agent containers: "<server name>:<site domain> <site domain> ...".
-# Site users are the first label of each domain.
-AGENT_SERVERS=(
-	"dev-agent-1:alpha.local-dev.test beta.local-dev.test"
-	"dev-agent-2:gamma.local-dev.test"
+# The server containers: "<name> <agent|ssh> <domain>:<environment> ...".
+# The n-th listens for SSH on 127.0.0.1:$SSH_PORT+n-1; "ssh" servers run no
+# jman-agent. Site users are the first label of each domain. The plugins of
+# each site are in agent/entrypoint.sh (site_plugins).
+SERVERS=(
+	"dev-agent-1 agent alpha.local-dev.test:production beta.local-dev.test:staging"
+	"dev-agent-2 agent gamma.local-dev.test:production"
+	"dev-ssh-1 ssh delta.local-dev.test:production"
 )
 
 log() { printf '\033[1;34m[local-dev]\033[0m %s\n' "$*" >&2; }
@@ -46,10 +57,16 @@ need() {
 port_in_use() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
 # Go's own caches and settings, resolved before XDG_* is pointed into
-# .local-dev, so builds keep using the developer's (warm) caches.
+# .local-dev, so builds keep using the developer's (warm) caches. The Go
+# toolchain's own bin comes first on PATH: a version manager's shim (mise,
+# asdf) reads its config from XDG_* too, and fails under jman-api's.
 go_env() {
+	local goroot
+	goroot="$(go env GOROOT)"
+	[[ -x "$goroot/bin/go" ]] || die "go env GOROOT gave $goroot, which has no bin/go"
 	GOCACHE="$(go env GOCACHE)" GOMODCACHE="$(go env GOMODCACHE)" GOPATH="$(go env GOPATH)" GOENV="$(go env GOENV)"
-	export GOCACHE GOMODCACHE GOPATH GOENV
+	PATH="$goroot/bin:$PATH"
+	export GOCACHE GOMODCACHE GOPATH GOENV PATH
 }
 
 # Drop any JMAN_* setting inherited from the developer's shell (a real
@@ -59,14 +76,74 @@ clear_jman_env() {
 	for v in $(compgen -e | grep '^JMAN_' || true); do unset "$v"; done
 }
 
-# Environment of jman-api and its admin subcommands.
+# Environment of jman-api and its admin subcommands (run with env -u
+# SSH_AUTH_SOCK, so no key of the developer's SSH agent is offered). PATH
+# starts with the SSH wrappers (ensure_ssh) and the real PHP, which the local
+# wp-cli runs on: a version manager's PHP shim fails under these XDG_* too.
+API_ENV=()
 api_env() {
-	export XDG_CONFIG_HOME="$STATE/api/config" XDG_DATA_HOME="$STATE/api/data" \
-		XDG_CACHE_HOME="$STATE/api/cache" XDG_STATE_HOME="$STATE/api/state" \
-		JMAN_API_PORT="$API_PORT"
+	local path="$STATE/api/bin" php_bin
+	if php_bin="$(php -r 'echo PHP_BINARY;' 2>/dev/null)" && [[ -x "$php_bin" ]]; then
+		path="$path:$(dirname "$php_bin")"
+	fi
+	API_ENV=(XDG_CONFIG_HOME="$STATE/api/config" XDG_DATA_HOME="$STATE/api/data"
+		XDG_CACHE_HOME="$STATE/api/cache" XDG_STATE_HOME="$STATE/api/state"
+		JMAN_API_PORT="$API_PORT" PATH="$path:$PATH")
+	if [[ -n "${LOCAL_DEV_ANTHROPIC_API_KEY:-}" ]]; then
+		API_ENV+=(JMAN_ANTHROPICAPIKEY="$LOCAL_DEV_ANTHROPIC_API_KEY")
+	fi
 }
 
-jman_api() { (api_env; "$STATE/bin/jman-api" "$@"); }
+jman_api() { env -u SSH_AUTH_SOCK "${API_ENV[@]}" "$STATE/bin/jman-api" "$@"; }
+
+# jman-api's SSH: its own key, config and known_hosts in .local-dev/ssh,
+# through wrappers in .local-dev/api/bin that jman-api and the wp-cli it runs
+# find first on PATH. ~/.ssh and the SSH agent are never used, so the local
+# jman-api can only log in to the local containers.
+ensure_ssh() {
+	local dir="$STATE/ssh" bin="$STATE/api/bin" tool real
+	mkdir -p "$dir" "$bin"
+	chmod 700 "$dir"
+	[[ -f "$dir/id_ed25519" ]] || ssh-keygen -q -t ed25519 -N "" -C "jman-local-dev" -f "$dir/id_ed25519"
+	cat >"$dir/config" <<-EOF
+		# Generated by scripts/local-dev/local-dev.sh: jman-api's SSH client config.
+		Host *
+			IdentityFile "$dir/id_ed25519"
+			IdentitiesOnly yes
+			IdentityAgent none
+			UserKnownHostsFile "$dir/known_hosts"
+			StrictHostKeyChecking accept-new
+			BatchMode yes
+			ConnectTimeout 10
+	EOF
+	for tool in ssh scp; do
+		real="$(command -v "$tool")"
+		printf '#!/bin/sh\n# Generated by make local-dev.\nexec %q -F %q "$@"\n' "$real" "$dir/config" >"$bin/$tool"
+	done
+	# jman-api checks known_hosts with ssh-keygen -F before connecting.
+	real="$(command -v ssh-keygen)"
+	cat >"$bin/ssh-keygen" <<-EOF
+		#!/bin/sh
+		# Generated by make local-dev: ssh-keygen -F reads .local-dev/ssh/known_hosts.
+		case " \$* " in
+		*" -F "*) case " \$* " in *" -f "*) ;; *) exec $(printf %q "$real") "\$@" -f $(printf %q "$dir/known_hosts") ;; esac ;;
+		esac
+		exec $(printf %q "$real") "\$@"
+	EOF
+	chmod 755 "$bin/ssh" "$bin/scp" "$bin/ssh-keygen"
+	if ! command -v wp >/dev/null 2>&1; then
+		if command -v php >/dev/null 2>&1; then
+			[[ -x "$bin/wp" ]] || {
+				log "Downloading wp-cli $WP_CLI_VERSION (jman-api runs it with --ssh)..."
+				curl -fsSL -o "$bin/wp" \
+					"https://github.com/wp-cli/wp-cli/releases/download/v$WP_CLI_VERSION/wp-cli-$WP_CLI_VERSION.phar"
+				chmod 755 "$bin/wp"
+			}
+		else
+			log "PHP isn't installed, so jman-api can't run wp-cli: plugin updates and other SSH work will fail"
+		fi
+	fi
+}
 
 build_binaries() {
 	log "Building jman and jman-api into .local-dev/bin..."
@@ -84,15 +161,34 @@ write_api_config() {
 		# No SpinupWP, Slack or PagerDuty tokens: those integrations stay off.
 		webUrl = "$UI_URL"
 		allowedOrigins = ["$UI_URL"]
-		# Uptime checks and the SpinupWP/SSH/vulnerability refresh reach real
-		# hosts; both stay off locally.
+		# Uptime checks would reach real hosts; they stay off.
 		monitorDisabled = true
-		refreshDisabled = true
+		# The refresh reads plugins and core over SSH (only the local containers
+		# are reachable, see ensure_ssh), fetches plugin info and vulnerability
+		# data from wordpress.org and wpvulnerability.net, and syncs the
+		# exposures. Every 5 minutes, so new data shows up soon.
+		refreshDisabled = false
+		refreshSlowInterval = 5
 		# The local agents collect WordPress data and scan every minute.
 		agentWpDataInterval = 1
 		agentScanInterval = 1
 		slackChannel = ""
+		aiEnabled = true
+		$(if [[ -n "${LOCAL_DEV_ANTHROPIC_API_KEY:-}" ]]; then
+			printf '%s\n' "# The Claude API, with the key from LOCAL_DEV_ANTHROPIC_API_KEY. Local runs" \
+				"# send only public vulnerability data and counts of the made-up sites." \
+				"aiZdrConfirmed = true"
+		else
+			printf '%s\n' "# Canned answers; set LOCAL_DEV_ANTHROPIC_API_KEY to use the Claude API." "aiFake = true"
+		fi)
 	EOF
+	if [[ -f "$EXTRA_CONFIG" ]]; then
+		log "Adding your settings from $EXTRA_CONFIG to jman-api's config..."
+		printf '\n# From %s:\n' "$EXTRA_CONFIG" >>"$dir/config.toml"
+		cat "$EXTRA_CONFIG" >>"$dir/config.toml"
+	elif [[ -n "${LOCAL_DEV_API_CONFIG:-}" ]]; then
+		die "LOCAL_DEV_API_CONFIG is $LOCAL_DEV_API_CONFIG, which doesn't exist"
+	fi
 	chmod 600 "$dir/config.toml"
 }
 
@@ -107,6 +203,34 @@ ensure_user() {
 	pw="Dev-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
 	(umask 077; printf '%s\n' "$pw" >"$pwfile")
 	printf '%s\n' "$pw" | jman_api useradd --username "$DEV_USER" --display-name "Local Dev Admin" --level admin --password-stdin
+}
+
+# TOTP for the dev user, so it gets the admin level (without TOTP jman-api
+# caps it at edit, which can't run AI agents or update jobs). The secret is in
+# .local-dev/admin-totp-secret; .local-dev/totp prints the current code. Runs
+# before jman-api starts: it reads users.toml once.
+ensure_totp() {
+	local secret="$STATE/admin-totp-secret" out
+	if [[ ! -s "$secret" ]]; then
+		log "Setting up TOTP for '$DEV_USER'..."
+		out="$(printf 'y\n' | jman_api totp-setup --username "$DEV_USER" 2>/dev/null)"
+		(umask 077; sed -n 's/^Secret: *//p' <<<"$out" >"$secret")
+		[[ -s "$secret" ]] || die "jman-api totp-setup printed no secret"
+	fi
+	cat >"$STATE/totp" <<-EOF
+		#!/usr/bin/env bash
+		# Generated by make local-dev: prints the current TOTP code of the local
+		# '$DEV_USER' user (RFC 6238: HMAC-SHA1, 30 seconds, 6 digits).
+		set -euo pipefail
+		secret="\$(tr -d ' \n=' <$(printf %q "$secret"))"
+		while (( \${#secret} % 8 )); do secret+="="; done
+		key="\$(printf '%s' "\$secret" | base32 -d | od -An -v -tx1 | tr -d ' \n')"
+		counter="\$(printf '%016x' \$(( \$(date +%s) / 30 )) | sed 's/../\\\\x&/g')"
+		mac="\$(printf "\$counter" | openssl dgst -sha1 -mac HMAC -macopt "hexkey:\$key" -binary | od -An -v -tx1 | tr -d ' \n')"
+		offset=\$(( 16#\${mac:39:1} * 2 ))
+		printf '%06d\\n' \$(( (16#\${mac:offset:8} & 0x7fffffff) % 1000000 ))
+	EOF
+	chmod 700 "$STATE/totp"
 }
 
 # air from PATH or GOBIN/GOPATH (like make dev-api), else a pinned go run.
@@ -141,7 +265,8 @@ api_call() { # method path token [json]
 
 login_token() {
 	api_call POST /api/auth/login "" \
-		"$(jq -nc --arg u "$DEV_USER" --arg p "$(cat "$STATE/admin-password")" '{username:$u,password:$p}')" |
+		"$(jq -nc --arg u "$DEV_USER" --arg p "$(cat "$STATE/admin-password")" --arg t "$("$STATE/totp")" \
+			'{username:$u,password:$p,totp:$t}')" |
 		jq -r .token
 }
 
@@ -155,22 +280,23 @@ ensure_server() {
 	echo "$id"
 }
 
-# ensure_site token json: creates the site unless its domain exists.
+# ensure_site token json: creates the site, or updates it to json when its
+# domain exists (so a changed setup here reaches existing sites).
 ensure_site() {
-	local domain
+	local domain id
 	domain="$(jq -r .domain <<<"$2")"
-	if api_call GET '/api/sites?format=managed' "$1" | jq -e --arg d "$domain" 'any(.[]; .domain==$d)' >/dev/null; then
-		return
+	id="$(api_call GET '/api/sites?format=managed' "$1" | jq -r --arg d "$domain" 'map(select(.domain==$d))[0].id // empty')"
+	if [[ -n "$id" ]]; then
+		api_call PUT "/api/sites/$id" "$1" "$2" >/dev/null
+	else
+		api_call POST /api/sites "$1" "$2" >/dev/null
 	fi
-	api_call POST /api/sites "$1" "$2" >/dev/null
 }
 
-# Fake servers and sites so the UI and CLI have something to show. Their
-# domains (.test), SSH hosts (.invalid) and IPs (192.0.2.0/24) are reserved
-# and never resolve. jman-api still tries to read their plugins over SSH
-# when the dashboard loads vulnerabilities (GET /api/vulns refreshes stale
-# sites), and a manual `jman wp` or update job does too: those fail to
-# resolve and only log "Cannot connect over SSH".
+# Fake servers and sites so the UI and CLI have something to show without
+# Docker. Their domains (.test), SSH hosts (.invalid) and IPs (192.0.2.0/24)
+# are reserved and never resolve, so the refresh's SSH reads of them fail and
+# only log "Cannot connect over SSH". make local-dev-agent adds real ones.
 seed_fake() {
 	local token="$1" web1 web2
 	log "Seeding fake servers and sites..."
@@ -256,7 +382,7 @@ start() {
 }
 
 cmd_up() {
-	need go pnpm curl jq openssl setsid sed od pkill
+	need go pnpm curl jq openssl setsid sed od pkill ssh scp ssh-keygen base32
 	api_running && die "a local-dev jman-api is already running ($(API_BIN))"
 	port_in_use "$API_PORT" && die "port $API_PORT is in use (set LOCAL_DEV_API_PORT to use another)"
 	port_in_use "$UI_PORT" && die "port $UI_PORT is in use (set LOCAL_DEV_UI_PORT to use another)"
@@ -266,8 +392,11 @@ cmd_up() {
 	chmod 700 "$STATE"
 
 	build_binaries
+	api_env
+	ensure_ssh
 	write_api_config
 	ensure_user
+	ensure_totp
 
 	log "Installing web UI dependencies..."
 	# Run in web/: corepack picks pnpm's version from the current directory.
@@ -279,8 +408,7 @@ cmd_up() {
 
 	log "Starting jman-api with hot reload (air) on $API_URL..."
 	# shellcheck disable=SC2046
-	start api env XDG_CONFIG_HOME="$STATE/api/config" XDG_DATA_HOME="$STATE/api/data" \
-		XDG_CACHE_HOME="$STATE/api/cache" XDG_STATE_HOME="$STATE/api/state" JMAN_API_PORT="$API_PORT" \
+	start api env -u SSH_AUTH_SOCK "${API_ENV[@]}" \
 		bash -c 'cd "$1" && shift && exec "$@"' _ "$ROOT" $(air_cmd) -c .air.toml \
 		--tmp_dir "$STATE/tmp" --build.cmd "go build -o $(API_BIN) ./cmd/jman-api" --build.bin "$(API_BIN)"
 	local api_pid="${PIDS[0]}"
@@ -303,13 +431,15 @@ cmd_up() {
 
 		  Web UI     $UI_URL
 		  API        $API_URL/api
-		  User       $DEV_USER
+		  User       $DEV_USER (admin)
 		  Password   $(cat "$STATE/admin-password")
-		             (no TOTP, so admin actions are limited to edit level)
+		  TOTP code  $STATE/totp   (prints the current code)
 		  CLI        $STATE/jman   e.g. .local-dev/jman search example
+		  AI         $(if [[ -n "${LOCAL_DEV_ANTHROPIC_API_KEY:-}" ]]; then echo "Claude API (LOCAL_DEV_ANTHROPIC_API_KEY)"; else echo "canned answers (set LOCAL_DEV_ANTHROPIC_API_KEY for Claude)"; fi)
 		  State      $STATE        (make local-dev-reset wipes it)
 
-		  Agent containers: make local-dev-agent (in another terminal)
+		  Servers with real SSH, vulnerable plugins and agents:
+		  make local-dev-agent (in another terminal)
 
 	EOF
 
@@ -332,32 +462,66 @@ cmd_reset() {
 
 compose() {
 	API_PORT="$API_PORT" AGENT_ENV_DIR="$STATE/agent" AGENT_BIN_DIR="$STATE/agent/bin" \
+		SSH_PUBKEY="$STATE/ssh/id_ed25519.pub" SSH_PORT_1="$SSH_PORT" SSH_PORT_2="$((SSH_PORT + 1))" \
+		SSH_PORT_3="$((SSH_PORT + 2))" AGENT_BRIDGE="$AGENT_BRIDGE" \
 		docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" "$@"
 }
 
+# A host firewall (ufw's default deny, say) drops the agents' connections to
+# jman-api on the host; they then time out on every report.
+check_agent_reach() {
+	local entry server kind
+	for entry in "${SERVERS[@]}"; do
+		read -r server kind _ <<<"$entry"
+		[[ "$kind" == agent ]] && break
+	done
+	if compose exec -T "$server" curl -fsS -m 5 -o /dev/null "http://host.docker.internal:$API_PORT/api/health" 2>/dev/null; then
+		return
+	fi
+	printf '\033[1;33m[local-dev]\033[0m %s\n' \
+		"The agent containers can't reach jman-api on the host (port $API_PORT)." \
+		"A host firewall is probably dropping it. With ufw, allow the agents' bridge:" \
+		"" "    sudo ufw allow in on $AGENT_BRIDGE to any port $API_PORT proto tcp" "" \
+		"The agents retry on their own; no restart is needed." >&2
+}
+
 cmd_agent_up() {
-	need go docker curl jq
-	[[ -f "$STATE/admin-password" && -x "$STATE/bin/jman-api" ]] || die "run make local-dev first"
+	need go docker curl jq openssl ssh ssh-keygen base32
+	# The image build uses additional_contexts and COPY --chmod (BuildKit).
+	docker buildx version >/dev/null 2>&1 ||
+		die "the Docker buildx plugin is required (Arch: pacman -S docker-buildx; Debian/Ubuntu: apt install docker-buildx-plugin)"
+	[[ -f "$STATE/admin-password" && -x "$STATE/totp" && -x "$STATE/bin/jman-api" ]] || die "run make local-dev first"
 	curl -fsS -o /dev/null "$API_URL/api/health" 2>/dev/null || die "jman-api isn't running on $API_URL; start make local-dev first"
 	go_env
 	clear_jman_env
+	api_env
 	mkdir -p "$STATE/agent/bin"
 	chmod 700 "$STATE/agent"
 
 	log "Building jman-agent for linux/$(go env GOARCH)..."
 	(cd "$ROOT" && CGO_ENABLED=0 GOOS=linux go build -o "$STATE/agent/bin/jman-agent" ./cmd/jman-agent)
 
-	local token entry server sites server_id domain
+	ensure_ssh
+	local token entry server kind site domain env server_id port=$SSH_PORT has_agent
 	token="$(login_token)"
-	for entry in "${AGENT_SERVERS[@]}"; do
-		server="${entry%%:*}"
-		sites="${entry#*:}"
+	for entry in "${SERVERS[@]}"; do
+		read -r server kind _ <<<"$entry"
+		has_agent=false
+		[[ "$kind" == agent ]] && has_agent=true
 		server_id="$(ensure_server "$server" "" "$token")"
-		for domain in $sites; do
-			ensure_site "$token" "$(jq -nc --arg d "$domain" --arg s "$server_id" --arg u "${domain%%.*}" --arg h "$server.invalid" \
-				'{domain:$d,server_id:$s,environment:"production",php_version:"8.4",is_wordpress:true,provider:"manual",
-				  connection_type:"agent",ssh_host:$h,ssh_user:$u,can_wp_cli:true,has_agent:true}')"
+		for site in ${entry#"$server $kind "}; do
+			domain="${site%%:*}"
+			env="${site#*:}"
+			ensure_site "$token" "$(jq -nc --arg d "$domain" --arg s "$server_id" --arg e "$env" --arg u "${domain%%.*}" \
+				--argjson p "$port" --arg c "$kind" --argjson a "$has_agent" \
+				'{domain:$d,server_id:$s,environment:$e,php_version:"8.4",is_wordpress:true,provider:"manual",
+				  connection_type:$c,ssh_host:"127.0.0.1",ssh_port:$p,ssh_user:$u,site_path:"files",
+				  can_wp_cli:true,has_agent:$a,status:"active"}')"
 		done
+		# A rebuilt volume has a new host key; forget the old one.
+		ssh-keygen -q -R "[127.0.0.1]:$port" -f "$STATE/ssh/known_hosts" >/dev/null 2>&1 || true
+		port=$((port + 1))
+		[[ "$kind" == agent ]] || continue
 		if [[ ! -s "$STATE/agent/$server.env" ]]; then
 			log "Creating an agent token for $server..."
 			local t
@@ -366,14 +530,24 @@ cmd_agent_up() {
 		fi
 	done
 
-	log "Starting MariaDB and the agent containers..."
+	log "Starting MariaDB and the server containers..."
+	# Older networks have a random bridge name; recreate them to get the fixed one.
+	if docker network inspect "${COMPOSE_PROJECT}_default" >/dev/null 2>&1 &&
+		[[ "$(docker network inspect -f '{{index .Options "com.docker.network.bridge.name"}}' "${COMPOSE_PROJECT}_default")" != "$AGENT_BRIDGE" ]]; then
+		log "Recreating the containers' network with the bridge name $AGENT_BRIDGE..."
+		compose down
+	fi
 	compose up -d --build --wait mariadb
 	compose up -d --build
+	check_agent_reach
 	cat >&2 <<-EOF
 
-		The agent containers are starting. They install WordPress on first start
-		(a minute or two), then report every minute.
+		The server containers are starting. They install WordPress and old plugin
+		releases with known vulnerabilities on first start (a minute or two). The
+		agents report every minute; jman-api reads delta over SSH and syncs the
+		vulnerability exposures every 5 minutes.
 
+		  SSH         ssh -F $STATE/ssh/config -p $SSH_PORT alpha@127.0.0.1
 		  Logs        docker compose -p $COMPOSE_PROJECT logs -f
 		  Check WP    docker compose -p $COMPOSE_PROJECT exec dev-agent-1 jman-agent --check-wp
 		  Check scan  docker compose -p $COMPOSE_PROJECT exec dev-agent-1 jman-agent --check-scan
@@ -392,9 +566,9 @@ cmd_agent_down() {
 # the others stay clean for comparison.
 cmd_fixtures() {
 	need docker
-	local entry="${AGENT_SERVERS[0]}" sites
-	sites="${entry#*:}"
-	compose exec -T "${entry%%:*}" local-dev-fixtures "$1" "${sites%% *}"
+	local server kind site
+	read -r server kind site _ <<<"${SERVERS[0]}"
+	compose exec -T "$server" local-dev-fixtures "$1" "${site%%:*}"
 }
 
 case "${1:-up}" in

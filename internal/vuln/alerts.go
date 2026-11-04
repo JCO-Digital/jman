@@ -104,7 +104,10 @@ type vulnAlertPlan struct {
 // vuln_alert_sites. A site's records are forgotten once it is no longer
 // affected (past the reopen window), so a reinstall or downgrade is
 // alerted again. On the very first run every current exposure is recorded
-// without sending, so enabling this doesn't flood the channel.
+// without sending, so enabling this doesn't flood the channel. Without a
+// Slack token (local development, say) nothing can be sent, so every scan
+// records like the first run: no failed sends retried and logged each time,
+// and a token added later alerts only what is new from then on.
 func AlertNewVulnerabilities() error {
 	exposures, err := db.ListOpenVulnExposures()
 	if err != nil {
@@ -116,7 +119,15 @@ func AlertNewVulnerabilities() error {
 		return err
 	}
 	if seeded == nil {
-		return seedVulnAlerts(exposures)
+		n, err := seedVulnAlerts(exposures)
+		if err == nil {
+			verb.LogPrintf(verb.Normal, "Seeded %d existing per-site vulnerability alerts; alerts start from the next scan\n", n)
+		}
+		return err
+	}
+	if config.Cfg.TokenSlack == "" {
+		_, err := seedVulnAlerts(exposures)
+		return err
 	}
 
 	alertedUUIDs, err := db.GetAlertedVulnUUIDs()
@@ -145,7 +156,7 @@ func AlertNewVulnerabilities() error {
 		message := formatNewVulnAlert(a)
 		fmt.Println(message)
 		// force: the alert tables are the dedup here, not the message hash.
-		if err := slack.SendMessage(message, true); err != nil {
+		if err := sendAlert(message); err != nil {
 			verb.LogPrintf(verb.Normal, "Warning: failed to send new-vulnerability alert for %s: %v\n", a.Vuln.Uuid, err)
 			continue // retried on the next scan
 		}
@@ -159,7 +170,7 @@ func AlertNewVulnerabilities() error {
 	for _, a := range plan.NewCore {
 		message := formatNewCoreAlert(a)
 		fmt.Println(message)
-		if err := slack.SendMessage(message, true); err != nil {
+		if err := sendAlert(message); err != nil {
 			verb.LogPrintf(verb.Normal, "Warning: failed to send new core vulnerability alert for WordPress %s: %v\n", a.Version, err)
 			continue // retried on the next scan
 		}
@@ -176,7 +187,7 @@ func AlertNewVulnerabilities() error {
 	for _, a := range plan.NewSites {
 		message := formatNewSitesAlert(a)
 		fmt.Println(message)
-		if err := slack.SendMessage(message, true); err != nil {
+		if err := sendAlert(message); err != nil {
 			verb.LogPrintf(verb.Normal, "Warning: failed to send newly-affected alert for %s: %v\n", a.PluginSlug, err)
 			continue
 		}
@@ -190,9 +201,13 @@ func AlertNewVulnerabilities() error {
 	return forgetResolvedAlertSites(exposures, alertedSites)
 }
 
+// sendAlert sends an alert to Slack; tests replace it.
+var sendAlert = func(message string) error { return slack.SendMessage(message, true) }
+
 // seedVulnAlerts records every current exposure's vulnerabilities as
-// alerted, per vulnerability and per site, without sending anything.
-func seedVulnAlerts(exposures []models.VulnExposure) error {
+// alerted, per vulnerability and per site, without sending anything. It
+// returns the number of per-site records.
+func seedVulnAlerts(exposures []models.VulnExposure) (int, error) {
 	var records []db.VulnAlertSite
 	for _, e := range exposures {
 		for _, u := range e.VulnUUIDs {
@@ -202,21 +217,20 @@ func seedVulnAlerts(exposures []models.VulnExposure) error {
 				cvss = *e.MaxCvss
 			}
 			if err := db.RecordVulnAlert(u, e.Slug, cvss); err != nil {
-				return fmt.Errorf("failed to seed vuln alert %s: %w", u, err)
+				return 0, fmt.Errorf("failed to seed vuln alert %s: %w", u, err)
 			}
 		}
 	}
 	if err := db.RecordVulnAlertSites(records); err != nil {
-		return err
+		return 0, err
 	}
 	if _, err := db.SaveSetting(db.SystemSettingsUserID, db.VulnAlertSitesSeededSettingKey, true); err != nil {
-		return err
+		return 0, err
 	}
 	if _, err := db.SaveSetting(db.SystemSettingsUserID, db.VulnAlertsSeededSettingKey, true); err != nil {
-		return err
+		return 0, err
 	}
-	verb.LogPrintf(verb.Normal, "Seeded %d existing per-site vulnerability alerts; alerts start from the next scan\n", len(records))
-	return nil
+	return len(records), nil
 }
 
 // forgetResolvedAlertSites drops the per-site alert records of plugins (or

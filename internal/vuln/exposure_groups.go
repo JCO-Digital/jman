@@ -104,6 +104,13 @@ func loadGroupDetails(kind, slug, coreVersion string) groupDetails {
 	return d
 }
 
+// GroupVulnerabilities returns the cached feed data of a group's
+// vulnerabilities by UUID: the plugin's (kind plugin, slug) or the core
+// version's (kind core, coreVersion).
+func GroupVulnerabilities(kind, slug, coreVersion string) map[string]models.Vulnerability {
+	return loadGroupDetails(kind, slug, coreVersion).Vulns
+}
+
 func groupExposures(exposures []models.VulnExposure, siteNames map[string]string, mutes map[exposureKey]models.VulnMute,
 	details func(kind, slug, coreVersion string) groupDetails, now time.Time) []models.VulnExposureGroup {
 	type groupKey struct{ Kind, Slug, Version string }

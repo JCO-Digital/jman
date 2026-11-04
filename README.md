@@ -279,24 +279,28 @@ In addition to the main `jman` CLI, this repository includes sidecar utilities:
 
 ### Local development
 
-`make local-dev` starts the whole stack with one command: `jman-api` with hot reload (air), the web UI (Vite) and a `jman` CLI that is already logged in. It creates a throwaway user `admin` with a random password and prints the URLs and credentials. Ctrl-C stops everything. It needs Go, pnpm, curl, jq and openssl. If air isn't installed, a pinned version runs through `go run`.
+`make local-dev` starts the whole stack with one command: `jman-api` with hot reload (air), the web UI (Vite) and a `jman` CLI that is already logged in. It creates a throwaway user `admin` with a random password and TOTP, and prints the URLs and credentials. Ctrl-C stops everything. It needs Go, pnpm, curl, jq, openssl, OpenSSH and coreutils' `base32`. If air isn't installed, a pinned version runs through `go run`. jman-api runs wp-cli locally for its SSH work: an installed `wp` is used, else (with PHP) a pinned wp-cli is downloaded into `.local-dev/`.
 
-- **Isolated:** all state (config, `users.toml`, databases, CLI token) is in `./.local-dev/`, never in `~/.config/jman` or the OS keyring. Inherited `JMAN_*` variables are ignored.
-- **No side effects:** there are no SpinupWP, Slack or PagerDuty tokens, and uptime monitoring and the SpinupWP/SSH/vulnerability refresh are off. The seeded fake servers and sites use reserved names (`*.example.test`, `*.invalid`, `192.0.2.x`) that never resolve. jman-api still tries to read their plugins over SSH when the dashboard loads vulnerabilities, so `Cannot connect over SSH` warnings in its log are expected.
-- **CLI:** run `.local-dev/jman <command>`, e.g. `.local-dev/jman search example`.
-- **Login:** the user has no TOTP, so jman-api limits it to the edit level (no user or agent-token admin in the UI).
-- **Ports:** 8080 (API) and 5173 (UI); override them with `LOCAL_DEV_API_PORT` and `LOCAL_DEV_UI_PORT`. Open the UI at `localhost`, not `127.0.0.1`, or its session cookie won't reach the API.
-- **Reset:** `make local-dev-reset` deletes `.local-dev/` and the agent containers' volumes.
+- **Isolated:** all state (config, `users.toml`, databases, CLI token, SSH key) is in `./.local-dev/`, never in `~/.config/jman`, `~/.ssh` or the OS keyring. Inherited `JMAN_*` variables are ignored. jman-api's `ssh`, `scp` and `ssh-keygen` go through wrappers with their own config, key and `known_hosts`, and it gets no SSH agent, so it can only log in to the local containers.
+- **No side effects:** there are no SpinupWP, Slack or PagerDuty tokens, and uptime monitoring is off. The refresh runs every 5 minutes: it reads plugins and core over SSH, fetches plugin info and vulnerability data from wordpress.org and the WPVulnerability API, and syncs the exposures. The seeded fake servers and sites use reserved names (`*.example.test`, `*.invalid`, `192.0.2.x`) that never resolve, so `Cannot connect over SSH` warnings about them in its log are expected.
+- **Login:** user `admin`, the printed password, and the code from `.local-dev/totp` (the secret is in `.local-dev/admin-totp-secret`, for an authenticator app). With TOTP the user has the admin level, so update jobs, AI runs and user admin work.
+- **CLI:** run `.local-dev/jman <command>`, e.g. `.local-dev/jman search example` or `.local-dev/jman ai run vuln-rank`.
+- **AI gateway:** canned answers (`aiFake`) by default. `LOCAL_DEV_ANTHROPIC_API_KEY=sk-ant-... make local-dev` uses the Claude API instead; the key goes to jman-api through its environment only. Local runs send public vulnerability data and counts of the made-up sites.
+- **Your settings:** `.local-dev.toml` in the repo root (gitignored, or another file named in `LOCAL_DEV_API_CONFIG`) is appended to the generated jman-api config on every start, e.g. `[aiAgents.vuln-rank]` with `model = "claude-haiku-5-5"`. Add keys and tables there, but don't repeat the generated top-level keys: TOML refuses a key set twice.
+- **Ports:** 8080 (API), 5173 (UI) and 2221–2223 (the containers' SSH, on 127.0.0.1); override them with `LOCAL_DEV_API_PORT`, `LOCAL_DEV_UI_PORT` and `LOCAL_DEV_SSH_PORT` (the first of the three). Open the UI at `localhost`, not `127.0.0.1`, or its session cookie won't reach the API. `LOCAL_DEV_STATE` and `LOCAL_DEV_PROJECT` move the state directory and the Compose project, to run a second stack next to the first.
+- **Reset:** `make local-dev-reset` deletes `.local-dev/` and the containers' volumes.
 
-#### jman-agent containers
+#### Server containers
 
-With `make local-dev` running, `make local-dev-agent` (needs Docker) starts two containers, `dev-agent-1` and `dev-agent-2`, that look like SpinupWP servers:
+With `make local-dev` running, `make local-dev-agent` (needs Docker with the buildx plugin) starts three containers that look like SpinupWP servers:
 
-- WordPress sites at `/sites/<domain>/files`, each owned by its own user.
-- nginx access logs, PHP-FPM, and a shared MariaDB.
-- `jman-agent` built from this checkout, reporting every minute to the local jman-api.
+- `dev-agent-1` (alpha, production; beta, staging) and `dev-agent-2` (gamma, production) run `jman-agent` built from this checkout, reporting every minute.
+- `dev-ssh-1` (delta, production) has no agent, so jman-api reads it over SSH only, as it does agentless sites.
+- WordPress sites at `/sites/<domain>/files`, each owned by its own user, nginx access logs, PHP-FPM and a shared MariaDB.
+- SSH as the site user (`ssh -F .local-dev/ssh/config -p 2221 alpha@127.0.0.1`), with the key in `.local-dev/ssh`. jman-api uses it for plugin and core updates, live update checks, test connections and the agentless refresh.
+- Old plugin releases with published vulnerabilities, so jman finds real exposures: Duplicator 1.3.26 (in CISA KEV), Contact Form 7 5.3.1 (CVSS 10), WP Statistics, LiteSpeed Cache, Really Simple SSL, Forminator and Wordfence. gamma runs WordPress 6.8.2 for core vulnerabilities. The list is `site_plugins` in `scripts/local-dev/agent/entrypoint.sh`. The containers' web servers aren't published on the host. A plugin is only installed when it is missing, so updates made through jman stay; `make local-dev-reset` brings the old versions back.
 
-It adds the servers and sites to jman-api and creates their agent tokens with `jman-api agent-token`. Run it again after changing the agent code to rebuild it. The sites, databases and scan baselines persist until `make local-dev-agent-down` plus `make local-dev-reset`. Installing WordPress, the checksums and the vulnerability data come from wordpress.org and the WPVulnerability API. The agent reaches jman-api through `host.docker.internal`, because jman-api listens on all interfaces.
+It adds the servers and sites to jman-api and creates their agent tokens with `jman-api agent-token`. Run it again after changing the agent code to rebuild it. The exposures appear with the next refresh, within 5 minutes of the sites' first report. The sites, databases and scan baselines persist until `make local-dev-agent-down` plus `make local-dev-reset`. Installing WordPress and the plugins, the checksums and the vulnerability data come from wordpress.org and the WPVulnerability API. The agent reaches jman-api through `host.docker.internal`, because jman-api listens on all interfaces. A host firewall can block that: the containers' bridge is named after the Compose project (`jman-local-dev`), so with ufw run `sudo ufw allow in on jman-local-dev to any port 8080 proto tcp`. `make local-dev-agent` checks the connection and prints this command when it's blocked.
 
 - `make local-dev-agent-infect` plants inert files on `alpha.local-dev.test` that match the scan rules: PHP in uploads, an `eval(base64_decode(…))` of an `echo`, an `auto_prepend_file` `.htaccess`, a `.sql` dump, and a comment appended to a core file and a plugin file. `make local-dev-agent-clean` removes them again. Findings appear, and later clear, within a minute or two.
 - `docker compose -p jman-local-dev exec dev-agent-1 jman-agent --check-wp` (or `--check-scan`) checks a server by hand. `docker compose -p jman-local-dev logs -f` follows the logs.

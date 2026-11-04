@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/JCO-Digital/jman/internal/ai"
+	"github.com/JCO-Digital/jman/internal/ai/agents"
 	"github.com/JCO-Digital/jman/internal/api"
 	"github.com/JCO-Digital/jman/internal/backup"
 	"github.com/JCO-Digital/jman/internal/config"
@@ -83,6 +85,11 @@ func runServe(cmd *cobra.Command, args []string) error {
 
 	// Start the background update job runner (plugin and core updates)
 	if err := updatejobs.Start(cmd.Context()); err != nil {
+		return err
+	}
+
+	// Start the AI gateway (off unless aiEnabled is set)
+	if err := ai.Start(cmd.Context(), agents.All()...); err != nil {
 		return err
 	}
 

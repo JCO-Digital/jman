@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -171,6 +172,9 @@ func stubSite(t *testing.T, runner *fakeRunner) {
 	lastWPCollectionMu.Lock()
 	lastWPCollection = map[string]time.Time{}
 	lastWPCollectionMu.Unlock()
+	adminUsersMu.Lock()
+	adminUsers = map[string]cachedAdminUser{}
+	adminUsersMu.Unlock()
 	t.Cleanup(func() { resolvePath, resolveIdentity, newRunner = oldPath, oldID, oldRunner })
 }
 
@@ -389,8 +393,11 @@ func TestCollectSiteWPDataUsers(t *testing.T) {
 	if data.Users != nil || data.Hash != models.WPDataHash(data.Plugins, *data.Core, nil) {
 		t.Errorf("data = %+v", data)
 	}
+	// The administrator lookup for the plugin list only reads IDs and
+	// reports nothing, so it's allowed.
+	adminList := strings.Join(wpcli.AdminUserListArgs(), " ")
 	for _, c := range runner.calls {
-		if strings.HasPrefix(c, "user ") {
+		if strings.HasPrefix(c, "user ") && c != adminList {
 			t.Errorf("listed users without being asked: %s", c)
 		}
 	}
@@ -438,5 +445,90 @@ func TestCollectWPDataForSitesCapsPayloadBytes(t *testing.T) {
 	}
 	if len(data) > 1 && total > maxWPDataPayloadBytes {
 		t.Errorf("payloads total %d bytes, over %d", total, maxWPDataPayloadBytes)
+	}
+}
+
+// Premium plugins such as FileBird Pro check for updates only for an
+// administrator, so the loaded plugin list runs as the lowest-numbered one,
+// looked up once per adminUserTTL.
+func TestCollectSiteWPDataListsPluginsAsAdmin(t *testing.T) {
+	adminList := strings.Join(wpcli.AdminUserListArgs(), " ")
+	runner := okRunner()
+	runner.out[adminList] = `[{"ID":7},{"ID":3}]`
+	runner.out["loaded: plugin list --format=json --user=3"] = pluginListJSON
+	stubSite(t, runner)
+	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com", IsWordpress: true}
+
+	data := collectSiteWPData(context.Background(), runner, site, false)
+	if data.Error != "" || len(data.Plugins) != 2 {
+		t.Fatalf("data = %+v", data)
+	}
+	if !slices.Contains(runner.calls, "loaded: plugin list --format=json --user=3") {
+		t.Errorf("plugin list didn't run as the administrator: %v", runner.calls)
+	}
+
+	// The ID is cached: the next collection doesn't look it up again.
+	runner.calls = nil
+	collectSiteWPData(context.Background(), runner, site, false)
+	if slices.Contains(runner.calls, adminList) {
+		t.Errorf("administrator looked up again within the TTL: %v", runner.calls)
+	}
+
+	// Once it's expired, it is.
+	adminUsersMu.Lock()
+	adminUsers["s1"] = cachedAdminUser{id: 3, at: time.Now().Add(-adminUserTTL - time.Minute)}
+	adminUsersMu.Unlock()
+	runner.calls = nil
+	collectSiteWPData(context.Background(), runner, site, false)
+	if !slices.Contains(runner.calls, adminList) {
+		t.Errorf("expired administrator not looked up again: %v", runner.calls)
+	}
+}
+
+// Without an administrator to run as, plugins are listed as before.
+func TestCollectSiteWPDataWithoutAdmin(t *testing.T) {
+	adminList := strings.Join(wpcli.AdminUserListArgs(), " ")
+	for name, setup := range map[string]func(*fakeRunner){
+		"lookup fails": func(r *fakeRunner) { r.fail = map[string]error{adminList: errors.New("boom")} },
+		"none found":   func(r *fakeRunner) { r.out[adminList] = `[]` },
+	} {
+		t.Run(name, func(t *testing.T) {
+			runner := okRunner()
+			setup(runner)
+			stubSite(t, runner)
+			data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
+			if data.Error != "" || len(data.Plugins) != 2 {
+				t.Fatalf("data = %+v", data)
+			}
+			if !slices.Contains(runner.calls, "loaded: plugin list --format=json") {
+				t.Errorf("calls = %v", runner.calls)
+			}
+		})
+	}
+}
+
+// A list that fails as the administrator (deleted since, say) is retried
+// with plugins skipped and without --user, and the administrator is looked
+// up again next time.
+func TestCollectSiteWPDataAdminListFails(t *testing.T) {
+	adminList := strings.Join(wpcli.AdminUserListArgs(), " ")
+	runner := okRunner()
+	runner.out[adminList] = `[{"ID":3}]`
+	runner.fail = map[string]error{"loaded: plugin list --format=json --user=3": errors.New("Error: Invalid user ID, email or login: '3'")}
+	stubSite(t, runner)
+	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}
+
+	data := collectSiteWPData(context.Background(), runner, site, false)
+	if data.Error != "" || len(data.Plugins) != 2 {
+		t.Fatalf("data = %+v", data)
+	}
+	if !slices.Contains(runner.calls, "plugin list --format=json") {
+		t.Errorf("not retried without --user: %v", runner.calls)
+	}
+	adminUsersMu.Lock()
+	_, cached := adminUsers["s1"]
+	adminUsersMu.Unlock()
+	if cached {
+		t.Error("administrator still cached after the list failed")
 	}
 }
