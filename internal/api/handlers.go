@@ -132,6 +132,14 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/incidents/{id}/close", basic(CloseIncidentHandler))
 	mux.Handle("POST /api/incidents/{id}/pause", edit(PauseIncidentCheckHandler))
 
+	// --- AI gateway (advisory agents; see docs/ai-gateway.md) ---
+	mux.Handle("GET /api/ai/status", basic(AIStatusHandler))
+	mux.Handle("GET /api/ai/agents", basic(ListAIAgentsHandler))
+	mux.Handle("POST /api/ai/agents/{name}/runs", execute(CreateAIRunHandler))
+	mux.Handle("GET /api/ai/runs", basic(ListAIRunsHandler))
+	mux.Handle("GET /api/ai/runs/{id}", basic(GetAIRunHandler))
+	mux.Handle("POST /api/ai/runs/{id}/cancel", execute(CancelAIRunHandler))
+
 	// --- Ignore routes ---
 	mux.Handle("GET /api/ignore", basic(ListIgnoreEntriesHandler))
 	mux.Handle("POST /api/ignore", edit(CreateIgnoreEntryHandler))

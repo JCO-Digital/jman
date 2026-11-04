@@ -1019,6 +1019,106 @@ Warnings flag rules that can't be verified against cached vulnerability data or 
 
 ---
 
+## AI Gateway
+
+Advisory AI agents that run on Claude (see `docs/ai-gateway.md`). A run reads jman's data and returns an answer; it never changes anything. Runs are queued and run in the background, two at a time.
+
+### Status
+
+`GET /ai/status` (Protected: `basic`)
+
+```json
+{ "enabled": true, "fake": false, "daily_budget_usd": 10, "spent_today_usd": 0.42 }
+```
+
+`enabled` is false with a `reason` when the gateway is off (`aiEnabled`, `anthropicApiKey` or `aiZdrConfirmed` unset). `fake` is set in local development, where runs get canned answers. Spend is the estimated cost of today's runs (UTC).
+
+### List Agents
+
+`GET /ai/agents` (Protected: `basic`)
+
+```json
+[
+	{
+		"name": "vuln-rank",
+		"version": "1",
+		"description": "Ranks the open vulnerability exposure groups ...",
+		"model": "claude-opus-5-5",
+		"effort": "high",
+		"tools": [],
+		"input_schema": { "type": "object", "properties": { "keys": { "type": "array", "items": { "type": "string" } } } },
+		"schedule_hours": 24,
+		"batch": true
+	}
+]
+```
+
+### Run an Agent
+
+`POST /ai/agents/{name}/runs` (Protected: `execute`)
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `wait` | int | Seconds to wait for the run to finish, 0–120 (default 0). |
+
+**Request Body** (optional)
+```json
+{ "input": { "keys": ["plugin:contact-form-7", "core:6.4.1"] }, "batch": false }
+```
+
+`batch: true` sends the run through the Message Batches API: half price, but the result can take up to 24 hours. Only for agents whose `batch` is true in `GET /ai/agents` (agents whose requests hold no personal data); `400` otherwise. A batched request that looks like it holds personal data is sent through the regular API instead, and the run's `batch` is then false.
+
+Answers `200 OK` with the finished run, or `202 Accepted` with the run still `queued` or `running`; poll `GET /ai/runs/{id}`. `400` for invalid input, `404` for an unknown agent, `503` when the gateway is off.
+
+**Run object**
+```json
+{
+	"id": "01a1a204-25d5-7d12-a4c5-a1837840e007",
+	"agent": "vuln-rank",
+	"agent_version": "1",
+	"model": "claude-opus-5-5",
+	"status": "succeeded",
+	"input": {},
+	"batch": false,
+	"output": { "rankings": [ { "key": "plugin:contact-form-7", "rank": 1, "priority": "P1", "score": 92, "action": "update_now", "rationale": "In CISA KEV; unauthenticated SQL injection on 12 production sites.", "confidence": "high" } ] },
+	"stop_reason": "end_turn",
+	"turns": 1,
+	"usage": { "input_tokens": 1800, "output_tokens": 6100, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 2400 },
+	"cost_micros": 141200,
+	"requested_by": "alice",
+	"trigger": "api",
+	"created_at": "2026-11-03T15:25:33Z",
+	"started_at": "2026-11-03T15:25:33Z",
+	"finished_at": "2026-11-03T15:26:20Z"
+}
+```
+
+`status` is `queued`, `running`, `succeeded`, `failed`, `refused` (the model declined; `refusal_category` says why) or `canceled`. `error` explains a failed or refused run. A batched run has `batch: true` and, once submitted, `batch_id`; it stays `running` until its batch ends. `reused_from` is set when the run reused the result of an identical recent request instead of calling the model. `cost_micros` is the estimated cost in millionths of a US dollar. `GET /ai/runs/{id}` adds `steps`, the tool calls of an agent with tools.
+
+### List Runs
+
+`GET /ai/runs` (Protected: `basic`)
+
+Newest first, without `steps`.
+
+**Query Parameters**
+| Parameter | Type | Description |
+| :--- | :--- | :--- |
+| `agent` | string | Only this agent's runs. |
+| `status` | string | Only runs with this status. |
+| `limit` | int | 1–500 (default 50). |
+
+### Get a Run
+
+`GET /ai/runs/{id}` (Protected: `basic`)
+
+### Cancel a Run
+
+`POST /ai/runs/{id}/cancel` (Protected: `execute`)
+
+Cancels a queued or running run and returns it. `409` when it has already finished.
+
 ## Plugin Update Operations
 
 Plugin and core updates run as background jobs (`POST /plugin-update-jobs`, `POST /sites/{id}/core-update`; progress via `GET /update-jobs`). Queueing them requires the **`execute`** level.

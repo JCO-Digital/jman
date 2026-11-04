@@ -47,6 +47,11 @@
 - Implements JWT-based auth with TOTP support.
 - Provides endpoints for managing monitoring ignore lists.
 
+### 4. AI Gateway (`jman-api`, `internal/ai`)
+
+- Advisory agents defined in Go (`internal/ai/agents/`), run through `/api/ai/*` and `jman ai`. The first is `vuln-rank`, which ranks open vulnerability exposure groups. See `docs/ai-gateway.md`.
+- Only zero data retention (ZDR) features of the Claude API are used (`internal/ai/zdr.go`): no Files or Managed Agents APIs, server tools or Fable/Mythos models. The one exception is the Message Batches API, for agents whose requests hold no personal data (`Spec.Batchable`, checked by `internal/ai/pii.go`).
+
 ## Build & Configuration
 
 ### Build System
@@ -62,7 +67,7 @@
 
 ### Configuration
 
-- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`.
+- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`, and for the AI gateway `anthropicApiKey`, `aiEnabled`, `aiZdrConfirmed`, `aiFake`, `aiDailyBudgetUsd` and `aiAgents`.
 - **API Users**: `jman-api` uses a separate `users.toml` for authentication, storing bcrypt-hashed passwords and TOTP secrets.
 - **XDG Support**: Follows XDG Base Directory Specification for configuration and data storage.
 

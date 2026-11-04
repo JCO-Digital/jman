@@ -123,6 +123,32 @@ type AppConfig struct {
 	// update notice. Defaults to jman-api's own version.
 	LatestCLIVersion string `toml:"latestCliVersion" mapstructure:"latestCliVersion"`
 
+	// AnthropicAPIKey is the Claude API key jman-api's AI gateway uses (see
+	// docs/ai-gateway.md). The key's Anthropic organization must have zero
+	// data retention (ZDR) enabled; AIZDRConfirmed says it has.
+	AnthropicAPIKey string `toml:"anthropicApiKey" mapstructure:"anthropicApiKey"`
+	// AIEnabled turns the AI gateway on.
+	AIEnabled bool `toml:"aiEnabled" mapstructure:"aiEnabled"`
+	// AIZDRConfirmed confirms that the Anthropic organization of
+	// AnthropicAPIKey has zero data retention enabled. ZDR is enabled by
+	// Anthropic per organization and can't be checked from the API, so the
+	// gateway won't call the Claude API until this is set.
+	AIZDRConfirmed bool `toml:"aiZdrConfirmed" mapstructure:"aiZdrConfirmed"`
+	// AIFake answers AI runs with canned responses instead of calling the
+	// Claude API, for local development.
+	AIFake bool `toml:"aiFake" mapstructure:"aiFake"`
+	// AIDailyBudgetUSD caps the estimated Claude API spend per UTC day
+	// (default 10). Runs fail once it is reached.
+	AIDailyBudgetUSD float64 `toml:"aiDailyBudgetUsd" mapstructure:"aiDailyBudgetUsd"`
+	// AIAgents overrides agents' settings by agent name:
+	//
+	//	[aiAgents.vuln-rank]
+	//	model = "claude-sonnet-5-5"
+	//	effort = "high"
+	//	scheduleHours = 12   # negative turns the schedule off
+	//	batch = false        # no Message Batches API for this agent
+	AIAgents map[string]AIAgentConfig `toml:"aiAgents" mapstructure:"aiAgents"`
+
 	// APIURL is the jman-api base URL the CLI uses, e.g.
 	// "https://jman.example.com". `jman login <url>` sets it.
 	APIURL string `toml:"apiUrl" mapstructure:"apiUrl"`
@@ -138,6 +164,19 @@ type AppConfig struct {
 	// StaleWarning is how old the local copy can get before the CLI warns
 	// that it is working from outdated data.
 	StaleWarning time.Duration `toml:"staleWarning" mapstructure:"staleWarning"`
+}
+
+// AIAgentConfig overrides one AI agent's defaults. Empty fields keep the
+// agent's own.
+type AIAgentConfig struct {
+	Model  string `toml:"model" mapstructure:"model"`
+	Effort string `toml:"effort" mapstructure:"effort"`
+	// ScheduleHours is how often jman-api runs the agent itself; 0 keeps
+	// the agent's default and a negative value turns it off.
+	ScheduleHours int `toml:"scheduleHours" mapstructure:"scheduleHours"`
+	// Batch = false stops a batchable agent from using the Message Batches
+	// API.
+	Batch *bool `toml:"batch" mapstructure:"batch"`
 }
 
 // WPCLIHostTimeout sets a minimum WP-CLI timeout, in minutes, for every SSH
@@ -215,6 +254,10 @@ func loadConfig() error {
 	viper.SetDefault("apiTimeout", "3s")
 	viper.SetDefault("offlineBackoff", "15m")
 	viper.SetDefault("staleWarning", "168h")
+	viper.SetDefault("aiEnabled", false)
+	viper.SetDefault("aiZdrConfirmed", false)
+	viper.SetDefault("aiFake", false)
+	viper.SetDefault("aiDailyBudgetUsd", 10.0)
 
 	// Viper configuration
 	viper.SetConfigName("config")
@@ -265,6 +308,11 @@ func loadConfig() error {
 		"minCliVersion":              "MINCLIVERSION",
 		"latestCliVersion":           "LATESTCLIVERSION",
 		"apiUrl":                     "APIURL",
+		"anthropicApiKey":            "ANTHROPICAPIKEY",
+		"aiEnabled":                  "AIENABLED",
+		"aiZdrConfirmed":             "AIZDRCONFIRMED",
+		"aiFake":                     "AIFAKE",
+		"aiDailyBudgetUsd":           "AIDAILYBUDGETUSD",
 	}
 
 	for key, envVar := range envBindings {
