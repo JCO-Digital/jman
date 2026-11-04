@@ -2,6 +2,7 @@
 /tmp/
 /completions/
 /.local-dev/
+/.local-dev.toml
 PLAN.md
 AUDIT.md
 

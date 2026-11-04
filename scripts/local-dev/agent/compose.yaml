@@ -1,7 +1,9 @@
-# make local-dev-agent: containers that act as managed servers, each running
-# jman-agent against the jman-api of make local-dev on the host. Run through
-# scripts/local-dev/local-dev.sh, which sets API_PORT, AGENT_ENV_DIR and
-# AGENT_BIN_DIR and creates the per-server token files.
+# make local-dev-agent: containers that act as managed servers. dev-agent-1/2
+# run jman-agent against the jman-api of make local-dev on the host;
+# dev-ssh-1 has no agent, so jman-api reaches its site over SSH only. Run through
+# scripts/local-dev/local-dev.sh, which sets API_PORT, AGENT_ENV_DIR,
+# AGENT_BIN_DIR, SSH_PUBKEY and SSH_PORT_1/2/3, and creates the per-server token
+# files and the SSH key.
 name: jman-local-dev
 
 x-server: &server
@@ -42,10 +44,15 @@ services:
       SITES: alpha.local-dev.test beta.local-dev.test
       DB_ROOT_PASSWORD: localdev
       JMAN_AGENT_API_URL: http://host.docker.internal:${API_PORT:-8080}/api
+    # SSH for jman-api, on the host's loopback only. The web server isn't
+    # published: the sites run plugin versions with known vulnerabilities.
+    ports:
+      - 127.0.0.1:${SSH_PORT_1:-2221}:22
     volumes:
       - sites-1:/sites
       - state-1:/var/lib/jman-agent
       - wpcli-cache:/var/cache/wp-cli
+      - ${SSH_PUBKEY:?run through scripts/local-dev/local-dev.sh}:/run/local-dev/ssh.pub:ro
 
   dev-agent-2:
     <<: *server
@@ -58,15 +65,35 @@ services:
       SITES: gamma.local-dev.test
       DB_ROOT_PASSWORD: localdev
       JMAN_AGENT_API_URL: http://host.docker.internal:${API_PORT:-8080}/api
+    # SSH for jman-api, on the host's loopback only. The web server isn't
+    # published: the sites run plugin versions with known vulnerabilities.
+    ports:
+      - 127.0.0.1:${SSH_PORT_2:-2222}:22
     volumes:
       - sites-2:/sites
       - state-2:/var/lib/jman-agent
       - wpcli-cache:/var/cache/wp-cli
+      - ${SSH_PUBKEY:?run through scripts/local-dev/local-dev.sh}:/run/local-dev/ssh.pub:ro
+
+  dev-ssh-1:
+    <<: *server
+    hostname: dev-ssh-1
+    environment:
+      SITES: delta.local-dev.test
+      DB_ROOT_PASSWORD: localdev
+      NO_AGENT: "1"
+    ports:
+      - 127.0.0.1:${SSH_PORT_3:-2223}:22
+    volumes:
+      - sites-3:/sites
+      - wpcli-cache:/var/cache/wp-cli
+      - ${SSH_PUBKEY:?run through scripts/local-dev/local-dev.sh}:/run/local-dev/ssh.pub:ro
 
 volumes:
   db:
   sites-1:
   sites-2:
+  sites-3:
   state-1:
   state-2:
   wpcli-cache:

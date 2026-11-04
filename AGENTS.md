@@ -61,8 +61,8 @@
 
 ### Local Development
 
-- `make local-dev` runs jman-api (air), the web UI (Vite) and a logged-in CLI (`.local-dev/jman`) with all state in `./.local-dev/`. The user is `admin`, its password is in `.local-dev/admin-password`, and there are no external tokens. Monitoring and refresh are off. `make local-dev-reset` wipes it.
-- `make local-dev-agent` adds Docker containers that act as SpinupWP-like servers running jman-agent from source. `make local-dev-agent-infect`/`-clean` plant and remove inert scan fixtures. The scripts are in `scripts/local-dev/`.
+- `make local-dev` runs jman-api (air), the web UI (Vite) and a logged-in CLI (`.local-dev/jman`) with all state in `./.local-dev/`. The user is `admin` with TOTP (password in `.local-dev/admin-password`, code from `.local-dev/totp`), so it has the admin level. There are no external tokens and monitoring is off; the refresh runs every 5 minutes. jman-api's SSH uses its own key and config in `.local-dev/ssh` and can reach only the local containers. The AI gateway gives canned answers (`aiFake`) unless `LOCAL_DEV_ANTHROPIC_API_KEY` is set. Your own jman-api settings (e.g. `aiAgents` overrides) go in the gitignored `.local-dev.toml`, appended to the generated config. `make local-dev-reset` wipes the state, not that file.
+- `make local-dev-agent` adds Docker containers that act as SpinupWP-like servers with SSH on 127.0.0.1:2221–2223: two run jman-agent from source, one is SSH-only. Their sites run old plugin releases with real CVEs, so exposures and `vuln-rank` have data. `make local-dev-agent-infect`/`-clean` plant and remove inert scan fixtures. The scripts are in `scripts/local-dev/`.
 - Use these to check API, UI, CLI and agent changes end to end without touching production.
 
 ### Configuration
