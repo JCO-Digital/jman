@@ -1,6 +1,17 @@
 # Changelog
 
-## 7.28.0 (2026-11-04)
+## 7.29.0 (2026-11-04)
+
+#### Features
+
+- monitor: hold site alerts during jman's own network problems (fc8d8d3)
+- api: nightly minor core updates for core vulnerabilities (6565595)
+
+#### Bug Fixes
+
+- vuln: resolve exposures of deleted sites (cdd3baf)
+
+## v7.28.0 (2026-11-04)
 
 #### Features
 
