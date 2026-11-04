@@ -308,7 +308,20 @@ func formatDatePtr(t *time.Time) string {
 	return t.Local().Format("2006-01-02")
 }
 
+// taskLink is a Slack link to the task in the web UI, or "" when jman-api
+// doesn't know the UI's address (webUrl).
+func taskLink(task *models.Task) string {
+	base := strings.TrimSuffix(config.Cfg.WebURL, "/")
+	if base == "" || task.ID == 0 {
+		return ""
+	}
+	return fmt.Sprintf("<%s/tasks?task=%d|Open task #%d>", base, task.ID, task.ID)
+}
+
 func sendToAssignee(task *models.Task, message string) bool {
+	if link := taskLink(task); link != "" {
+		message += "\n" + link
+	}
 	var sent bool
 	if task.AssignedTo != nil && *task.AssignedTo != "" {
 		setting, err := db.GetSetting(*task.AssignedTo, "slack_id")

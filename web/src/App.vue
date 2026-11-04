@@ -14,6 +14,7 @@ import AppNav from "./components/AppNav.vue";
 import ToastContainer from "./components/ToastContainer.vue";
 import TaskCenter from "./components/TaskCenter.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
+import TaskModalHost from "./components/TaskModalHost.vue";
 import packageInfo from "../package.json";
 
 const dataStore = useDataStore();
@@ -123,6 +124,7 @@ const handleLogout = () => {
 	</div>
 	<ToastContainer />
 	<TaskCenter v-if="authStore.isAuthenticated" />
+	<TaskModalHost v-if="authStore.isAuthenticated" />
 	<ConfirmModal />
 </template>
 

@@ -5,8 +5,7 @@ import { useTaskStore } from "../stores/tasks";
 import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
 import type { Task, TaskStatus } from "../types";
-import TaskInfoModal from "./TaskInfoModal.vue";
-import TaskFormModal from "./TaskFormModal.vue";
+import { useTaskModal } from "../composables/useTaskModal";
 import AppIcon from "./AppIcon.vue";
 import { getVulnerabilityStatus } from "../utils/taskVulnerability";
 
@@ -36,15 +35,12 @@ function vulnStatus(task: Task) {
 }
 
 const isTasksLoading = ref(false);
-const selectedTask = ref<Task | null>(null);
-const showTaskModal = ref(false);
-const showFormModal = ref(false);
-const editingTask = ref<Task | null>(null);
+// Opening a task puts it in the URL; TaskModalHost shows it.
+const { openTask } = useTaskModal();
 
 // Derived from the task store, so every change there (completing, editing or
 // deleting a task here or in the task modal, the next occurrence of a
-// repeating task arriving) shows up at once. The task modal closes before
-// its change is saved, so its updated/deleted events never reach us.
+// repeating task arriving) shows up at once.
 const reminderTasks = computed(() => {
 	const now = new Date();
 	const currentUsername = authStore.user?.username;
@@ -73,39 +69,12 @@ const loadReminderTasks = async () => {
 	}
 };
 
-function openTask(task: Task) {
-	selectedTask.value = task;
-	showTaskModal.value = true;
-}
-
-function openEdit(task: Task) {
-	editingTask.value = task;
-	showTaskModal.value = false;
-	showFormModal.value = true;
-}
-
-function handleSaved(task: Task) {
-	showFormModal.value = false;
-	if (editingTask.value) {
-		selectedTask.value = task;
-		showTaskModal.value = true;
-	}
-}
-
 async function completeTask(task: Task) {
 	try {
 		await taskStore.completeTask(task.id);
 	} catch (e) {
 		console.error("Failed to complete task", e);
 	}
-}
-
-function handleTaskUpdated(updated: Task) {
-	selectedTask.value = updated;
-}
-
-function handleTaskDeleted() {
-	showTaskModal.value = false;
 }
 
 const formatDate = (dateString: string | null) => {
@@ -144,7 +113,7 @@ onMounted(loadReminderTasks);
 						v-for="task in reminderTasks"
 						:key="task.id"
 						class="clickable-row"
-						@click="openTask(task)"
+						@click="openTask(task.id)"
 					>
 						<td class="task-title-cell">
 							<div class="flex-between gap-2">
@@ -230,22 +199,6 @@ onMounted(loadReminderTasks);
 				</tbody>
 			</table>
 		</div>
-
-		<TaskInfoModal
-			v-if="showTaskModal && selectedTask"
-			:task="selectedTask"
-			@close="showTaskModal = false"
-			@edit="openEdit"
-			@updated="handleTaskUpdated"
-			@deleted="handleTaskDeleted"
-		/>
-
-		<TaskFormModal
-			v-if="showFormModal"
-			:task="editingTask"
-			@close="showFormModal = false"
-			@saved="handleSaved"
-		/>
 	</section>
 </template>
 

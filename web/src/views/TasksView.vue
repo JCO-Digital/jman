@@ -7,8 +7,8 @@ import { useDataStore } from "../stores/data";
 import AppIcon from "../components/AppIcon.vue";
 import type { Task, TaskStatus, TaskPriority, TaskType } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
-import TaskInfoModal from "../components/TaskInfoModal.vue";
 import TaskFormModal from "../components/TaskFormModal.vue";
+import { useTaskModal } from "../composables/useTaskModal";
 import { getVulnerabilityStatus } from "../utils/taskVulnerability";
 
 const taskStore = useTaskStore();
@@ -16,10 +16,10 @@ const authStore = useAuthStore();
 const userStore = useUserStore();
 const dataStore = useDataStore();
 
-const selectedTask = ref<Task | null>(null);
-const showInfoModal = ref(false);
+// Opening a task puts it in the URL; TaskModalHost shows it and its edit
+// form. The form here is only for creating one.
+const { openTask } = useTaskModal();
 const showFormModal = ref(false);
-const editingTask = ref<Task | null>(null);
 
 // Filters
 const searchQuery = ref("");
@@ -109,36 +109,8 @@ const filteredTasks = computed(() => {
 	);
 });
 
-function openTask(task: Task) {
-	selectedTask.value = task;
-	showInfoModal.value = true;
-}
-
 function openCreate() {
-	editingTask.value = null;
 	showFormModal.value = true;
-}
-
-function openEdit(task: Task) {
-	editingTask.value = task;
-	showInfoModal.value = false;
-	showFormModal.value = true;
-}
-
-function handleSaved(task: Task) {
-	showFormModal.value = false;
-	if (editingTask.value) {
-		selectedTask.value = task;
-		showInfoModal.value = true;
-	}
-}
-
-function handleTaskUpdated(task: Task) {
-	selectedTask.value = task;
-}
-
-function handleTaskDeleted() {
-	showInfoModal.value = false;
 }
 
 const priorityClass: Record<TaskPriority, string> = {
@@ -266,7 +238,7 @@ function vulnStatus(task: Task) {
 						v-for="task in filteredTasks"
 						:key="task.id"
 						class="clickable-row"
-						@click="openTask(task)"
+						@click="openTask(task.id)"
 					>
 						<td class="max-w-320 truncate font-medium">
 							<div class="flex-between gap-2">
@@ -345,20 +317,10 @@ function vulnStatus(task: Task) {
 			</table>
 		</main>
 
-		<TaskInfoModal
-			v-if="showInfoModal && selectedTask"
-			:task="selectedTask"
-			@close="showInfoModal = false"
-			@edit="openEdit"
-			@updated="handleTaskUpdated"
-			@deleted="handleTaskDeleted"
-		/>
-
 		<TaskFormModal
 			v-if="showFormModal"
-			:task="editingTask"
 			@close="showFormModal = false"
-			@saved="handleSaved"
+			@saved="showFormModal = false"
 		/>
 	</div>
 </template>
