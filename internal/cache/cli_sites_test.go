@@ -3,6 +3,7 @@ package cache
 import (
 	"testing"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
@@ -63,5 +64,38 @@ func TestBuildCliSites(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("site %d:\n got  %+v\n want %+v", i, got[i], want[i])
 		}
+	}
+}
+
+// Without a SpinupWP token the servers and sites caches are never written;
+// the fast site list is then the external sites alone, not an error.
+func TestGetFastSiteListWithoutSpinupWP(t *testing.T) {
+	setupCacheTest(t)
+	if err := db.InitInventory(); err != nil {
+		t.Fatalf("failed to init inventory DB: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	oldToken := config.Cfg.TokenSpinup
+	t.Cleanup(func() { config.Cfg.TokenSpinup = oldToken })
+
+	if err := db.SaveManagedSite(models.ManagedSite{ID: "33333333-3333-3333-3333-333333333333", Provider: "manual",
+		Domain: "manual.example.org", IsWordpress: true, CanWPCLI: true, SSHHost: "127.0.0.1", SSHUser: "manual",
+		SSHPort: 2222, SitePath: "files"}); err != nil {
+		t.Fatal(err)
+	}
+
+	config.Cfg.TokenSpinup = ""
+	got, err := GetFastSiteList()
+	if err != nil {
+		t.Fatalf("GetFastSiteList: %v", err)
+	}
+	if len(got) != 1 || got[0].SSH != "manual@127.0.0.1:2222" {
+		t.Errorf("sites = %+v", got)
+	}
+
+	// With a token, missing caches are still an error: the refresh hasn't run.
+	config.Cfg.TokenSpinup = "token"
+	if _, err := GetFastSiteList(); err == nil {
+		t.Error("GetFastSiteList with a token and no cache succeeded")
 	}
 }

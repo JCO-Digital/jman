@@ -1,7 +1,9 @@
 package cache
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"time"
 
@@ -100,7 +102,7 @@ func RefreshCachedSites(ttl ...time.Duration) ([]models.Site, error) {
 // GetFastCachedServers retrieves servers from the cache without checking expiry.
 func GetFastCachedServers() ([]models.Server, error) {
 	servers := []models.Server{}
-	if err := ReadJSONCache("servers", &servers, -1); err != nil {
+	if err := ReadJSONCache("servers", &servers, -1); err != nil && !noSpinupWPCache(err) {
 		return servers, err
 	}
 	return servers, nil
@@ -109,10 +111,18 @@ func GetFastCachedServers() ([]models.Server, error) {
 // GetFastCachedSites retrieves sites from the cache without checking expiry.
 func GetFastCachedSites() ([]models.Site, error) {
 	sites := []models.Site{}
-	if err := ReadJSONCache("sites", &sites, -1); err != nil {
+	if err := ReadJSONCache("sites", &sites, -1); err != nil && !noSpinupWPCache(err) {
 		return sites, err
 	}
 	return sites, nil
+}
+
+// noSpinupWPCache reports whether a cache read failed only because the file
+// was never written, as without a SpinupWP token: the refresh then never
+// fetches servers or sites, and there are none (manual sites come from
+// inventory.db).
+func noSpinupWPCache(err error) bool {
+	return config.Cfg.TokenSpinup == "" && errors.Is(err, os.ErrNotExist)
 }
 
 // GetFastServerMap returns a map of server IDs to server names from cache without checking expiry.

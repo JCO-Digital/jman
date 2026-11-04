@@ -59,6 +59,7 @@ func ensureWithinDir(path, baseDir string) error {
 // If ttl > 0 and the file is older than ttl, it returns an error.
 // If ttl is 0, the cache is considered expired (useful for force refreshing).
 // If ttl is -1, the cache never expires.
+// A missing file gives an error that matches os.ErrNotExist.
 func ReadJSONCache(filename string, dest any, ttl time.Duration) error {
 	filePath := getCacheFilePath(filename)
 	if err := ensureWithinDir(filePath, config.RunData.CacheDir); err != nil {
@@ -68,7 +69,7 @@ func ReadJSONCache(filename string, dest any, ttl time.Duration) error {
 	info, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("cache file %s does not exist", filename)
+			return fmt.Errorf("cache file %s does not exist: %w", filename, os.ErrNotExist)
 		}
 		return err
 	}
