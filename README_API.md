@@ -463,6 +463,7 @@ For hosts that are slow over SSH, such as WP Engine, see [docs/slow-ssh-hosts.md
 - **Acknowledgment**: Any authenticated user can acknowledge the incident via the web UI. Acknowledging posts an audit note to Slack and cancels/suppresses PagerDuty alerting.
 - **PagerDuty Escalation**: If an outage remains unacknowledged and open after 10 minutes (configurable via `pagerdutyEscalationMinutes`), a critical incident is sent to PagerDuty to page the on-call person.
 - **Recovery**: When the site comes back up, `jman-api` automatically marks the incident resolved, notifies Slack, and resolves PagerDuty.
+- **jman's own network problems**: When sites on 5 or more different addresses all fail to connect (timeouts, refused connections, DNS errors) within 5 minutes, the problem is taken to be jman's own network or its provider's, not the sites'. One Slack message says so, and while it lasts those connection failures don't count towards any site's outage: no per-site down alerts, incidents or PagerDuty, and they're left out of the uptime history. Sites that answer with an HTTP error are still alerted on. A second message follows when jman can connect again. After 30 minutes failures count again, so a real outage of many servers is still alerted on. Sites on one server share an address, so a server going down is alerted on as before.
 - **Disabling**: Set `monitorDisabled = true` (or `JMAN_MONITORDISABLED=true`) in config if you wish to disable uptime checks.
 
 ## Security Notes
