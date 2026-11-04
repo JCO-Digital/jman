@@ -20,6 +20,11 @@ func TestParseLowestAdminUserID(t *testing.T) {
 			want:   5,
 		},
 		{
+			name:   "numeric IDs, as WP-CLI 2.12 prints them",
+			output: `[{"ID":7},{"ID":1}]`,
+			want:   1,
+		},
+		{
 			name:   "picks lowest ID regardless of order",
 			output: `[{"ID":"9"},{"ID":"2"},{"ID":"14"}]`,
 			want:   2,
@@ -43,7 +48,7 @@ func TestParseLowestAdminUserID(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := parseLowestAdminUserID(tc.output)
+			got, err := ParseLowestAdminUserID(tc.output)
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected an error, got id %d", got)

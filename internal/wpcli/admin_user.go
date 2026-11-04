@@ -19,30 +19,37 @@ import (
 // list` round trip on every plugin check.
 const adminUserTTL = 24 * time.Hour
 
+// AdminUserListArgs are the wp-cli arguments that list a site's
+// administrators for ParseLowestAdminUserID.
+func AdminUserListArgs() []string {
+	return []string{"user", "list", "--role=administrator", "--fields=ID", "--format=json"}
+}
+
 // GetAdminUserID returns the lowest-numbered administrator user ID on the
 // target site, for deterministic reuse across calls.
 func GetAdminUserID(site models.CliSite) (int, error) {
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "user", "list", "--role=administrator", "--fields=ID", "--format=json")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, AdminUserListArgs()...)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list administrators: %w (stderr: %s)", err, res.Error)
 	}
 
-	return parseLowestAdminUserID(res.Output)
+	return ParseLowestAdminUserID(res.Output)
 }
 
-// parseLowestAdminUserID extracts the lowest numeric user ID from the JSON
-// array produced by `wp user list --fields=ID --format=json`. Split out from
-// GetAdminUserID so the parsing/selection logic can be unit tested without
-// shelling out to wp-cli.
-func parseLowestAdminUserID(output string) (int, error) {
+// ParseLowestAdminUserID extracts the lowest numeric user ID from the JSON
+// array produced by `wp user list --fields=ID --format=json` (see
+// AdminUserListArgs). jman-agent runs that list itself.
+func ParseLowestAdminUserID(output string) (int, error) {
 	output = strings.TrimSpace(output)
 	idx := strings.Index(output, "[")
 	if idx == -1 {
 		return 0, fmt.Errorf("no valid JSON array found in output")
 	}
 
+	// WP-CLI prints the ID as a number ([{"ID":1}]); older versions and
+	// some formats quote it, which json.Number accepts too.
 	var raw []struct {
-		ID string `json:"ID"`
+		ID json.Number `json:"ID"`
 	}
 	if err := json.Unmarshal([]byte(output[idx:]), &raw); err != nil {
 		return 0, fmt.Errorf("failed to parse user list JSON: %w", err)
@@ -53,7 +60,7 @@ func parseLowestAdminUserID(output string) (int, error) {
 
 	lowest := 0
 	for _, u := range raw {
-		id, err := strconv.Atoi(strings.TrimSpace(u.ID))
+		id, err := strconv.Atoi(u.ID.String())
 		if err != nil {
 			continue
 		}
