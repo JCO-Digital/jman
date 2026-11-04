@@ -434,6 +434,22 @@ Plugin updates, plugin activation, deactivation, deletion and installs, and Word
 - A site's `last_update` (in `GET /api/sites`) is its latest ledger entry that isn't a plugin action, so activating or installing a plugin doesn't count as updating the site.
 - Jobs are stored in `api.db`, so they survive page reloads. If jman-api restarts mid-update, the running job is marked interrupted and still-queued jobs run again.
 
+### Nightly core updates
+
+With `nightlyCoreUpdates` on, jman-api updates WordPress core once a night on every site that runs a version with known core vulnerabilities:
+
+- A site qualifies when it has an open core exposure (Monitoring → Vulnerabilities) that isn't muted, and a minor core update. Muting the exposure keeps the site out. Major updates are never queued, so a site with only a major update waits for someone to update it.
+- At the start hour (server local time), jman-api queues a minor core update job for each such site, the same job as `POST /api/sites/{id}/core-update` with `{"target": "minor"}`, with `nightly` as its user in the job list and the update ledger. Update locks don't stop it, as they only hold back major updates. Sites with a core update already queued or running are skipped.
+- It runs once a night. If jman-api was down at the start hour, it runs later, up to three hours after it.
+- When the jobs have finished, it posts a summary to `slackChannel`: the sites updated (with old and new version), failed, or already up to date. Nothing is posted on a night with nothing to update.
+
+| Key                     | Env var                      | Default | Description                                                  |
+| ----------------------- | ---------------------------- | ------- | ------------------------------------------------------------ |
+| `nightlyCoreUpdates`    | `JMAN_NIGHTLYCOREUPDATES`    | `false` | Turn the nightly core update on.                             |
+| `nightlyCoreUpdateHour` | `JMAN_NIGHTLYCOREUPDATEHOUR` | `3`     | The hour (0–23, server local time) the nightly run starts at. |
+
+`make local-dev` leaves it off, as it would update the deliberately outdated WordPress of the test sites. To try it there, add `nightlyCoreUpdates = true` and `nightlyCoreUpdateHour = <the current hour>` to `.local-dev.toml` and restart.
+
 ## Slow SSH Hosts
 
 For hosts that are slow over SSH, such as WP Engine, see [docs/slow-ssh-hosts.md](docs/slow-ssh-hosts.md). It covers SSH connection reuse, per-host WP-CLI timeouts, and what jman reports when an update fails.

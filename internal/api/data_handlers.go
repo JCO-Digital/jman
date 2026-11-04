@@ -2,13 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
@@ -565,10 +565,6 @@ func SiteCoreCheckHandler(w http.ResponseWriter, r *http.Request) {
 // coreUpdateTargetRegex restricts the update target to the two supported values.
 var coreUpdateTargetRegex = regexp.MustCompile(`^(minor|major)$`)
 
-// coreJobMu serializes the duplicate check and enqueue of core update jobs,
-// so two concurrent requests can't both queue one for the same site.
-var coreJobMu sync.Mutex
-
 // SiteCoreUpdateHandler queues a background update of WordPress core on a
 // site to the latest minor or major version and returns the job (202). The
 // job's result, including the refreshed core state, is available from
@@ -608,8 +604,8 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	coreJobMu.Lock()
-	defer coreJobMu.Unlock()
+	// Checked before the site so a duplicate is reported as one; EnqueueCore
+	// checks again under its lock.
 	active, err := db.HasActiveCoreUpdateJob(siteID)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)
@@ -631,7 +627,12 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		AllowMajor: body.Target == "major" && body.AllowMajor,
 	})
 	job.CreatedBy = getUsername(r)
-	if err := updatejobs.Enqueue(&job); err != nil {
+	// EnqueueCore refuses a second core job for the site, also against
+	// the nightly core update.
+	if err := updatejobs.EnqueueCore(&job); errors.Is(err, updatejobs.ErrCoreJobActive) {
+		WriteError(w, http.StatusConflict, "A WordPress core update is already queued or running for this site")
+		return
+	} else if err != nil {
 		verb.LogPrintf(verb.Normal, "SiteCoreUpdateHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to queue core update")
 		return

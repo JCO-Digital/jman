@@ -87,6 +87,9 @@ func runServe(cmd *cobra.Command, args []string) error {
 	if err := updatejobs.Start(cmd.Context()); err != nil {
 		return err
 	}
+	// Nightly minor core updates for core vulnerabilities (off unless
+	// nightlyCoreUpdates is set).
+	updatejobs.StartNightlyCore(cmd.Context())
 
 	// Start the AI gateway (off unless aiEnabled is set)
 	if err := ai.Start(cmd.Context(), agents.All()...); err != nil {

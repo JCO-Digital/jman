@@ -58,6 +58,25 @@ func GetUpdateJob(id int64) (*models.UpdateJob, error) {
 	return &jobs[0], nil
 }
 
+// LatestUpdateJobBy returns the most recently created job of createdBy
+// (e.g. "nightly"), or nil if there is none.
+func LatestUpdateJobBy(createdBy string) (*models.UpdateJob, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+
+	rows, err := db.Query(`SELECT `+updateJobColumns+` FROM plugin_update_jobs WHERE created_by = ? ORDER BY id DESC LIMIT 1`, createdBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get the latest update job: %w", err)
+	}
+	jobs, err := scanUpdateJobs(rows)
+	if err != nil || len(jobs) == 0 {
+		return nil, err
+	}
+	return &jobs[0], nil
+}
+
 // ListUpdateJobs returns every queued or running job plus those that
 // finished at or after finishedSince, oldest first.
 func ListUpdateJobs(finishedSince time.Time) ([]models.UpdateJob, error) {
