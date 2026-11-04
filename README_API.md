@@ -434,6 +434,22 @@ Plugin updates, plugin activation, deactivation, deletion and installs, and Word
 - A site's `last_update` (in `GET /api/sites`) is its latest ledger entry that isn't a plugin action, so activating or installing a plugin doesn't count as updating the site.
 - Jobs are stored in `api.db`, so they survive page reloads. If jman-api restarts mid-update, the running job is marked interrupted and still-queued jobs run again.
 
+### Nightly core updates
+
+With `nightlyCoreUpdates` on, jman-api updates WordPress core once a night on every site that runs a version with known core vulnerabilities:
+
+- A site qualifies when it has an open core exposure (Monitoring → Vulnerabilities) that isn't muted, and a minor core update. Muting the exposure keeps the site out. Major updates are never queued, so a site with only a major update waits for someone to update it.
+- At the start hour (server local time), jman-api queues a minor core update job for each such site, the same job as `POST /api/sites/{id}/core-update` with `{"target": "minor"}`, with `nightly` as its user in the job list and the update ledger. Update locks don't stop it, as they only hold back major updates. Sites with a core update already queued or running are skipped.
+- It runs once a night. If jman-api was down at the start hour, it runs later, up to three hours after it.
+- When the jobs have finished, it posts a summary to `slackChannel`: the sites updated (with old and new version), failed, or already up to date. Nothing is posted on a night with nothing to update.
+
+| Key                     | Env var                      | Default | Description                                                  |
+| ----------------------- | ---------------------------- | ------- | ------------------------------------------------------------ |
+| `nightlyCoreUpdates`    | `JMAN_NIGHTLYCOREUPDATES`    | `false` | Turn the nightly core update on.                             |
+| `nightlyCoreUpdateHour` | `JMAN_NIGHTLYCOREUPDATEHOUR` | `3`     | The hour (0–23, server local time) the nightly run starts at. |
+
+`make local-dev` leaves it off, as it would update the deliberately outdated WordPress of the test sites. To try it there, add `nightlyCoreUpdates = true` and `nightlyCoreUpdateHour = <the current hour>` to `.local-dev.toml` and restart.
+
 ## Slow SSH Hosts
 
 For hosts that are slow over SSH, such as WP Engine, see [docs/slow-ssh-hosts.md](docs/slow-ssh-hosts.md). It covers SSH connection reuse, per-host WP-CLI timeouts, and what jman reports when an update fails.
@@ -447,6 +463,7 @@ For hosts that are slow over SSH, such as WP Engine, see [docs/slow-ssh-hosts.md
 - **Acknowledgment**: Any authenticated user can acknowledge the incident via the web UI. Acknowledging posts an audit note to Slack and cancels/suppresses PagerDuty alerting.
 - **PagerDuty Escalation**: If an outage remains unacknowledged and open after 10 minutes (configurable via `pagerdutyEscalationMinutes`), a critical incident is sent to PagerDuty to page the on-call person.
 - **Recovery**: When the site comes back up, `jman-api` automatically marks the incident resolved, notifies Slack, and resolves PagerDuty.
+- **jman's own network problems**: When sites on 5 or more different addresses all fail to connect (timeouts, refused connections, DNS errors) within 5 minutes, the problem is taken to be jman's own network or its provider's, not the sites'. One Slack message says so, and while it lasts those connection failures don't count towards any site's outage: no per-site down alerts, incidents or PagerDuty, and they're left out of the uptime history. Sites that answer with an HTTP error are still alerted on. A second message follows when jman can connect again. After 30 minutes failures count again, so a real outage of many servers is still alerted on. Sites on one server share an address, so a server going down is alerted on as before.
 - **Disabling**: Set `monitorDisabled = true` (or `JMAN_MONITORDISABLED=true`) in config if you wish to disable uptime checks.
 
 ## Security Notes

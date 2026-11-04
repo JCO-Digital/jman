@@ -108,6 +108,12 @@ type AppConfig struct {
 	// before jman-api warns in Slack.
 	AgentServerStaleMinutes int `toml:"agentServerStaleMinutes" mapstructure:"agentServerStaleMinutes"`
 	AgentSiteStaleMinutes   int `toml:"agentSiteStaleMinutes" mapstructure:"agentSiteStaleMinutes"`
+	// NightlyCoreUpdates turns on the nightly WordPress core update: sites
+	// with an open (unmuted) core vulnerability exposure and a minor core
+	// update get it at NightlyCoreUpdateHour (server local time, default
+	// 3), or later that night if jman-api was down then.
+	NightlyCoreUpdates    bool `toml:"nightlyCoreUpdates" mapstructure:"nightlyCoreUpdates"`
+	NightlyCoreUpdateHour int  `toml:"nightlyCoreUpdateHour" mapstructure:"nightlyCoreUpdateHour"`
 	// WPCLIHostTimeouts raises the WP-CLI timeout for slow SSH hosts, such
 	// as WP Engine's SSH gateway. See WPCLIHostTimeout.
 	WPCLIHostTimeouts []WPCLIHostTimeout `toml:"wpcliHostTimeouts" mapstructure:"wpcliHostTimeouts"`
@@ -258,6 +264,8 @@ func loadConfig() error {
 	viper.SetDefault("aiZdrConfirmed", false)
 	viper.SetDefault("aiFake", false)
 	viper.SetDefault("aiDailyBudgetUsd", 10.0)
+	viper.SetDefault("nightlyCoreUpdates", false)
+	viper.SetDefault("nightlyCoreUpdateHour", DefaultNightlyCoreUpdateHour)
 
 	// Viper configuration
 	viper.SetConfigName("config")
@@ -313,6 +321,8 @@ func loadConfig() error {
 		"aiZdrConfirmed":             "AIZDRCONFIRMED",
 		"aiFake":                     "AIFAKE",
 		"aiDailyBudgetUsd":           "AIDAILYBUDGETUSD",
+		"nightlyCoreUpdates":         "NIGHTLYCOREUPDATES",
+		"nightlyCoreUpdateHour":      "NIGHTLYCOREUPDATEHOUR",
 	}
 
 	for key, envVar := range envBindings {
@@ -349,6 +359,19 @@ func loadConfig() error {
 	}
 
 	return nil
+}
+
+// DefaultNightlyCoreUpdateHour is when the nightly core update starts
+// unless nightlyCoreUpdateHour says otherwise.
+const DefaultNightlyCoreUpdateHour = 3
+
+// NightlyCoreUpdateStartHour returns the hour (0-23, server local time) the
+// nightly core update starts at; an out-of-range setting uses the default.
+func NightlyCoreUpdateStartHour() int {
+	if h := Cfg.NightlyCoreUpdateHour; h >= 0 && h <= 23 {
+		return h
+	}
+	return DefaultNightlyCoreUpdateHour
 }
 
 // AgentWPDataIntervalMinutes returns the agent's WordPress data collection

@@ -63,6 +63,31 @@ func (e *Engine) Check(status *CheckStatus) error {
 	}
 
 	result := e.probeHTTP(probe)
+
+	// A connection failure during a network problem on jman's side (see
+	// netguard.go) doesn't count: the site isn't recorded as down and is
+	// checked again in a minute.
+	if isConnectionFailure(result) {
+		hold, ev := guard.failed(checkID, guardResolve(probe.URL))
+		announce(ev)
+		if hold {
+			verb.LogPrintf(verb.Verbose, "Held %s's failure (jman network problem): %s\n", label, result.Message)
+			status.Mu.Lock()
+			stopped := status.Stopped
+			if !stopped {
+				status.LastChecked = time.Now()
+				status.NextCheckAt = time.Now().Add(time.Minute)
+			}
+			status.Mu.Unlock()
+			if stopped {
+				return nil
+			}
+			return SaveCheckStatus(status)
+		}
+	} else {
+		announce(guard.reached(checkID))
+	}
+
 	RecordHistory(checkID, domain, result.Up, result.Message, result.Code)
 
 	status.Mu.Lock()

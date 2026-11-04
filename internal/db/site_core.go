@@ -142,3 +142,16 @@ func SaveSiteCoreObserved(siteID, version, minorUpdate, majorUpdate string, obse
 	}
 	return nil
 }
+
+// DeleteSiteCore removes a site's cached core version, for a site that no
+// longer exists.
+func DeleteSiteCore(siteID string) error {
+	db := GetInventoryDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if _, err := db.Exec(`DELETE FROM site_core WHERE site_id = ?`, siteID); err != nil {
+		return fmt.Errorf("failed to delete core version for site %s: %w", siteID, err)
+	}
+	return nil
+}

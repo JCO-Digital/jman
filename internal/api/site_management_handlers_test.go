@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -153,6 +154,16 @@ func TestUpdateAndDeleteSiteHandler(t *testing.T) {
 		t.Fatalf("unexpected updated fields: %+v", updated)
 	}
 
+	// Cached core and an open core exposure, which deleting must clear.
+	if err := db.SaveSiteCore(siteID, "6.9.6", "6.9.11", ""); err != nil {
+		t.Fatal(err)
+	}
+	exposure := models.VulnExposure{Kind: models.VulnExposureCore, Slug: models.CoreExposureSlug, SiteID: siteID,
+		Version: "6.9.6", FixState: models.VulnFixAvailable, FirstSeenAt: time.Now(), LastSeenAt: time.Now()}
+	if err := db.InsertVulnExposure(&exposure); err != nil {
+		t.Fatal(err)
+	}
+
 	// Delete site
 	req = httptest.NewRequest("DELETE", "/api/sites/"+siteID, nil).WithContext(ctx)
 	req.SetPathValue("id", siteID)
@@ -160,6 +171,12 @@ func TestUpdateAndDeleteSiteHandler(t *testing.T) {
 	DeleteSiteHandler(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("expected 200 OK, got %d: %s", w.Code, w.Body.String())
+	}
+	if cores, err := db.GetAllSiteCore(); err != nil || len(cores) != 0 {
+		t.Errorf("site_core after delete = %+v, %v; want empty", cores, err)
+	}
+	if e, err := db.GetOpenVulnExposure(models.VulnExposureCore, models.CoreExposureSlug, siteID); err != nil || e != nil {
+		t.Errorf("open exposure after delete = %+v, %v; want none", e, err)
 	}
 
 	// Verify gone

@@ -520,6 +520,30 @@ func ListManagedSites(providerFilter ...string) ([]models.ManagedSite, error) {
 	return sites, nil
 }
 
+// ExistingSiteIDs returns the IDs of the sites in inventory.db that still
+// exist: not deleted, and not marked removed because SpinupWP no longer
+// lists them (SiteStatusRemoved).
+func ExistingSiteIDs() (map[string]bool, error) {
+	dbConn := GetInventoryDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := dbConn.Query(`SELECT id FROM sites WHERE status IS NULL OR status != ?`, SiteStatusRemoved)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sites: %w", err)
+	}
+	defer rows.Close()
+	ids := map[string]bool{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("failed to scan site ID: %w", err)
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
+}
+
 // DeleteManagedSite removes a site record by its UUID.
 func DeleteManagedSite(id string) error {
 	dbConn := GetInventoryDB()
