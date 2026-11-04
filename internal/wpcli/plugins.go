@@ -14,7 +14,7 @@ import (
 
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error) {
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: !skipPlugins}, "plugin", "list", "--format=json")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: !skipPlugins, PremiumUpdates: true}, "plugin", "list", "--format=json")
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func updatePlugins(site models.CliSite, plugins []string, patchOnly bool) ([]Upd
 	args = append(args, "--format=json")
 
 	timeout := WriteTimeout + time.Duration(len(plugins)-1)*perPluginWriteTimeout
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, Timeout: timeout}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, Timeout: timeout}, args...)
 	// WP-CLI prints the per-plugin JSON table even when some plugins fail,
 	// so parse it either way.
 	updates, parseErr := parseUpdateOutput(res.Output)
@@ -210,7 +210,7 @@ func updatePlugins(site models.CliSite, plugins []string, patchOnly bool) ([]Upd
 func PluginUpdatePackages(site models.CliSite) (map[string]string, error) {
 	refreshUpdateCache(site)
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true}, "plugin", "list", "--fields=name,update_package", "--format=json")
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true}, "plugin", "list", "--fields=name,update_package", "--format=json")
 	if err != nil {
 		return nil, err
 	}

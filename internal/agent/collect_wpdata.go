@@ -170,10 +170,12 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 	}
 
 	// Listed with the plugins loaded so premium plugins report their
-	// updates, and as an administrator, since some (FileBird Pro) check
-	// for updates only when current_user_can('manage_options'). If a
+	// updates, as an administrator, since some (FileBird Pro) check for
+	// updates only when current_user_can('manage_options'), and with the
+	// admin-only update checks of others (Yoast add-ons) registered by
+	// runWithPlugins. If a
 	// broken plugin (or a since-deleted administrator) stops that, listed
-	// again with plugins skipped, where neither matters.
+	// again with plugins skipped, where none of it matters.
 	listArgs := []string{"plugin", "list", "--format=json"}
 	if admin := siteAdminUser(ctx, runner, id, sitePath, site); admin > 0 {
 		listArgs = append(listArgs, fmt.Sprintf("--user=%d", admin))

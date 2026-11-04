@@ -20,8 +20,9 @@ func TestParsePluginDetails(t *testing.T) {
 
 func TestGetPluginsWithUpdates(t *testing.T) {
 	site := models.CliSite{ID: "test-site", Name: "example.com", Path: "/srv/www"}
-	// The patterns are anchored so the loaded and skipped runs can't both match.
-	loaded := "--path=/srv/www\\ --skip-themes\\ plugin\\ list*"
+	// The patterns are anchored so the loaded and skipped runs can't both
+	// match; the loaded run registers premium update checks (--exec).
+	loaded := "--path=/srv/www\\ --exec=*\\ --skip-themes\\ plugin\\ list*"
 	skipped := "--path=/srv/www\\ --skip-plugins\\ --skip-themes\\ plugin\\ list*"
 
 	fakeWP(t, map[string]string{

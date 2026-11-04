@@ -40,6 +40,9 @@ type CliOptions struct {
 	Path           string
 	User           int
 	IncludePlugins bool
+	// PremiumUpdates registers premium plugins' admin-only update checks
+	// (PremiumUpdatesArg); for plugin lists and updates with plugins loaded.
+	PremiumUpdates bool
 	IncludeThemes  bool
 	Timeout        time.Duration
 }
@@ -73,6 +76,8 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 
 	if !opts.IncludePlugins {
 		fullArgs = append(fullArgs, "--skip-plugins")
+	} else if opts.PremiumUpdates {
+		fullArgs = append(fullArgs, PremiumUpdatesArg())
 	}
 	if !opts.IncludeThemes {
 		fullArgs = append(fullArgs, "--skip-themes")
