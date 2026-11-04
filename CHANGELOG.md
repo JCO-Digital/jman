@@ -1,6 +1,24 @@
 # Changelog
 
-## 7.27.0 (2026-11-03)
+## 7.28.0 (2026-11-04)
+
+#### Features
+
+- link tasks from Slack and keep the open task in the URL (ccf58bc)
+- dev: add SSH, real CVE plugins, TOTP and AI to make local-dev (9b9117b)
+- web: show the AI vulnerability ranking in the vulnerabilities panel (2e8c6ac)
+- cli: add jman ai to run AI agents and show their results (8b025c1)
+- ai: add an advisory AI gateway to jman-api with a vuln-rank agent (cc4e3f3)
+
+#### Bug Fixes
+
+- local-dev: name the agents' bridge, detect a blocking firewall (84df14c)
+- wpcli: register Yoast add-on update checks under WP-CLI (28c2bcd)
+- agent: list plugins as an administrator so FileBird Pro reports updates (2396611)
+- vuln: record new vulnerability alerts without sending when Slack is off (de39122)
+- cache: treat missing SpinupWP caches as empty without a SpinupWP token (e16b9c6)
+
+## v7.27.0 (2026-11-03)
 
 #### Features
 
