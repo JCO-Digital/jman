@@ -379,6 +379,9 @@ func DeleteSiteHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Failed to delete site")
 		return
 	}
+	// Its cached plugins and core would otherwise keep it in the
+	// vulnerability reports until the next refresh.
+	forgetDeletedSite(site.ID)
 
 	WriteJSON(w, http.StatusOK, map[string]string{
 		"message": fmt.Sprintf("Site %s deleted successfully", site.Domain),
@@ -572,4 +575,32 @@ func RefreshDataHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, result)
+}
+
+// forgetDeletedSite drops a deleted site's cached plugins and core and
+// resolves its open vulnerability exposures. The exposure sync would do
+// the same on its next run (it resolves those of sites that no longer
+// exist), and also lifts the site's mutes then. Failures are logged only:
+// the site is deleted either way.
+func forgetDeletedSite(siteID string) {
+	if err := db.DeleteSitePlugins(siteID); err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+	}
+	if err := db.DeleteSiteCore(siteID); err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+	}
+	open, err := db.ListOpenVulnExposures()
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to resolve the exposures of deleted site %s: %v", siteID, err)
+		return
+	}
+	var ids []int64
+	for _, e := range open {
+		if e.SiteID == siteID {
+			ids = append(ids, e.ID)
+		}
+	}
+	if err := db.ResolveVulnExposures(ids, time.Now()); err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to resolve the exposures of deleted site %s: %v", siteID, err)
+	}
 }

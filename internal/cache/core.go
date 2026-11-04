@@ -39,9 +39,12 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 		return existing, fmt.Errorf("failed to get site list: %w", err)
 	}
 
+	// Drop the core versions of sites that no longer exist (deleted, or
+	// gone from SpinupWP), so core reports don't keep listing them.
+	updated := pruneSiteCore(existing)
+
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 12)
-	updated := false
 	var mu sync.Mutex
 
 	// jman-agent collects these sites itself (see GetCachedPlugins).
@@ -97,6 +100,28 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 		return db.GetAllSiteCore()
 	}
 	return existing, nil
+}
+
+// pruneSiteCore deletes the cached core versions of sites that no longer
+// exist in inventory.db, and reports whether it deleted any. Without
+// inventory.db (the CLI) it does nothing.
+func pruneSiteCore(cores []models.SiteCore) bool {
+	ids, err := db.ExistingSiteIDs()
+	if err != nil {
+		return false
+	}
+	pruned := false
+	for _, c := range cores {
+		if ids[c.SiteID] {
+			continue
+		}
+		if err := db.DeleteSiteCore(c.SiteID); err != nil {
+			verb.PrintErrorf(verb.Normal, "Warning: failed to prune core version of deleted site %s: %v\n", c.SiteID, err)
+			continue
+		}
+		pruned = true
+	}
+	return pruned
 }
 
 // checkCoreUpdates looks up the latest available minor/major WordPress core

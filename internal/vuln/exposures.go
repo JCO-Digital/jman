@@ -129,7 +129,17 @@ func syncVulnExposures(siteID string) error {
 		observed, open, recent = onlySite(siteID, observed, open, recent)
 	}
 
-	plan := planExposureSync(open, recent, observed, evaluated, exposureDataReadable, now)
+	// Exposures of deleted (or SpinupWP-removed) sites are resolved: their
+	// cached plugins and core can outlive them. Without the site list,
+	// every site counts as existing, so nothing is resolved for it.
+	var exists func(string) bool
+	if ids, err := db.ExistingSiteIDs(); err != nil {
+		verb.LogPrintf(verb.Normal, "Warning: failed to list sites, exposures of deleted sites left as they are: %v\n", err)
+	} else {
+		exists = func(id string) bool { return ids[id] }
+	}
+
+	plan := planExposureSync(open, recent, observed, evaluated, exposureDataReadable, exists, now)
 	for i := range plan.Inserts {
 		if err := db.InsertVulnExposure(&plan.Inserts[i]); err != nil {
 			return err
@@ -192,9 +202,14 @@ type exposurePlan struct {
 // resolved within exposureReopenWindow (recent), or else is inserted. An
 // open exposure that wasn't observed is resolved if its kind was evaluated
 // and readable says its data could be read.
+//
+// exists, when not nil, says whether a site still exists. A site that
+// doesn't gets no new or updated exposures, and its open ones are resolved
+// whatever the state of the vulnerability data.
 func planExposureSync(open, recent []models.VulnExposure, observed map[exposureKey]observedExposure,
-	evaluated map[string]bool, readable func(models.VulnExposure) bool, now time.Time) exposurePlan {
+	evaluated map[string]bool, readable func(models.VulnExposure) bool, exists func(siteID string) bool, now time.Time) exposurePlan {
 	var plan exposurePlan
+	gone := func(siteID string) bool { return exists != nil && !exists(siteID) }
 
 	openByKey := map[exposureKey]models.VulnExposure{}
 	for _, e := range open {
@@ -208,7 +223,9 @@ func planExposureSync(open, recent []models.VulnExposure, observed map[exposureK
 
 	keys := make([]exposureKey, 0, len(observed))
 	for k := range observed {
-		keys = append(keys, k)
+		if !gone(k.SiteID) {
+			keys = append(keys, k)
+		}
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		a, b := keys[i], keys[j]
@@ -240,6 +257,10 @@ func planExposureSync(open, recent []models.VulnExposure, observed map[exposureK
 	}
 
 	for _, e := range open {
+		if gone(e.SiteID) {
+			plan.Resolves = append(plan.Resolves, e.ID)
+			continue
+		}
 		if _, ok := observed[keyOf(e)]; ok || !evaluated[e.Kind] || !readable(e) {
 			continue
 		}

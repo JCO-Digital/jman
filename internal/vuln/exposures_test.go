@@ -124,7 +124,7 @@ func TestPlanExposureSync(t *testing.T) {
 	}
 	readable := func(e models.VulnExposure) bool { return e.Slug != "unreadable" }
 
-	plan := planExposureSync(open, recent, observed, map[string]bool{"plugin": true}, readable, now)
+	plan := planExposureSync(open, recent, observed, map[string]bool{"plugin": true}, readable, nil, now)
 
 	if !reflect.DeepEqual(plan.Resolves, []int64{3}) {
 		t.Errorf("resolves = %v, want [3]", plan.Resolves)
@@ -302,8 +302,45 @@ func TestOnlySiteLeavesOtherSitesAlone(t *testing.T) {
 	readable := func(models.VulnExposure) bool { return true }
 
 	obs, siteOpen, siteRecent := onlySite("s1", observed, open, nil)
-	plan := planExposureSync(siteOpen, siteRecent, obs, evaluated, readable, now)
+	plan := planExposureSync(siteOpen, siteRecent, obs, evaluated, readable, nil, now)
 	if !reflect.DeepEqual(plan.Resolves, []int64{1}) || len(plan.Inserts) != 0 || len(plan.Updates) != 0 {
 		t.Errorf("plan = %+v, want only s1's exposure resolved", plan)
+	}
+}
+
+// A deleted site's cached plugins and core can outlive it, so its
+// exposures are resolved and not reopened or inserted again, even when
+// that kind's vulnerability data wasn't processed this time.
+func TestPlanExposureSyncDeletedSites(t *testing.T) {
+	now := time.Date(2026, 11, 5, 12, 0, 0, 0, time.UTC)
+	resolvedAt := now.Add(-time.Hour)
+	open := []models.VulnExposure{
+		{ID: 1, Kind: "core", Slug: "wordpress", SiteID: "deleted", FixState: models.VulnFixAvailable},
+		{ID: 2, Kind: "plugin", Slug: "a", SiteID: "deleted", FixState: models.VulnNoFix},
+		{ID: 3, Kind: "core", Slug: "wordpress", SiteID: "kept", FixState: models.VulnFixAvailable},
+	}
+	recent := []models.VulnExposure{
+		{ID: 4, Kind: "plugin", Slug: "b", SiteID: "deleted", ResolvedAt: &resolvedAt},
+	}
+	observed := map[exposureKey]observedExposure{
+		{"core", "wordpress", "deleted"}: {Version: "6.9.6", FixState: models.VulnFixAvailable, FixedIn: "6.9.11"},
+		{"plugin", "b", "deleted"}:       {Version: "1.0", FixState: models.VulnNoFix},
+		{"plugin", "c", "deleted"}:       {Version: "1.0", FixState: models.VulnNoFix},
+		{"core", "wordpress", "kept"}:    {Version: "6.9.6", FixState: models.VulnFixAvailable, FixedIn: "6.9.11"},
+	}
+	readable := func(models.VulnExposure) bool { return true }
+	exists := func(id string) bool { return id == "kept" }
+
+	// Core was evaluated, plugins weren't (a failed fetch, say).
+	plan := planExposureSync(open, recent, observed, map[string]bool{"core": true}, readable, exists, now)
+
+	if !reflect.DeepEqual(plan.Resolves, []int64{1, 2}) {
+		t.Errorf("resolves = %v, want [1 2]", plan.Resolves)
+	}
+	if len(plan.Inserts) != 0 {
+		t.Errorf("inserts = %+v, want none", plan.Inserts)
+	}
+	if len(plan.Updates) != 1 || plan.Updates[0].ID != 3 {
+		t.Errorf("updates = %+v, want only the kept site's exposure", plan.Updates)
 	}
 }
