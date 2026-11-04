@@ -1,6 +1,7 @@
 package vuln
 
 import (
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -219,11 +220,12 @@ func TestAlertNewVulnerabilitiesFlow(t *testing.T) {
 	if err := db.InitAPI(); err != nil {
 		t.Fatal(err)
 	}
-	// No Slack token: every send fails, so nothing sent is recorded.
-	old := config.Cfg
-	t.Cleanup(func() { config.Cfg = old })
-	config.Cfg.TokenSlack = ""
+	// Every send fails, so nothing sent is recorded.
+	old, oldSend := config.Cfg, sendAlert
+	t.Cleanup(func() { config.Cfg, sendAlert = old, oldSend })
+	config.Cfg.TokenSlack = "test-token"
 	config.Cfg.CVSSThreshold = 7.0
+	sendAlert = func(string) error { return errors.New("slack is down") }
 
 	resp := models.VulnResponse{Data: &models.VulnData{Name: strp("Zeta"), Vulnerability: []models.Vulnerability{
 		testVuln("old", "9.0"), testVuln("high", "8.0"), testVuln("low", "3.0"),
@@ -280,5 +282,16 @@ func TestAlertNewVulnerabilitiesFlow(t *testing.T) {
 	}
 	if alerted, _ := db.GetAlertedVulnUUIDs(); alerted["high"] {
 		t.Error("high was recorded as alerted although the send failed")
+	}
+
+	// Without a Slack token nothing is sent or retried: everything open is
+	// recorded, as on the first run.
+	config.Cfg.TokenSlack = ""
+	sendAlert = func(string) error { t.Error("sent an alert without a Slack token"); return nil }
+	if err := AlertNewVulnerabilities(); err != nil {
+		t.Fatal(err)
+	}
+	if got := recorded(); !reflect.DeepEqual(got, map[string]bool{"s1/old": true, "s2/low": true, "s2/high": true, "s2/old": true}) {
+		t.Errorf("without Slack = %v", got)
 	}
 }
