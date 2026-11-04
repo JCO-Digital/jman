@@ -25,6 +25,10 @@ DEV_USER="admin"
 AIR_VERSION="v1.67.4"
 COMPOSE_FILE="$ROOT/scripts/local-dev/agent/compose.yaml"
 COMPOSE_PROJECT="${LOCAL_DEV_PROJECT:-jman-local-dev}"
+# The containers' bridge interface, named after the project (interface names
+# are at most 15 characters) so a host firewall rule can let the agents
+# reach jman-api; see check_agent_reach.
+AGENT_BRIDGE="${COMPOSE_PROJECT:0:15}"
 SSH_PORT="${LOCAL_DEV_SSH_PORT:-2221}"
 # Your own jman-api settings (gitignored), appended to the generated config.
 EXTRA_CONFIG="${LOCAL_DEV_API_CONFIG:-$ROOT/.local-dev.toml}"
@@ -459,11 +463,33 @@ cmd_reset() {
 compose() {
 	API_PORT="$API_PORT" AGENT_ENV_DIR="$STATE/agent" AGENT_BIN_DIR="$STATE/agent/bin" \
 		SSH_PUBKEY="$STATE/ssh/id_ed25519.pub" SSH_PORT_1="$SSH_PORT" SSH_PORT_2="$((SSH_PORT + 1))" \
-		SSH_PORT_3="$((SSH_PORT + 2))" docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" "$@"
+		SSH_PORT_3="$((SSH_PORT + 2))" AGENT_BRIDGE="$AGENT_BRIDGE" \
+		docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" "$@"
+}
+
+# A host firewall (ufw's default deny, say) drops the agents' connections to
+# jman-api on the host; they then time out on every report.
+check_agent_reach() {
+	local entry server kind
+	for entry in "${SERVERS[@]}"; do
+		read -r server kind _ <<<"$entry"
+		[[ "$kind" == agent ]] && break
+	done
+	if compose exec -T "$server" curl -fsS -m 5 -o /dev/null "http://host.docker.internal:$API_PORT/api/health" 2>/dev/null; then
+		return
+	fi
+	printf '\033[1;33m[local-dev]\033[0m %s\n' \
+		"The agent containers can't reach jman-api on the host (port $API_PORT)." \
+		"A host firewall is probably dropping it. With ufw, allow the agents' bridge:" \
+		"" "    sudo ufw allow in on $AGENT_BRIDGE to any port $API_PORT proto tcp" "" \
+		"The agents retry on their own; no restart is needed." >&2
 }
 
 cmd_agent_up() {
 	need go docker curl jq openssl ssh ssh-keygen base32
+	# The image build uses additional_contexts and COPY --chmod (BuildKit).
+	docker buildx version >/dev/null 2>&1 ||
+		die "the Docker buildx plugin is required (Arch: pacman -S docker-buildx; Debian/Ubuntu: apt install docker-buildx-plugin)"
 	[[ -f "$STATE/admin-password" && -x "$STATE/totp" && -x "$STATE/bin/jman-api" ]] || die "run make local-dev first"
 	curl -fsS -o /dev/null "$API_URL/api/health" 2>/dev/null || die "jman-api isn't running on $API_URL; start make local-dev first"
 	go_env
@@ -505,8 +531,15 @@ cmd_agent_up() {
 	done
 
 	log "Starting MariaDB and the server containers..."
+	# Older networks have a random bridge name; recreate them to get the fixed one.
+	if docker network inspect "${COMPOSE_PROJECT}_default" >/dev/null 2>&1 &&
+		[[ "$(docker network inspect -f '{{index .Options "com.docker.network.bridge.name"}}' "${COMPOSE_PROJECT}_default")" != "$AGENT_BRIDGE" ]]; then
+		log "Recreating the containers' network with the bridge name $AGENT_BRIDGE..."
+		compose down
+	fi
 	compose up -d --build --wait mariadb
 	compose up -d --build
+	check_agent_reach
 	cat >&2 <<-EOF
 
 		The server containers are starting. They install WordPress and old plugin

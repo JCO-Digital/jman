@@ -2,7 +2,7 @@
 # run jman-agent against the jman-api of make local-dev on the host;
 # dev-ssh-1 has no agent, so jman-api reaches its site over SSH only. Run through
 # scripts/local-dev/local-dev.sh, which sets API_PORT, AGENT_ENV_DIR,
-# AGENT_BIN_DIR, SSH_PUBKEY and SSH_PORT_1/2/3, and creates the per-server token
+# AGENT_BIN_DIR, SSH_PUBKEY, SSH_PORT_1/2/3 and AGENT_BRIDGE, and creates the per-server token
 # files and the SSH key.
 name: jman-local-dev
 
@@ -88,6 +88,13 @@ services:
       - sites-3:/sites
       - wpcli-cache:/var/cache/wp-cli
       - ${SSH_PUBKEY:?run through scripts/local-dev/local-dev.sh}:/run/local-dev/ssh.pub:ro
+
+# A fixed bridge name, so a host firewall rule can let the agents reach
+# jman-api (ufw: allow in on jman-local-dev to any port 8080 proto tcp).
+networks:
+  default:
+    driver_opts:
+      com.docker.network.bridge.name: ${AGENT_BRIDGE:?run through scripts/local-dev/local-dev.sh}
 
 volumes:
   db:

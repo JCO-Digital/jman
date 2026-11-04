@@ -292,7 +292,7 @@ In addition to the main `jman` CLI, this repository includes sidecar utilities:
 
 #### Server containers
 
-With `make local-dev` running, `make local-dev-agent` (needs Docker) starts three containers that look like SpinupWP servers:
+With `make local-dev` running, `make local-dev-agent` (needs Docker with the buildx plugin) starts three containers that look like SpinupWP servers:
 
 - `dev-agent-1` (alpha, production; beta, staging) and `dev-agent-2` (gamma, production) run `jman-agent` built from this checkout, reporting every minute.
 - `dev-ssh-1` (delta, production) has no agent, so jman-api reads it over SSH only, as it does agentless sites.
@@ -300,7 +300,7 @@ With `make local-dev` running, `make local-dev-agent` (needs Docker) starts thre
 - SSH as the site user (`ssh -F .local-dev/ssh/config -p 2221 alpha@127.0.0.1`), with the key in `.local-dev/ssh`. jman-api uses it for plugin and core updates, live update checks, test connections and the agentless refresh.
 - Old plugin releases with published vulnerabilities, so jman finds real exposures: Duplicator 1.3.26 (in CISA KEV), Contact Form 7 5.3.1 (CVSS 10), WP Statistics, LiteSpeed Cache, Really Simple SSL, Forminator and Wordfence. gamma runs WordPress 6.8.2 for core vulnerabilities. The list is `site_plugins` in `scripts/local-dev/agent/entrypoint.sh`. The containers' web servers aren't published on the host. A plugin is only installed when it is missing, so updates made through jman stay; `make local-dev-reset` brings the old versions back.
 
-It adds the servers and sites to jman-api and creates their agent tokens with `jman-api agent-token`. Run it again after changing the agent code to rebuild it. The exposures appear with the next refresh, within 5 minutes of the sites' first report. The sites, databases and scan baselines persist until `make local-dev-agent-down` plus `make local-dev-reset`. Installing WordPress and the plugins, the checksums and the vulnerability data come from wordpress.org and the WPVulnerability API. The agent reaches jman-api through `host.docker.internal`, because jman-api listens on all interfaces.
+It adds the servers and sites to jman-api and creates their agent tokens with `jman-api agent-token`. Run it again after changing the agent code to rebuild it. The exposures appear with the next refresh, within 5 minutes of the sites' first report. The sites, databases and scan baselines persist until `make local-dev-agent-down` plus `make local-dev-reset`. Installing WordPress and the plugins, the checksums and the vulnerability data come from wordpress.org and the WPVulnerability API. The agent reaches jman-api through `host.docker.internal`, because jman-api listens on all interfaces. A host firewall can block that: the containers' bridge is named after the Compose project (`jman-local-dev`), so with ufw run `sudo ufw allow in on jman-local-dev to any port 8080 proto tcp`. `make local-dev-agent` checks the connection and prints this command when it's blocked.
 
 - `make local-dev-agent-infect` plants inert files on `alpha.local-dev.test` that match the scan rules: PHP in uploads, an `eval(base64_decode(…))` of an `echo`, an `auto_prepend_file` `.htaccess`, a `.sql` dump, and a comment appended to a core file and a plugin file. `make local-dev-agent-clean` removes them again. Findings appear, and later clear, within a minute or two.
 - `docker compose -p jman-local-dev exec dev-agent-1 jman-agent --check-wp` (or `--check-scan`) checks a server by hand. `docker compose -p jman-local-dev logs -f` follows the logs.
