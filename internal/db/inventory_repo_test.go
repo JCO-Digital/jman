@@ -36,6 +36,10 @@ func TestInventoryItemSaveGetList(t *testing.T) {
 	if got.Name != "example.com" || got.Description != "Main domain" {
 		t.Errorf("got %+v", got)
 	}
+	// Unset JSON columns round-trip as empty structures, never null.
+	if got.ProviderData == nil || len(got.ProviderData) != 0 {
+		t.Errorf("provider_data = %v, want empty non-nil map", got.ProviderData)
+	}
 	if len(got.Tags) != 2 || got.Tags[0] != "prod" {
 		t.Errorf("tags = %v", got.Tags)
 	}
@@ -211,5 +215,28 @@ func TestInventoryItemStatusAndMatches(t *testing.T) {
 	active, err := ListInventoryItems(InventoryItemFilter{Status: string(models.InventoryItemStatusActive)})
 	if err != nil || len(active) != 1 || active[0].ID != manual.ID {
 		t.Fatalf("active items: %+v %v", active, err)
+	}
+}
+
+func TestInventoryItemNilJSONFieldsRoundTrip(t *testing.T) {
+	setupTestAPIDB(t)
+	// No tags/details/provider_data set: they must come back as empty
+	// structures, not null.
+	item := models.InventoryItem{Type: models.InventoryItemTypeServer, Name: "bare"}
+	if err := InsertInventoryItem(&item, "tester"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := GetInventoryItem(item.ID)
+	if err != nil || got == nil {
+		t.Fatalf("get: %v %v", got, err)
+	}
+	if got.Tags == nil || len(got.Tags) != 0 {
+		t.Errorf("tags = %#v, want empty non-nil slice", got.Tags)
+	}
+	if got.Details == nil || len(got.Details) != 0 {
+		t.Errorf("details = %#v, want empty non-nil map", got.Details)
+	}
+	if got.ProviderData == nil || len(got.ProviderData) != 0 {
+		t.Errorf("provider_data = %#v, want empty non-nil map", got.ProviderData)
 	}
 }

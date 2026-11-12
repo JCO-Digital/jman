@@ -419,10 +419,10 @@ func SyncInventoryProviderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if provider == "spinupwp" {
+		// Best effort: on failure the provider syncs from the last good
+		// cache instead, since the sync is idempotent.
 		if _, err := refresh.RefreshServersAndSites(); err != nil {
-			verb.LogPrintf(verb.Normal, "SyncInventoryProviderHandler: %v", err)
-			WriteError(w, http.StatusBadGateway, "Refresh failed: "+err.Error())
-			return
+			verb.LogPrintf(verb.Normal, "SyncInventoryProviderHandler: servers/sites refresh failed, syncing from cache: %v", err)
 		}
 	}
 	result, err := inventory.Sync(r.Context(), provider)

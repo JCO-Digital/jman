@@ -18,11 +18,21 @@ type InventoryItemFilter struct {
 	Search string
 }
 
-// marshalJSON encodes v, using fallback when v is nil so the NOT NULL JSON
-// columns never get an empty string.
+// marshalJSON encodes v, using fallback for nil values (including typed nil
+// maps/slices, which are not == nil) so the NOT NULL JSON columns never get
+// "null" or an empty string.
 func marshalJSON(v any, fallback string) (string, error) {
-	if v == nil {
+	switch t := v.(type) {
+	case nil:
 		return fallback, nil
+	case map[string]any:
+		if t == nil {
+			return fallback, nil
+		}
+	case []string:
+		if t == nil {
+			return fallback, nil
+		}
 	}
 	b, err := json.Marshal(v)
 	if err != nil {
@@ -31,9 +41,10 @@ func marshalJSON(v any, fallback string) (string, error) {
 	return string(b), nil
 }
 
-// unmarshalJSON decodes s into v, tolerating empty/NULL columns.
+// unmarshalJSON decodes s into v, tolerating empty/NULL columns and the
+// literal "null" (which would otherwise nil out the caller's map/slice).
 func unmarshalJSON(s string, v any) error {
-	if s == "" {
+	if s == "" || s == "null" {
 		return nil
 	}
 	return json.Unmarshal([]byte(s), v)

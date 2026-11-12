@@ -589,19 +589,78 @@ report ID.
 
 ## Asset & Monitoring Management
 
-### Asset Templates
+### Asset Templates (billing)
 
-`GET /assets` (Protected: `basic`)
-`POST /assets` (Protected: `edit`)
-`PATCH /assets/{id}` (Protected: `edit`)
-`DELETE /assets/{id}` (Protected: `edit`)
+The billing endpoints live under `/api/billing/*` (the web UI's billing
+pages under `/billing/*`); the asset inventory described below owns
+`/api/inventory/*` and `/inventory`.
 
-### Organization Assets & Payments
+`GET /api/billing/assets` (Protected: `basic`)
+`POST /api/billing/assets` (Protected: `edit`)
+`PATCH /api/billing/assets/{id}` (Protected: `edit`)
+`DELETE /api/billing/assets/{id}` (Protected: `edit`)
 
-`GET /organization-assets` (Protected: `basic`)
-`POST /organizations/{id}/assets` (Protected: `edit`)
-`POST /organization-assets/{id}/payments` (Protected: `edit`)
-`DELETE /asset-payments/{id}` (Protected: `edit`)
+### Organization Assets & Payments (billing)
+
+`GET /api/billing/organization-assets` (Protected: `basic`)
+`POST /api/organizations/{id}/assets` (Protected: `edit`)
+`POST /api/billing/organization-assets/{id}/payments` (Protected: `edit`)
+`DELETE /api/billing/asset-payments/{id}` (Protected: `edit`)
+
+### Asset Inventory
+
+CMDB-style registry of servers and domains (including ones unrelated to
+WordPress hosting), manual at the core with optional links to external APIs
+("providers", starting with SpinupWP). See `docs/inventory.md`. All IDs are
+UUID strings.
+
+`GET /api/inventory/types` (Protected: `basic`): known item types with suggested `details` keys.
+`GET /api/inventory/providers` (Protected: `basic`): registered provider names.
+`GET /api/inventory/items?type=&status=&search=` (Protected: `basic`): items with their links.
+`POST /api/inventory/items` (Protected: `edit`): create a manual item; domain names are reduced to the apex domain; answers `409` with `{"existing_item_id": "..."}` when an item with the same type+name exists.
+`GET /api/inventory/items/{id}` (Protected: `basic`): one item plus undismissed `matches` (other items with the same type+name that have provider links — the link/dismiss prompt).
+`PATCH /api/inventory/items/{id}` (Protected: `edit`): update manual fields; `type`/`name` are read-only on provider-linked items (`409`).
+`DELETE /api/inventory/items/{id}` (Protected: `edit`): manual items only; provider-linked items answer `409`.
+`POST /api/inventory/items/{id}/links` (Protected: `edit`): body `{"provider","provider_type","provider_id"}`; links an external entity to the item, moving the link off the auto-created item if it had one.
+`DELETE /api/inventory/items/{id}/links/{provider}/{providerType}/{providerId}` (Protected: `edit`): unlink.
+`POST /api/inventory/items/{id}/dismiss` (Protected: `edit`): body like the link payload; dismisses the match prompt.
+`POST /api/inventory/sync/{provider}` (Protected: `edit`): run a provider sync now; answers with a `SyncResult` (`fetched`, `created`, `updated`, `links_added`, `links_removed`, `removed`, `skipped`).
+
+**Inventory Item Object**
+
+```json
+{
+	"id": "0199…",
+	"type": "server",
+	"name": "web1.internal",
+	"origin": "manual",
+	"status": "active",
+	"description": "MariaDB host",
+	"tags": ["infra"],
+	"details": {"ip_addresses": ["10.0.0.5"], "access": "user: admin"},
+	"provider_data": {"ip_address": "203.0.113.10"},
+	"site_id": null,
+	"server_id": null,
+	"links": [
+		{
+			"id": 1,
+			"item_id": "0199…",
+			"provider": "spinupwp",
+			"provider_type": "server",
+			"provider_id": "678",
+			"created_at": "datetime"
+		}
+	],
+	"created_at": "datetime",
+	"created_by": "username",
+	"updated_at": "datetime",
+	"updated_by": "username"
+}
+```
+
+`details` is free-form per type and holds no secrets (at most usernames);
+`provider_data` is written only by provider syncs. Domain-type items are
+named by their apex (registrable) domain.
 
 ### Unified Ignore List
 
