@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.31.0 (2026-11-12)
+## 7.32.0 (2026-11-12)
+
+#### Features
+
+- inventory: readable detail view; trim SpinupWP provider data (086bf86)
+
+## v7.31.0 (2026-11-12)
 
 #### Features
 
