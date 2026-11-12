@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.29.0 (2026-11-04)
+### 7.29.1 (2026-11-12)
+
+#### Bug Fixes
+
+- scan: don't flag comment-only PHP placeholders (9027c84)
+
+## v7.29.0 (2026-11-04)
 
 #### Features
 
