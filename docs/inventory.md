@@ -59,7 +59,7 @@ There is deliberately **no unique constraint on `name`**: a manual item and a
 synced item may coexist with the same name; matches are surfaced, not merged.
 
 Domain-type names are normalized to the **apex (registrable) domain** on save
-and on sync, via `publicsuffix.EffectiveTLDPlus1`, so `www.example.com` and
+and on sync, via `publicsuffix.EffectiveTLDPlusOne`, so `www.example.com` and
 `example.com` are one inventory item.
 
 ## Providers

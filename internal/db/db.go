@@ -1204,6 +1204,69 @@ func initAPISchema() error {
 				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},
 		},
+		{
+			// inventory_items is the asset inventory (servers, domains, ...),
+			// a CMDB-style registry separate from the functional
+			// servers/sites in inventory.db. Manual entries are the core;
+			// items can additionally be linked to external APIs through
+			// inventory_item_links. See docs/inventory.md.
+			Name: "inventory_items",
+			Columns: map[string]string{
+				"id":   "TEXT PRIMARY KEY",
+				"type": "TEXT NOT NULL",
+				"name": "TEXT NOT NULL",
+				// 'manual' or 'provider'; syncs only auto-remove
+				// origin='provider' items.
+				"origin": "TEXT NOT NULL DEFAULT 'manual'",
+				"status": "TEXT NOT NULL DEFAULT 'active'",
+				// Free-form manual fields as JSON; no secrets, at most
+				// usernames.
+				"details": "TEXT NOT NULL DEFAULT '{}'",
+				// Latest snapshot from the linked API as JSON; only syncs
+				// write it.
+				"provider_data": "TEXT NOT NULL DEFAULT '{}'",
+				"description":   "TEXT DEFAULT ''",
+				"tags":          "TEXT NOT NULL DEFAULT '[]'",
+				// Optional soft references to the functional entities in
+				// inventory.db.
+				"site_id":    "TEXT",
+				"server_id":  "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT",
+			},
+		},
+		{
+			// inventory_item_links ties an inventory item to one entity of
+			// an external API. The unique (provider, provider_type,
+			// provider_id) key is how a sync finds the item an external
+			// entity belongs to (see idx_inventory_item_links_provider).
+			Name: "inventory_item_links",
+			Columns: map[string]string{
+				"id":            "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"item_id":       "TEXT NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE",
+				"provider":      "TEXT NOT NULL",
+				"provider_type": "TEXT NOT NULL",
+				"provider_id":   "TEXT NOT NULL",
+				"created_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+		},
+		{
+			// inventory_link_dismissals records that the "link / dismiss"
+			// prompt for one item against one provider link was answered
+			// with "dismiss".
+			Name: "inventory_link_dismissals",
+			Columns: map[string]string{
+				"item_id":       "TEXT NOT NULL",
+				"provider":      "TEXT NOT NULL",
+				"provider_type": "TEXT NOT NULL",
+				"provider_id":   "TEXT NOT NULL",
+				"created_at":    "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":    "TEXT",
+			},
+			PrimaryKey: []string{"item_id", "provider", "provider_type", "provider_id"},
+		},
 	}
 
 	// Before migrateTable drops the old job columns.
@@ -1384,6 +1447,31 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_incidents_check_id ON incidents(check_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_inventory_items_type ON inventory_items(type);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_inventory_items_status ON inventory_items(status);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_inventory_items_site_id ON inventory_items(site_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_inventory_items_server_id ON inventory_items(server_id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_inventory_item_links_item_id ON inventory_item_links(item_id);")
+	if err != nil {
+		return err
+	}
+	// One item per external entity: a sync resolves the item through this.
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_inventory_item_links_provider ON inventory_item_links(provider, provider_type, provider_id);")
 	if err != nil {
 		return err
 	}
