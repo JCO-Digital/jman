@@ -108,12 +108,15 @@ The first provider is **SpinupWP** (`internal/inventory/spinupwp`), reusing
 `internal/fetch/spinupwp`:
 
 - servers → `type=server` items (`provider_type='server'`, `provider_id` =
-  SpinupWP server ID); `provider_data` carries name, IP, SSH port, provider,
-  region, size, OS, disk, connection status, …
+  SpinupWP server ID); `provider_data` carries IP, SSH port, provider,
+  region, size, OS, disk size (`disk_total`, bytes), connection status, …
+  (not disk usage, which changes on every refresh, or the database host)
 - each site's primary domain **and** `additional_domains` → `type=domain`
   items named by apex domain (`provider_type='site_domain'`,
   `provider_id='<siteID>:<domain>'`), soft-linked to the managed site via
-  `site_id`.
+  `site_id`; `provider_data` carries only domain facts (`domain`,
+  `apex_domain`, `additional`, `certificate_expires`), not the site's
+  PHP version, status, environment and so on.
 
 Sync runs after every successful fast tick of jman-api's refresh scheduler
 (`internal/refresh`), and manually via `POST /api/inventory/sync/{provider}`.

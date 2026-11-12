@@ -32,6 +32,11 @@ func TestItemsMapsServersAndSiteDomains(t *testing.T) {
 	if srv.Type != models.InventoryItemTypeServer || srv.ProviderType != "server" || srv.ProviderID != "678" {
 		t.Errorf("server item: %+v", srv)
 	}
+	for _, key := range []string{"server_id", "name", "disk_space", "database"} {
+		if _, ok := srv.Data[key]; ok {
+			t.Errorf("server provider_data has %q: %+v", key, srv.Data)
+		}
+	}
 	if srv.Name != "lon1.examplehost.com" || srv.Data["ip_address"] != "203.0.113.10" || srv.Data["region"] != "fsn1" {
 		t.Errorf("server data: %+v", srv.Data)
 	}
@@ -57,8 +62,13 @@ func TestItemsMapsServersAndSiteDomains(t *testing.T) {
 			t.Errorf("domain item %d site link = %q", i, d.SiteID)
 		}
 	}
-	if items[1].Data["additional"] != false || items[2].Data["additional"] != true || items[2].Data["redirect"] != true {
-		t.Errorf("additional/redirect flags: %+v %+v", items[1].Data, items[2].Data)
+	if items[1].Data["additional"] != false || items[2].Data["additional"] != true {
+		t.Errorf("additional flags: %+v %+v", items[1].Data, items[2].Data)
+	}
+	for _, key := range []string{"site_id", "site_uuid", "php_version", "is_wordpress", "environment", "status", "redirect", "https_enabled"} {
+		if _, ok := items[1].Data[key]; ok {
+			t.Errorf("domain provider_data has site field %q: %+v", key, items[1].Data)
+		}
 	}
 	if items[1].Data["certificate_expires"] != "2027-01-01" {
 		t.Errorf("https data: %+v", items[1].Data)

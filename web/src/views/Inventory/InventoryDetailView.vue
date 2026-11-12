@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useInventoryStore } from "../../stores/inventory";
+import { useDataStore } from "../../stores/data";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import type {
@@ -15,10 +16,12 @@ import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { formatBytes } from "../../utils/format";
 
 const route = useRoute();
 const router = useRouter();
 const inventoryStore = useInventoryStore();
+const dataStore = useDataStore();
 const authStore = useAuthStore();
 const toast = useToastStore();
 const { confirm } = useConfirm();
@@ -41,9 +44,19 @@ const load = async () => {
 };
 
 onMounted(async () => {
-	await inventoryStore.fetchTypes();
-	await load();
+	await Promise.all([
+		inventoryStore.fetchTypes(),
+		dataStore.initData(),
+		load(),
+	]);
 });
+
+// The linked site and server, when the soft link points at one jman knows.
+// A link to something no longer listed falls back to showing the ID.
+const linkedSite = computed(() => dataStore.getSiteById(item.value?.site_id));
+const linkedServer = computed(() =>
+	dataStore.getServerById(item.value?.server_id),
+);
 
 // The component is reused when the route goes from one item to another.
 watch(id, () => {
@@ -53,20 +66,49 @@ watch(id, () => {
 	load();
 });
 
-const detailEntries = computed(() =>
-	Object.entries(item.value?.details ?? {}).map(([key, value]) => ({
+// formatValue renders one details/provider_data value for the key-value
+// tables: byte counts (keys ending in _total, _used, _available or _bytes)
+// as sizes, timestamps (keys ending in _at or _expires) as local dates,
+// arrays as comma-separated lists and objects as "key: value" pairs.
+const formatValue = (key: string, value: unknown): string => {
+	if (value === null || value === undefined || value === "") return "—";
+	if (
+		typeof value === "number" &&
+		/_(total|used|available|bytes)$/.test(key)
+	) {
+		return formatBytes(value);
+	}
+	if (typeof value === "string" && /_(at|expires)$/.test(key)) {
+		const date = new Date(value);
+		if (!Number.isNaN(date.getTime())) return date.toLocaleString();
+	}
+	if (typeof value === "boolean") return value ? "yes" : "no";
+	if (Array.isArray(value)) {
+		return value.map((v) => formatValue("", v)).join(", ") || "—";
+	}
+	if (typeof value === "object") {
+		return (
+			Object.entries(value as Record<string, unknown>)
+				.map(([k, v]) => `${formatLabel(k)}: ${formatValue(k, v)}`)
+				.join(", ") || "—"
+		);
+	}
+	return String(value);
+};
+
+const formatLabel = (key: string) => key.replace(/_/g, " ");
+
+const toEntries = (data: Record<string, unknown> | undefined) =>
+	Object.entries(data ?? {}).map(([key, value]) => ({
 		key,
-		value:
-			typeof value === "object" ? JSON.stringify(value) : String(value),
-	})),
-);
+		label: formatLabel(key),
+		value: formatValue(key, value),
+	}));
+
+const detailEntries = computed(() => toEntries(item.value?.details));
 
 const providerDataEntries = computed(() =>
-	Object.entries(item.value?.provider_data ?? {}).map(([key, value]) => ({
-		key,
-		value:
-			typeof value === "object" ? JSON.stringify(value) : String(value),
-	})),
+	toEntries(item.value?.provider_data),
 );
 
 // The link/dismiss prompt: for every undismissed match, its first link.
@@ -270,11 +312,30 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 								</tr>
 								<tr>
 									<th>Linked site</th>
-									<td>{{ item.site_id || "—" }}</td>
+									<td>
+										<RouterLink
+											v-if="linkedSite"
+											:to="{
+												name: 'site-detail',
+												params: { id: linkedSite.id },
+											}"
+										>
+											{{ linkedSite.domain }}
+										</RouterLink>
+										<span v-else>{{
+											item.site_id || "—"
+										}}</span>
+									</td>
 								</tr>
 								<tr>
 									<th>Linked server</th>
-									<td>{{ item.server_id || "—" }}</td>
+									<td>
+										{{
+											linkedServer?.name ||
+											item.server_id ||
+											"—"
+										}}
+									</td>
 								</tr>
 								<tr>
 									<th>Updated</th>
@@ -341,7 +402,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 									v-for="entry in detailEntries"
 									:key="entry.key"
 								>
-									<th>{{ entry.key }}</th>
+									<th>{{ entry.label }}</th>
 									<td>{{ entry.value }}</td>
 								</tr>
 							</tbody>
@@ -360,7 +421,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 									v-for="entry in providerDataEntries"
 									:key="entry.key"
 								>
-									<th>{{ entry.key }}</th>
+									<th>{{ entry.label }}</th>
 									<td>{{ entry.value }}</td>
 								</tr>
 							</tbody>

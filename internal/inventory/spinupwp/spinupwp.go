@@ -51,6 +51,8 @@ func (Provider) Fetch(ctx context.Context) ([]inventory.ExternalItem, error) {
 // server becomes a 'server' item, and every site's primary domain plus its
 // additional domains become 'domain' items named by their apex
 // (registrable) domain, so www.example.com and example.com are one item.
+// A domain item's provider_data holds only domain facts (the hostname, its
+// apex, whether it's an additional domain, the certificate expiry).
 func Items(servers []models.Server, sites []models.Site) []inventory.ExternalItem {
 	items := make([]inventory.ExternalItem, 0, len(servers)+len(sites))
 
@@ -61,17 +63,18 @@ func Items(servers []models.Server, sites []models.Site) []inventory.ExternalIte
 			ProviderID:   strconv.Itoa(srv.ID),
 			Name:         srv.Name,
 			Data: map[string]any{
-				"server_id":         srv.ID,
-				"name":              srv.Name,
-				"provider_name":     srv.ProviderName,
-				"ubuntu_version":    srv.UbuntuVersion,
-				"ip_address":        srv.IPAddress,
-				"ssh_port":          srv.SSHPort,
-				"timezone":          srv.Timezone,
-				"region":            srv.Region,
-				"size":              srv.Size,
-				"disk_space":        srv.DiskSpace,
-				"database":          srv.Database,
+				"provider_name":  srv.ProviderName,
+				"ubuntu_version": srv.UbuntuVersion,
+				"ip_address":     srv.IPAddress,
+				"ssh_port":       srv.SSHPort,
+				"timezone":       srv.Timezone,
+				"region":         srv.Region,
+				"size":           srv.Size,
+				// The disk size only: used/available change on every
+				// refresh and belong to monitoring, not the inventory
+				// record. The database host/port is the same localhost
+				// MySQL on every server, so it's left out too.
+				"disk_total":        srv.DiskSpace.Total,
 				"connection_status": srv.ConnectionStatus,
 				"reboot_required":   srv.RebootRequired,
 				"upgrade_required":  srv.UpgradeRequired,
@@ -98,19 +101,14 @@ func Items(servers []models.Server, sites []models.Site) []inventory.ExternalIte
 				ProviderID:   fmt.Sprintf("%d:%s", site.ID, d.Domain),
 				Name:         apex,
 				SiteID:       siteUUID,
+				// Only what describes the domain itself: the site it
+				// belongs to is the item's site link, and the site's own
+				// details are on the site's page.
 				Data: map[string]any{
-					"site_id":             site.ID,
-					"site_uuid":           siteUUID,
 					"domain":              d.Domain,
 					"apex_domain":         apex,
 					"additional":          site.Domain != d.Domain,
-					"redirect":            d.Redirect.Enabled,
-					"environment":         string(site.Environment),
-					"php_version":         site.PHPVersion,
-					"is_wordpress":        site.IsWordpress,
-					"https_enabled":       site.HTTPS.Enabled,
 					"certificate_expires": site.HTTPS.CertificateExpires,
-					"status":              site.Status,
 				},
 			})
 		}
