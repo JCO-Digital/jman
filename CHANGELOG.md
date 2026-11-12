@@ -1,6 +1,28 @@
 # Changelog
 
-## 7.30.0 (2026-11-12)
+## 7.31.0 (2026-11-12)
+
+#### Features
+
+- inventory: attach items to the generic notes system (69ba30d)
+- inventory: template-driven graphical details editor in the item modal (39bf890)
+- inventory: web UI; move billing to /billing routes and /api/billing/* (3d70757)
+- inventory: REST API for inventory items, links, matches and sync (82c094d)
+- inventory: provider framework, SpinupWP provider, sync scheduler hook (ded6be8)
+- inventory: schema, models and repo for inventory items (bb4071f)
+
+#### Bug Fixes
+
+- inventory: make the provider sync self-healing; partial PATCH; UI fixes (5c7a10b)
+- inventory: render provider data as a formatted key-value table (f24ecfd)
+- inventory: add-item defaults to the active type filter; type switch drops stale template fields (6300da8)
+- inventory: marshal nil JSON fields as empty structures; docs; sync handler falls back to cache (3a4b893)
+
+#### Documentation
+
+- add inventory system spec (b690ef4)
+
+## v7.30.0 (2026-11-12)
 
 #### Features
 
