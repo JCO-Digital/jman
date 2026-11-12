@@ -65,7 +65,6 @@ func ListInventoryTypesHandler(w http.ResponseWriter, r *http.Request) {
 				{Key: "access", Kind: "text", Hint: "how to reach it and as which user — no passwords"},
 				{Key: "services", Kind: "list", Hint: "services running on it"},
 				{Key: "last_updated", Kind: "text", Hint: "when it was last updated (YYYY-MM-DD)"},
-				{Key: "notes", Kind: "text"},
 			},
 		},
 		{
@@ -75,7 +74,6 @@ func ListInventoryTypesHandler(w http.ResponseWriter, r *http.Request) {
 				{Key: "dns_servers", Kind: "list", Hint: "the domain's DNS servers / nameservers"},
 				{Key: "access", Kind: "text", Hint: "who manages it, and as which user — no passwords"},
 				{Key: "expiry", Kind: "text", Hint: "renewal date (YYYY-MM-DD)"},
-				{Key: "notes", Kind: "text"},
 			},
 		},
 	})

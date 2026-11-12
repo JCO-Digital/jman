@@ -13,6 +13,7 @@ import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
+import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
 
 const route = useRoute();
@@ -317,6 +318,8 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 					</div>
 					<pre>{{ providerDataJSON }}</pre>
 				</div>
+
+				<NotesWidget parent-type="InventoryItem" :parent-id="item.id" />
 			</template>
 		</main>
 

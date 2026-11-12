@@ -136,4 +136,7 @@ The CLI does not consume inventory data (no `cliproto.Snapshot` change).
 - `internal/inventory/` — provider framework, registry, sync runner
 - `internal/inventory/spinupwp/` — SpinupWP provider
 - `internal/api/inventory_handlers.go` — REST handlers, registered in `handlers.go`
+- Notes attach through the generic notes system (`/api/notes`) with
+  `parent_type = "InventoryItem"`; the detail view embeds `NotesWidget`. The
+  `notes` key is deliberately not part of the details templates.
 - `web/src/views/Inventory/` — list/detail views; router + `AppNav` changes

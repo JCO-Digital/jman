@@ -658,7 +658,7 @@ UUID strings.
 }
 ```
 
-`details` is free-form per type and holds no secrets (at most usernames);
+`details` is free-form per type and holds no secrets (at most usernames). Notes are not kept in `details`: attach them via the generic notes endpoints (`/api/notes`) with `parent_type: "InventoryItem"`;
 `provider_data` is written only by provider syncs. Domain-type items are
 named by their apex (registrable) domain.
 

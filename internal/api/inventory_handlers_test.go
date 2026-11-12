@@ -306,3 +306,32 @@ func TestListInventoryTypesHandler(t *testing.T) {
 		}
 	}
 }
+
+func TestNotesAcceptInventoryItemParent(t *testing.T) {
+	ctx := setupInventoryHandlerTest(t)
+
+	w := doInventoryRequest(t, ctx, "POST", "/api/inventory/items",
+		`{"type":"server","name":"db1.internal"}`, CreateInventoryItemHandler, nil)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", w.Code, w.Body.String())
+	}
+	var item models.InventoryItem
+	json.Unmarshal(w.Body.Bytes(), &item)
+
+	// Notes on the item go through the generic notes endpoints.
+	w = doInventoryRequest(t, ctx, "POST", "/api/notes",
+		`{"parent_type":"InventoryItem","parent_id":"`+item.ID+`","content":"Runs MariaDB 11"}`,
+		CreateNoteHandler, nil)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("create note: %d %s", w.Code, w.Body.String())
+	}
+	w = doInventoryRequest(t, ctx, "GET", "/api/notes?type=InventoryItem&id="+item.ID, "", ListNotesHandler, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("list notes: %d", w.Code)
+	}
+	var notes []models.Note
+	json.Unmarshal(w.Body.Bytes(), &notes)
+	if len(notes) != 1 || notes[0].Content != "Runs MariaDB 11" || notes[0].ParentType != models.NoteParentTypeInventoryItem {
+		t.Fatalf("notes: %+v", notes)
+	}
+}
