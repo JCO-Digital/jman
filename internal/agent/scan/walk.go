@@ -76,6 +76,10 @@ type Entry struct {
 	Process bool `json:"process,omitempty"`
 	// Exe is the program a Process runs.
 	Exe string `json:"exe,omitempty"`
+	// Config is wp-config.php or the site root's .htaccess with its
+	// secrets taken out (see ConfigCopy), kept in the baseline so a change
+	// can be shown as a diff.
+	Config *ConfigCopy `json:"config,omitempty"`
 }
 
 // Result is what a walk found.
@@ -408,10 +412,13 @@ func readTracked(full, rel string, e *Entry, keepBody bool) []byte {
 	}
 
 	h := sha256.New()
-	var head, ini, body bytes.Buffer
+	var head, ini, body, config bytes.Buffer
 	w := io.MultiWriter(h, &cappedWriter{buf: &head, max: headBytes})
 	if isPHPIni(rel) {
 		w = io.MultiWriter(w, &cappedWriter{buf: &ini, max: maxIniBytes})
+	}
+	if isConfig(rel) {
+		w = io.MultiWriter(w, &cappedWriter{buf: &config, max: maxConfigBytes})
 	}
 	if keepBody {
 		w = io.MultiWriter(w, &cappedWriter{buf: &body, max: maxContentBytes})
@@ -426,6 +433,9 @@ func readTracked(full, rel string, e *Entry, keepBody bool) []byte {
 	}
 	if isPHPIni(rel) {
 		e.Directives = phpDirectives(ini.Bytes())
+	}
+	if isConfig(rel) {
+		e.Config = newConfigCopy(rel, config.Bytes(), e.Size)
 	}
 	return body.Bytes()
 }

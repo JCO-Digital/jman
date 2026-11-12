@@ -127,7 +127,11 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 			case isDropin(e.Path) && changed:
 				flag(RuleDropin, change+" drop-in")
 			case isConfig(e.Path) && changed:
-				flag(RuleConfig, change+" "+e.Path)
+				detail, diff := configChange(old, e, existed)
+				flag(RuleConfig, change+" "+e.Path+detail)
+				if diff != "" && e.Symlink == "" {
+					findings[len(findings)-1].Snippet = diff
+				}
 			}
 			if len(e.Directives) > 0 && changed {
 				flag(RuleAutoPrepend, strings.Join(e.Directives, "\n"))

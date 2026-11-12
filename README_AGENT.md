@@ -151,7 +151,7 @@ The rules flag:
 | `auto-prepend`     | high     | A new or changed `.user.ini` or `.htaccess` that sets `auto_prepend_file` or `auto_append_file` |
 | `mu-plugin-change` | medium   | A new or changed file directly in `wp-content/mu-plugins` (not in its subdirectories)          |
 | `dropin-change`    | medium   | A new or changed drop-in (`object-cache.php`, `advanced-cache.php`, `db.php`, …)                |
-| `config-change`    | medium   | `wp-config.php` or the site root's `.htaccess` changed                                          |
+| `config-change`    | medium   | `wp-config.php` or the site root's `.htaccess` changed; the snippet is a diff with secrets redacted |
 | `foreign-owner`    | medium   | A file or directory owned by someone other than the site's owner, except root-owned symlinks    |
 | `stray-file`       | low      | A database dump, archive, backup or editor swap file, `.env`, or a `.git`/`.svn` directory. Zip files in uploads aren't flagged, except zipped database dumps, and in plugins and themes only `.env` and `.git` are. |
 | `unreadable`       | low      | A file or directory the site's owner can't read                                                 |
