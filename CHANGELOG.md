@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.29.1 (2026-11-12)
+## 7.30.0 (2026-11-12)
+
+#### Features
+
+- scan: show config changes as redacted diffs (f945170)
+
+### v7.29.1 (2026-11-12)
 
 #### Bug Fixes
 
