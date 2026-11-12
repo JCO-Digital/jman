@@ -272,6 +272,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 			v-if="showModal"
 			:item="editingItem"
 			:types="inventoryStore.types"
+			:initial-type="typeFilter || undefined"
 			@save="handleSave"
 			@close="showModal = false"
 		/>

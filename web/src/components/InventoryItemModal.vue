@@ -12,6 +12,8 @@ import type {
 const props = defineProps<{
 	item: InventoryItem | null;
 	types: InventoryTypeInfo[];
+	/** Preselected type for a new item (e.g. the list's active type filter). */
+	initialType?: InventoryItemType;
 }>();
 
 const emit = defineEmits<{
@@ -74,9 +76,15 @@ const rowsFromDetails = (details: Record<string, unknown>): DetailRow[] =>
 	});
 
 // buildRows starts from the type's template, carrying over any values the
-// current rows already have for those keys, and appends the remaining
-// (custom) rows.
-const buildRows = (type: InventoryItemType, existing: DetailRow[]) => {
+// current rows already have for those keys, and appends the remaining rows.
+// With dropStaleTemplate (a type switch on a new item), rows that came from
+// the old type's template and aren't in the new one are dropped; custom
+// rows are always kept.
+const buildRows = (
+	type: InventoryItemType,
+	existing: DetailRow[],
+	dropStaleTemplate = false,
+) => {
 	const byKey = new Map(existing.map((r) => [r.key, r]));
 	const rows: DetailRow[] = templateFor(type).map((f) => {
 		const prev = byKey.get(f.key);
@@ -89,7 +97,10 @@ const buildRows = (type: InventoryItemType, existing: DetailRow[]) => {
 			custom: false,
 		};
 	});
-	for (const rest of byKey.values()) rows.push(rest);
+	for (const rest of byKey.values()) {
+		if (dropStaleTemplate && !rest.custom) continue;
+		rows.push(rest);
+	}
 	return rows;
 };
 
@@ -173,7 +184,7 @@ watch(
 				rowsFromDetails(item.details ?? {}),
 			);
 		} else {
-			const type = props.types[0]?.type ?? "server";
+			const type = props.initialType ?? props.types[0]?.type ?? "server";
 			form.value = {
 				type,
 				name: "",
@@ -188,11 +199,13 @@ watch(
 	{ immediate: true },
 );
 
-// Switching the type re-templates the fields (linked items have it locked).
+// Switching the type re-templates the fields (linked items have it locked):
+// the old type's template fields are dropped, custom fields are kept.
 watch(
 	() => form.value.type,
 	(type) => {
-		if (!props.item) detailRows.value = buildRows(type, detailRows.value);
+		if (!props.item)
+			detailRows.value = buildRows(type, detailRows.value, true);
 	},
 );
 
