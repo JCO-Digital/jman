@@ -1413,3 +1413,77 @@ export interface AIVulnRanking {
 	rankings: AIVulnRank[];
 	unranked?: string[];
 }
+
+// --- Asset inventory (docs/inventory.md) ---
+
+export type InventoryItemType = "server" | "domain" | (string & {});
+export type InventoryItemOrigin = "manual" | "provider";
+export type InventoryItemStatus = "active" | "removed";
+
+export interface InventoryItemLink {
+	id: number;
+	item_id: string;
+	provider: string;
+	provider_type: string;
+	provider_id: string;
+	created_at: string;
+}
+
+export interface InventoryItem {
+	id: string;
+	type: InventoryItemType;
+	name: string;
+	origin: InventoryItemOrigin;
+	status: InventoryItemStatus;
+	description: string;
+	tags: string[];
+	/** Free-form manual fields; no secrets, at most usernames. */
+	details: Record<string, unknown>;
+	/** Latest snapshot from the linked API; read-only, written by syncs. */
+	provider_data: Record<string, unknown>;
+	site_id?: string | null;
+	server_id?: string | null;
+	links?: InventoryItemLink[];
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
+export interface InventoryItemPayload {
+	type: InventoryItemType;
+	name: string;
+	description?: string;
+	tags?: string[];
+	details?: Record<string, unknown>;
+	site_id?: string | null;
+	server_id?: string | null;
+}
+
+export interface InventoryTypeInfo {
+	type: InventoryItemType;
+	/** Suggested keys for the item's details object. */
+	detail_fields: string[];
+}
+
+export interface InventoryItemResponse extends InventoryItem {
+	/** Other items matching type+name that the link/dismiss prompt offers. */
+	matches?: InventoryItem[];
+}
+
+export interface InventoryLinkPayload {
+	provider: string;
+	provider_type: string;
+	provider_id: string;
+}
+
+export interface InventorySyncResult {
+	provider: string;
+	fetched: number;
+	created: number;
+	updated: number;
+	links_added: number;
+	links_removed: number;
+	removed: number;
+	skipped?: boolean;
+}

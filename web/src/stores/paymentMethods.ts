@@ -16,7 +16,7 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 		error.value = null;
 		try {
 			const url = new URL(
-				`${BASE_URL}/payment-methods`,
+				`${BASE_URL}/billing/payment-methods`,
 				window.location.origin,
 			);
 			if (params?.search)
@@ -36,7 +36,9 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 
 	async function getPaymentMethod(id: number): Promise<PaymentMethod | null> {
 		try {
-			const res = await apiFetch(`${BASE_URL}/payment-methods/${id}`);
+			const res = await apiFetch(
+				`${BASE_URL}/billing/payment-methods/${id}`,
+			);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -46,7 +48,7 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 	}
 
 	async function createPaymentMethod(payload: Partial<PaymentMethod>) {
-		const res = await apiFetch(`${BASE_URL}/payment-methods`, {
+		const res = await apiFetch(`${BASE_URL}/billing/payment-methods`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -61,21 +63,27 @@ export const usePaymentMethodsStore = defineStore("paymentMethods", () => {
 		id: number,
 		payload: Partial<PaymentMethod>,
 	) {
-		const res = await apiFetch(`${BASE_URL}/payment-methods/${id}`, {
-			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
+		const res = await apiFetch(
+			`${BASE_URL}/billing/payment-methods/${id}`,
+			{
+				method: "PATCH",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(payload),
 			},
-			body: JSON.stringify(payload),
-		});
+		);
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
 	async function deletePaymentMethod(id: number) {
-		const res = await apiFetch(`${BASE_URL}/payment-methods/${id}`, {
-			method: "DELETE",
-		});
+		const res = await apiFetch(
+			`${BASE_URL}/billing/payment-methods/${id}`,
+			{
+				method: "DELETE",
+			},
+		);
 		if (!res.ok) await handleErrorResponse(res);
 	}
 

@@ -73,7 +73,7 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/inventory/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			path: "/billing/:page(\\d+)?/:rowsPerPage(\\d+)?",
 			name: "assets",
 			component: () => import("../views/Assets/AssetsListView.vue"),
 			props: (route) => ({
@@ -86,14 +86,26 @@ const router = createRouter({
 			}),
 		},
 		{
-			path: "/inventory/templates",
+			path: "/billing/templates",
 			name: "asset-templates",
 			component: () => import("../views/Assets/TemplatesView.vue"),
 		},
 		{
-			path: "/inventory/payment-methods",
+			path: "/billing/payment-methods",
 			name: "payment-methods",
 			component: () => import("../views/Assets/PaymentMethodsView.vue"),
+		},
+		{
+			path: "/inventory",
+			name: "inventory",
+			component: () => import("../views/Inventory/InventoryListView.vue"),
+		},
+		{
+			path: "/inventory/:id",
+			name: "inventory-detail",
+			component: () =>
+				import("../views/Inventory/InventoryDetailView.vue"),
+			props: true,
 		},
 		{
 			path: "/monitoring",
