@@ -102,7 +102,7 @@ func TestWalkSkipsOtherBuilds(t *testing.T) {
 	writeFile(t, root, "wp-content/plugins/sm/sm.php", header)
 	sums := &PluginChecksums{Slug: "sm", Version: "8", SHA256: map[string][]string{"sm.php": {sha256Of(header)}}}
 	for i := range maxPluginUnknown + 1 {
-		writeFile(t, root, fmt.Sprintf("wp-content/plugins/sm/pro/f%d.php", i), "<?php // pro")
+		writeFile(t, root, fmt.Sprintf("wp-content/plugins/sm/pro/f%d.php", i), "<?php pro();")
 	}
 	res, _ := Walk(root, uint32(os.Getuid()), Options{Plugins: map[string]*PluginChecksums{"sm": sums}})
 	if res.PluginsChecked["sm"] || len(coreFindings(res.Entries)) != 0 || len(res.PluginNotes) != 1 {

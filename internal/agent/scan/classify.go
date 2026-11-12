@@ -63,6 +63,62 @@ func isGuarded(head string) bool {
 	return guardedRe.MatchString(head)
 }
 
+// isInert reports whether head is the whole of a PHP file, size bytes
+// long, that holds no code: an opening tag followed by nothing but
+// whitespace and comments, and optionally a closing tag with only
+// whitespace after it. Plugins leave such index.php files ("Silence is
+// golden") in their directories, uploads included, in endless variants
+// of the comment. A file longer than the head isn't inert, since the rest
+// is unseen. A "?>" in a line comment ends PHP mode, so what follows must
+// be whitespace too; "#[" starts an attribute, not a comment.
+func isInert(head string, size int64) bool {
+	if int64(len(head)) != size {
+		return false
+	}
+	s := strings.TrimPrefix(head, "\uFEFF")
+	if len(s) < 5 || !strings.EqualFold(s[:5], "<?php") {
+		return false
+	}
+	s = s[5:]
+	if s != "" && !isSpace(s[0]) {
+		return false
+	}
+	for {
+		s = strings.TrimLeft(s, " \t\r\n")
+		switch {
+		case s == "":
+			return true
+		case strings.HasPrefix(s, "?>"):
+			return strings.TrimSpace(s[2:]) == ""
+		case strings.HasPrefix(s, "/*"):
+			end := strings.Index(s[2:], "*/")
+			if end < 0 {
+				return false
+			}
+			s = s[2+end+2:]
+		case strings.HasPrefix(s, "//") || (strings.HasPrefix(s, "#") && !strings.HasPrefix(s, "#[")):
+			line, rest, _ := strings.Cut(s, "\n")
+			if i := strings.Index(line, "?>"); i >= 0 {
+				return strings.TrimSpace(s[i+2:]) == ""
+			}
+			s = rest
+		default:
+			return false
+		}
+	}
+}
+
+func isSpace(c byte) bool {
+	return c == ' ' || c == '\t' || c == '\r' || c == '\n'
+}
+
+// runsNothing reports whether a PHP file, size bytes long and starting
+// with head, can't run anything when requested or included: an empty,
+// guarded (see isGuarded) or inert (see isInert) file.
+func runsNothing(head string, size int64) bool {
+	return size == 0 || isGuarded(head) || isInert(head, size)
+}
+
 // isPHP reports whether name has an extension a web server may run as PHP.
 func isPHP(name string) bool {
 	lower := strings.ToLower(name)

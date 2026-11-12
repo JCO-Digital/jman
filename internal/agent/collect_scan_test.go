@@ -111,9 +111,9 @@ func TestScanDefersSitesOverTheFindingsBudget(t *testing.T) {
 	saveScans(stateDir, done, now)
 
 	for i := range maxScanFindingsPerReport + 5 {
-		writeSiteFile(t, a, fmt.Sprintf("wp-content/uploads/%d.php", i), "<?php")
+		writeSiteFile(t, a, fmt.Sprintf("wp-content/uploads/%d.php", i), "<?php x();")
 	}
-	writeSiteFile(t, b, "wp-content/uploads/x.php", "<?php")
+	writeSiteFile(t, b, "wp-content/uploads/x.php", "<?php x();")
 
 	later := now.Add(time.Hour)
 	scans, done := collectScansForSites(context.Background(), stateDir, manifest, later)
@@ -157,7 +157,7 @@ func TestRunScanChildPrintsTheWalk(t *testing.T) {
 		t.Skip("the scan child refuses to run as root")
 	}
 	root := t.TempDir()
-	writeSiteFile(t, root, "wp-content/uploads/x.php", "<?php")
+	writeSiteFile(t, root, "wp-content/uploads/x.php", "<?php x();")
 	var out bytes.Buffer
 	if err := RunScanChild(root, strings.NewReader(""), &out); err != nil {
 		t.Fatal(err)

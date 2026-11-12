@@ -286,8 +286,8 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	writeFile(t, root, "wp-content/mu-plugins/acf/acf.php", "<?php // bundled plugin")
 	writeFile(t, root, "wp-content/uploads/wpallimport/index.php", "")
 	writeFile(t, root, "wp-content/languages/loco/x-fi-backup.po~", "msgid")
-	writeFile(t, root, "wp-content/uploads/cache/wpml/twig/01/abc.php", "<?php // compiled")
-	writeFile(t, root, "wp-content/uploads/sites/2/cache/wpml/twig/02/def.php", "<?php // compiled")
+	writeFile(t, root, "wp-content/uploads/cache/wpml/twig/01/abc.php", "<?php // compiled\necho $this->render();")
+	writeFile(t, root, "wp-content/uploads/sites/2/cache/wpml/twig/02/def.php", "<?php // compiled\necho $this->render();")
 	writeFile(t, root, "wp-content/uploads/2020/06/logos.zip", "PK")
 	writeFile(t, root, "wp-content/uploads/db.sql.zip", "PK")
 	writeFile(t, root, "wp-content/themes/x/style.css.bak", "/* theme */")
@@ -354,6 +354,41 @@ func TestIsGuarded(t *testing.T) {
 		if got := isGuarded(c.head); got != c.want {
 			t.Errorf("isGuarded(%q) = %t, want %t", c.head, got, c.want)
 		}
+	}
+}
+
+func TestIsInert(t *testing.T) {
+	cases := []struct {
+		head string
+		want bool
+	}{
+		{"<?php\n// Silence is golden.\n", true},
+		{"<?php\r\n// Silence is golden.\r\n", true},
+		{"<?php // Silence is golden", true},
+		{"<?PHP\n# Nothing to see here\n?>\n", true},
+		{"<?php\n/**\n * Silence is golden.\n *\n * @package Foo\n */\n", true},
+		{"\xEF\xBB\xBF<?php /* ?> */ ?>  \n", true},
+		{"<?php // Silence ?>\n", true},
+		{"<?php", true},
+		{"<?php\n", true},
+		{"<?php\n// Silence is golden.\nsystem($_GET['c']);", false},
+		{"<?php // Silence ?><?php system('x');", false},
+		{"<?php ?>\n<script>alert(1)</script>", false},
+		{"<?php /* unterminated", false},
+		{"<?php\n#[Attr]\nfunction f() {}", false},
+		{"<?phpx", false},
+		{"<? // short tag", false},
+		{"// Silence is golden", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := isInert(c.head, int64(len(c.head))); got != c.want {
+			t.Errorf("isInert(%q) = %t, want %t", c.head, got, c.want)
+		}
+	}
+	// Code past the head isn't seen, so a longer file isn't inert.
+	if isInert("<?php // Silence is golden.\n", 4096) {
+		t.Error("isInert with a size past the head = true, want false")
 	}
 }
 
