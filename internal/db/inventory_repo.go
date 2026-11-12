@@ -108,25 +108,27 @@ func InsertInventoryItem(item *models.InventoryItem, username string) error {
 	return nil
 }
 
-// UpdateInventoryItem updates an existing item's fields. The origin is never
-// changed after creation.
+// UpdateInventoryItem saves a manual edit: the fields a user owns. It does
+// not write status or provider_data, which belong to the provider sync
+// (UpdateInventoryItemProviderFields), so an edit can't overwrite a sync
+// that ran since the item was loaded. The origin is never changed.
 func UpdateInventoryItem(item *models.InventoryItem, username string) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	tags, details, providerData, err := inventoryItemJSON(item)
+	tags, details, _, err := inventoryItemJSON(item)
 	if err != nil {
 		return err
 	}
 	now := time.Now()
 	query := `
-	UPDATE inventory_items SET type = ?, name = ?, status = ?, description = ?, tags = ?, details = ?, provider_data = ?, site_id = ?, server_id = ?, updated_at = ?, updated_by = ?
+	UPDATE inventory_items SET type = ?, name = ?, description = ?, tags = ?, details = ?, site_id = ?, server_id = ?, updated_at = ?, updated_by = ?
 	WHERE id = ?
 	`
 	res, err := db.Exec(query,
-		item.Type, item.Name, item.Status, item.Description,
-		tags, details, providerData, item.SiteID, item.ServerID,
+		item.Type, item.Name, item.Description,
+		tags, details, item.SiteID, item.ServerID,
 		now, username, item.ID,
 	)
 	if err != nil {
@@ -137,6 +139,31 @@ func UpdateInventoryItem(item *models.InventoryItem, username string) error {
 	}
 	item.UpdatedAt = now
 	item.UpdatedBy = username
+	return nil
+}
+
+// UpdateInventoryItemProviderFields saves what a provider sync owns: name,
+// status, provider_data and the site link. It leaves updated_at/updated_by
+// alone, so they keep showing the last manual edit.
+func UpdateInventoryItemProviderFields(item *models.InventoryItem) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	providerData, err := marshalJSON(item.ProviderData, "{}")
+	if err != nil {
+		return fmt.Errorf("failed to encode provider_data: %w", err)
+	}
+	res, err := db.Exec(
+		`UPDATE inventory_items SET name = ?, status = ?, provider_data = ?, site_id = ? WHERE id = ?`,
+		item.Name, item.Status, providerData, item.SiteID, item.ID,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to update inventory item provider fields: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("inventory item %s not found", item.ID)
+	}
 	return nil
 }
 

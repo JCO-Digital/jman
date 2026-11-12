@@ -121,7 +121,8 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sync 2: %v", err)
 	}
-	if res.Created != 0 || res.Updated != 3 {
+	// Only the server changed, so only it is written.
+	if res.Created != 0 || res.Updated != 1 {
 		t.Fatalf("second sync: %+v", res)
 	}
 	srv, err := db.GetInventoryItemByLink(p.name, "server", "srv-web1.examplehost.com")
@@ -135,7 +136,9 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 
 	// When the provider stops listing the domains, their links go and the
 	// provider-origin item is marked removed; the manual item stays.
-	p.items = []ExternalItem{serverItem("web1.examplehost.com")}
+	// (Another domain is still listed: a fetch with no domains at all
+	// would be taken for a partial fetch and remove nothing.)
+	p.items = []ExternalItem{serverItem("web1.examplehost.com"), domainItem("site-13:example.org", "example.org")}
 	p.items[0].Data["ip_address"] = "203.0.113.99"
 	res, err = Sync(context.Background(), p.name)
 	if err != nil {
@@ -196,5 +199,144 @@ func TestSyncUnknownProvider(t *testing.T) {
 	setupInventoryTest(t)
 	if _, err := Sync(context.Background(), "nope"); err == nil {
 		t.Fatal("unknown provider accepted")
+	}
+}
+
+func mustSync(t *testing.T, name string) SyncResult {
+	t.Helper()
+	res, err := Sync(context.Background(), name)
+	if err != nil {
+		t.Fatalf("sync: %v", err)
+	}
+	return res
+}
+
+// An entity that disappears and comes back, or is unlinked by hand, reuses
+// its removed item instead of failing on the primary key.
+func TestSyncReactivatesRemovedItem(t *testing.T) {
+	setupInventoryTest(t)
+	p := &fakeProvider{}
+	registerFake(t, p)
+
+	both := []ExternalItem{domainItem("1:example.com", "example.com"), domainItem("2:example.org", "example.org")}
+	p.items = both
+	mustSync(t, p.name)
+	id := utils.InventoryItemUUID(p.name, "site_domain", "1:example.com")
+
+	p.items = both[1:]
+	if res := mustSync(t, p.name); res.Removed != 1 {
+		t.Fatalf("removal sync: %+v", res)
+	}
+	p.items = both
+	res := mustSync(t, p.name)
+	if res.Created != 0 || res.LinksAdded != 1 || res.Updated != 1 {
+		t.Fatalf("reappear sync: %+v", res)
+	}
+	item, _ := db.GetInventoryItem(id)
+	if item == nil || item.Status != models.InventoryItemStatusActive || len(item.Links) != 1 {
+		t.Fatalf("reactivated item: %+v", item)
+	}
+
+	// Unlinked by hand (as the unlink handler does): the next sync relinks.
+	if err := db.DeleteInventoryItemLink(p.name, "site_domain", "1:example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.SetInventoryItemStatus(id, models.InventoryItemStatusRemoved); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, p.name)
+	item, _ = db.GetInventoryItem(id)
+	if item == nil || item.Status != models.InventoryItemStatusActive || len(item.Links) != 1 {
+		t.Fatalf("relinked item: %+v", item)
+	}
+	if res := mustSync(t, p.name); res.Updated != 0 || res.LinksAdded != 0 {
+		t.Fatalf("steady-state sync: %+v", res)
+	}
+}
+
+// A fetch that returns nothing for one provider type removes nothing of
+// that type.
+func TestSyncPartialFetchKeepsLinks(t *testing.T) {
+	setupInventoryTest(t)
+	p := &fakeProvider{}
+	registerFake(t, p)
+
+	p.items = []ExternalItem{serverItem("web1"), serverItem("web2"), domainItem("1:example.com", "example.com")}
+	mustSync(t, p.name)
+
+	p.items = []ExternalItem{serverItem("web1")}
+	res := mustSync(t, p.name)
+	if res.LinksRemoved != 1 || res.Removed != 1 {
+		t.Fatalf("partial sync: %+v", res)
+	}
+	domain, _ := db.GetInventoryItemByLink(p.name, "site_domain", "1:example.com")
+	if domain == nil || domain.Status != models.InventoryItemStatusActive {
+		t.Fatalf("domain removed by a fetch without domains: %+v", domain)
+	}
+}
+
+// A new entity joins the existing item of its name whatever the fetch
+// order, and the item's data doesn't depend on that order either.
+func TestSyncSharedItemIsOrderIndependent(t *testing.T) {
+	setupInventoryTest(t)
+	p := &fakeProvider{}
+	registerFake(t, p)
+
+	first := domainItem("1:example.com", "example.com")
+	first.SiteID = "site-1"
+	p.items = []ExternalItem{first}
+	mustSync(t, p.name)
+
+	second := domainItem("2:staging.example.com", "example.com")
+	second.Data = map[string]any{"domain": "staging.example.com"}
+	second.SiteID = "site-2"
+	p.items = []ExternalItem{second, first}
+	res := mustSync(t, p.name)
+	if res.Created != 0 || res.LinksAdded != 1 || res.Updated != 0 {
+		t.Fatalf("second entity: %+v", res)
+	}
+	items, _ := db.FindInventoryItemsByTypeName(models.InventoryItemTypeDomain, "example.com")
+	if len(items) != 1 || len(items[0].Links) != 2 {
+		t.Fatalf("items: %+v", items)
+	}
+	if items[0].ProviderData["domain"] != "example.com" || *items[0].SiteID != "site-1" {
+		t.Fatalf("shared item took the wrong entity's data: %+v", items[0])
+	}
+	p.items = []ExternalItem{first, second}
+	if res := mustSync(t, p.name); res.Updated != 0 {
+		t.Fatalf("reordered fetch rewrote the item: %+v", res)
+	}
+}
+
+// A sync keeps a site link set by hand and the audit fields of the last
+// manual edit.
+func TestSyncKeepsManualEdits(t *testing.T) {
+	setupInventoryTest(t)
+	p := &fakeProvider{}
+	registerFake(t, p)
+
+	ext := domainItem("1:example.com", "example.com")
+	ext.SiteID = "site-1"
+	p.items = []ExternalItem{ext}
+	mustSync(t, p.name)
+
+	item, _ := db.GetInventoryItemByLink(p.name, "site_domain", "1:example.com")
+	manualSite := "site-by-hand"
+	item.SiteID = &manualSite
+	item.Description = "edited"
+	if err := db.UpdateInventoryItem(item, "editor"); err != nil {
+		t.Fatal(err)
+	}
+
+	p.items[0].Data = map[string]any{"domain": "example.com", "status": "changed"}
+	if res := mustSync(t, p.name); res.Updated != 1 {
+		t.Fatalf("sync after edit: %+v", res)
+	}
+	got, _ := db.GetInventoryItem(item.ID)
+	if *got.SiteID != manualSite || got.Description != "edited" || got.UpdatedBy != "editor" {
+		t.Fatalf("manual edit lost: site=%s description=%q updated_by=%q", *got.SiteID, got.Description, got.UpdatedBy)
+	}
+	if got.ProviderData["status"] != "changed" {
+		t.Fatalf("provider_data not refreshed: %+v", got.ProviderData)
 	}
 }

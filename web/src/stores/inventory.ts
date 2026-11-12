@@ -17,11 +17,18 @@ export const useInventoryStore = defineStore("inventory", () => {
 	const isLoading = ref(false);
 	const error = ref<string | null>(null);
 
+	// The list request in flight. A new fetchItems aborts it, so a slow
+	// response to an older search can't replace a newer one.
+	let itemsRequest: AbortController | null = null;
+
 	async function fetchItems(params?: {
 		type?: string;
 		status?: string;
 		search?: string;
 	}) {
+		itemsRequest?.abort();
+		const request = new AbortController();
+		itemsRequest = request;
 		isLoading.value = true;
 		error.value = null;
 		try {
@@ -34,14 +41,22 @@ export const useInventoryStore = defineStore("inventory", () => {
 				url.searchParams.append("status", params.status);
 			if (params?.search)
 				url.searchParams.append("search", params.search);
-			const res = await apiFetch(url.toString(), {});
+			const res = await apiFetch(url.toString(), {
+				signal: request.signal,
+			});
 			if (!res.ok) await handleErrorResponse(res);
-			items.value = await res.json();
+			const data = await res.json();
+			if (itemsRequest !== request) return;
+			items.value = data;
 		} catch (e: any) {
+			if (e.name === "AbortError" || itemsRequest !== request) return;
 			error.value = e.message;
 			console.error(e);
 		} finally {
-			isLoading.value = false;
+			if (itemsRequest === request) {
+				itemsRequest = null;
+				isLoading.value = false;
+			}
 		}
 	}
 

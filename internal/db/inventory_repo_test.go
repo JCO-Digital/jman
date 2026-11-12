@@ -52,10 +52,18 @@ func TestInventoryItemSaveGetList(t *testing.T) {
 
 	// Update keeps the origin and updates the manual fields.
 	got.Description = "Updated"
-	got.ProviderData = map[string]any{"ip": "203.0.113.10"}
-	got.Origin = models.InventoryItemOriginProvider // must be ignored on update
-	if err := UpdateInventoryItem(got, "tester"); err != nil {
+	got.ProviderData = map[string]any{"ip": "198.51.100.1"} // must be ignored on update
+	got.Origin = models.InventoryItemOriginProvider         // must be ignored on update
+	if err := UpdateInventoryItem(got, "editor"); err != nil {
 		t.Fatalf("update: %v", err)
+	}
+	if again, _ := GetInventoryItem(item.ID); again == nil || len(again.ProviderData) != 0 {
+		t.Fatalf("manual update wrote provider_data: %+v", again)
+	}
+	// The provider fields are written separately and keep the audit fields.
+	got.ProviderData = map[string]any{"ip": "203.0.113.10"}
+	if err := UpdateInventoryItemProviderFields(got); err != nil {
+		t.Fatalf("update provider fields: %v", err)
 	}
 	again, err := GetInventoryItem(item.ID)
 	if err != nil || again == nil {
@@ -66,6 +74,9 @@ func TestInventoryItemSaveGetList(t *testing.T) {
 	}
 	if again.ProviderData["ip"] != "203.0.113.10" {
 		t.Errorf("provider_data = %v", again.ProviderData)
+	}
+	if again.UpdatedBy != "editor" {
+		t.Errorf("updated_by = %q, want the manual editor", again.UpdatedBy)
 	}
 
 	// List with filters.

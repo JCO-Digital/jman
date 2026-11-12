@@ -22,16 +22,31 @@ import (
 // provider owns (type, name); syncs refresh their provider_data. See
 // docs/inventory.md.
 
-// inventoryItemRequest is the create/update payload. SiteID/ServerID accept
-// a UUID or a legacy SpinupWP integer (FlexID).
+// inventoryItemRequest is the create/update payload. On an update, a field
+// that is absent keeps its value. SiteID/ServerID accept a UUID or a legacy
+// SpinupWP integer (FlexID); null or "" clears the link.
 type inventoryItemRequest struct {
-	Type        string         `json:"type"`
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
+	Type        *string        `json:"type"`
+	Name        *string        `json:"name"`
+	Description *string        `json:"description"`
 	Tags        []string       `json:"tags"`
 	Details     map[string]any `json:"details"`
-	SiteID      FlexID         `json:"site_id"`
-	ServerID    FlexID         `json:"server_id"`
+	SiteID      optionalFlexID `json:"site_id"`
+	ServerID    optionalFlexID `json:"server_id"`
+}
+
+// optionalFlexID is a FlexID that knows whether the request had the field
+// at all: Set is false when it was absent, and true for a value, null or "".
+type optionalFlexID struct {
+	Set bool
+	ID  FlexID
+}
+
+// UnmarshalJSON implements json.Unmarshaler; it only runs when the field
+// is present.
+func (o *optionalFlexID) UnmarshalJSON(data []byte) error {
+	o.Set = true
+	return o.ID.UnmarshalJSON(data)
 }
 
 // InventoryDetailField is one suggested `details` key for an item type.
@@ -125,36 +140,73 @@ func normalizeItemName(itemType models.InventoryItemType, name string) (string, 
 	return name, nil
 }
 
-// applyRequest copies the editable fields of req onto item, resolving the
-// soft links. Type and name changes on a provider-linked item are rejected by
-// the callers.
+// applyRequest copies the editable fields that req has onto item, resolving
+// the soft links; absent fields are left as they are. Type and name are
+// handled by the callers.
 func applyRequest(item *models.InventoryItem, req inventoryItemRequest) error {
-	item.Description = req.Description
+	if req.Description != nil {
+		item.Description = *req.Description
+	}
 	if req.Tags != nil {
 		item.Tags = req.Tags
 	}
 	if req.Details != nil {
 		item.Details = req.Details
 	}
-	if req.SiteID != "" {
-		id, err := resolveSiteUUID(string(req.SiteID))
-		if err != nil {
-			return err
-		}
-		item.SiteID = &id
-	} else {
+	if req.SiteID.Set {
 		item.SiteID = nil
-	}
-	if req.ServerID != "" {
-		id, err := resolveServerUUID(string(req.ServerID))
-		if err != nil {
-			return err
+		if req.SiteID.ID != "" {
+			id, err := resolveSiteUUID(string(req.SiteID.ID))
+			if err != nil {
+				return err
+			}
+			item.SiteID = &id
 		}
-		item.ServerID = &id
-	} else {
+	}
+	if req.ServerID.Set {
 		item.ServerID = nil
+		if req.ServerID.ID != "" {
+			id, err := resolveServerUUID(string(req.ServerID.ID))
+			if err != nil {
+				return err
+			}
+			item.ServerID = &id
+		}
 	}
 	return nil
+}
+
+// requestTypeName validates the type and name of req. A field that is
+// absent falls back to the given current value (empty on a create, where
+// both are required).
+func requestTypeName(req inventoryItemRequest, curType models.InventoryItemType, curName string) (models.InventoryItemType, string, error) {
+	itemType := curType
+	if req.Type != nil {
+		itemType = models.InventoryItemType(strings.ToLower(strings.TrimSpace(*req.Type)))
+	}
+	if !models.IsValidInventoryItemType(itemType) {
+		return "", "", fmt.Errorf("Type must be one of: server, domain")
+	}
+	name := curName
+	if req.Name != nil {
+		name = *req.Name
+	}
+	name, err := normalizeItemName(itemType, name)
+	if err != nil {
+		return "", "", err
+	}
+	return itemType, name, nil
+}
+
+// writeInventoryConflict answers 409 with the ID of the item that already
+// has the requested type+name.
+func writeInventoryConflict(w http.ResponseWriter, existingID string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusConflict)
+	_ = json.NewEncoder(w).Encode(inventoryConflict{
+		Error:          "An item with this type and name already exists",
+		ExistingItemID: existingID,
+	})
 }
 
 // CreateInventoryItemHandler creates a manual inventory item. When an item
@@ -166,12 +218,7 @@ func CreateInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	itemType := models.InventoryItemType(strings.ToLower(strings.TrimSpace(req.Type)))
-	if !models.IsValidInventoryItemType(itemType) {
-		WriteError(w, http.StatusBadRequest, "Type must be one of: server, domain")
-		return
-	}
-	name, err := normalizeItemName(itemType, req.Name)
+	itemType, name, err := requestTypeName(req, "", "")
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, err.Error())
 		return
@@ -184,12 +231,7 @@ func CreateInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(existing) > 0 {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(w).Encode(inventoryConflict{
-			Error:          "An item with this type and name already exists",
-			ExistingItemID: existing[0].ID,
-		})
+		writeInventoryConflict(w, existing[0].ID)
 		return
 	}
 
@@ -250,8 +292,10 @@ func loadInventoryItem(w http.ResponseWriter, r *http.Request) (*models.Inventor
 	return item, true
 }
 
-// UpdateInventoryItemHandler updates the manual fields of an item. On a
-// provider-linked item, type and name are read-only (a sync owns them).
+// UpdateInventoryItemHandler updates the manual fields of an item; fields
+// absent from the request keep their value. On a provider-linked item, type
+// and name are read-only (a sync owns them). Renaming an item to the
+// type+name of another one answers 409 like a create does.
 func UpdateInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 	item, ok := loadInventoryItem(w, r)
 	if !ok {
@@ -262,19 +306,30 @@ func UpdateInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-	itemType := models.InventoryItemType(strings.ToLower(strings.TrimSpace(req.Type)))
-	if !models.IsValidInventoryItemType(itemType) {
-		WriteError(w, http.StatusBadRequest, "Type must be one of: server, domain")
-		return
-	}
-	name, err := normalizeItemName(itemType, req.Name)
+	itemType, name, err := requestTypeName(req, item.Type, item.Name)
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if len(item.Links) > 0 && (itemType != item.Type || name != item.Name) {
+	renamed := itemType != item.Type || !strings.EqualFold(name, item.Name)
+	if len(item.Links) > 0 && (renamed || name != item.Name) {
 		WriteError(w, http.StatusConflict, "Provider-linked items are read-only for type and name; changes would be overwritten by sync")
 		return
+	}
+	if renamed {
+		// Same rule as on create: no second item with this type+name.
+		existing, err := db.FindInventoryItemsByTypeName(itemType, name)
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "UpdateInventoryItemHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		for _, other := range existing {
+			if other.ID != item.ID {
+				writeInventoryConflict(w, other.ID)
+				return
+			}
+		}
 	}
 	item.Type = itemType
 	item.Name = name
@@ -433,8 +488,10 @@ func DismissInventoryLinkMatchHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // SyncInventoryProviderHandler runs one provider's sync now. For SpinupWP it
-// first forces a fresh servers/sites refresh so the provider reads current
-// data, mirroring SyncSpinupWPHandler.
+// first requests a servers/sites refresh so the provider reads current
+// data. The refresh is skipped when the last one is less than
+// refresh.ManualRefreshMinInterval old, so repeated syncs can't use up the
+// SpinupWP API rate limit.
 func SyncInventoryProviderHandler(w http.ResponseWriter, r *http.Request) {
 	provider := r.PathValue("provider")
 	if _, ok := inventory.Get(provider); !ok {
@@ -444,7 +501,7 @@ func SyncInventoryProviderHandler(w http.ResponseWriter, r *http.Request) {
 	if provider == "spinupwp" {
 		// Best effort: on failure the provider syncs from the last good
 		// cache instead, since the sync is idempotent.
-		if _, err := refresh.RefreshServersAndSites(); err != nil {
+		if _, err := refresh.RequestRefresh(); err != nil {
 			verb.LogPrintf(verb.Normal, "SyncInventoryProviderHandler: servers/sites refresh failed, syncing from cache: %v", err)
 		}
 	}

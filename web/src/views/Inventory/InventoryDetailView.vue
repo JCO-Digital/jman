@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useInventoryStore } from "../../stores/inventory";
 import { useAuthStore } from "../../stores/auth";
@@ -28,13 +28,29 @@ const showModal = ref(false);
 
 const id = computed(() => String(route.params.id));
 
+// True when the item could not be loaded (deleted, unknown ID, API error).
+const loadFailed = ref(false);
+
 const load = async () => {
-	item.value = await inventoryStore.getItem(id.value);
+	const requested = id.value;
+	const loaded = await inventoryStore.getItem(requested);
+	// The route moved on to another item while this one loaded.
+	if (requested !== id.value) return;
+	loadFailed.value = loaded === null;
+	if (loaded) item.value = loaded;
 };
 
 onMounted(async () => {
 	await inventoryStore.fetchTypes();
 	await load();
+});
+
+// The component is reused when the route goes from one item to another.
+watch(id, () => {
+	item.value = null;
+	loadFailed.value = false;
+	showModal.value = false;
+	load();
 });
 
 const detailEntries = computed(() =>
@@ -150,7 +166,24 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 		</ViewHeader>
 
 		<main class="content">
-			<div v-if="!item" class="loading-container">
+			<div v-if="!item && loadFailed" class="card">
+				<p class="form-error">
+					This inventory item could not be loaded. It may have been
+					deleted.
+				</p>
+				<div class="flex-row gap-2">
+					<button class="btn btn-outline" @click="load">
+						Try again
+					</button>
+					<button
+						class="btn btn-primary"
+						@click="router.push({ name: 'inventory' })"
+					>
+						Back to inventory
+					</button>
+				</div>
+			</div>
+			<div v-else-if="!item" class="loading-container">
 				<LoadingSpinner message="Loading item..." />
 			</div>
 

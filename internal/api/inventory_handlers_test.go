@@ -136,6 +136,29 @@ func TestInventoryItemCRUD(t *testing.T) {
 		t.Fatalf("updated: %+v", updated)
 	}
 
+	// A partial update keeps the fields it doesn't name.
+	w = doInventoryRequest(t, ctx, "PATCH", "/api/inventory/items/"+created.ID,
+		`{"tags":["db"]}`, UpdateInventoryItemHandler, map[string]string{"id": created.ID})
+	if w.Code != http.StatusOK {
+		t.Fatalf("partial update: %d %s", w.Code, w.Body.String())
+	}
+	json.Unmarshal(w.Body.Bytes(), &updated)
+	if updated.Name != "db1.internal" || updated.Description != "updated" || len(updated.Tags) != 1 || updated.Details["services"] == nil {
+		t.Fatalf("partial update: %+v", updated)
+	}
+
+	// Renaming an item to another item's type+name -> 409, like a create.
+	w = doInventoryRequest(t, ctx, "PATCH", "/api/inventory/items/"+created.ID,
+		`{"type":"domain","name":"www.example.co.uk"}`, UpdateInventoryItemHandler, map[string]string{"id": created.ID})
+	if w.Code != http.StatusConflict {
+		t.Fatalf("rename onto existing: %d %s", w.Code, w.Body.String())
+	}
+	conflict = inventoryConflict{}
+	json.Unmarshal(w.Body.Bytes(), &conflict)
+	if conflict.ExistingItemID != domain.ID {
+		t.Fatalf("rename conflict: %+v", conflict)
+	}
+
 	// Delete works for a manual item.
 	w = doInventoryRequest(t, ctx, "DELETE", "/api/inventory/items/"+created.ID, "", DeleteInventoryItemHandler, map[string]string{"id": created.ID})
 	if w.Code != http.StatusOK {

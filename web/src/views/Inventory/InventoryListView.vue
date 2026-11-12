@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useInventoryStore } from "../../stores/inventory";
 import { useAuthStore } from "../../stores/auth";
@@ -34,7 +34,18 @@ const load = async () => {
 	});
 };
 
-watch([typeFilter, searchQuery], load);
+// Typing waits for a pause before it searches; the store drops the response
+// of any request a newer one has replaced.
+let searchTimer: ReturnType<typeof setTimeout> | undefined;
+watch(typeFilter, () => {
+	clearTimeout(searchTimer);
+	load();
+});
+watch(searchQuery, () => {
+	clearTimeout(searchTimer);
+	searchTimer = setTimeout(load, 250);
+});
+onBeforeUnmount(() => clearTimeout(searchTimer));
 onMounted(async () => {
 	await Promise.all([
 		inventoryStore.fetchTypes(),

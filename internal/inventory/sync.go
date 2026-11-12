@@ -1,7 +1,9 @@
 package inventory
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -17,12 +19,14 @@ const syncUser = "jman-api"
 
 // SyncResult summarizes one provider sync.
 type SyncResult struct {
-	Provider     string `json:"provider"`
-	Fetched      int    `json:"fetched"`
-	Created      int    `json:"created"`
-	Updated      int    `json:"updated"`
-	LinksAdded   int    `json:"links_added"`
-	LinksRemoved int    `json:"links_removed"`
+	Provider string `json:"provider"`
+	Fetched  int    `json:"fetched"`
+	Created  int    `json:"created"`
+	// Updated counts existing items whose name, status, provider_data or
+	// site link the sync changed.
+	Updated      int `json:"updated"`
+	LinksAdded   int `json:"links_added"`
+	LinksRemoved int `json:"links_removed"`
 	// Removed counts items marked status='removed' because their last
 	// provider link disappeared.
 	Removed int `json:"removed"`
@@ -37,17 +41,36 @@ type SyncResult struct {
 // run concurrently.
 var syncMu sync.Mutex
 
+// syncTarget is one item a sync run found entities for.
+type syncTarget struct {
+	item    *models.InventoryItem
+	exts    []ExternalItem
+	created bool
+}
+
 // Sync fetches one provider's entities and upserts them as inventory items:
 //
-//   - an external entity with an existing link gets its item's name and
-//     provider_data refreshed (manual fields are kept),
-//   - a new entity creates an item (origin='provider', deterministic UUID)
-//     plus its link; entities of one sync sharing (type, name) share one
-//     item with several links,
+//   - an external entity with an existing link refreshes its item's name,
+//     provider_data and status (manual fields are kept),
+//   - a new entity is linked to the item another entity of the same
+//     (type, name) is linked to, or else gets its own item
+//     (origin='provider', deterministic UUID). An item that still exists
+//     under that UUID, e.g. one marked removed earlier, is reused and
+//     reactivated instead of inserted again,
 //   - links whose entity the provider no longer lists are deleted; an
 //     origin='provider' item left with no links is marked removed.
 //
-// Manual items are never created, linked or removed by a sync.
+// An item with several links takes its name, provider_data and site link
+// from one of them, chosen the same way on every run (primaryEntity). The
+// site link is only filled in when the item has none, so one set by hand
+// stays. Items are written only when something changed, and without
+// touching updated_at/updated_by.
+//
+// Manual items are never created or removed by a sync, and only linked by
+// hand.
+//
+// The run is not one transaction, but every step is idempotent: a sync
+// that fails halfway is completed by the next one.
 func Sync(ctx context.Context, providerName string) (SyncResult, error) {
 	syncMu.Lock()
 	defer syncMu.Unlock()
@@ -58,7 +81,7 @@ func Sync(ctx context.Context, providerName string) (SyncResult, error) {
 		return result, fmt.Errorf("unknown inventory provider %q", providerName)
 	}
 
-	items, err := p.Fetch(ctx)
+	fetched, err := p.Fetch(ctx)
 	if errors.Is(err, ErrNotConfigured) {
 		result.Skipped = true
 		return result, nil
@@ -66,84 +89,168 @@ func Sync(ctx context.Context, providerName string) (SyncResult, error) {
 	if err != nil {
 		return result, fmt.Errorf("inventory provider %s fetch failed: %w", providerName, err)
 	}
-	if len(items) == 0 {
+	if len(fetched) == 0 {
 		result.Skipped = true
 		return result, nil
 	}
-	result.Fetched = len(items)
+	result.Fetched = len(fetched)
 
-	seen := make(map[string]bool, len(items))
-	// byName maps "type\x00lower(name)" to the item ID created or updated
-	// for it during this sync, so entities sharing a name share one item.
-	byName := make(map[string]string, len(items))
-
-	for _, ext := range items {
-		if err := ctx.Err(); err != nil {
-			return result, err
-		}
-		linkKey := ext.ProviderType + "\x00" + ext.ProviderID
-		seen[linkKey] = true
-
-		existing, err := db.GetInventoryItemByLink(providerName, ext.ProviderType, ext.ProviderID)
-		if err != nil {
-			return result, err
-		}
-		if existing != nil {
-			existing.Name = ext.Name
-			existing.ProviderData = ext.Data
-			if ext.SiteID != "" {
-				existing.SiteID = &ext.SiteID
-			}
-			if err := db.UpdateInventoryItem(existing, syncUser); err != nil {
-				return result, err
-			}
-			result.Updated++
-			byName[string(ext.Type)+"\x00"+strings.ToLower(ext.Name)] = existing.ID
-			continue
-		}
-
-		nameKey := string(ext.Type) + "\x00" + strings.ToLower(ext.Name)
-		if itemID, ok := byName[nameKey]; ok {
-			if err := db.AddInventoryItemLink(&models.InventoryItemLink{
-				ItemID: itemID, Provider: providerName, ProviderType: ext.ProviderType, ProviderID: ext.ProviderID,
-			}); err != nil {
-				return result, err
-			}
-			result.LinksAdded++
-			continue
-		}
-
-		item := &models.InventoryItem{
-			ID:           utils.InventoryItemUUID(providerName, ext.ProviderType, ext.ProviderID),
-			Type:         ext.Type,
-			Name:         ext.Name,
-			Origin:       models.InventoryItemOriginProvider,
-			Status:       models.InventoryItemStatusActive,
-			ProviderData: ext.Data,
-		}
-		if ext.SiteID != "" {
-			item.SiteID = &ext.SiteID
-		}
-		if err := db.InsertInventoryItem(item, syncUser); err != nil {
-			return result, err
-		}
-		if err := db.AddInventoryItemLink(&models.InventoryItemLink{
-			ItemID: item.ID, Provider: providerName, ProviderType: ext.ProviderType, ProviderID: ext.ProviderID,
-		}); err != nil {
-			return result, err
-		}
-		result.Created++
-		result.LinksAdded++
-		byName[nameKey] = item.ID
-	}
-
-	// Remove links whose external entity the provider no longer lists.
 	links, err := db.ListInventoryLinksByProvider(providerName)
 	if err != nil {
 		return result, err
 	}
+	linkedItem := make(map[string]string, len(links)) // link key -> item ID
 	for _, link := range links {
-		if seen[link.ProviderType+"\x00"+link.ProviderID] {
+		linkedItem[link.ProviderType+"\x00"+link.ProviderID] = link.ItemID
+	}
+
+	targets := map[string]*syncTarget{}
+	var order []string // item IDs in first-seen order
+	target := func(itemID string) (*syncTarget, error) {
+		if t, ok := targets[itemID]; ok {
+			return t, nil
+		}
+		item, err := db.GetInventoryItem(itemID)
+		if err != nil || item == nil {
+			return nil, err
+		}
+		t := &syncTarget{item: item}
+		targets[itemID] = t
+		order = append(order, itemID)
+		return t, nil
+	}
+
+	seen := make(map[string]bool, len(fetched))
+	fetchedTypes := map[string]bool{}
+	// byName maps "type\x00lower(name)" to the item its entities share.
+	byName := make(map[string]string, len(fetched))
+	var unlinked []ExternalItem
+
+	// First the entities that are already linked, so that a new entity finds
+	// the item of its name whatever the order of the fetch.
+	for _, ext := range fetched {
+		linkKey := ext.ProviderType + "\x00" + ext.ProviderID
+		if seen[linkKey] {
+			continue
+		}
+		seen[linkKey] = true
+		fetchedTypes[ext.ProviderType] = true
+
+		itemID, ok := linkedItem[linkKey]
+		if !ok {
+			unlinked = append(unlinked, ext)
+			continue
+		}
+		t, err := target(itemID)
+		if err != nil {
+			return result, err
+		}
+		if t == nil {
+			// The link's item is gone (deleted since the links were read).
+			unlinked = append(unlinked, ext)
+			continue
+		}
+		t.exts = append(t.exts, ext)
+		// A provider-created item wins over a manual one that was linked by
+		// hand to an entity of the same name.
+		key := nameKey(ext)
+		if cur, ok := byName[key]; !ok ||
+			(targets[cur].item.Origin != models.InventoryItemOriginProvider && t.item.Origin == models.InventoryItemOriginProvider) {
+			byName[key] = itemID
+		}
+	}
+
+	for _, ext := range unlinked {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		link := &models.InventoryItemLink{Provider: providerName, ProviderType: ext.ProviderType, ProviderID: ext.ProviderID}
+		key := nameKey(ext)
+
+		itemID, shared := byName[key]
+		if !shared {
+			itemID = utils.InventoryItemUUID(providerName, ext.ProviderType, ext.ProviderID)
+		}
+		t, err := target(itemID)
+		if err != nil {
+			return result, err
+		}
+		if t == nil {
+			item := &models.InventoryItem{
+				ID:           itemID,
+				Type:         ext.Type,
+				Name:         ext.Name,
+				Origin:       models.InventoryItemOriginProvider,
+				Status:       models.InventoryItemStatusActive,
+				ProviderData: ext.Data,
+			}
+			if ext.SiteID != "" {
+				siteID := ext.SiteID
+				item.SiteID = &siteID
+			}
+			if err := db.InsertInventoryItem(item, syncUser); err != nil {
+				return result, err
+			}
+			t = &syncTarget{item: item, created: true}
+			targets[itemID] = t
+			order = append(order, itemID)
+			result.Created++
+		}
+		link.ItemID = itemID
+		if err := db.AddInventoryItemLink(link); err != nil {
+			return result, err
+		}
+		result.LinksAdded++
+		t.exts = append(t.exts, ext)
+		byName[key] = itemID
+	}
+
+	// Refresh the provider-owned fields of every item that has entities,
+	// writing only the items that changed.
+	for _, itemID := range order {
+		if err := ctx.Err(); err != nil {
+			return result, err
+		}
+		t := targets[itemID]
+		if len(t.exts) == 0 {
+			continue
+		}
+		primary := primaryEntity(providerName, t.item.ID, t.exts)
+		changed := false
+		if t.item.Name != primary.Name {
+			t.item.Name = primary.Name
+			changed = true
+		}
+		if t.item.Status != models.InventoryItemStatusActive {
+			t.item.Status = models.InventoryItemStatusActive
+			changed = true
+		}
+		if t.item.SiteID == nil && primary.SiteID != "" {
+			siteID := primary.SiteID
+			t.item.SiteID = &siteID
+			changed = true
+		}
+		if !sameJSON(t.item.ProviderData, primary.Data) {
+			t.item.ProviderData = primary.Data
+			changed = true
+		}
+		if !changed {
+			continue
+		}
+		if err := db.UpdateInventoryItemProviderFields(t.item); err != nil {
+			return result, err
+		}
+		if !t.created {
+			result.Updated++
+		}
+	}
+
+	// Remove links whose external entity the provider no longer lists. A
+	// provider type the fetch returned nothing at all for is left alone:
+	// that is more likely a partial fetch (e.g. no sites but all servers)
+	// than every entity of the type disappearing at once.
+	for _, link := range links {
+		if seen[link.ProviderType+"\x00"+link.ProviderID] || !fetchedTypes[link.ProviderType] {
 			continue
 		}
 		if err := db.DeleteInventoryItemLink(providerName, link.ProviderType, link.ProviderID); err != nil {
@@ -161,7 +268,7 @@ func Sync(ctx context.Context, providerName string) (SyncResult, error) {
 		if err != nil {
 			return result, err
 		}
-		if item != nil && item.Origin == models.InventoryItemOriginProvider {
+		if item != nil && item.Origin == models.InventoryItemOriginProvider && item.Status != models.InventoryItemStatusRemoved {
 			if err := db.SetInventoryItemStatus(item.ID, models.InventoryItemStatusRemoved); err != nil {
 				return result, err
 			}
@@ -170,6 +277,41 @@ func Sync(ctx context.Context, providerName string) (SyncResult, error) {
 	}
 
 	return result, nil
+}
+
+// nameKey is the key entities share an item by: type and lower-cased name.
+func nameKey(ext ExternalItem) string {
+	return string(ext.Type) + "\x00" + strings.ToLower(ext.Name)
+}
+
+// primaryEntity picks the entity an item with several links takes its name,
+// provider_data and site link from: the one the item was created for (its
+// deterministic UUID is the item's ID), else the one with the smallest
+// (provider type, provider ID). The choice doesn't depend on fetch order.
+func primaryEntity(providerName, itemID string, exts []ExternalItem) ExternalItem {
+	best := exts[0]
+	for _, ext := range exts {
+		if utils.InventoryItemUUID(providerName, ext.ProviderType, ext.ProviderID) == itemID {
+			return ext
+		}
+		if ext.ProviderType < best.ProviderType ||
+			(ext.ProviderType == best.ProviderType && ext.ProviderID < best.ProviderID) {
+			best = ext
+		}
+	}
+	return best
+}
+
+// sameJSON reports whether two provider_data values encode to the same
+// JSON, which is how a stored snapshot compares to a freshly fetched one
+// (the stored one has been through a JSON round trip).
+func sameJSON(a, b map[string]any) bool {
+	if len(a) == 0 && len(b) == 0 {
+		return true
+	}
+	ja, errA := json.Marshal(a)
+	jb, errB := json.Marshal(b)
+	return errA == nil && errB == nil && bytes.Equal(ja, jb)
 }
 
 // SyncAll runs Sync for every registered provider and returns one result

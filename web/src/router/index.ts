@@ -100,6 +100,17 @@ const router = createRouter({
 			name: "inventory",
 			component: () => import("../views/Inventory/InventoryListView.vue"),
 		},
+		// The billing assets used to live under /inventory: keep old
+		// bookmarks working. Item IDs are UUIDs, so these can't be items.
+		{ path: "/inventory/templates", redirect: { name: "asset-templates" } },
+		{
+			path: "/inventory/payment-methods",
+			redirect: { name: "payment-methods" },
+		},
+		{
+			path: "/inventory/:page(\\d+)/:rowsPerPage(\\d+)?",
+			redirect: (to) => ({ name: "assets", params: to.params }),
+		},
 		{
 			path: "/inventory/:id",
 			name: "inventory-detail",

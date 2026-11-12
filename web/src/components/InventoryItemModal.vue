@@ -24,7 +24,13 @@ const emit = defineEmits<{
 interface DetailRow {
 	key: string;
 	value: string;
-	kind: "text" | "list";
+	/**
+	 * How the value is edited and saved: "text" is a string, "list" a
+	 * comma-separated array of strings, and "json" any other stored value
+	 * (number, boolean, null, object, mixed array), edited as JSON so that
+	 * saving the form keeps its type.
+	 */
+	kind: "text" | "list" | "json";
 	hint?: string;
 	/** False for rows that come from the type's template. */
 	custom: boolean;
@@ -52,25 +58,31 @@ const typeNameLocked = computed(
 const templateFor = (type: InventoryItemType): InventoryDetailField[] =>
 	props.types.find((t) => t.type === type)?.detail_fields ?? [];
 
-// rowsFromDetails turns a stored details object into form rows: arrays
-// become comma-separated "list" rows, everything else "text".
+// rowsFromDetails turns a stored details object into form rows: strings
+// become "text" rows, arrays of plain strings comma-separated "list" rows,
+// and every other value a "json" row.
 const rowsFromDetails = (details: Record<string, unknown>): DetailRow[] =>
 	Object.entries(details).map(([key, value]) => {
-		if (Array.isArray(value)) {
-			return {
-				key,
-				value: value.map((v) => String(v)).join(", "),
-				kind: "list",
-				custom: true,
-			};
+		if (typeof value === "string") {
+			return { key, value, kind: "text", custom: true };
+		}
+		if (
+			Array.isArray(value) &&
+			value.length > 0 &&
+			value.every(
+				(v) =>
+					typeof v === "string" &&
+					v.trim() === v &&
+					v !== "" &&
+					!v.includes(","),
+			)
+		) {
+			return { key, value: value.join(", "), kind: "list", custom: true };
 		}
 		return {
 			key,
-			value:
-				typeof value === "object"
-					? JSON.stringify(value)
-					: String(value),
-			kind: "text",
+			value: JSON.stringify(value),
+			kind: "json",
 			custom: true,
 		};
 	});
@@ -92,7 +104,9 @@ const buildRows = (
 		return {
 			key: f.key,
 			value: prev?.value ?? "",
-			kind: f.kind,
+			// A stored value keeps the kind it was stored as, whatever the
+			// template says, so that saving doesn't convert it.
+			kind: prev && prev.value !== "" ? prev.kind : f.kind,
 			hint: f.hint,
 			custom: false,
 		};
@@ -117,7 +131,16 @@ const detailsFromRows = (): Record<string, unknown> => {
 				.map((v) => v.trim())
 				.filter((v) => v !== "");
 			if (items.length > 0) details[key] = items;
-		} else if (row.value.trim() !== "") {
+		} else if (row.value.trim() === "") {
+			continue;
+		} else if (row.kind === "json") {
+			// Edited into something that isn't JSON: save it as text.
+			try {
+				details[key] = JSON.parse(row.value);
+			} catch {
+				details[key] = row.value;
+			}
+		} else {
 			details[key] = row.value;
 		}
 	}
@@ -153,7 +176,7 @@ const toggleJsonMode = () => {
 		detailsError.value = "Details is not a valid JSON object";
 		return;
 	}
-	detailRows.value = rowsFromDetails(parsed);
+	detailRows.value = buildRows(form.value.type, rowsFromDetails(parsed));
 	jsonMode.value = false;
 };
 
@@ -331,7 +354,14 @@ const submit = () => {
 								:placeholder="
 									row.kind === 'list'
 										? 'comma-separated values'
-										: row.hint || 'value'
+										: row.kind === 'json'
+											? 'JSON value'
+											: row.hint || 'value'
+								"
+								:title="
+									row.kind === 'json'
+										? 'Saved as a JSON value (number, true/false, object, ...)'
+										: undefined
 								"
 								:aria-label="'Value for ' + row.key"
 								class="detail-value-input"
@@ -347,7 +377,9 @@ const submit = () => {
 						</div>
 						<p class="text-muted">
 							Fields left empty are not saved. List fields are
-							comma-separated. No secrets — at most usernames.
+							comma-separated. Numbers, true/false and objects
+							saved through the JSON editor keep their type. No
+							secrets — at most usernames.
 						</p>
 					</template>
 

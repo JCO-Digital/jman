@@ -83,11 +83,26 @@ type Provider interface {
 ```
 
 `Sync(ctx, providerName)` upserts items by link: existing link → refresh
-`provider_data` (and `name`); new entity → create item (`origin='provider'`,
-deterministic UUIDv5) plus link; entities from the same sync sharing
-`(type, name)` map to one item with several links; links whose entity
+`provider_data`, `name` and status; new entity → link it to the item another
+entity of the same `(type, name)` is linked to, or else create an item
+(`origin='provider'`, deterministic UUIDv5) plus link; links whose entity
 disappeared are deleted, and an `origin='provider'` item left with no links is
 marked `status='removed'` (kept for history, like SpinupWP sites today).
+
+- An entity that comes back, or was unlinked by hand, is linked again to the
+  item that still exists under its deterministic UUID, and that item becomes
+  `active` again. Unlinking a provider-created item therefore only lasts until
+  the next sync.
+- An item with several links takes `name`, `provider_data` and the site link
+  from one entity: the one it was created for, else the one with the smallest
+  `(provider_type, provider_id)`. The fetch order doesn't matter.
+- `site_id` is only filled in when the item has none, so a site link set by
+  hand stays (clearing it lets the sync fill it in again).
+- Items are written only when something changed, and a sync never touches
+  `updated_at`/`updated_by`: those show the last manual edit.
+- Nothing is removed when the fetch is empty, or for a provider type the fetch
+  returned no entities of (no sites but all servers is taken for a partial
+  fetch). The last entity of a type is therefore never removed automatically.
 
 The first provider is **SpinupWP** (`internal/inventory/spinupwp`), reusing
 `internal/fetch/spinupwp`:
