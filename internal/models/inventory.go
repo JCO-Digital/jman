@@ -10,6 +10,15 @@ const (
 	InventoryItemTypeDomain InventoryItemType = "domain"
 )
 
+// IsValidInventoryItemType reports whether t is a known item type.
+func IsValidInventoryItemType(t InventoryItemType) bool {
+	switch t {
+	case InventoryItemTypeServer, InventoryItemTypeDomain:
+		return true
+	}
+	return false
+}
+
 // InventoryItemOrigin tells whether an item was created by hand or by a
 // provider sync. Syncs only ever auto-remove origin='provider' items.
 type InventoryItemOrigin string

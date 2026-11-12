@@ -105,6 +105,11 @@ func TestInventoryItemLinks(t *testing.T) {
 	if err != nil || byLink == nil || byLink.ID != item.ID {
 		t.Fatalf("by link: %+v %v", byLink, err)
 	}
+	// GetInventoryItem must return the item's links, too.
+	withLinks, err := GetInventoryItem(item.ID)
+	if err != nil || withLinks == nil || len(withLinks.Links) != 1 || withLinks.Links[0].ProviderID != "678" {
+		t.Fatalf("get with links: %+v %v", withLinks, err)
+	}
 
 	// The same external entity cannot be linked twice.
 	dup := models.InventoryItemLink{ItemID: item.ID, Provider: "spinupwp", ProviderType: "server", ProviderID: "678"}

@@ -186,6 +186,19 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/organization-assets/{id}/payments", edit(CreateAssetPaymentHandler))
 	mux.Handle("DELETE /api/asset-payments/{id}", edit(DeleteAssetPaymentHandler))
 
+	// --- Inventory (asset registry) routes ---
+	mux.Handle("GET /api/inventory/types", basic(ListInventoryTypesHandler))
+	mux.Handle("GET /api/inventory/providers", basic(ListInventoryProvidersHandler))
+	mux.Handle("GET /api/inventory/items", basic(ListInventoryItemsHandler))
+	mux.Handle("POST /api/inventory/items", edit(CreateInventoryItemHandler))
+	mux.Handle("GET /api/inventory/items/{id}", basic(GetInventoryItemHandler))
+	mux.Handle("PATCH /api/inventory/items/{id}", edit(UpdateInventoryItemHandler))
+	mux.Handle("DELETE /api/inventory/items/{id}", edit(DeleteInventoryItemHandler))
+	mux.Handle("POST /api/inventory/items/{id}/links", edit(LinkInventoryItemHandler))
+	mux.Handle("DELETE /api/inventory/items/{id}/links/{provider}/{providerType}/{providerId}", edit(UnlinkInventoryItemHandler))
+	mux.Handle("POST /api/inventory/items/{id}/dismiss", edit(DismissInventoryLinkMatchHandler))
+	mux.Handle("POST /api/inventory/sync/{provider}", edit(SyncInventoryProviderHandler))
+
 	// --- Site linking routes ---
 	mux.Handle("GET /api/sites/{id}/traffic", basic(SiteTrafficHandler))
 	mux.Handle("GET /api/sites/{id}/organization", basic(GetSiteOrganizationHandler))

@@ -169,8 +169,19 @@ func scanInventoryItem(scanner interface{ Scan(...any) error }) (*models.Invento
 	return &it, nil
 }
 
-// attachLinks loads the links of each item with one query.
-func attachLinks(items []models.InventoryItem) error {
+// itemPtrs returns pointers into items' backing array, built after the
+// slice is final so appends can't invalidate them.
+func itemPtrs(items []models.InventoryItem) []*models.InventoryItem {
+	ptrs := make([]*models.InventoryItem, len(items))
+	for i := range items {
+		ptrs[i] = &items[i]
+	}
+	return ptrs
+}
+
+// attachLinks loads the links of each item with one query. items must be
+// pointers into the caller's slice so the links land on the returned items.
+func attachLinks(items []*models.InventoryItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -184,7 +195,7 @@ func attachLinks(items []models.InventoryItem) error {
 	for i, it := range items {
 		placeholders[i] = "?"
 		args[i] = it.ID
-		byID[it.ID] = &items[i]
+		byID[it.ID] = it
 	}
 	rows, err := db.Query(
 		`SELECT id, item_id, provider, provider_type, provider_id, created_at FROM inventory_item_links WHERE item_id IN (`+
@@ -224,7 +235,7 @@ func GetInventoryItem(id string) (*models.InventoryItem, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to get inventory item: %w", err)
 	}
-	if err := attachLinks([]models.InventoryItem{*it}); err != nil {
+	if err := attachLinks([]*models.InventoryItem{it}); err != nil {
 		return nil, err
 	}
 	return it, nil
@@ -272,7 +283,7 @@ func ListInventoryItems(filter InventoryItemFilter) ([]models.InventoryItem, err
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if err := attachLinks(items); err != nil {
+	if err := attachLinks(itemPtrs(items)); err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -305,7 +316,7 @@ func FindInventoryItemsByTypeName(itemType models.InventoryItemType, name string
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if err := attachLinks(items); err != nil {
+	if err := attachLinks(itemPtrs(items)); err != nil {
 		return nil, err
 	}
 	return items, nil
@@ -471,7 +482,7 @@ func FindInventoryItemMatches(itemID string) ([]models.InventoryItem, error) {
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if err := attachLinks(items); err != nil {
+	if err := attachLinks(itemPtrs(items)); err != nil {
 		return nil, err
 	}
 	return items, nil
