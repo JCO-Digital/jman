@@ -363,9 +363,11 @@ func recordSymlink(rel string, uid, ownerUID uint32) bool {
 }
 
 // checkContent sets the content rules a PHP file's body matches. A data
-// file that exits first runs nothing, so it isn't searched.
+// file that exits first, or one that holds only comments, runs nothing,
+// so it isn't searched.
 func checkContent(e *Entry, body []byte) {
-	if isGuarded(string(body[:min(len(body), headBytes)])) {
+	head := string(body[:min(len(body), headBytes)])
+	if isGuarded(head) || (len(body) < headBytes && isInert(head, int64(len(body)))) {
 		return
 	}
 	if matches := matchContent(body); len(matches) > 0 {

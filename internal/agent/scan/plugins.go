@@ -127,7 +127,7 @@ func pluginRule(inner string, sums *PluginChecksums, e Entry) string {
 		}
 		return ""
 	}
-	if e.Unreadable || (e.Size > 0 && !isGuarded(e.Head)) {
+	if e.Unreadable || !runsNothing(e.Head, e.Size) {
 		return RulePluginUnknown
 	}
 	return ""
