@@ -201,7 +201,8 @@ func isTracked(p string) bool {
 }
 
 // hasSecrets reports whether a file's content must not leave the server,
-// so no snippet of it is sent.
+// so no snippet of it is sent; a config-change finding shows a redacted
+// diff instead (see ConfigCopy).
 func hasSecrets(p string) bool {
 	return p == "wp-config.php"
 }
