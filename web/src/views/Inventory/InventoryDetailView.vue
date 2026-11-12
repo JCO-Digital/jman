@@ -45,8 +45,12 @@ const detailEntries = computed(() =>
 	})),
 );
 
-const providerDataJSON = computed(() =>
-	JSON.stringify(item.value?.provider_data ?? {}, null, 2),
+const providerDataEntries = computed(() =>
+	Object.entries(item.value?.provider_data ?? {}).map(([key, value]) => ({
+		key,
+		value:
+			typeof value === "object" ? JSON.stringify(value) : String(value),
+	})),
 );
 
 // The link/dismiss prompt: for every undismissed match, its first link.
@@ -312,11 +316,23 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 					</div>
 				</div>
 
-				<div v-if="providerDataJSON !== '{}'" class="card">
+				<div v-if="providerDataEntries.length > 0" class="card">
 					<div class="card-header">
 						<h3>Provider data (read-only)</h3>
 					</div>
-					<pre>{{ providerDataJSON }}</pre>
+					<div class="table-container">
+						<table class="data-table">
+							<tbody>
+								<tr
+									v-for="entry in providerDataEntries"
+									:key="entry.key"
+								>
+									<th>{{ entry.key }}</th>
+									<td>{{ entry.value }}</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
 				</div>
 
 				<NotesWidget parent-type="InventoryItem" :parent-id="item.id" />
