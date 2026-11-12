@@ -11,6 +11,8 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/inventory"
+	_ "github.com/JCO-Digital/jman/internal/inventory/spinupwp" // register the SpinupWP provider
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/vuln"
 )
@@ -93,6 +95,14 @@ func runFastTick() {
 		msg := "🚨 jman-api failed to refresh servers/sites from SpinupWP: " + err.Error()
 		log.Println(msg)
 		_ = slack.SendMessage(msg, true)
+		return
+	}
+	// Keep the asset inventory (SpinupWP-linked servers and domains) in
+	// step. The providers read the cache this tick just refreshed, so this
+	// doesn't fetch the SpinupWP API again. A failure here is logged only:
+	// stale inventory items are not worth paging anyone.
+	if _, err := inventory.SyncAll(context.Background()); err != nil {
+		log.Printf("Refresh scheduler: inventory sync failed: %v", err)
 	}
 }
 

@@ -73,7 +73,7 @@ Built from the `servers` table, enriched with SpinupWP cache details for SpinupW
 | `GET /api/vulns`, `/api/vulns/core` | `sites[].site_id` |
 | `GET /api/core-versions` (or equivalent) | `sites[].site_id` |
 | `GET /api/tasks…` | `site_id`, `server_id` (omitted when unset) |
-| `GET /api/organization-assets…` | `site_id` (null when unset) |
+| `GET /api/billing/organization-assets…` | `site_id` (null when unset) |
 | `GET /api/sites/{id}/update-ledger`, `sites[].last_update` | `site_id` |
 | `GET /api/agent-tokens` | `server_id` |
 | `GET /api/ignore` | `target` (UUID for `site`/`server`), `negated_site_ids: string[]` |

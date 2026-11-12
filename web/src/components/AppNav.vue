@@ -49,9 +49,14 @@ const navLinks: NavLink[] = [
 		match: ["organizations", "organization-detail"],
 	},
 	{
-		to: "/inventory",
+		to: "/billing",
 		label: "Assets",
 		match: ["assets", "asset-templates", "payment-methods"],
+	},
+	{
+		to: "/inventory",
+		label: "Inventory",
+		match: ["inventory", "inventory-detail"],
 	},
 	{ to: "/reports", label: "Reports", match: ["reports", "report-runner"] },
 ];

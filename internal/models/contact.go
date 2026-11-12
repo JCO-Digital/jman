@@ -51,10 +51,20 @@ type SiteOrganizationMap struct {
 type NoteParentType string
 
 const (
-	NoteParentTypeOrganization NoteParentType = "Organization"
-	NoteParentTypeSite         NoteParentType = "Site"
-	NoteParentTypePlugin       NoteParentType = "Plugin"
+	NoteParentTypeOrganization  NoteParentType = "Organization"
+	NoteParentTypeSite          NoteParentType = "Site"
+	NoteParentTypePlugin        NoteParentType = "Plugin"
+	NoteParentTypeInventoryItem NoteParentType = "InventoryItem"
 )
+
+// IsValidNoteParentType reports whether t is a known note parent type.
+func IsValidNoteParentType(t NoteParentType) bool {
+	switch t {
+	case NoteParentTypeOrganization, NoteParentTypeSite, NoteParentTypePlugin, NoteParentTypeInventoryItem:
+		return true
+	}
+	return false
+}
 
 // Note represents a free-text record linked to an organization or site.
 type Note struct {

@@ -73,7 +73,7 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/inventory/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			path: "/billing/:page(\\d+)?/:rowsPerPage(\\d+)?",
 			name: "assets",
 			component: () => import("../views/Assets/AssetsListView.vue"),
 			props: (route) => ({
@@ -86,14 +86,37 @@ const router = createRouter({
 			}),
 		},
 		{
-			path: "/inventory/templates",
+			path: "/billing/templates",
 			name: "asset-templates",
 			component: () => import("../views/Assets/TemplatesView.vue"),
 		},
 		{
-			path: "/inventory/payment-methods",
+			path: "/billing/payment-methods",
 			name: "payment-methods",
 			component: () => import("../views/Assets/PaymentMethodsView.vue"),
+		},
+		{
+			path: "/inventory",
+			name: "inventory",
+			component: () => import("../views/Inventory/InventoryListView.vue"),
+		},
+		// The billing assets used to live under /inventory: keep old
+		// bookmarks working. Item IDs are UUIDs, so these can't be items.
+		{ path: "/inventory/templates", redirect: { name: "asset-templates" } },
+		{
+			path: "/inventory/payment-methods",
+			redirect: { name: "payment-methods" },
+		},
+		{
+			path: "/inventory/:page(\\d+)/:rowsPerPage(\\d+)?",
+			redirect: (to) => ({ name: "assets", params: to.params }),
+		},
+		{
+			path: "/inventory/:id",
+			name: "inventory-detail",
+			component: () =>
+				import("../views/Inventory/InventoryDetailView.vue"),
+			props: true,
 		},
 		{
 			path: "/monitoring",

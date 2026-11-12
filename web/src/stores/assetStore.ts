@@ -18,7 +18,7 @@ export const useAssetStore = defineStore("asset", () => {
 		isLoading.value = true;
 		error.value = null;
 		try {
-			const res = await apiFetch(`${BASE_URL}/assets`, {
+			const res = await apiFetch(`${BASE_URL}/billing/assets`, {
 				signal,
 			});
 
@@ -41,7 +41,10 @@ export const useAssetStore = defineStore("asset", () => {
 		search: string,
 		signal?: AbortSignal,
 	): Promise<Asset[]> {
-		const url = new URL(`${BASE_URL}/assets`, window.location.origin);
+		const url = new URL(
+			`${BASE_URL}/billing/assets`,
+			window.location.origin,
+		);
 		url.searchParams.append("search", search);
 
 		const res = await apiFetch(url.toString(), {
@@ -54,7 +57,7 @@ export const useAssetStore = defineStore("asset", () => {
 
 	async function getAsset(id: number): Promise<Asset | null> {
 		try {
-			const res = await apiFetch(`${BASE_URL}/assets/${id}`);
+			const res = await apiFetch(`${BASE_URL}/billing/assets/${id}`);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -64,7 +67,7 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function createAsset(asset: Partial<Asset>) {
-		const res = await apiFetch(`${BASE_URL}/assets`, {
+		const res = await apiFetch(`${BASE_URL}/billing/assets`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -76,7 +79,7 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function updateAsset(id: number, asset: Partial<Asset>) {
-		const res = await apiFetch(`${BASE_URL}/assets/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/billing/assets/${id}`, {
 			method: "PATCH",
 			headers: {
 				"Content-Type": "application/json",
@@ -88,7 +91,7 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function deleteAsset(id: number) {
-		const res = await apiFetch(`${BASE_URL}/assets/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/billing/assets/${id}`, {
 			method: "DELETE",
 		});
 		if (!res.ok) await handleErrorResponse(res);
@@ -111,7 +114,7 @@ export const useAssetStore = defineStore("asset", () => {
 		before?: string;
 	}): Promise<OrganizationAsset[]> {
 		const url = new URL(
-			`${BASE_URL}/organization-assets`,
+			`${BASE_URL}/billing/organization-assets`,
 			window.location.origin,
 		);
 		if (params?.search) url.searchParams.append("search", params.search);
@@ -145,7 +148,9 @@ export const useAssetStore = defineStore("asset", () => {
 		id: number,
 	): Promise<EnrichedOrganizationAsset | null> {
 		try {
-			const res = await apiFetch(`${BASE_URL}/organization-assets/${id}`);
+			const res = await apiFetch(
+				`${BASE_URL}/billing/organization-assets/${id}`,
+			);
 			if (!res.ok) await handleErrorResponse(res);
 			return await res.json();
 		} catch (e) {
@@ -158,21 +163,27 @@ export const useAssetStore = defineStore("asset", () => {
 		id: number,
 		data: Partial<OrganizationAsset>,
 	) {
-		const res = await apiFetch(`${BASE_URL}/organization-assets/${id}`, {
-			method: "PATCH",
-			headers: {
-				"Content-Type": "application/json",
+		const res = await apiFetch(
+			`${BASE_URL}/billing/organization-assets/${id}`,
+			{
+				method: "PATCH",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(data),
 			},
-			body: JSON.stringify(data),
-		});
+		);
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
 	}
 
 	async function unlinkAsset(id: number) {
-		const res = await apiFetch(`${BASE_URL}/organization-assets/${id}`, {
-			method: "DELETE",
-		});
+		const res = await apiFetch(
+			`${BASE_URL}/billing/organization-assets/${id}`,
+			{
+				method: "DELETE",
+			},
+		);
 		if (!res.ok) await handleErrorResponse(res);
 	}
 
@@ -181,7 +192,7 @@ export const useAssetStore = defineStore("asset", () => {
 		organizationAssetId: number,
 	): Promise<AssetPayment[]> {
 		const res = await apiFetch(
-			`${BASE_URL}/organization-assets/${organizationAssetId}/payments`,
+			`${BASE_URL}/billing/organization-assets/${organizationAssetId}/payments`,
 		);
 		if (!res.ok) await handleErrorResponse(res);
 		return await res.json();
@@ -197,7 +208,7 @@ export const useAssetStore = defineStore("asset", () => {
 		},
 	) {
 		const res = await apiFetch(
-			`${BASE_URL}/organization-assets/${organizationAssetId}/payments`,
+			`${BASE_URL}/billing/organization-assets/${organizationAssetId}/payments`,
 			{
 				method: "POST",
 				headers: {
@@ -211,7 +222,7 @@ export const useAssetStore = defineStore("asset", () => {
 	}
 
 	async function deletePayment(id: number) {
-		const res = await apiFetch(`${BASE_URL}/asset-payments/${id}`, {
+		const res = await apiFetch(`${BASE_URL}/billing/asset-payments/${id}`, {
 			method: "DELETE",
 		});
 		if (!res.ok) await handleErrorResponse(res);
