@@ -1460,10 +1460,17 @@ export interface InventoryItemPayload {
 	server_id?: string | null;
 }
 
+export interface InventoryDetailField {
+	key: string;
+	/** "text" or "list" (comma-separated input, stored as a JSON array). */
+	kind: "text" | "list";
+	hint?: string;
+}
+
 export interface InventoryTypeInfo {
 	type: InventoryItemType;
-	/** Suggested keys for the item's details object. */
-	detail_fields: string[];
+	/** The type's details template, in display order. */
+	detail_fields: InventoryDetailField[];
 }
 
 export interface InventoryItemResponse extends InventoryItem {

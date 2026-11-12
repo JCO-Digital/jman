@@ -108,7 +108,7 @@ The CLI does not consume inventory data (no `cliproto.Snapshot` change).
 
 | Method & path | Auth | Purpose |
 |---|---|---|
-| `GET /api/inventory/types` | basic | item types + field hints for forms |
+| `GET /api/inventory/types` | basic | item types + their `details` template (key/kind/hint per field; the UI renders it as a form, empty fields are not saved, with an add-field button and a raw-JSON editor toggle) |
 | `GET /api/inventory/items?type=&status=&search=` | basic | list, joined with links |
 | `POST /api/inventory/items` | edit | create manual item; domain names normalized to apex; `409` + `existing_item_id` on type+name match |
 | `GET /api/inventory/items/{id}` | basic | item + links + match suggestions (undismissed) |

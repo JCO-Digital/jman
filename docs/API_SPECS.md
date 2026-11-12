@@ -614,7 +614,7 @@ WordPress hosting), manual at the core with optional links to external APIs
 ("providers", starting with SpinupWP). See `docs/inventory.md`. All IDs are
 UUID strings.
 
-`GET /api/inventory/types` (Protected: `basic`): known item types with suggested `details` keys.
+`GET /api/inventory/types` (Protected: `basic`): known item types with their `details` template — `detail_fields` is a list of `{"key", "kind": "text"|"list", "hint"}` the UI renders as a form; fields left empty are not saved.
 `GET /api/inventory/providers` (Protected: `basic`): registered provider names.
 `GET /api/inventory/items?type=&status=&search=` (Protected: `basic`): items with their links.
 `POST /api/inventory/items` (Protected: `edit`): create a manual item; domain names are reduced to the apex domain; answers `409` with `{"existing_item_id": "..."}` when an item with the same type+name exists.

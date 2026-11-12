@@ -281,3 +281,28 @@ func TestSyncInventoryProviderHandler(t *testing.T) {
 		t.Fatalf("provider_data: %+v", item.ProviderData)
 	}
 }
+
+func TestListInventoryTypesHandler(t *testing.T) {
+	ctx := setupInventoryHandlerTest(t)
+	w := doInventoryRequest(t, ctx, "GET", "/api/inventory/types", "", ListInventoryTypesHandler, nil)
+	if w.Code != http.StatusOK {
+		t.Fatalf("types: %d", w.Code)
+	}
+	var types []InventoryTypeInfo
+	if err := json.Unmarshal(w.Body.Bytes(), &types); err != nil {
+		t.Fatal(err)
+	}
+	if len(types) != 2 {
+		t.Fatalf("types: %+v", types)
+	}
+	for _, ti := range types {
+		if len(ti.DetailFields) == 0 {
+			t.Errorf("type %s has no template fields", ti.Type)
+		}
+		for _, f := range ti.DetailFields {
+			if f.Key == "" || (f.Kind != "text" && f.Kind != "list") {
+				t.Errorf("type %s field: %+v", ti.Type, f)
+			}
+		}
+	}
+}

@@ -34,24 +34,49 @@ type inventoryItemRequest struct {
 	ServerID    FlexID         `json:"server_id"`
 }
 
-// InventoryTypeInfo describes one item type for the UI's forms.
-type InventoryTypeInfo struct {
-	Type models.InventoryItemType `json:"type"`
-	// DetailFields hints which keys `details` usually holds for this type.
-	DetailFields []string `json:"detail_fields"`
+// InventoryDetailField is one suggested `details` key for an item type.
+type InventoryDetailField struct {
+	Key string `json:"key"`
+	// Kind is how the UI renders the value: "text" or "list"
+	// (comma-separated input, stored as a JSON array).
+	Kind string `json:"kind"`
+	// Hint is a short description shown next to the input.
+	Hint string `json:"hint,omitempty"`
 }
 
-// ListInventoryTypesHandler returns the known item types and their detail
-// field hints.
+// InventoryTypeInfo describes one item type for the UI's forms: the template
+// of detail fields a new item of this type starts with.
+type InventoryTypeInfo struct {
+	Type models.InventoryItemType `json:"type"`
+	// DetailFields is the type's details template, in display order.
+	DetailFields []InventoryDetailField `json:"detail_fields"`
+}
+
+// ListInventoryTypesHandler returns the known item types and their details
+// templates.
 func ListInventoryTypesHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, []InventoryTypeInfo{
 		{
-			Type:         models.InventoryItemTypeServer,
-			DetailFields: []string{"ip_addresses", "hostnames", "os", "access", "services", "last_updated", "notes"},
+			Type: models.InventoryItemTypeServer,
+			DetailFields: []InventoryDetailField{
+				{Key: "ip_addresses", Kind: "list", Hint: "all IP addresses of the host"},
+				{Key: "hostnames", Kind: "list", Hint: "all DNS names pointing at it"},
+				{Key: "os", Kind: "text", Hint: "operating system and version"},
+				{Key: "access", Kind: "text", Hint: "how to reach it and as which user — no passwords"},
+				{Key: "services", Kind: "list", Hint: "services running on it"},
+				{Key: "last_updated", Kind: "text", Hint: "when it was last updated (YYYY-MM-DD)"},
+				{Key: "notes", Kind: "text"},
+			},
 		},
 		{
-			Type:         models.InventoryItemTypeDomain,
-			DetailFields: []string{"registrar", "dns_servers", "access", "expiry", "notes"},
+			Type: models.InventoryItemTypeDomain,
+			DetailFields: []InventoryDetailField{
+				{Key: "registrar", Kind: "text", Hint: "where the domain is registered"},
+				{Key: "dns_servers", Kind: "list", Hint: "the domain's DNS servers / nameservers"},
+				{Key: "access", Kind: "text", Hint: "who manages it, and as which user — no passwords"},
+				{Key: "expiry", Kind: "text", Hint: "renewal date (YYYY-MM-DD)"},
+				{Key: "notes", Kind: "text"},
+			},
 		},
 	})
 }
