@@ -17,6 +17,7 @@ Styles are modularized into specific files within `src/styles/`. Avoid a monolit
 - `variables.css`: Global CSS custom properties (colors, spacing, z-index).
 - `base.css`: HTML resets, base element styles (input, select, a), and generic text utilities.
 - `layout.css`: Layout containers (`view-container`, `grid-2-cols`) and flex helpers.
+- `lists.css`: List toolbars, sortable headers, filter chips and pagination.
 - `shell.css`: The app shell: sidebar (collapsible rail, mobile drawer), top bar with breadcrumbs, user menu, and page widths.
 - `components.css`: Shared component styles (buttons, cards, tables, badges, tabs, accordions).
 - `modals.css`: Standardized modal overlay and content styles.
@@ -53,13 +54,22 @@ Use existing class structures to ensure UI consistency:
 - Every route sets `meta.nav` to the sidebar item it belongs to; this drives the active item, the breadcrumbs and `document.title`. Pages under a section (a detail view) also set `meta.title`.
 - `meta.width` sets how wide the page's `.view-container` may grow: `wide` for lists and dashboards, the default for detail pages, `narrow` for forms. Views must not set their own `max-width`.
 
-## 6. Responsive Utilities
+## 6. Lists
+
+Every list view uses the shared list system, so search, sort, filters and paging behave and look the same everywhere:
+
+- `useListState` (`src/composables/useListState.ts`) keeps the state in the query string: `?q=&sort=&dir=&page=&per=` plus the list's declared filters. Defaults are left out, and query keys the list doesn't manage (e.g. `?task=`, `?site=`) are kept. Don't keep list state in local refs or in path params.
+- `useClientList` searches, filters, sorts and pages items held in memory. For a search that runs on the server, watch `list.query` and fetch, and leave out the `search` option.
+- Render with `ListToolbar` (search, filter selects and `.filter-chip` toggles in the default slot, actions in `#actions`), `SortableTh` for sortable headers, and `Pagination` under the table.
+- Give the row's main cell a `RouterLink` with `.row-link` and `@click.stop`, so it opens in a new tab with a middle click.
+
+## 7. Responsive Utilities
 
 - Use `.hide-mobile` and `.show-mobile` for simple toggling.
 - Use responsive table utilities like `.hide-col-3-sm` to drop less important columns on small screens.
 - Prefer CSS Grid (`.grid-2-cols`) and Flexbox over fixed widths.
 
-## 7. CSS Nesting
+## 8. CSS Nesting
 
 The project uses modern CSS nesting. You can nest selectors inside their parents to improve readability:
 
@@ -72,7 +82,7 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 }
 ```
 
-## 8. Icons
+## 9. Icons
 
 **DO NOT** use inline SVGs in components or views. Use the `<AppIcon>` component.
 
@@ -81,13 +91,13 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 - Usage: `<AppIcon name="settings" size="18" />`.
 - To add a new icon: create `src/components/icons/IconMyIcon.vue` with the SVG markup and register it in the `iconMap` in `AppIcon.vue`.
 
-## 9. API Documentation
+## 10. API Documentation
 
 For information regarding backend API endpoints, payloads, and authentication, refer to the official API specification:
 
 - [API Specification (API_SPECS.md)](https://github.com/JCO-Digital/jman/blob/main/docs/API_SPECS.md)
 
-## 10. Code Design & Architecture
+## 11. Code Design & Architecture
 
 The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 
@@ -129,7 +139,7 @@ The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 
 When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.
 
-## 11. Intentional Design Decisions
+## 12. Intentional Design Decisions
 
 This section documents choices that look like mistakes but are deliberate. Do not "fix" them without understanding the rationale.
 
