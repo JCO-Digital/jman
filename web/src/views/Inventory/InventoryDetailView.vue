@@ -16,7 +16,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
-import { formatBytes } from "../../utils/format";
+import { displayDomain, formatBytes } from "../../utils/format";
 
 const route = useRoute();
 const router = useRouter();
@@ -30,6 +30,14 @@ const item = ref<InventoryItemResponse | null>(null);
 const showModal = ref(false);
 
 const id = computed(() => String(route.params.id));
+
+// Domain names are shown in Unicode in the title; everywhere else on the
+// page shows the stored (Punycode) form.
+const displayName = computed(() =>
+	item.value?.type === "domain"
+		? displayDomain(item.value.name)
+		: (item.value?.name ?? ""),
+);
 
 // True when the item could not be loaded (deleted, unknown ID, API error).
 const loadFailed = ref(false);
@@ -184,7 +192,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 <template>
 	<div class="view-container">
 		<ViewHeader
-			:title="item ? item.name : 'Inventory item'"
+			:title="item ? displayName : 'Inventory item'"
 			:back-button="{
 				text: 'Inventory',
 				onClick: () => router.push({ name: 'inventory' }),

@@ -99,3 +99,82 @@ export function availablePluginUpdate(plugin: {
 	const u = plugin.update ?? "";
 	return u && u !== "none" && u !== plugin.version ? u : "";
 }
+
+/**
+ * Decodes one Punycode-encoded string (RFC 3492, the part after "xn--") to
+ * Unicode. Returns null when the input is not valid Punycode.
+ */
+function decodePunycode(input: string): string | null {
+	const base = 36;
+	const tMin = 1;
+	const tMax = 26;
+	const skew = 38;
+	const damp = 700;
+
+	const adapt = (delta: number, numPoints: number, firstTime: boolean) => {
+		delta = firstTime ? Math.floor(delta / damp) : delta >> 1;
+		delta += Math.floor(delta / numPoints);
+		let k = 0;
+		while (delta > ((base - tMin) * tMax) >> 1) {
+			delta = Math.floor(delta / (base - tMin));
+			k += base;
+		}
+		return k + Math.floor(((base - tMin + 1) * delta) / (delta + skew));
+	};
+	const digit = (c: number) => {
+		if (c >= 0x30 && c <= 0x39) return c - 0x30 + 26; // 0-9
+		if (c >= 0x41 && c <= 0x5a) return c - 0x41; // A-Z
+		if (c >= 0x61 && c <= 0x7a) return c - 0x61; // a-z
+		return base;
+	};
+
+	const output: number[] = [];
+	const lastDash = input.lastIndexOf("-");
+	for (let j = 0; j < Math.max(lastDash, 0); j++) {
+		const c = input.charCodeAt(j);
+		if (c >= 0x80) return null;
+		output.push(c);
+	}
+
+	let n = 128;
+	let i = 0;
+	let bias = 72;
+	for (let pos = lastDash > 0 ? lastDash + 1 : 0; pos < input.length; ) {
+		const oldI = i;
+		for (let w = 1, k = base; ; k += base) {
+			if (pos >= input.length) return null;
+			const d = digit(input.charCodeAt(pos++));
+			if (d >= base) return null;
+			i += d * w;
+			const t = k <= bias ? tMin : k >= bias + tMax ? tMax : k - bias;
+			if (d < t) break;
+			w *= base - t;
+			if (!Number.isSafeInteger(i) || !Number.isSafeInteger(w))
+				return null;
+		}
+		const len = output.length + 1;
+		bias = adapt(i - oldI, len, oldI === 0);
+		n += Math.floor(i / len);
+		i %= len;
+		if (n > 0x10ffff) return null;
+		output.splice(i, 0, n);
+		i++;
+	}
+	return String.fromCodePoint(...output);
+}
+
+/**
+ * Shows an internationalized domain name in Unicode: every "xn--" label is
+ * decoded from Punycode (xn--bcher-kva.example → bücher.example). Labels
+ * that aren't valid Punycode, and non-IDN names, are returned unchanged.
+ */
+export function displayDomain(domain: string): string {
+	if (!/(^|\.)xn--/i.test(domain)) return domain;
+	return domain
+		.split(".")
+		.map((label) => {
+			if (!/^xn--/i.test(label)) return label;
+			return decodePunycode(label.slice(4)) ?? label;
+		})
+		.join(".");
+}
