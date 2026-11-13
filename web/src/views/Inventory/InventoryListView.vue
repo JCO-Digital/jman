@@ -101,16 +101,20 @@ const load = async () => {
 	});
 };
 
-// Typing waits for a pause, then replaces the URL (no history entry per
-// keystroke) and goes back to the first page; the URL change loads.
+// Typing waits for a pause, then goes to the first page of the results.
+// Starting a search (or clearing it) adds a history entry, so back returns
+// to the list as it was before; refining it replaces the URL, so back
+// doesn't step through every pause in the typing. The URL change loads.
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(searchQuery, (value) => {
 	clearTimeout(searchTimer);
 	if (value === routeSearch.value) return;
-	searchTimer = setTimeout(
-		() => router.replace(listLocation({ search: value })),
-		250,
-	);
+	searchTimer = setTimeout(() => {
+		const location = listLocation({ search: value });
+		const refining = routeSearch.value !== "" && value !== "";
+		if (refining) router.replace(location);
+		else router.push(location);
+	}, 250);
 });
 // Back/forward to a URL with another search shows it in the box.
 watch(routeSearch, (value) => {
