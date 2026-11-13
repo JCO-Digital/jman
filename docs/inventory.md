@@ -184,9 +184,27 @@ separate from `details` (manual) and `provider_data` (per provider link).
 - **WHOIS for the gaps**: when RDAP leaves a field out, or a TLD has no RDAP,
   the registry's WHOIS server is asked if `whoisServers` (`whois.go`) has an
   entry for the TLD: its address and the keys of the "key: value" lines that
-  hold each field. Only `.fi` is configured: rdap.fi has no registrar, which
-  `whois.fi` publishes (in Latin-1). Adding a WHOIS-only TLD is an entry in
-  that map.
+  hold each field. A key `section.key` reads a key inside a section (a line
+  `Registrar:` followed by `name: ...`), and a section's own key its lines
+  without a key. Adding a TLD is an entry in that map. Configured, each from a
+  real answer of its server:
+
+  | TLD | Server | Registrar | Expiry | Nameservers |
+  |---|---|---|---|---|
+  | `.fi` | `whois.fi` (Latin-1), for the registrar rdap.fi lacks | `registrar` | — (RDAP) | — (RDAP) |
+  | `.se` | `whois.iis.se` | `registrar` | `expires` | `nserver` |
+  | `.ee` | `whois.tld.ee` | `registrar.name` | `expire` | `nserver` |
+  | `.dk` | `whois.punktum.dk` | `registrar` (absent for direct registrations) | `expires` | `hostname` |
+  | `.io`, `.me`, `.ie` | `whois.nic.io`, `whois.nic.me`, `whois.weare.ie` (gTLD style) | `registrar` | `registry expiry date` | `name server` |
+  | `.eu` | `whois.eu` | `registrar.name` | not published | `name servers` section |
+
+- **`.ch`** has no port-43 WHOIS for clients like jman-api and isn't in the
+  bootstrap file, but SWITCH's RDAP (`https://rdap.nic.ch/`, in
+  `rdapServers`) gives the nameservers and the registrar (as the vCard `org`).
+  It publishes no expiry date.
+- A WHOIS answer saying the domain doesn't exist is stored like RDAP's "not
+  found"; one with none of the configured fields (a rate limit notice, a
+  refusal) is a failed lookup.
 - A TLD with neither is stored with an "unsupported" error. A field the
   registry doesn't publish stays empty; the UI says "Not published by the
   registry".

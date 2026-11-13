@@ -56,6 +56,9 @@ type Client struct {
 	Dial func(ctx context.Context, address string) (net.Conn, error)
 	// WhoisServers maps a top-level domain to its WHOIS configuration.
 	WhoisServers map[string]WhoisServer
+	// RDAPServers are RDAP base URLs for top-level domains whose registry
+	// runs RDAP without being in IANA's bootstrap file.
+	RDAPServers map[string]string
 	// MinInterval is the least time between two requests to one host, so
 	// a batch of lookups doesn't trip a registry's rate limit.
 	MinInterval time.Duration
@@ -79,6 +82,7 @@ func NewClient() *Client {
 			return dialer.DialContext(ctx, "tcp", address)
 		},
 		WhoisServers: whoisServers,
+		RDAPServers:  rdapServers,
 		MinInterval:  2 * time.Second,
 	}
 }
