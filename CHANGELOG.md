@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.33.0 (2026-11-13)
+## 7.34.0 (2026-11-13)
+
+#### Features
+
+- inventory: Hetzner Cloud provider; merge servers across providers (9beeb8f)
+
+## v7.33.0 (2026-11-13)
 
 #### Features
 
