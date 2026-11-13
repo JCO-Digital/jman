@@ -26,6 +26,104 @@
 	}
 }
 
+/* Detail pages: a main column (tables, history) and, when the page area is
+   wide enough, an aside beside it (info cards, notes, links). Narrower,
+   the aside follows the main column. */
+.detail-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-6);
+	align-items: start;
+
+	@container page (min-width: 1200px) {
+		grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+	}
+
+	@media (max-width: 640px) {
+		gap: var(--space-4);
+	}
+}
+
+/* The aside goes first in the markup when it should lead on narrow
+   screens too (e.g. a plugin's info), and is placed right when wide. */
+.detail-aside-first {
+	@container page (min-width: 1200px) {
+		& > .detail-aside {
+			grid-column: 2;
+			grid-row: 1;
+		}
+	}
+}
+
+.detail-main,
+.detail-aside {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	min-width: 0;
+
+	/* The column's gap spaces the cards. */
+	& > .mt-4 {
+		margin-top: 0;
+	}
+
+	@media (max-width: 640px) {
+		gap: var(--space-4);
+	}
+}
+
+/* Beside the main column the aside is narrow, so two-column helpers in
+   it stack, and info grids use narrower columns (two fit). */
+.detail-aside {
+	@container page (min-width: 1200px) {
+		& .grid-2-cols {
+			grid-template-columns: minmax(0, 1fr);
+		}
+
+		& .info-grid {
+			grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+		}
+	}
+}
+
+/* The dashboard's widgets: one column, two when there is room, three on
+   wide screens. A widget can span the row (.widget-full) or two columns
+   when there are three (.widget-wide, the full row when there are two). */
+.dashboard-widgets {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-6);
+	align-items: start;
+
+	@container page (min-width: 1100px) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		/* Fills the gaps a full-row widget leaves; not while dragging,
+		   where the order on screen must follow the layout's. */
+		&:not(.is-editing) {
+			grid-auto-flow: row dense;
+		}
+	}
+
+	@container page (min-width: 1700px) {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	@media (max-width: 640px) {
+		gap: var(--space-4);
+	}
+
+	& > .widget-full,
+	& > .widget-wide {
+		grid-column: 1 / -1;
+	}
+
+	@container page (min-width: 1700px) {
+		& > .widget-wide {
+			grid-column: span 2;
+		}
+	}
+}
+
 /* Flex Grid Utilities */
 .flex-row {
 	display: flex;

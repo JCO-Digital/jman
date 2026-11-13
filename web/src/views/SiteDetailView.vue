@@ -1082,115 +1082,128 @@ const unlinkOrganization = async () => {
 					</select>
 				</div>
 
-				<div class="grid-2-cols">
-					<InfoCard title="Site Information" :items="siteInfoItems" />
-					<InfoCard
-						v-if="server"
-						title="Server Information"
-						:items="serverInfoItems"
-					/>
-				</div>
-
-				<NotesWidget parent-type="Site" :parent-id="site.id" />
-
-				<section class="card mt-4">
-					<div class="card-header">
-						<h2>Organization Information</h2>
-						<div class="flex-row gap-3">
-							<button
-								v-if="organization && authStore.canEdit"
-								class="btn btn-text danger"
-								@click="unlinkOrganization"
-							>
-								Unlink
-							</button>
-							<button
-								v-if="organization"
-								class="btn btn-outline btn-sm"
-								@click="goToOrganization"
-							>
-								View Organization
-							</button>
-							<button
-								v-if="!organization && authStore.canEdit"
-								class="btn btn-primary btn-sm"
-								@click="showLinkModal = true"
-							>
-								Link Organization
-							</button>
-						</div>
-					</div>
-
-					<div v-if="organization">
-						<div class="info-grid">
-							<div class="info-item">
-								<span class="label">Name</span>
-								<span class="value">{{
-									organization.name
-								}}</span>
-							</div>
-							<div
-								v-if="organization.vat_number"
-								class="info-item"
-							>
-								<span class="label">VAT Number</span>
-								<span class="value">{{
-									organization.vat_number
-								}}</span>
-							</div>
+				<div class="detail-layout detail-aside-first">
+					<aside class="detail-aside">
+						<div class="grid-2-cols">
+							<InfoCard
+								title="Site Information"
+								:items="siteInfoItems"
+							/>
+							<InfoCard
+								v-if="server"
+								title="Server Information"
+								:items="serverInfoItems"
+							/>
 						</div>
 
-						<div v-if="contacts.length > 0" class="mt-4">
-							<h3 class="sub-text font-medium mb-4">Contacts</h3>
-							<div class="table-container">
-								<table class="data-table">
-									<thead>
-										<tr>
-											<th>Name</th>
-											<th>Type</th>
-											<th>Email</th>
-										</tr>
-									</thead>
-									<tbody>
-										<tr
-											v-for="contact in contacts"
-											:key="contact.id"
-										>
-											<td class="font-medium">
-												{{ contact.name }}
-											</td>
-											<td>
-												<span
-													:class="[
-														'status-badge',
-														'badge-sm',
-														contact.type.toLowerCase(),
-													]"
+						<NotesWidget parent-type="Site" :parent-id="site.id" />
+					</aside>
+					<div class="detail-main">
+						<div class="mt-4">
+							<MonitorHistoryCard
+								:history="history"
+								:domain="site.domain"
+								:site-id="site.id"
+								:server-id="site.server_id"
+							/>
+						</div>
+						<section class="card mt-4">
+							<div class="card-header">
+								<h2>Organization Information</h2>
+								<div class="flex-row gap-3">
+									<button
+										v-if="organization && authStore.canEdit"
+										class="btn btn-text danger"
+										@click="unlinkOrganization"
+									>
+										Unlink
+									</button>
+									<button
+										v-if="organization"
+										class="btn btn-outline btn-sm"
+										@click="goToOrganization"
+									>
+										View Organization
+									</button>
+									<button
+										v-if="
+											!organization && authStore.canEdit
+										"
+										class="btn btn-primary btn-sm"
+										@click="showLinkModal = true"
+									>
+										Link Organization
+									</button>
+								</div>
+							</div>
+
+							<div v-if="organization">
+								<div class="info-grid">
+									<div class="info-item">
+										<span class="label">Name</span>
+										<span class="value">{{
+											organization.name
+										}}</span>
+									</div>
+									<div
+										v-if="organization.vat_number"
+										class="info-item"
+									>
+										<span class="label">VAT Number</span>
+										<span class="value">{{
+											organization.vat_number
+										}}</span>
+									</div>
+								</div>
+
+								<div v-if="contacts.length > 0" class="mt-4">
+									<h3 class="sub-text font-medium mb-4">
+										Contacts
+									</h3>
+									<div class="table-container">
+										<table class="data-table">
+											<thead>
+												<tr>
+													<th>Name</th>
+													<th>Type</th>
+													<th>Email</th>
+												</tr>
+											</thead>
+											<tbody>
+												<tr
+													v-for="contact in contacts"
+													:key="contact.id"
 												>
-													{{ contact.type }}
-												</span>
-											</td>
-											<td class="text-muted">
-												{{ contact.email || "—" }}
-											</td>
-										</tr>
-									</tbody>
-								</table>
+													<td class="font-medium">
+														{{ contact.name }}
+													</td>
+													<td>
+														<span
+															:class="[
+																'status-badge',
+																'badge-sm',
+																contact.type.toLowerCase(),
+															]"
+														>
+															{{ contact.type }}
+														</span>
+													</td>
+													<td class="text-muted">
+														{{
+															contact.email || "—"
+														}}
+													</td>
+												</tr>
+											</tbody>
+										</table>
+									</div>
+								</div>
 							</div>
-						</div>
+							<div v-else class="empty-state">
+								No organization linked to this site.
+							</div>
+						</section>
 					</div>
-					<div v-else class="empty-state">
-						No organization linked to this site.
-					</div>
-				</section>
-
-				<div class="mt-4">
-					<MonitorHistoryCard
-						:history="history"
-						:domain="site.domain"
-						:site-id="site.id"
-						:server-id="site.server_id"
-					/>
 				</div>
 			</template>
 			<template v-if="activeTab === 'updates'">

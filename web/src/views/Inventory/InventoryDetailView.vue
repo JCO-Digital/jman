@@ -320,260 +320,307 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 					</div>
 				</div>
 
-				<div class="card">
-					<div class="card-header">
-						<h3>Item</h3>
-					</div>
-					<div class="table-container">
-						<table class="data-table">
-							<tbody>
-								<tr>
-									<th>Type</th>
-									<td>
-										<span class="status-badge info">{{
-											item.type
-										}}</span>
-									</td>
-								</tr>
-								<tr>
-									<th>Status</th>
-									<td>
-										<span
-											:class="[
-												'status-badge',
-												item.status === 'active'
-													? 'active'
-													: 'inactive',
-											]"
-										>
-											{{ item.status }}
-										</span>
-									</td>
-								</tr>
-								<tr>
-									<th>Origin</th>
-									<td>{{ item.origin }}</td>
-								</tr>
-								<tr>
-									<th>Description</th>
-									<td>{{ item.description || "—" }}</td>
-								</tr>
-								<tr>
-									<th>Tags</th>
-									<td>
-										{{
-											(item.tags ?? []).join(", ") || "—"
-										}}
-									</td>
-								</tr>
-								<tr>
-									<th>Linked site</th>
-									<td>
-										<RouterLink
-											v-if="linkedSite"
-											:to="{
-												name: 'site-detail',
-												params: { id: linkedSite.id },
-											}"
-										>
-											{{ linkedSite.domain }}
-										</RouterLink>
-										<span v-else>{{
-											item.site_id || "—"
-										}}</span>
-									</td>
-								</tr>
-								<tr>
-									<th>Linked server</th>
-									<td>
-										{{
-											linkedServer?.name ||
-											item.server_id ||
-											"—"
-										}}
-									</td>
-								</tr>
-								<tr>
-									<th>Updated</th>
-									<td>
-										{{ formatDate(item.updated_at) }} by
-										{{ item.updated_by }}
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</div>
-
-				<div v-if="item.type === 'domain'" class="card">
-					<div class="card-header">
-						<h3>Registration</h3>
-						<button
-							v-if="authStore.canEdit"
-							class="btn btn-outline btn-sm"
-							:disabled="lookingUp"
-							@click="handleLookup"
-						>
-							<AppIcon name="refresh" size="16" />
-							{{ lookingUp ? "Looking up..." : "Look up now" }}
-						</button>
-					</div>
-					<p v-if="!lookup" class="text-muted">
-						Not looked up yet. Domains are looked up at their
-						registry once a day.
-					</p>
-					<template v-else>
-						<p v-if="lookup.error" class="form-error">
-							Last lookup failed: {{ lookup.error }}
-							<template v-if="lookup.last_success_at">
-								— showing the result from
-								{{ formatDate(lookup.last_success_at) }}.
-							</template>
-						</p>
-						<div
-							v-if="lookup.last_success_at"
-							class="table-container"
-						>
-							<table class="data-table">
-								<tbody>
-									<tr>
-										<th>Registrar</th>
-										<td>
-											{{
-												lookup.registrar ||
-												"Not published by the registry"
-											}}
-										</td>
-									</tr>
-									<tr>
-										<th>Expires</th>
-										<td>
-											<template v-if="lookup.expires_at">
-												{{
-													formatDay(lookup.expires_at)
-												}}
+				<div class="detail-layout detail-aside-first">
+					<aside class="detail-aside">
+						<div class="card">
+							<div class="card-header">
+								<h3>Item</h3>
+							</div>
+							<div class="table-container">
+								<table class="data-table">
+									<tbody>
+										<tr>
+											<th>Type</th>
+											<td>
 												<span
-													v-if="lookupExpiryBadge"
+													class="status-badge info"
+													>{{ item.type }}</span
+												>
+											</td>
+										</tr>
+										<tr>
+											<th>Status</th>
+											<td>
+												<span
 													:class="[
 														'status-badge',
-														'badge-sm',
-														lookupExpiryBadge.cls,
+														item.status === 'active'
+															? 'active'
+															: 'inactive',
 													]"
 												>
-													{{ lookupExpiryBadge.text }}
+													{{ item.status }}
 												</span>
-											</template>
-											<template v-else>
-												Not published by the registry
-											</template>
-										</td>
-									</tr>
-									<tr>
-										<th>Nameservers</th>
-										<td>
-											{{
-												lookup.nameservers.join(", ") ||
-												"Not published by the registry"
-											}}
-										</td>
-									</tr>
-								</tbody>
-							</table>
+											</td>
+										</tr>
+										<tr>
+											<th>Origin</th>
+											<td>{{ item.origin }}</td>
+										</tr>
+										<tr>
+											<th>Description</th>
+											<td>
+												{{ item.description || "—" }}
+											</td>
+										</tr>
+										<tr>
+											<th>Tags</th>
+											<td>
+												{{
+													(item.tags ?? []).join(
+														", ",
+													) || "—"
+												}}
+											</td>
+										</tr>
+										<tr>
+											<th>Linked site</th>
+											<td>
+												<RouterLink
+													v-if="linkedSite"
+													:to="{
+														name: 'site-detail',
+														params: {
+															id: linkedSite.id,
+														},
+													}"
+												>
+													{{ linkedSite.domain }}
+												</RouterLink>
+												<span v-else>{{
+													item.site_id || "—"
+												}}</span>
+											</td>
+										</tr>
+										<tr>
+											<th>Linked server</th>
+											<td>
+												{{
+													linkedServer?.name ||
+													item.server_id ||
+													"—"
+												}}
+											</td>
+										</tr>
+										<tr>
+											<th>Updated</th>
+											<td>
+												{{
+													formatDate(item.updated_at)
+												}}
+												by
+												{{ item.updated_by }}
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
 						</div>
-						<p class="text-muted">
-							Checked {{ formatDate(lookup.checked_at) }}
-							<template v-if="lookup.source">
-								via {{ sourceLabel(lookup.source) }}</template
-							>.
-						</p>
-					</template>
-				</div>
+						<NotesWidget
+							parent-type="InventoryItem"
+							:parent-id="item.id"
+						/>
+					</aside>
+					<div class="detail-main">
+						<div v-if="item.type === 'domain'" class="card">
+							<div class="card-header">
+								<h3>Registration</h3>
+								<button
+									v-if="authStore.canEdit"
+									class="btn btn-outline btn-sm"
+									:disabled="lookingUp"
+									@click="handleLookup"
+								>
+									<AppIcon name="refresh" size="16" />
+									{{
+										lookingUp
+											? "Looking up..."
+											: "Look up now"
+									}}
+								</button>
+							</div>
+							<p v-if="!lookup" class="text-muted">
+								Not looked up yet. Domains are looked up at
+								their registry once a day.
+							</p>
+							<template v-else>
+								<p v-if="lookup.error" class="form-error">
+									Last lookup failed: {{ lookup.error }}
+									<template v-if="lookup.last_success_at">
+										— showing the result from
+										{{
+											formatDate(lookup.last_success_at)
+										}}.
+									</template>
+								</p>
+								<div
+									v-if="lookup.last_success_at"
+									class="table-container"
+								>
+									<table class="data-table">
+										<tbody>
+											<tr>
+												<th>Registrar</th>
+												<td>
+													{{
+														lookup.registrar ||
+														"Not published by the registry"
+													}}
+												</td>
+											</tr>
+											<tr>
+												<th>Expires</th>
+												<td>
+													<template
+														v-if="lookup.expires_at"
+													>
+														{{
+															formatDay(
+																lookup.expires_at,
+															)
+														}}
+														<span
+															v-if="
+																lookupExpiryBadge
+															"
+															:class="[
+																'status-badge',
+																'badge-sm',
+																lookupExpiryBadge.cls,
+															]"
+														>
+															{{
+																lookupExpiryBadge.text
+															}}
+														</span>
+													</template>
+													<template v-else>
+														Not published by the
+														registry
+													</template>
+												</td>
+											</tr>
+											<tr>
+												<th>Nameservers</th>
+												<td>
+													{{
+														lookup.nameservers.join(
+															", ",
+														) ||
+														"Not published by the registry"
+													}}
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+								<p class="text-muted">
+									Checked {{ formatDate(lookup.checked_at) }}
+									<template v-if="lookup.source">
+										via
+										{{
+											sourceLabel(lookup.source)
+										}}</template
+									>.
+								</p>
+							</template>
+						</div>
 
-				<div class="card">
-					<div class="card-header">
-						<h3>Provider links</h3>
-					</div>
-					<p
-						v-if="(item.links ?? []).length === 0"
-						class="text-muted"
-					>
-						Manual item — not linked to any provider.
-					</p>
-					<div v-else class="table-container">
-						<table class="data-table">
-							<thead>
-								<tr>
-									<th>Provider</th>
-									<th>Type</th>
-									<th>Provider ID</th>
-									<th v-if="authStore.canEdit"></th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-for="link in item.links" :key="link.id">
-									<td>{{ providerName(link.provider) }}</td>
-									<td>{{ link.provider_type }}</td>
-									<td>{{ link.provider_id }}</td>
-									<td v-if="authStore.canEdit">
-										<button
-											class="btn btn-outline btn-sm"
-											@click="handleUnlink(link)"
+						<div class="card">
+							<div class="card-header">
+								<h3>Provider links</h3>
+							</div>
+							<p
+								v-if="(item.links ?? []).length === 0"
+								class="text-muted"
+							>
+								Manual item — not linked to any provider.
+							</p>
+							<div v-else class="table-container">
+								<table class="data-table">
+									<thead>
+										<tr>
+											<th>Provider</th>
+											<th>Type</th>
+											<th>Provider ID</th>
+											<th v-if="authStore.canEdit"></th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr
+											v-for="link in item.links"
+											:key="link.id"
 										>
-											Unlink
-										</button>
-									</td>
-								</tr>
-							</tbody>
-						</table>
+											<td>
+												{{
+													providerName(link.provider)
+												}}
+											</td>
+											<td>{{ link.provider_type }}</td>
+											<td>{{ link.provider_id }}</td>
+											<td v-if="authStore.canEdit">
+												<button
+													class="btn btn-outline btn-sm"
+													@click="handleUnlink(link)"
+												>
+													Unlink
+												</button>
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div class="card">
+							<div class="card-header">
+								<h3>Details (manual)</h3>
+							</div>
+							<div
+								v-if="detailEntries.length === 0"
+								class="text-muted"
+							>
+								No details yet.
+							</div>
+							<div v-else class="table-container">
+								<table class="data-table">
+									<tbody>
+										<tr
+											v-for="entry in detailEntries"
+											:key="entry.key"
+										>
+											<th>{{ entry.label }}</th>
+											<td>{{ entry.value }}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+
+						<div
+							v-for="section in providerSections"
+							:key="section.provider"
+							class="card"
+						>
+							<div class="card-header">
+								<h3>{{ section.label }} data (read-only)</h3>
+							</div>
+							<div class="table-container">
+								<table class="data-table">
+									<tbody>
+										<tr
+											v-for="entry in section.entries"
+											:key="entry.key"
+										>
+											<th>{{ entry.label }}</th>
+											<td>{{ entry.value }}</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
 					</div>
 				</div>
-
-				<div class="card">
-					<div class="card-header">
-						<h3>Details (manual)</h3>
-					</div>
-					<div v-if="detailEntries.length === 0" class="text-muted">
-						No details yet.
-					</div>
-					<div v-else class="table-container">
-						<table class="data-table">
-							<tbody>
-								<tr
-									v-for="entry in detailEntries"
-									:key="entry.key"
-								>
-									<th>{{ entry.label }}</th>
-									<td>{{ entry.value }}</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</div>
-
-				<div
-					v-for="section in providerSections"
-					:key="section.provider"
-					class="card"
-				>
-					<div class="card-header">
-						<h3>{{ section.label }} data (read-only)</h3>
-					</div>
-					<div class="table-container">
-						<table class="data-table">
-							<tbody>
-								<tr
-									v-for="entry in section.entries"
-									:key="entry.key"
-								>
-									<th>{{ entry.label }}</th>
-									<td>{{ entry.value }}</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</div>
-
-				<NotesWidget parent-type="InventoryItem" :parent-id="item.id" />
 			</template>
 		</main>
 

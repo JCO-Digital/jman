@@ -420,164 +420,189 @@ const sitesAudit = computed(() => {
 
 		<main v-if="organization" class="content">
 			<template v-if="activeTab === 'overview'">
-				<div class="card-group">
-					<EditableInfoCard
-						title="Organization Information"
-						:items="organizationInfoItems"
-						:editable="authStore.canEdit"
-						:on-save="handleSaveOrganization"
-					/>
-					<div
-						v-if="organization?.created_by"
-						class="card-footer-audit"
-					>
-						Created by
-						{{
-							userStore.resolveDisplayName(
-								organization.created_by,
-							)
-						}}
-						on
-						{{ formatAuditDate(organization.created_at) }}.<template
-							v-if="isModified(organization)"
-						>
-							Last edited by
-							{{
-								userStore.resolveDisplayName(
-									organization.updated_by,
-								)
-							}}
-							on {{ formatAuditDate(organization.updated_at) }}.
-						</template>
-					</div>
-				</div>
-
-				<div class="card-group">
-					<NotesWidget
-						parent-type="Organization"
-						:parent-id="organizationId"
-					/>
-				</div>
-
-				<div class="card-group">
-					<section class="card">
-						<div class="card-header">
-							<h2>Contacts ({{ contacts.length }})</h2>
-							<button
-								v-if="authStore.canEdit"
-								class="btn btn-primary btn-sm"
-								@click="openAddContact"
+				<div class="detail-layout detail-aside-first">
+					<aside class="detail-aside">
+						<div class="card-group">
+							<EditableInfoCard
+								title="Organization Information"
+								:items="organizationInfoItems"
+								:editable="authStore.canEdit"
+								:on-save="handleSaveOrganization"
+							/>
+							<div
+								v-if="organization?.created_by"
+								class="card-footer-audit"
 							>
-								Add Contact
-							</button>
+								Created by
+								{{
+									userStore.resolveDisplayName(
+										organization.created_by,
+									)
+								}}
+								on
+								{{
+									formatAuditDate(organization.created_at)
+								}}.<template v-if="isModified(organization)">
+									Last edited by
+									{{
+										userStore.resolveDisplayName(
+											organization.updated_by,
+										)
+									}}
+									on
+									{{
+										formatAuditDate(
+											organization.updated_at,
+										)
+									}}.
+								</template>
+							</div>
 						</div>
 
-						<div class="table-container">
-							<table
-								class="data-table hide-col-3-sm hide-col-4-sm"
-							>
-								<thead>
-									<tr>
-										<th>Name</th>
-										<th>Type</th>
-										<th>Email</th>
-										<th>Phone</th>
-										<th
-											v-if="authStore.canEdit"
-											class="text-right"
-										></th>
-									</tr>
-								</thead>
-								<tbody>
-									<tr v-if="contacts.length === 0">
-										<td colspan="5" class="empty-state">
-											No contacts found for this
-											organization.
-										</td>
-									</tr>
-									<tr
-										v-for="contact in contacts"
-										:key="contact.id"
+						<div class="card-group">
+							<NotesWidget
+								parent-type="Organization"
+								:parent-id="organizationId"
+							/>
+						</div>
+					</aside>
+					<div class="detail-main">
+						<div class="card-group">
+							<section class="card">
+								<div class="card-header">
+									<h2>Contacts ({{ contacts.length }})</h2>
+									<button
+										v-if="authStore.canEdit"
+										class="btn btn-primary btn-sm"
+										@click="openAddContact"
 									>
-										<td class="font-medium">
-											{{ contact.name }}
-										</td>
-										<td>
-											<span
-												:class="[
-													'status-badge',
-													'badge-sm',
-													contact.type.toLowerCase(),
-												]"
-											>
-												{{ contact.type }}
-											</span>
-										</td>
-										<td class="text-muted">
-											{{ contact.email || "—" }}
-										</td>
-										<td class="text-muted">
-											{{ contact.phone || "—" }}
-										</td>
-										<td class="text-right">
-											<div
-												class="flex-row gap-2 justify-end"
-											>
-												<button
-													class="icon-btn icon-btn-sm"
-													title="Edit Contact"
-													@click="
-														openEditContact(contact)
-													"
+										Add Contact
+									</button>
+								</div>
+
+								<div class="table-container">
+									<table
+										class="data-table hide-col-3-sm hide-col-4-sm"
+									>
+										<thead>
+											<tr>
+												<th>Name</th>
+												<th>Type</th>
+												<th>Email</th>
+												<th>Phone</th>
+												<th
+													v-if="authStore.canEdit"
+													class="text-right"
+												></th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr v-if="contacts.length === 0">
+												<td
+													colspan="5"
+													class="empty-state"
 												>
-													<AppIcon
-														name="edit"
-														size="16"
-													/>
-												</button>
-												<button
-													class="icon-btn icon-btn-sm danger"
-													title="Delete Contact"
-													@click="
-														handleDeleteContact(
-															contact.id,
-														)
-													"
-												>
-													<AppIcon
-														name="trash"
-														size="16"
-													/>
-												</button>
-											</div>
-										</td>
-									</tr>
-								</tbody>
-							</table>
+													No contacts found for this
+													organization.
+												</td>
+											</tr>
+											<tr
+												v-for="contact in contacts"
+												:key="contact.id"
+											>
+												<td class="font-medium">
+													{{ contact.name }}
+												</td>
+												<td>
+													<span
+														:class="[
+															'status-badge',
+															'badge-sm',
+															contact.type.toLowerCase(),
+														]"
+													>
+														{{ contact.type }}
+													</span>
+												</td>
+												<td class="text-muted">
+													{{ contact.email || "—" }}
+												</td>
+												<td class="text-muted">
+													{{ contact.phone || "—" }}
+												</td>
+												<td class="text-right">
+													<div
+														class="flex-row gap-2 justify-end"
+													>
+														<button
+															class="icon-btn icon-btn-sm"
+															title="Edit Contact"
+															@click="
+																openEditContact(
+																	contact,
+																)
+															"
+														>
+															<AppIcon
+																name="edit"
+																size="16"
+															/>
+														</button>
+														<button
+															class="icon-btn icon-btn-sm danger"
+															title="Delete Contact"
+															@click="
+																handleDeleteContact(
+																	contact.id,
+																)
+															"
+														>
+															<AppIcon
+																name="trash"
+																size="16"
+															/>
+														</button>
+													</div>
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+							</section>
+							<div
+								v-if="contactsAudit?.updated_by"
+								class="card-footer-audit"
+							>
+								<template v-if="isModified(contactsAudit)">
+									Last edited by
+									{{
+										userStore.resolveDisplayName(
+											contactsAudit.updated_by,
+										)
+									}}
+									on
+									{{
+										formatAuditDate(
+											contactsAudit.updated_at,
+										)
+									}}.
+								</template>
+								<template v-else>
+									Created by
+									{{
+										userStore.resolveDisplayName(
+											contactsAudit.created_by,
+										)
+									}}
+									on
+									{{
+										formatAuditDate(
+											contactsAudit.created_at,
+										)
+									}}.
+								</template>
+							</div>
 						</div>
-					</section>
-					<div
-						v-if="contactsAudit?.updated_by"
-						class="card-footer-audit"
-					>
-						<template v-if="isModified(contactsAudit)">
-							Last edited by
-							{{
-								userStore.resolveDisplayName(
-									contactsAudit.updated_by,
-								)
-							}}
-							on {{ formatAuditDate(contactsAudit.updated_at) }}.
-						</template>
-						<template v-else>
-							Created by
-							{{
-								userStore.resolveDisplayName(
-									contactsAudit.created_by,
-								)
-							}}
-							on {{ formatAuditDate(contactsAudit.created_at) }}.
-						</template>
 					</div>
 				</div>
 			</template>
