@@ -1,6 +1,13 @@
 # Changelog
 
-## 7.34.0 (2026-11-13)
+## 7.35.0 (2026-11-13)
+
+#### Features
+
+- inventory: WHOIS lookups for .se .ee .dk .io .me .ie .eu; RDAP for .ch (c70f8c0)
+- inventory: import domains from CSV; merge domains by name (e622b27)
+
+## v7.34.0 (2026-11-13)
 
 #### Features
 
