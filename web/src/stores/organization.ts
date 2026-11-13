@@ -40,6 +40,16 @@ export const useOrganizationStore = defineStore("organization", () => {
 		}
 	}
 
+	/**
+	 * Every organization, without touching the store's list (which the
+	 * organization list's search narrows), for the quick-jump.
+	 */
+	async function listAllOrganizations(): Promise<Organization[]> {
+		const res = await apiFetch(`${BASE_URL}/organizations`);
+		if (!res.ok) await handleErrorResponse(res);
+		return await res.json();
+	}
+
 	async function getOrganization(id: number): Promise<Organization | null> {
 		try {
 			const res = await apiFetch(`${BASE_URL}/organizations/${id}`);
@@ -183,6 +193,7 @@ export const useOrganizationStore = defineStore("organization", () => {
 		isLoading,
 		error,
 		fetchOrganizations,
+		listAllOrganizations,
 		getOrganization,
 		createOrganization,
 		updateOrganization,

@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
-import SettingsTabs from "../components/settings/SettingsTabs.vue";
+import RouteTabs, { type RouteTab } from "../components/RouteTabs.vue";
 import GeneralSettings from "../components/settings/GeneralSettings.vue";
 import IgnoreManager from "../components/settings/IgnoreManager.vue";
 import BackportManager from "../components/settings/BackportManager.vue";
@@ -13,55 +13,65 @@ import AgentTokenManagement from "../components/settings/AgentTokenManagement.vu
 import SiteManagement from "../components/settings/SiteManagement.vue";
 import CliTokenManagement from "../components/settings/CliTokenManagement.vue";
 
-const route = useRoute();
+// /settings[/<tab>]: My Account is the default and left out.
+const props = defineProps<{
+	tab?: string;
+}>();
+
 const router = useRouter();
 const authStore = useAuthStore();
 
-const validTabs = computed(() => {
-	const tabs = ["account", "general", "cli-tokens"];
-	if (authStore.canEdit) tabs.push("ignored", "backports", "sites");
-	if (authStore.canAdmin) tabs.push("users", "agent-tokens");
-	return tabs;
+const ALL_TABS: { key: string; label: string; level?: "edit" | "admin" }[] = [
+	{ key: "account", label: "My Account" },
+	{ key: "general", label: "General" },
+	{ key: "cli-tokens", label: "CLI Tokens" },
+	{ key: "ignored", label: "Ignore List", level: "edit" },
+	{ key: "backports", label: "Backports", level: "edit" },
+	{ key: "sites", label: "Sites", level: "edit" },
+	{ key: "users", label: "Users", level: "admin" },
+	{ key: "agent-tokens", label: "Agent Tokens", level: "admin" },
+];
+
+const tabs = computed<RouteTab[]>(() =>
+	ALL_TABS.filter(
+		(t) =>
+			!t.level ||
+			(t.level === "edit" ? authStore.canEdit : authStore.canAdmin),
+	).map((t) => ({
+		key: t.key,
+		label: t.label,
+		to: {
+			name: "settings",
+			params: { tab: t.key === "account" ? "" : t.key },
+		},
+	})),
+);
+
+const activeTab = computed(() => {
+	const t = props.tab || "account";
+	return tabs.value.some((x) => x.key === t) ? t : "account";
 });
 
-const activeTab = ref(getInitialTab());
-
-function getInitialTab(): string {
-	const tab = route.query.tab as string;
-	if (tab && validTabs.value.includes(tab)) return tab;
-	return "account";
-}
-
-// Sync tab to URL query parameter
-watch(activeTab, (newTab) => {
-	router.replace({ query: { ...route.query, tab: newTab } });
-});
-
-// React to URL changes (e.g. browser back/forward)
+// A tab this session can't see (an old link, a lower level) opens the
+// default one instead.
 watch(
-	() => route.query.tab,
-	(newTab) => {
-		if (typeof newTab === "string" && validTabs.value.includes(newTab)) {
-			activeTab.value = newTab;
-		}
+	() => props.tab && activeTab.value !== props.tab,
+	(unknown) => {
+		if (unknown) router.replace({ name: "settings" });
 	},
+	{ immediate: true },
 );
 </script>
 
 <template>
 	<div class="view-container">
-		<ViewHeader title="Settings" />
+		<ViewHeader title="Settings">
+			<template #tabs>
+				<RouteTabs :tabs="tabs" :active="activeTab" label="Settings" />
+			</template>
+		</ViewHeader>
 
-		<main class="content mt-4">
-			<SettingsTabs
-				v-model="activeTab"
-				:show-users-tab="authStore.canAdmin"
-				:show-ignored-tab="authStore.canEdit"
-				:show-backports-tab="authStore.canEdit"
-				:show-sites-tab="authStore.canEdit"
-				:show-agent-tokens-tab="authStore.canAdmin"
-			/>
-
+		<main class="content">
 			<div class="settings-content">
 				<GeneralSettings v-if="activeTab === 'general'" />
 				<CliTokenManagement v-else-if="activeTab === 'cli-tokens'" />

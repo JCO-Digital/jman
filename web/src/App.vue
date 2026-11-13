@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { watch, onUnmounted } from "vue";
-import { RouterView } from "vue-router";
+import { RouterView, useRoute } from "vue-router";
 import { useDataStore } from "./stores/data";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
@@ -10,12 +10,14 @@ import { useVulnStore } from "./stores/vulns";
 import { useUserStore } from "./stores/user";
 import { useUpdateJobsStore } from "./stores/updateJobs";
 import { useNotificationStore } from "./stores/notifications";
-import AppNav from "./components/AppNav.vue";
+import AppSidebar from "./components/AppSidebar.vue";
+import AppTopbar from "./components/AppTopbar.vue";
+import { useSidebar } from "./composables/useSidebar";
 import ToastContainer from "./components/ToastContainer.vue";
 import TaskCenter from "./components/TaskCenter.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
+import CommandPalette from "./components/CommandPalette.vue";
 import TaskModalHost from "./components/TaskModalHost.vue";
-import packageInfo from "../package.json";
 
 const dataStore = useDataStore();
 const authStore = useAuthStore();
@@ -105,7 +107,8 @@ onUnmounted(() => {
 	stopIntervals();
 });
 
-const version = packageInfo.version;
+const route = useRoute();
+const { collapsed } = useSidebar();
 
 const handleLogout = () => {
 	authStore.logout(); // watcher handles interval/cache cleanup
@@ -113,21 +116,30 @@ const handleLogout = () => {
 </script>
 
 <template>
-	<div class="app-container">
-		<AppNav @logout="handleLogout" />
-		<div class="main-content">
-			<RouterView />
+	<div
+		class="app-shell"
+		:class="{
+			'has-nav': authStore.isAuthenticated,
+			'is-collapsed': collapsed,
+		}"
+	>
+		<AppSidebar v-if="authStore.isAuthenticated" />
+		<div class="app-main">
+			<AppTopbar
+				v-if="authStore.isAuthenticated"
+				@logout="handleLogout"
+			/>
+			<main
+				class="main-content"
+				:data-width="route.meta.width ?? 'default'"
+			>
+				<RouterView />
+			</main>
 		</div>
-		<footer v-if="authStore.isAuthenticated" class="app-footer">
-			v{{ version }}
-		</footer>
 	</div>
 	<ToastContainer />
 	<TaskCenter v-if="authStore.isAuthenticated" />
 	<TaskModalHost v-if="authStore.isAuthenticated" />
 	<ConfirmModal />
+	<CommandPalette v-if="authStore.isAuthenticated" />
 </template>
-
-<style scoped>
-/* Navigation styles moved to AppNav.vue */
-</style>

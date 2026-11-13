@@ -1,33 +1,22 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { ref, computed, onMounted } from "vue";
+import { useRouter } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
 import { useSiteUsersStore } from "../stores/siteUsers";
 import type { SiteUser } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
+import ListToolbar from "../components/ListToolbar.vue";
+import SortableTh from "../components/SortableTh.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import AppIcon from "../components/AppIcon.vue";
 import SiteUserDeleteModal from "../components/SiteUserDeleteModal.vue";
-
-const props = defineProps<{
-	page?: number;
-	rowsPerPage?: number;
-}>();
-
-type SortKey =
-	| "domain"
-	| "login"
-	| "display_name"
-	| "email"
-	| "roles"
-	| "registered"
-	| "post_count";
+import { useListState } from "../composables/useListState";
+import { useClientList } from "../composables/useClientList";
 
 type UserRow = SiteUser & { domain: string };
 
-const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const dataStore = useDataStore();
@@ -38,57 +27,27 @@ onMounted(() => {
 	siteUsersStore.fetchAll(true);
 });
 
-const searchQuery = ref("");
-const filterRole = ref("");
-const sortKey = ref<SortKey>("domain");
-const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(props.page || 1);
-const rowsPerPage = ref(props.rowsPerPage || 50);
+// /users?q=&sort=&dir=&page=&per=&role=&site=<id>. The site filter lets
+// a site's page link to its users.
+const list = useListState({
+	sortKeys: [
+		"domain",
+		"login",
+		"email",
+		"display_name",
+		"roles",
+		"registered",
+		"posts",
+	],
+	defaultSort: "domain",
+	descFirst: ["registered", "posts"],
+	filters: { role: true, site: true },
+});
 
-watch(
-	() => props.page,
-	(newVal) => {
-		currentPage.value = newVal || 1;
-	},
-);
-
-watch(
-	() => props.rowsPerPage,
-	(newVal) => {
-		rowsPerPage.value = newVal || 50;
-	},
-);
-
-// The site filter lives in the URL (?site=<id>), so a site's page can link
-// to its users.
-const filterSite = computed(() =>
-	typeof route.query.site === "string" ? route.query.site : "",
-);
+const filterSite = computed(() => list.filters.value.site);
 const filterSiteDomain = computed(
 	() => dataStore.getSiteById(filterSite.value)?.domain ?? filterSite.value,
 );
-
-const updateRoute = (page: number, rpp: number, site = filterSite.value) => {
-	router.push({
-		name: "users",
-		params: {
-			page: page.toString(),
-			rowsPerPage: rpp.toString(),
-		},
-		query: site ? { site } : {},
-	});
-};
-
-const clearSiteFilter = () => updateRoute(1, rowsPerPage.value, "");
-
-const handleSort = (key: SortKey) => {
-	if (sortKey.value === key) {
-		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
-	} else {
-		sortKey.value = key;
-		sortOrder.value = "asc";
-	}
-};
 
 const splitRoles = (roles: string) =>
 	roles
@@ -106,6 +65,13 @@ const usersWithSite = computed(() =>
 	}),
 );
 
+// Users that sort the same stay in login order.
+const usersByLogin = computed(() =>
+	[...usersWithSite.value].sort((a, b) =>
+		a.login.toLowerCase().localeCompare(b.login.toLowerCase()),
+	),
+);
+
 const roleOptions = computed(() => {
 	const roles = new Set<string>();
 	for (const u of usersWithSite.value) {
@@ -114,45 +80,19 @@ const roleOptions = computed(() => {
 	return [...roles].sort();
 });
 
-const filteredUsers = computed(() => {
-	let filtered = usersWithSite.value;
-
-	if (searchQuery.value) {
-		const query = searchQuery.value.toLowerCase();
-		filtered = filtered.filter(
-			(u) =>
-				u.login.toLowerCase().includes(query) ||
-				u.email.toLowerCase().includes(query) ||
-				u.display_name.toLowerCase().includes(query) ||
-				u.domain.toLowerCase().includes(query),
-		);
-	}
-	if (filterRole.value) {
-		filtered = filtered.filter((u) =>
-			splitRoles(u.roles).includes(filterRole.value),
-		);
-	}
-
-	const dir = sortOrder.value === "asc" ? 1 : -1;
-	const key = sortKey.value;
-	return [...filtered].sort((a, b) => {
-		const cmp =
-			key === "post_count"
-				? (a.post_count ?? -1) - (b.post_count ?? -1)
-				: a[key].toLowerCase().localeCompare(b[key].toLowerCase());
-		if (cmp !== 0) return cmp * dir;
-		return a.login.toLowerCase().localeCompare(b.login.toLowerCase());
-	});
+const users = useClientList(usersByLogin, list, {
+	search: (u, q) =>
+		u.login.toLowerCase().includes(q) ||
+		u.email.toLowerCase().includes(q) ||
+		u.display_name.toLowerCase().includes(q) ||
+		u.domain.toLowerCase().includes(q),
+	filter: (u) =>
+		!list.filters.value.role ||
+		splitRoles(u.roles).includes(list.filters.value.role),
+	sortValue: (u, key) => (key === "posts" ? u.post_count : u[key]),
 });
 
-const totalPages = computed(
-	() => Math.ceil(filteredUsers.value.length / rowsPerPage.value) || 1,
-);
-
-const paginatedUsers = computed(() => {
-	const start = (currentPage.value - 1) * rowsPerPage.value;
-	return filteredUsers.value.slice(start, start + rowsPerPage.value);
-});
+const paginatedUsers = users.pageItems;
 
 const knownSummaries = computed(() =>
 	siteUsersStore.summaries.filter(
@@ -186,22 +126,6 @@ const excludedText = computed(() =>
 		.map(([role, n]) => `${formatCount(n)} ${role}${n === 1 ? "" : "s"}`)
 		.join(", "),
 );
-
-const prevPage = () => {
-	if (currentPage.value > 1) {
-		updateRoute(currentPage.value - 1, rowsPerPage.value);
-	}
-};
-
-const nextPage = () => {
-	if (currentPage.value < totalPages.value) {
-		updateRoute(currentPage.value + 1, rowsPerPage.value);
-	}
-};
-
-const handleRowsPerPageUpdate = (newRpp: number) => {
-	updateRoute(1, newRpp);
-};
 
 // Selecting users to delete. Rows stay selected across filters and pages.
 const selectMode = ref(false);
@@ -272,17 +196,21 @@ const goToSite = (id: string) => {
 			</p>
 		</div>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search by login, email, name or site..."
-				class="search-input"
-				@input="updateRoute(1, rowsPerPage)"
-			/>
-
-			<select v-model="filterRole" @change="updateRoute(1, rowsPerPage)">
-				<option value="">All Roles</option>
+		<ListToolbar
+			:list="list"
+			placeholder="Search by login, email, name or site"
+		>
+			<select
+				:value="list.filters.value.role"
+				aria-label="Role"
+				@change="
+					list.setFilter(
+						'role',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
+			>
+				<option value="">All roles</option>
 				<option v-for="role in roleOptions" :key="role" :value="role">
 					{{ role }}
 				</option>
@@ -291,23 +219,25 @@ const goToSite = (id: string) => {
 			<button
 				v-if="filterSite"
 				type="button"
-				class="btn btn-primary"
+				class="filter-chip"
+				aria-pressed="true"
 				title="Show users of all sites"
-				@click="clearSiteFilter"
+				@click="list.setFilter('site', '')"
 			>
 				{{ filterSiteDomain }}
 				<AppIcon name="x" size="14" />
 			</button>
 
-			<button
-				v-if="authStore.canExecute"
-				type="button"
-				class="btn btn-outline"
-				@click="toggleSelectMode"
-			>
-				{{ selectMode ? "Cancel" : "Select" }}
-			</button>
-		</div>
+			<template v-if="authStore.canExecute" #actions>
+				<button
+					type="button"
+					class="btn btn-outline"
+					@click="toggleSelectMode"
+				>
+					{{ selectMode ? "Cancel" : "Select" }}
+				</button>
+			</template>
+		</ListToolbar>
 
 		<div v-if="selectMode" class="card-muted batch-action-bar">
 			<span class="font-medium">{{ selected.size }} selected</span>
@@ -336,7 +266,7 @@ const goToSite = (id: string) => {
 
 		<main class="table-container">
 			<table
-				class="data-table sortable"
+				class="data-table"
 				:class="selectMode ? 'hide-col-5-sm' : 'hide-col-4-sm'"
 			>
 				<thead>
@@ -348,51 +278,39 @@ const goToSite = (id: string) => {
 								@click="toggleSelectAllOnPage"
 							/>
 						</th>
-						<th class="col-wide" @click="handleSort('domain')">
+						<SortableTh
+							:list="list"
+							sort-key="domain"
+							class="col-wide"
+						>
 							Site
-							<span v-if="sortKey === 'domain'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th @click="handleSort('login')">
+						</SortableTh>
+						<SortableTh :list="list" sort-key="login">
 							Login
-							<span v-if="sortKey === 'login'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th class="col-expand" @click="handleSort('email')">
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="email"
+							class="col-expand"
+						>
 							Email
-							<span v-if="sortKey === 'email'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th @click="handleSort('display_name')">
+						</SortableTh>
+						<SortableTh :list="list" sort-key="display_name">
 							Name
-							<span v-if="sortKey === 'display_name'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th @click="handleSort('roles')">
+						</SortableTh>
+						<SortableTh :list="list" sort-key="roles">
 							Roles
-							<span v-if="sortKey === 'roles'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th @click="handleSort('registered')">
+						</SortableTh>
+						<SortableTh :list="list" sort-key="registered">
 							Registered
-							<span v-if="sortKey === 'registered'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="posts"
 							class="text-right"
-							@click="handleSort('post_count')"
 						>
 							Posts
-							<span v-if="sortKey === 'post_count'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
@@ -408,7 +326,7 @@ const goToSite = (id: string) => {
 					</tr>
 					<tr v-else-if="paginatedUsers.length === 0">
 						<td :colspan="selectMode ? 8 : 7" class="empty-state">
-							<span v-if="searchQuery || filterRole"
+							<span v-if="list.narrowed.value"
 								>No users found matching the filters.</span
 							>
 							<span v-else>No users collected yet.</span>
@@ -457,12 +375,9 @@ const goToSite = (id: string) => {
 			</table>
 
 			<Pagination
-				:current-page="currentPage"
-				:total-pages="totalPages"
-				:rows-per-page="rowsPerPage"
-				@update:rows-per-page="handleRowsPerPageUpdate"
-				@prev="prevPage"
-				@next="nextPage"
+				:list="list"
+				:page="users.page.value"
+				:total="users.total.value"
 			/>
 		</main>
 

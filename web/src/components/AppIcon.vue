@@ -27,6 +27,14 @@ import IconTask from "./icons/IconTask.vue";
 import IconTrash from "./icons/IconTrash.vue";
 import IconVulnerability from "./icons/IconVulnerability.vue";
 import IconX from "./icons/IconX.vue";
+import IconActivity from "./icons/IconActivity.vue";
+import IconBox from "./icons/IconBox.vue";
+import IconChevronDown from "./icons/IconChevronDown.vue";
+import IconDashboard from "./icons/IconDashboard.vue";
+import IconLogout from "./icons/IconLogout.vue";
+import IconSidebar from "./icons/IconSidebar.vue";
+import IconUsers from "./icons/IconUsers.vue";
+import IconSearch from "./icons/IconSearch.vue";
 
 const props = defineProps<{
 	name: string;
@@ -61,6 +69,14 @@ const iconMap: Record<string, Component> = {
 	trash: IconTrash,
 	vulnerability: IconVulnerability,
 	x: IconX,
+	activity: IconActivity,
+	box: IconBox,
+	"chevron-down": IconChevronDown,
+	dashboard: IconDashboard,
+	logout: IconLogout,
+	sidebar: IconSidebar,
+	users: IconUsers,
+	search: IconSearch,
 };
 
 const icon = computed(() => iconMap[props.name]);

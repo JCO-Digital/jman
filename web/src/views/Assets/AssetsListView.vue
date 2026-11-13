@@ -1,26 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { useAssetStore } from "../../stores/assetStore";
 import { useOrganizationStore } from "../../stores/organization";
 import { useDataStore } from "../../stores/data";
-import type {
-	OrganizationAsset,
-	OrganizationAssetStatus,
-	Site,
-} from "../../types";
+import type { OrganizationAsset, Site } from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
+import ListToolbar from "../../components/ListToolbar.vue";
+import SortableTh from "../../components/SortableTh.vue";
 import Pagination from "../../components/Pagination.vue";
 import AppIcon from "../../components/AppIcon.vue";
 
 import AssetEditModal from "../../components/AssetEditModal.vue";
 import { useToastStore } from "../../stores/toast";
-
-const props = defineProps<{
-	page?: number;
-	rowsPerPage?: number;
-}>();
+import { useListState } from "../../composables/useListState";
+import { useClientList } from "../../composables/useClientList";
 
 const router = useRouter();
 const assetStore = useAssetStore();
@@ -48,71 +43,25 @@ const selectedOrgId = ref<number | null>(null);
 
 const assets = ref<OrganizationAsset[]>([]);
 const isLoading = ref(true);
-const searchQuery = ref("");
-const statusFilter = ref<OrganizationAssetStatus | "all">("all");
-const typeFilter = ref<string>("all");
 
-const currentPage = ref(props.page || 1);
-const rowsPerPage = ref(props.rowsPerPage || 50);
+const ASSET_TYPES = [
+	"Plugin",
+	"Domain",
+	"Hosting Package",
+	"Service Package",
+	"General",
+] as const;
 
-const sortKey = ref<
-	| "organization_name"
-	| "asset_type"
-	| "asset_name"
-	| "price"
-	| "next_billing"
-	| "status"
->("organization_name");
-const sortOrder = ref<"asc" | "desc">("asc");
-
-watch(
-	() => props.page,
-	(newVal) => {
-		currentPage.value = newVal || 1;
+// /billing?q=&sort=&dir=&page=&per=&type=&status=
+const list = useListState({
+	sortKeys: ["customer", "type", "asset", "price", "billing", "status"],
+	defaultSort: "customer",
+	descFirst: ["price"],
+	filters: {
+		type: ASSET_TYPES,
+		status: ["active", "paused", "cancelled"],
 	},
-);
-
-watch(
-	() => props.rowsPerPage,
-	(newVal) => {
-		rowsPerPage.value = newVal || 50;
-	},
-);
-
-const updateRoute = (page: number, rpp: number) => {
-	router.push({
-		name: "assets",
-		params: {
-			page: page.toString(),
-			rowsPerPage: rpp.toString(),
-		},
-	});
-};
-
-const prevPage = () => {
-	if (currentPage.value > 1) {
-		updateRoute(currentPage.value - 1, rowsPerPage.value);
-	}
-};
-
-const nextPage = () => {
-	if (currentPage.value < totalPages.value) {
-		updateRoute(currentPage.value + 1, rowsPerPage.value);
-	}
-};
-
-const handleRowsPerPageUpdate = (newRpp: number) => {
-	updateRoute(1, newRpp);
-};
-
-const handleSort = (key: typeof sortKey.value) => {
-	if (sortKey.value === key) {
-		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
-	} else {
-		sortKey.value = key;
-		sortOrder.value = "asc";
-	}
-};
+});
 
 const loadAssets = async () => {
 	isLoading.value = true;
@@ -138,66 +87,38 @@ const getLinkedSite = (siteId: string | null | undefined) => {
 
 const organizations = computed(() => organizationStore.organizations);
 
-const filteredAssets = computed(() => {
-	return assets.value.filter((a) => {
-		const matchesSearch =
-			!searchQuery.value ||
-			a.organization_name
-				?.toLowerCase()
-				.includes(searchQuery.value.toLowerCase()) ||
-			a.asset_name
-				?.toLowerCase()
-				.includes(searchQuery.value.toLowerCase()) ||
-			a.identifier
-				?.toLowerCase()
-				.includes(searchQuery.value.toLowerCase());
-
-		const matchesStatus =
-			statusFilter.value === "all" || a.status === statusFilter.value;
-
-		const matchesType =
-			typeFilter.value === "all" ||
-			(a.asset_type || "General") === typeFilter.value;
-
-		return matchesSearch && matchesStatus && matchesType;
-	});
-});
-
-const sortedAssets = computed(() => {
-	const result = [...filteredAssets.value];
-
-	result.sort((a, b) => {
-		let valA: any = a[sortKey.value];
-		let valB: any = b[sortKey.value];
-
-		// Handle undefined/null values
-		if (valA === undefined || valA === null) valA = "";
-		if (valB === undefined || valB === null) valB = "";
-
-		if (typeof valA === "string") {
-			valA = valA.toLowerCase();
+const assetList = useClientList(assets, list, {
+	search: (a, q) =>
+		Boolean(
+			a.organization_name?.toLowerCase().includes(q) ||
+			a.asset_name?.toLowerCase().includes(q) ||
+			a.identifier?.toLowerCase().includes(q),
+		),
+	filter: (a) => {
+		const f = list.filters.value;
+		if (f.status && a.status !== f.status) return false;
+		if (f.type && (a.asset_type || "General") !== f.type) return false;
+		return true;
+	},
+	sortValue: (a, key) => {
+		switch (key) {
+			case "customer":
+				return a.organization_name;
+			case "type":
+				return a.asset_type || "General";
+			case "asset":
+				return a.asset_name;
+			case "price":
+				return a.price;
+			case "billing":
+				return a.next_billing;
+			case "status":
+				return a.status;
 		}
-		if (typeof valB === "string") {
-			valB = valB.toLowerCase();
-		}
-
-		if (valA < valB) return sortOrder.value === "asc" ? -1 : 1;
-		if (valA > valB) return sortOrder.value === "asc" ? 1 : -1;
-		return 0;
-	});
-
-	return result;
+	},
 });
 
-const totalPages = computed(
-	() => Math.ceil(sortedAssets.value.length / rowsPerPage.value) || 1,
-);
-
-const paginatedAssets = computed(() => {
-	const start = (currentPage.value - 1) * rowsPerPage.value;
-	const end = start + rowsPerPage.value;
-	return sortedAssets.value.slice(start, end);
-});
+const paginatedAssets = assetList.pageItems;
 
 const goToOrganization = (id: number) => {
 	router.push({ name: "organization-detail", params: { id: id.toString() } });
@@ -289,37 +210,41 @@ const formatDate = (dateString: string | null) => {
 			</template>
 		</ViewHeader>
 
-		<div class="controls-row">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search by customer, asset or identifier..."
-				class="search-input"
-				@input="updateRoute(1, rowsPerPage)"
-			/>
+		<ListToolbar
+			:list="list"
+			placeholder="Search by customer, asset or identifier"
+		>
 			<select
-				v-model="typeFilter"
-				class="type-select"
-				@change="updateRoute(1, rowsPerPage)"
+				:value="list.filters.value.type"
+				aria-label="Type"
+				@change="
+					list.setFilter(
+						'type',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
 			>
-				<option value="all">All Types</option>
-				<option value="Plugin">Plugin</option>
-				<option value="Domain">Domain</option>
-				<option value="Hosting Package">Hosting Package</option>
-				<option value="Service Package">Service Package</option>
-				<option value="General">General</option>
+				<option value="">All types</option>
+				<option v-for="t in ASSET_TYPES" :key="t" :value="t">
+					{{ t }}
+				</option>
 			</select>
 			<select
-				v-model="statusFilter"
-				class="status-select"
-				@change="updateRoute(1, rowsPerPage)"
+				:value="list.filters.value.status"
+				aria-label="Status"
+				@change="
+					list.setFilter(
+						'status',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
 			>
-				<option value="all">All Statuses</option>
+				<option value="">All statuses</option>
 				<option value="active">Active</option>
 				<option value="paused">Paused</option>
 				<option value="cancelled">Cancelled</option>
 			</select>
-		</div>
+		</ListToolbar>
 
 		<main class="table-container">
 			<div
@@ -330,45 +255,27 @@ const formatDate = (dateString: string | null) => {
 			</div>
 
 			<template v-else>
-				<table class="data-table sortable">
+				<table class="data-table">
 					<thead>
 						<tr>
-							<th @click="handleSort('organization_name')">
+							<SortableTh :list="list" sort-key="customer">
 								Customer
-								<span v-if="sortKey === 'organization_name'">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
-							<th @click="handleSort('asset_type')">
+							</SortableTh>
+							<SortableTh :list="list" sort-key="type">
 								Type
-								<span v-if="sortKey === 'asset_type'">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
-							<th @click="handleSort('asset_name')">
+							</SortableTh>
+							<SortableTh :list="list" sort-key="asset">
 								Asset
-								<span v-if="sortKey === 'asset_name'">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
-							<th @click="handleSort('price')">
+							</SortableTh>
+							<SortableTh :list="list" sort-key="price">
 								Price
-								<span v-if="sortKey === 'price'">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
-							<th @click="handleSort('next_billing')">
+							</SortableTh>
+							<SortableTh :list="list" sort-key="billing">
 								Next Billing
-								<span v-if="sortKey === 'next_billing'">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
-							<th @click="handleSort('status')">
+							</SortableTh>
+							<SortableTh :list="list" sort-key="status">
 								Status
-								<span v-if="sortKey === 'status'">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
+							</SortableTh>
 							<th style="width: 40px"></th>
 						</tr>
 					</thead>
@@ -588,12 +495,9 @@ const formatDate = (dateString: string | null) => {
 					</tbody>
 				</table>
 				<Pagination
-					:current-page="currentPage"
-					:total-pages="totalPages"
-					:rows-per-page="rowsPerPage"
-					@update:rows-per-page="handleRowsPerPageUpdate"
-					@prev="prevPage"
-					@next="nextPage"
+					:list="list"
+					:page="assetList.page.value"
+					:total="assetList.total.value"
 				/>
 			</template>
 		</main>

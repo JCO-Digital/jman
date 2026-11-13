@@ -15,6 +15,8 @@ import type {
 	Asset,
 } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
+import RouteTabs, { type RouteTab } from "../components/RouteTabs.vue";
+import { usePageTitle } from "../composables/usePageTitle";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import EditableInfoCard from "../components/EditableInfoCard.vue";
 import AppIcon from "../components/AppIcon.vue";
@@ -27,6 +29,7 @@ import NotesWidget from "../components/NotesWidget.vue";
 
 const props = defineProps<{
 	id: string;
+	tab?: string;
 }>();
 
 const router = useRouter();
@@ -164,9 +167,35 @@ const handleDeleteContact = async (id: number) => {
 	}
 };
 
-const goBack = () => {
-	router.push({ name: "organizations" });
-};
+type Tab = "overview" | "sites" | "assets";
+
+// /organization/<id>[/<tab>]. The tabs replace the history entry, so the
+// back link returns to the list the organization was opened from.
+const tabs = computed<RouteTab[]>(() => {
+	const to = (tab: Tab) => ({
+		name: "organization-detail",
+		params: { id: props.id, tab: tab === "overview" ? "" : tab },
+	});
+	return [
+		{ key: "overview", label: "Overview", to: to("overview") },
+		{
+			key: "sites",
+			label: `Sites (${linkedSites.value.length})`,
+			to: to("sites"),
+		},
+		{
+			key: "assets",
+			label: `Assets (${orgAssets.value.length})`,
+			to: to("assets"),
+		},
+	];
+});
+
+const activeTab = computed<Tab>(() =>
+	props.tab === "sites" || props.tab === "assets" ? props.tab : "overview",
+);
+
+usePageTitle(() => organization.value?.name);
 
 const handleDeleteOrganization = async () => {
 	if (
@@ -363,8 +392,8 @@ const sitesAudit = computed(() => {
 <template>
 	<div class="view-container">
 		<ViewHeader
-			:title="organization?.name || 'Organization Details'"
-			:back-button="{ text: 'Back to Organizations', onClick: goBack }"
+			:title="organization?.name || 'Organization'"
+			:back="{ label: 'Organizations', to: { name: 'organizations' } }"
 		>
 			<template #actions>
 				<button
@@ -374,6 +403,14 @@ const sitesAudit = computed(() => {
 					Delete Organization
 				</button>
 			</template>
+			<template v-if="organization" #tabs>
+				<RouteTabs
+					:tabs="tabs"
+					:active="activeTab"
+					label="Organization sections"
+					replace
+				/>
+			</template>
 		</ViewHeader>
 
 		<div v-if="error" class="error-banner">
@@ -382,490 +419,564 @@ const sitesAudit = computed(() => {
 		</div>
 
 		<main v-if="organization" class="content">
-			<div class="card-group">
-				<EditableInfoCard
-					title="Organization Information"
-					:items="organizationInfoItems"
-					:editable="authStore.canEdit"
-					:on-save="handleSaveOrganization"
-				/>
-				<div v-if="organization?.created_by" class="card-footer-audit">
-					Created by
-					{{ userStore.resolveDisplayName(organization.created_by) }}
-					on {{ formatAuditDate(organization.created_at) }}.<template
-						v-if="isModified(organization)"
-					>
-						Last edited by
-						{{
-							userStore.resolveDisplayName(
-								organization.updated_by,
-							)
-						}}
-						on {{ formatAuditDate(organization.updated_at) }}.
-					</template>
-				</div>
-			</div>
+			<template v-if="activeTab === 'overview'">
+				<div class="detail-layout detail-aside-first">
+					<aside class="detail-aside">
+						<div class="card-group">
+							<EditableInfoCard
+								title="Organization Information"
+								:items="organizationInfoItems"
+								:editable="authStore.canEdit"
+								:on-save="handleSaveOrganization"
+							/>
+							<div
+								v-if="organization?.created_by"
+								class="card-footer-audit"
+							>
+								Created by
+								{{
+									userStore.resolveDisplayName(
+										organization.created_by,
+									)
+								}}
+								on
+								{{
+									formatAuditDate(organization.created_at)
+								}}.<template v-if="isModified(organization)">
+									Last edited by
+									{{
+										userStore.resolveDisplayName(
+											organization.updated_by,
+										)
+									}}
+									on
+									{{
+										formatAuditDate(
+											organization.updated_at,
+										)
+									}}.
+								</template>
+							</div>
+						</div>
 
-			<div class="card-group">
-				<NotesWidget
-					parent-type="Organization"
-					:parent-id="organizationId"
-				/>
-			</div>
-
-			<div class="card-group">
-				<section class="card">
-					<div class="card-header">
-						<h2>Contacts ({{ contacts.length }})</h2>
-						<button
-							v-if="authStore.canEdit"
-							class="btn btn-primary btn-sm"
-							@click="openAddContact"
-						>
-							Add Contact
-						</button>
-					</div>
-
-					<div class="table-container">
-						<table class="data-table hide-col-3-sm hide-col-4-sm">
-							<thead>
-								<tr>
-									<th>Name</th>
-									<th>Type</th>
-									<th>Email</th>
-									<th>Phone</th>
-									<th
+						<div class="card-group">
+							<NotesWidget
+								parent-type="Organization"
+								:parent-id="organizationId"
+							/>
+						</div>
+					</aside>
+					<div class="detail-main">
+						<div class="card-group">
+							<section class="card">
+								<div class="card-header">
+									<h2>Contacts ({{ contacts.length }})</h2>
+									<button
 										v-if="authStore.canEdit"
-										class="text-right"
-									></th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-if="contacts.length === 0">
-									<td colspan="5" class="empty-state">
-										No contacts found for this organization.
-									</td>
-								</tr>
-								<tr
-									v-for="contact in contacts"
-									:key="contact.id"
-								>
-									<td class="font-medium">
-										{{ contact.name }}
-									</td>
-									<td>
-										<span
-											:class="[
-												'status-badge',
-												'badge-sm',
-												contact.type.toLowerCase(),
-											]"
+										class="btn btn-primary btn-sm"
+										@click="openAddContact"
+									>
+										Add Contact
+									</button>
+								</div>
+
+								<div class="table-container">
+									<table
+										class="data-table hide-col-3-sm hide-col-4-sm"
+									>
+										<thead>
+											<tr>
+												<th>Name</th>
+												<th>Type</th>
+												<th>Email</th>
+												<th>Phone</th>
+												<th
+													v-if="authStore.canEdit"
+													class="text-right"
+												></th>
+											</tr>
+										</thead>
+										<tbody>
+											<tr v-if="contacts.length === 0">
+												<td
+													colspan="5"
+													class="empty-state"
+												>
+													No contacts found for this
+													organization.
+												</td>
+											</tr>
+											<tr
+												v-for="contact in contacts"
+												:key="contact.id"
+											>
+												<td class="font-medium">
+													{{ contact.name }}
+												</td>
+												<td>
+													<span
+														:class="[
+															'status-badge',
+															'badge-sm',
+															contact.type.toLowerCase(),
+														]"
+													>
+														{{ contact.type }}
+													</span>
+												</td>
+												<td class="text-muted">
+													{{ contact.email || "—" }}
+												</td>
+												<td class="text-muted">
+													{{ contact.phone || "—" }}
+												</td>
+												<td class="text-right">
+													<div
+														class="flex-row gap-2 justify-end"
+													>
+														<button
+															class="icon-btn icon-btn-sm"
+															title="Edit Contact"
+															@click="
+																openEditContact(
+																	contact,
+																)
+															"
+														>
+															<AppIcon
+																name="edit"
+																size="16"
+															/>
+														</button>
+														<button
+															class="icon-btn icon-btn-sm danger"
+															title="Delete Contact"
+															@click="
+																handleDeleteContact(
+																	contact.id,
+																)
+															"
+														>
+															<AppIcon
+																name="trash"
+																size="16"
+															/>
+														</button>
+													</div>
+												</td>
+											</tr>
+										</tbody>
+									</table>
+								</div>
+							</section>
+							<div
+								v-if="contactsAudit?.updated_by"
+								class="card-footer-audit"
+							>
+								<template v-if="isModified(contactsAudit)">
+									Last edited by
+									{{
+										userStore.resolveDisplayName(
+											contactsAudit.updated_by,
+										)
+									}}
+									on
+									{{
+										formatAuditDate(
+											contactsAudit.updated_at,
+										)
+									}}.
+								</template>
+								<template v-else>
+									Created by
+									{{
+										userStore.resolveDisplayName(
+											contactsAudit.created_by,
+										)
+									}}
+									on
+									{{
+										formatAuditDate(
+											contactsAudit.created_at,
+										)
+									}}.
+								</template>
+							</div>
+						</div>
+					</div>
+				</div>
+			</template>
+			<template v-if="activeTab === 'sites'">
+				<div class="card-group">
+					<section class="card">
+						<div class="card-header">
+							<h2>Linked Sites ({{ linkedSites.length }})</h2>
+							<button
+								v-if="authStore.canEdit"
+								class="btn btn-primary btn-sm"
+								@click="showLinkSiteModal = true"
+							>
+								Link Site
+							</button>
+						</div>
+
+						<div class="table-container">
+							<table class="data-table hide-col-2-sm">
+								<thead>
+									<tr>
+										<th>Domain</th>
+										<th>Type</th>
+										<th>PHP</th>
+										<th
+											v-if="authStore.canEdit"
+											class="text-right"
+										></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr v-if="linkedSites.length === 0">
+										<td
+											:colspan="authStore.canEdit ? 4 : 3"
+											class="empty-state"
 										>
-											{{ contact.type }}
-										</span>
-									</td>
-									<td class="text-muted">
-										{{ contact.email || "—" }}
-									</td>
-									<td class="text-muted">
-										{{ contact.phone || "—" }}
-									</td>
-									<td class="text-right">
-										<div class="flex-row gap-2 justify-end">
-											<button
-												class="icon-btn icon-btn-sm"
-												title="Edit Contact"
-												@click="
-													openEditContact(contact)
+											No sites linked to this
+											organization.
+										</td>
+									</tr>
+									<tr
+										v-for="site in linkedSites"
+										:key="site.id"
+									>
+										<td>
+											<a
+												href="#"
+												class="site-link font-medium"
+												@click.prevent="
+													goToSite(site.id)
 												"
 											>
-												<AppIcon
-													name="edit"
-													size="16"
-												/>
-											</button>
-											<button
-												class="icon-btn icon-btn-sm danger"
-												title="Delete Contact"
-												@click="
-													handleDeleteContact(
-														contact.id,
-													)
-												"
-											>
-												<AppIcon
-													name="trash"
-													size="16"
-												/>
-											</button>
-										</div>
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</section>
-				<div v-if="contactsAudit?.updated_by" class="card-footer-audit">
-					<template v-if="isModified(contactsAudit)">
-						Last edited by
-						{{
-							userStore.resolveDisplayName(
-								contactsAudit.updated_by,
-							)
-						}}
-						on {{ formatAuditDate(contactsAudit.updated_at) }}.
-					</template>
-					<template v-else>
-						Created by
-						{{
-							userStore.resolveDisplayName(
-								contactsAudit.created_by,
-							)
-						}}
-						on {{ formatAuditDate(contactsAudit.created_at) }}.
-					</template>
-				</div>
-			</div>
-
-			<div class="card-group">
-				<section class="card">
-					<div class="card-header">
-						<h2>Linked Sites ({{ linkedSites.length }})</h2>
-						<button
-							v-if="authStore.canEdit"
-							class="btn btn-primary btn-sm"
-							@click="showLinkSiteModal = true"
-						>
-							Link Site
-						</button>
-					</div>
-
-					<div class="table-container">
-						<table class="data-table hide-col-2-sm">
-							<thead>
-								<tr>
-									<th>Domain</th>
-									<th>Type</th>
-									<th>PHP</th>
-									<th
-										v-if="authStore.canEdit"
-										class="text-right"
-									></th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-if="linkedSites.length === 0">
-									<td
-										:colspan="authStore.canEdit ? 4 : 3"
-										class="empty-state"
-									>
-										No sites linked to this organization.
-									</td>
-								</tr>
-								<tr v-for="site in linkedSites" :key="site.id">
-									<td>
-										<a
-											href="#"
-											class="site-link font-medium"
-											@click.prevent="goToSite(site.id)"
-										>
-											{{ site.domain }}
-										</a>
-									</td>
-									<td>
-										<span
-											class="status-badge badge-sm"
-											:class="
-												site.is_wordpress
-													? 'info'
-													: 'default'
-											"
-										>
-											{{
-												site.is_wordpress
-													? "WordPress"
-													: "App"
-											}}
-										</span>
-									</td>
-									<td class="text-muted">
-										{{ site.php_version }}
-									</td>
-									<td
-										v-if="authStore.canEdit"
-										class="text-right"
-									>
-										<div class="flex-row gap-2 justify-end">
-											<button
-												class="icon-btn icon-btn-sm danger"
-												title="Unlink Site"
-												@click="
-													handleUnlinkSite(site.id)
-												"
-											>
-												<AppIcon
-													name="trash"
-													size="16"
-												/>
-											</button>
-										</div>
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</section>
-				<div v-if="sitesAudit?.updated_by" class="card-footer-audit">
-					<template v-if="isModified(sitesAudit)">
-						Last edited by
-						{{
-							userStore.resolveDisplayName(sitesAudit.updated_by)
-						}}
-						on {{ formatAuditDate(sitesAudit.updated_at) }}.
-					</template>
-					<template v-else>
-						Created by
-						{{
-							userStore.resolveDisplayName(sitesAudit.created_by)
-						}}
-						on {{ formatAuditDate(sitesAudit.created_at) }}.
-					</template>
-				</div>
-			</div>
-
-			<div class="card-group">
-				<section class="card">
-					<div class="card-header">
-						<h2>Assets & Services ({{ orgAssets.length }})</h2>
-						<button
-							v-if="authStore.canEdit"
-							class="btn btn-primary btn-sm"
-							@click="openAddAsset"
-						>
-							Link Asset
-						</button>
-					</div>
-
-					<div class="table-container">
-						<table class="data-table">
-							<thead>
-								<tr>
-									<th>Asset</th>
-									<th>Identifier</th>
-									<th>Price</th>
-									<th>Frequency</th>
-									<th>Next Billing</th>
-									<th>Status</th>
-									<th
-										v-if="authStore.canEdit"
-										class="text-right"
-									></th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr v-if="orgAssets.length === 0">
-									<td
-										:colspan="authStore.canEdit ? 7 : 6"
-										class="empty-state"
-									>
-										No assets linked to this organization.
-									</td>
-								</tr>
-								<tr v-for="oa in orgAssets" :key="oa.id">
-									<td>
-										<strong>{{
-											oa.asset?.name ||
-											oa.asset_name ||
-											oa.identifier ||
-											"Custom Asset"
-										}}</strong>
-										<div
-											v-if="oa.site_id != null"
-											class="sub-text"
-										>
-											Linked to:
-											{{
-												linkedSites.find(
-													(s) => s.id === oa.site_id,
-												)?.domain || "Unknown Site"
-											}}
-										</div>
-										<div
-											v-if="
-												oa.license_key ||
-												oa.asset_license_key
-											"
-											class="sub-text text-muted"
-											style="
-												margin-top: 4px;
-												display: flex;
-												align-items: center;
-												gap: 6px;
-											"
-										>
+												{{ site.domain }}
+											</a>
+										</td>
+										<td>
 											<span
-												>Key:
-												<code
-													style="
-														font-family: monospace;
-													"
-													>{{
-														revealedKeys[oa.id]
-															? oa.license_key ||
-																oa.asset_license_key
-															: "••••••••••••••••"
-													}}</code
-												></span
-											>
-											<button
-												type="button"
-												class="icon-btn icon-btn-sm"
-												:title="
-													revealedKeys[oa.id]
-														? 'Hide'
-														: 'Reveal'
-												"
-												@click="toggleReveal(oa.id)"
-												style="
-													padding: 2px 4px;
-													display: inline-flex;
+												class="status-badge badge-sm"
+												:class="
+													site.is_wordpress
+														? 'info'
+														: 'default'
 												"
 											>
-												<AppIcon
-													:name="
-														revealedKeys[oa.id]
-															? 'eye-off'
-															: 'eye'
-													"
-													size="14"
-												/>
-											</button>
-											<button
-												type="button"
-												class="icon-btn icon-btn-sm"
-												title="Copy Key"
-												@click="
-													copyKey(
-														oa.license_key ||
-															oa.asset_license_key ||
-															'',
-													)
-												"
-												style="
-													padding: 2px 4px;
-													display: inline-flex;
-												"
-											>
-												<AppIcon
-													name="copy"
-													size="14"
-												/>
-											</button>
-										</div>
-									</td>
-									<td>{{ oa.identifier }}</td>
-									<td>{{ formatCurrency(oa.price) }}</td>
-									<td>{{ oa.billing_freq }}</td>
-									<td>{{ formatDate(oa.next_billing) }}</td>
-									<td>
-										<span
-											:class="['status-badge', oa.status]"
+												{{
+													site.is_wordpress
+														? "WordPress"
+														: "App"
+												}}
+											</span>
+										</td>
+										<td class="text-muted">
+											{{ site.php_version }}
+										</td>
+										<td
+											v-if="authStore.canEdit"
+											class="text-right"
 										>
-											{{ oa.status }}
-										</span>
-									</td>
-									<td
-										v-if="authStore.canEdit"
-										class="text-right"
-									>
-										<div class="flex-row gap-2 justify-end">
-											<button
-												class="icon-btn icon-btn-sm"
-												title="Edit Asset"
-												@click="openEditAsset(oa)"
+											<div
+												class="flex-row gap-2 justify-end"
 											>
-												<AppIcon
-													name="edit"
-													size="16"
-												/>
-											</button>
-											<button
-												class="icon-btn icon-btn-sm"
-												title="Record Payment"
-												@click="openPaymentModal(oa)"
-											>
-												<AppIcon
-													name="credit-card"
-													size="16"
-												/>
-											</button>
-											<button
-												class="icon-btn icon-btn-sm danger"
-												title="Unlink Asset"
-												@click="
-													handleUnlinkAsset(oa.id)
-												"
-											>
-												<AppIcon
-													name="trash"
-													size="16"
-												/>
-											</button>
-										</div>
-									</td>
-								</tr>
-							</tbody>
-						</table>
+												<button
+													class="icon-btn icon-btn-sm danger"
+													title="Unlink Site"
+													@click="
+														handleUnlinkSite(
+															site.id,
+														)
+													"
+												>
+													<AppIcon
+														name="trash"
+														size="16"
+													/>
+												</button>
+											</div>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+					<div
+						v-if="sitesAudit?.updated_by"
+						class="card-footer-audit"
+					>
+						<template v-if="isModified(sitesAudit)">
+							Last edited by
+							{{
+								userStore.resolveDisplayName(
+									sitesAudit.updated_by,
+								)
+							}}
+							on {{ formatAuditDate(sitesAudit.updated_at) }}.
+						</template>
+						<template v-else>
+							Created by
+							{{
+								userStore.resolveDisplayName(
+									sitesAudit.created_by,
+								)
+							}}
+							on {{ formatAuditDate(sitesAudit.created_at) }}.
+						</template>
 					</div>
-				</section>
-			</div>
+				</div>
+			</template>
+			<template v-if="activeTab === 'assets'">
+				<div class="card-group">
+					<section class="card">
+						<div class="card-header">
+							<h2>Assets & Services ({{ orgAssets.length }})</h2>
+							<button
+								v-if="authStore.canEdit"
+								class="btn btn-primary btn-sm"
+								@click="openAddAsset"
+							>
+								Link Asset
+							</button>
+						</div>
 
-			<div v-if="unlinkedPlugins.length > 0" class="card-group">
-				<section class="card">
-					<div class="card-header">
-						<h2>Plugin Audit</h2>
-						<span class="unlinked-count"
-							>{{ unlinkedPlugins.length }} Potential Assets</span
-						>
-					</div>
-					<div class="table-container">
-						<table class="data-table">
-							<thead>
-								<tr>
-									<th>Site</th>
-									<th>Plugin</th>
-									<th
-										v-if="authStore.canEdit"
-										class="text-right"
-									></th>
-								</tr>
-							</thead>
-							<tbody>
-								<tr
-									v-for="(p, idx) in unlinkedPlugins"
-									:key="idx"
-								>
-									<td>{{ p.site.domain }}</td>
-									<td>
-										<strong>{{ p.pluginName }}</strong>
-									</td>
-									<td
-										v-if="authStore.canEdit"
-										class="text-right"
-									>
-										<button
-											class="btn btn-primary btn-sm"
-											@click="convertToAsset(p)"
+						<div class="table-container">
+							<table class="data-table">
+								<thead>
+									<tr>
+										<th>Asset</th>
+										<th>Identifier</th>
+										<th>Price</th>
+										<th>Frequency</th>
+										<th>Next Billing</th>
+										<th>Status</th>
+										<th
+											v-if="authStore.canEdit"
+											class="text-right"
+										></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr v-if="orgAssets.length === 0">
+										<td
+											:colspan="authStore.canEdit ? 7 : 6"
+											class="empty-state"
 										>
-											Convert to Asset
-										</button>
-									</td>
-								</tr>
-							</tbody>
-						</table>
-					</div>
-				</section>
-			</div>
+											No assets linked to this
+											organization.
+										</td>
+									</tr>
+									<tr v-for="oa in orgAssets" :key="oa.id">
+										<td>
+											<strong>{{
+												oa.asset?.name ||
+												oa.asset_name ||
+												oa.identifier ||
+												"Custom Asset"
+											}}</strong>
+											<div
+												v-if="oa.site_id != null"
+												class="sub-text"
+											>
+												Linked to:
+												{{
+													linkedSites.find(
+														(s) =>
+															s.id === oa.site_id,
+													)?.domain || "Unknown Site"
+												}}
+											</div>
+											<div
+												v-if="
+													oa.license_key ||
+													oa.asset_license_key
+												"
+												class="sub-text text-muted"
+												style="
+													margin-top: 4px;
+													display: flex;
+													align-items: center;
+													gap: 6px;
+												"
+											>
+												<span
+													>Key:
+													<code
+														style="
+															font-family: monospace;
+														"
+														>{{
+															revealedKeys[oa.id]
+																? oa.license_key ||
+																	oa.asset_license_key
+																: "••••••••••••••••"
+														}}</code
+													></span
+												>
+												<button
+													type="button"
+													class="icon-btn icon-btn-sm"
+													:title="
+														revealedKeys[oa.id]
+															? 'Hide'
+															: 'Reveal'
+													"
+													@click="toggleReveal(oa.id)"
+													style="
+														padding: 2px 4px;
+														display: inline-flex;
+													"
+												>
+													<AppIcon
+														:name="
+															revealedKeys[oa.id]
+																? 'eye-off'
+																: 'eye'
+														"
+														size="14"
+													/>
+												</button>
+												<button
+													type="button"
+													class="icon-btn icon-btn-sm"
+													title="Copy Key"
+													@click="
+														copyKey(
+															oa.license_key ||
+																oa.asset_license_key ||
+																'',
+														)
+													"
+													style="
+														padding: 2px 4px;
+														display: inline-flex;
+													"
+												>
+													<AppIcon
+														name="copy"
+														size="14"
+													/>
+												</button>
+											</div>
+										</td>
+										<td>{{ oa.identifier }}</td>
+										<td>{{ formatCurrency(oa.price) }}</td>
+										<td>{{ oa.billing_freq }}</td>
+										<td>
+											{{ formatDate(oa.next_billing) }}
+										</td>
+										<td>
+											<span
+												:class="[
+													'status-badge',
+													oa.status,
+												]"
+											>
+												{{ oa.status }}
+											</span>
+										</td>
+										<td
+											v-if="authStore.canEdit"
+											class="text-right"
+										>
+											<div
+												class="flex-row gap-2 justify-end"
+											>
+												<button
+													class="icon-btn icon-btn-sm"
+													title="Edit Asset"
+													@click="openEditAsset(oa)"
+												>
+													<AppIcon
+														name="edit"
+														size="16"
+													/>
+												</button>
+												<button
+													class="icon-btn icon-btn-sm"
+													title="Record Payment"
+													@click="
+														openPaymentModal(oa)
+													"
+												>
+													<AppIcon
+														name="credit-card"
+														size="16"
+													/>
+												</button>
+												<button
+													class="icon-btn icon-btn-sm danger"
+													title="Unlink Asset"
+													@click="
+														handleUnlinkAsset(oa.id)
+													"
+												>
+													<AppIcon
+														name="trash"
+														size="16"
+													/>
+												</button>
+											</div>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+				</div>
+
+				<div v-if="unlinkedPlugins.length > 0" class="card-group">
+					<section class="card">
+						<div class="card-header">
+							<h2>Plugin Audit</h2>
+							<span class="unlinked-count"
+								>{{ unlinkedPlugins.length }} Potential
+								Assets</span
+							>
+						</div>
+						<div class="table-container">
+							<table class="data-table">
+								<thead>
+									<tr>
+										<th>Site</th>
+										<th>Plugin</th>
+										<th
+											v-if="authStore.canEdit"
+											class="text-right"
+										></th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr
+										v-for="(p, idx) in unlinkedPlugins"
+										:key="idx"
+									>
+										<td>{{ p.site.domain }}</td>
+										<td>
+											<strong>{{ p.pluginName }}</strong>
+										</td>
+										<td
+											v-if="authStore.canEdit"
+											class="text-right"
+										>
+											<button
+												class="btn btn-primary btn-sm"
+												@click="convertToAsset(p)"
+											>
+												Convert to Asset
+											</button>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+				</div>
+			</template>
 		</main>
 
 		<main v-else-if="isLoading" class="content">

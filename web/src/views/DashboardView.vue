@@ -83,6 +83,14 @@ onMounted(() => {
 	organizationStore.fetchOrganizations();
 	taskStore.fetchTasks();
 });
+
+// How much of the widget grid a widget takes: the stat tiles a full row,
+// the vulnerability table two columns (the row when there are only two).
+const WIDGET_SIZES: Partial<Record<DashboardWidgetType, string>> = {
+	stats: "widget-full",
+	vulnerabilities: "widget-wide",
+};
+const widgetSize = (id: DashboardWidgetType) => WIDGET_SIZES[id] ?? "";
 </script>
 
 <template>
@@ -128,12 +136,12 @@ onMounted(() => {
 			</div>
 		</div>
 
-		<main class="dashboard-widgets">
+		<main class="dashboard-widgets" :class="{ 'is-editing': isEditMode }">
 			<div
 				v-for="(widgetId, index) in layout"
 				:key="widgetId"
 				class="widget-container"
-				:class="{ 'is-editing': isEditMode }"
+				:class="[widgetSize(widgetId), { 'is-editing': isEditMode }]"
 				:draggable="isEditMode"
 				@dragstart="onDragStart(index)"
 				@dragover="onDragOver"
@@ -164,13 +172,6 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.dashboard-widgets {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-6);
-	margin-top: var(--space-6);
-}
-
 .widget-container {
 	position: relative;
 	transition: all 0.2s ease;

@@ -9,7 +9,8 @@ items may soft-link to those functional entities (`site_id`/`server_id`).
 
 The billing feature (organizations → assets/payments) is a separate concept
 that used to own the `/inventory` web route and `/api/assets*` endpoints;
-those moved to `/billing` to make room for this system.
+those moved to `/billing` (now `/assets` in the web UI) to make room for
+this system.
 
 ## Core model
 
@@ -265,8 +266,8 @@ UTF-8, else as Windows-1252.
 
 ## Web UI
 
-- Billing moved to `/billing*` routes and `/api/billing/*` endpoints; the nav
-  label stays "Assets".
+- Billing's web pages are under `/assets*` (formerly `/billing*`, which
+  redirects) and its endpoints under `/api/billing/*`.
 - The **list** (`/inventory`) looks like the site list: search, a type
   dropdown and an expiry dropdown, a sortable table and pagination. Its state
   is in the URL, `/inventory[/<type|all>[/<page>[/<rowsPerPage>]]]` with

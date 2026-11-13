@@ -1,60 +1,69 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { ref, onMounted, watch } from "vue";
+import { RouterLink, useRouter } from "vue-router";
 import { useOrganizationStore } from "../stores/organization";
 import { useDataStore } from "../stores/data";
 import { useAuthStore } from "../stores/auth";
 import ViewHeader from "../components/ViewHeader.vue";
+import ListToolbar from "../components/ListToolbar.vue";
+import SortableTh from "../components/SortableTh.vue";
+import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import AppIcon from "../components/AppIcon.vue";
+import { useListState } from "../composables/useListState";
+import { useClientList } from "../composables/useClientList";
 
 const router = useRouter();
 const organizationStore = useOrganizationStore();
 const dataStore = useDataStore();
 const authStore = useAuthStore();
 
-const searchQuery = ref("");
-let searchTimeout: number | null = null;
+// /organizations?q=&sort=&dir=&page=&per=
+const list = useListState({
+	sortKeys: ["name", "sites"],
+	defaultSort: "name",
+	descFirst: ["sites"],
+});
+
 let abortController: AbortController | null = null;
 
-onMounted(async () => {
-	await organizationStore.fetchOrganizations();
+// The search runs on the server; a newer search cancels an older one.
+const load = async () => {
+	abortController?.abort();
+	abortController = new AbortController();
+	try {
+		await organizationStore.fetchOrganizations(
+			list.query.value,
+			abortController.signal,
+		);
+		organizationStore.organizations.forEach((org) => {
+			organizationStore.fetchOrganizationSites(org.id);
+		});
+	} catch (e: unknown) {
+		if ((e as Error).name !== "AbortError") {
+			console.error("Search failed", e);
+		}
+	}
+};
+
+onMounted(() => {
+	load();
 	dataStore.initData();
-	organizationStore.organizations.forEach((org) => {
-		organizationStore.fetchOrganizationSites(org.id);
-	});
 });
+watch(list.query, load);
 
 const getLinkedSites = (orgId: number) => {
 	return dataStore.enrichedSites.filter((s) => s.organization_id === orgId);
 };
 
-const handleSearch = () => {
-	if (searchTimeout) {
-		clearTimeout(searchTimeout);
-	}
-
-	searchTimeout = window.setTimeout(async () => {
-		if (abortController) {
-			abortController.abort();
-		}
-		abortController = new AbortController();
-
-		try {
-			await organizationStore.fetchOrganizations(
-				searchQuery.value,
-				abortController.signal,
-			);
-			organizationStore.organizations.forEach((org) => {
-				organizationStore.fetchOrganizationSites(org.id);
-			});
-		} catch (e: any) {
-			if (e.name !== "AbortError") {
-				console.error("Search failed", e);
-			}
-		}
-	}, 300);
-};
+const organizations = useClientList(
+	() => organizationStore.organizations,
+	list,
+	{
+		sortValue: (org, key) =>
+			key === "name" ? org.name : getLinkedSites(org.id).length,
+	},
+);
 
 const goToOrganization = (id: number) => {
 	router.push({ name: "organization-detail", params: { id: id.toString() } });
@@ -73,7 +82,7 @@ const handleCreateOrganization = async () => {
 		await organizationStore.createOrganization(newOrganization.value);
 		showCreateModal.value = false;
 		newOrganization.value = { name: "", vat_number: "", info: "" };
-		organizationStore.fetchOrganizations(searchQuery.value);
+		load();
 	} catch (e) {
 		console.error("Failed to create organization:", e);
 	}
@@ -88,29 +97,27 @@ const handleCreateOrganization = async () => {
 			<p><strong>Error:</strong> {{ organizationStore.error }}</p>
 		</div>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search organizations by name or VAT..."
-				class="search-input"
-				@input="handleSearch"
-			/>
-			<button
-				v-if="authStore.canEdit"
-				class="btn btn-primary"
-				@click="showCreateModal = true"
-			>
-				Add Organization
-			</button>
-		</div>
+		<ListToolbar
+			:list="list"
+			placeholder="Search organizations by name or VAT"
+		>
+			<template v-if="authStore.canEdit" #actions>
+				<button class="btn btn-primary" @click="showCreateModal = true">
+					Add Organization
+				</button>
+			</template>
+		</ListToolbar>
 
 		<main class="table-container">
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>Name</th>
-						<th>Linked Sites</th>
+						<SortableTh :list="list" sort-key="name"
+							>Name</SortableTh
+						>
+						<SortableTh :list="list" sort-key="sites">
+							Linked Sites
+						</SortableTh>
 						<th class="text-right"></th>
 					</tr>
 				</thead>
@@ -131,24 +138,32 @@ const handleCreateOrganization = async () => {
 						v-else-if="organizationStore.organizations.length === 0"
 					>
 						<td colspan="3" class="empty-state">
-							<span v-if="searchQuery"
+							<span v-if="list.query.value"
 								>No organizations found matching "{{
-									searchQuery
+									list.query.value
 								}}".</span
 							>
 							<span v-else>No organizations available.</span>
 						</td>
 					</tr>
 					<tr
-						v-for="organization in organizationStore.organizations"
+						v-for="organization in organizations.pageItems.value"
 						:key="organization.id"
 						class="clickable-row"
 						@click="goToOrganization(organization.id)"
 					>
 						<td>
-							<strong :title="organization.info ?? undefined">{{
-								organization.name
-							}}</strong>
+							<RouterLink
+								:to="{
+									name: 'organization-detail',
+									params: { id: organization.id },
+								}"
+								class="row-link font-semibold"
+								:title="organization.info ?? undefined"
+								@click.stop
+							>
+								{{ organization.name }}
+							</RouterLink>
 						</td>
 						<td>
 							<div class="flex-row gap-1 font-sm">
@@ -194,6 +209,11 @@ const handleCreateOrganization = async () => {
 					</tr>
 				</tbody>
 			</table>
+			<Pagination
+				:list="list"
+				:page="organizations.page.value"
+				:total="organizations.total.value"
+			/>
 		</main>
 
 		<!-- Create Modal -->

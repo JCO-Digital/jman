@@ -45,7 +45,7 @@ const stats = computed(() => [
 		label: "Vulnerabilities",
 		value: dataStore.activeVulnerabilities.length,
 		icon: "vulnerability",
-		link: "/plugins", // Linking to plugins as vulnerabilities are plugin-based
+		link: "/monitoring/vulnerabilities",
 		isError: dataStore.activeVulnerabilities.length > 0,
 		loading: dataStore.isVulnsLoading,
 	},

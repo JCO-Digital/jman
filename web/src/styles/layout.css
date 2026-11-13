@@ -1,12 +1,16 @@
 /* Main Layout Container */
+/* The page's width comes from its route (meta.width): see shell.css. */
 .view-container {
-	max-width: 1200px;
-	width: 95%;
+	max-width: var(--page-max);
+	width: 100%;
 	margin: 0 auto;
-	padding: 20px;
+	padding: var(--space-6) var(--space-8);
+
+	@media (max-width: 1280px) {
+		padding: var(--space-5) var(--space-6);
+	}
 
 	@media (max-width: 640px) {
-		width: 100%;
 		padding: 12px 8px;
 	}
 }
@@ -22,261 +26,102 @@
 	}
 }
 
-/* App Shell (Main Navigation and Container) */
-.app-container {
-	min-height: 100vh;
-	width: 100%;
+/* Detail pages: a main column (tables, history) and, when the page area is
+   wide enough, an aside beside it (info cards, notes, links). Narrower,
+   the aside follows the main column. */
+.detail-layout {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-6);
+	align-items: start;
+
+	@container page (min-width: 1200px) {
+		grid-template-columns: minmax(0, 1fr) minmax(340px, 440px);
+	}
+
+	@media (max-width: 640px) {
+		gap: var(--space-4);
+	}
+}
+
+/* The aside goes first in the markup when it should lead on narrow
+   screens too (e.g. a plugin's info), and is placed right when wide. */
+.detail-aside-first {
+	@container page (min-width: 1200px) {
+		& > .detail-aside {
+			grid-column: 2;
+			grid-row: 1;
+		}
+	}
+}
+
+.detail-main,
+.detail-aside {
 	display: flex;
 	flex-direction: column;
+	gap: var(--space-6);
+	min-width: 0;
 
-	& .main-content {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
+	/* The column's gap spaces the cards. */
+	& > .mt-4 {
+		margin-top: 0;
 	}
 
-	& .app-nav {
-		background-color: var(--bg-card);
-		border-bottom: 1px solid var(--border-color);
-		padding: 0 20px;
-
-		@media (max-width: 900px) {
-			position: sticky;
-			top: 0;
-			z-index: var(--z-nav);
-			padding: 0 8px;
-		}
-
-		& .nav-container {
-			max-width: 1200px;
-			margin: 0 auto;
-			display: flex;
-			gap: 24px;
-		}
-
-		& .desktop-nav {
-			@media (max-width: 900px) {
-				display: none;
-			}
-		}
-
-		& .nav-item {
-			padding: 16px 4px;
-			color: var(--text-muted);
-			text-decoration: none;
-			font-weight: 500;
-			font-size: 14px;
-			border-bottom: 2px solid transparent;
-			transition: all 0.2s ease;
-
-			&:hover {
-				color: var(--text-main);
-			}
-
-			&.active {
-				color: var(--primary);
-				border-bottom-color: var(--primary);
-			}
-
-			&.nav-item-with-badge {
-				display: inline-flex;
-				align-items: center;
-				gap: 6px;
-			}
-		}
-
-		& .nav-badge {
-			background: var(--error-border);
-			color: var(--primary-text);
-			font-size: 11px;
-			font-weight: 700;
-			padding: 1px 6px;
-			border-radius: 999px;
-			line-height: 1.2;
-		}
-
-		/* Mobile top bar */
-		& .mobile-bar {
-			display: none;
-			align-items: center;
-			justify-content: space-between;
-			gap: 8px;
-			height: 48px;
-
-			@media (max-width: 900px) {
-				display: flex;
-			}
-		}
-
-		& .mobile-bar-title {
-			flex: 1;
-			font-weight: 600;
-			font-size: 16px;
-			color: var(--text-heading);
-			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
-		}
-
-		& .menu-toggle {
-			position: relative;
-		}
-
-		& .menu-toggle-dot {
-			position: absolute;
-			top: 6px;
-			right: 6px;
-			width: 8px;
-			height: 8px;
-			border-radius: 50%;
-			background: var(--error-border);
-			border: 1px solid var(--bg-card);
-		}
+	@media (max-width: 640px) {
+		gap: var(--space-4);
 	}
+}
 
-	/* Mobile drawer */
-	& .nav-backdrop {
-		position: fixed;
-		inset: 0;
-		background: rgba(0, 0, 0, 0.5);
-		z-index: var(--z-nav-drawer);
-	}
-
-	& .nav-drawer {
-		position: fixed;
-		top: 0;
-		left: 0;
-		bottom: 0;
-		width: min(280px, 85vw);
-		background: var(--bg-card);
-		border-right: 1px solid var(--border-color);
-		z-index: var(--z-nav-drawer);
-		display: flex;
-		flex-direction: column;
-		overflow-y: auto;
-		box-shadow: 4px 0 16px rgba(0, 0, 0, 0.15);
-	}
-
-	& .nav-drawer-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 8px 8px 8px 16px;
-		height: 48px;
-		border-bottom: 1px solid var(--border-color);
-	}
-
-	& .nav-drawer-title {
-		font-weight: 700;
-		font-size: 16px;
-		color: var(--text-heading);
-	}
-
-	& .nav-drawer-links {
-		display: flex;
-		flex-direction: column;
-		padding: 8px 0;
-	}
-
-	& .nav-drawer-item {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 12px 16px;
-		color: var(--text-main);
-		font-weight: 500;
-		font-size: 15px;
-		border-left: 3px solid transparent;
-		text-decoration: none;
-
-		&:hover {
-			background-color: var(--bg-hover);
-			text-decoration: none;
+/* Beside the main column the aside is narrow, so two-column helpers in
+   it stack, and info grids use narrower columns (two fit). */
+.detail-aside {
+	@container page (min-width: 1200px) {
+		& .grid-2-cols {
+			grid-template-columns: minmax(0, 1fr);
 		}
 
-		&.active {
-			color: var(--primary);
-			border-left-color: var(--primary);
-			background-color: var(--bg-hover);
-		}
-	}
-
-	& .nav-drawer-divider {
-		height: 1px;
-		background: var(--border-color);
-		margin: 8px 0;
-	}
-
-	& .nav-drawer-footer {
-		margin-top: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		padding: 16px;
-		border-top: 1px solid var(--border-color);
-	}
-
-	/* Shown when 2FA is missing and the session's level was downgraded */
-	& .nav-user.restricted {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		font-size: 14px;
-		font-weight: 500;
-		color: var(--warning-text);
-		text-decoration: none;
-	}
-
-	& .nav-restricted-notice {
-		display: flex;
-		align-items: flex-start;
-		gap: 8px;
-		padding: 8px 10px;
-		border-left: 3px solid var(--warning-border);
-		background-color: var(--warning-bg);
-		color: var(--warning-text);
-		font-size: 13px;
-		text-decoration: none;
-
-		& svg {
-			flex-shrink: 0;
-			margin-top: 1px;
-		}
-	}
-
-	& .app-footer {
-		margin-top: auto;
-		padding: 1rem;
-		text-align: center;
-		font-size: 0.875rem;
-		color: var(--text-muted);
-
-		@media (max-width: 900px) {
-			display: none;
+		& .info-grid {
+			grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 		}
 	}
 }
 
-body.nav-open {
-	overflow: hidden;
-}
+/* The dashboard's widgets: one column, two when there is room, three on
+   wide screens. A widget can span the row (.widget-full) or two columns
+   when there are three (.widget-wide, the full row when there are two). */
+.dashboard-widgets {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: var(--space-6);
+	align-items: start;
 
-.nav-slide-enter-active,
-.nav-slide-leave-active {
-	transition: transform 0.2s ease;
-}
-.nav-slide-enter-from,
-.nav-slide-leave-to {
-	transform: translateX(-100%);
-}
+	@container page (min-width: 1100px) {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		/* Fills the gaps a full-row widget leaves; not while dragging,
+		   where the order on screen must follow the layout's. */
+		&:not(.is-editing) {
+			grid-auto-flow: row dense;
+		}
+	}
 
-.nav-fade-enter-active,
-.nav-fade-leave-active {
-	transition: opacity 0.2s ease;
-}
-.nav-fade-enter-from,
-.nav-fade-leave-to {
-	opacity: 0;
+	@container page (min-width: 1700px) {
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+	}
+
+	@media (max-width: 640px) {
+		gap: var(--space-4);
+	}
+
+	& > .widget-full,
+	& > .widget-wide {
+		grid-column: 1 / -1;
+	}
+
+	@container page (min-width: 1700px) {
+		& > .widget-wide {
+			grid-column: span 2;
+		}
+	}
 }
 
 /* Flex Grid Utilities */

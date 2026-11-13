@@ -1,20 +1,22 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import { usePaymentMethodsStore } from "../../stores/paymentMethods";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import type { PaymentMethod, PaymentMethodType } from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
+import ListToolbar from "../../components/ListToolbar.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { useListState } from "../../composables/useListState";
+import { useClientList } from "../../composables/useClientList";
 
 const paymentMethodsStore = usePaymentMethodsStore();
 const authStore = useAuthStore();
 const toast = useToastStore();
 const { confirm } = useConfirm();
 
-const searchQuery = ref("");
 const showModal = ref(false);
 const editingMethod = ref<PaymentMethod | null>(null);
 
@@ -26,15 +28,21 @@ const pmForm = ref({
 
 const typeOptions: PaymentMethodType[] = ["Buy", "Sell"];
 
-const filteredMethods = computed(() => {
-	if (!searchQuery.value) return paymentMethodsStore.paymentMethods;
-	const query = searchQuery.value.toLowerCase();
-	return paymentMethodsStore.paymentMethods.filter(
-		(pm) =>
-			pm.name.toLowerCase().includes(query) ||
-			pm.type.toLowerCase().includes(query),
-	);
+// /billing/payment-methods?q=&type=Buy|Sell
+const list = useListState({
+	sortKeys: ["name"],
+	defaultSort: "name",
+	filters: { type: typeOptions },
 });
+
+const methods = useClientList(() => paymentMethodsStore.paymentMethods, list, {
+	search: (pm, q) =>
+		pm.name.toLowerCase().includes(q) || pm.type.toLowerCase().includes(q),
+	filter: (pm) =>
+		!list.filters.value.type || pm.type === list.filters.value.type,
+	sortValue: (pm) => pm.name,
+});
+const filteredMethods = methods.sorted;
 
 const loadPaymentMethods = async () => {
 	await paymentMethodsStore.fetchPaymentMethods();
@@ -145,14 +153,26 @@ const isExpiringSoon = (pm: PaymentMethod) => {
 			</template>
 		</ViewHeader>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search payment methods by name or type..."
-				class="search-input"
-			/>
-		</div>
+		<ListToolbar
+			:list="list"
+			placeholder="Search payment methods by name or type"
+		>
+			<select
+				:value="list.filters.value.type"
+				aria-label="Type"
+				@change="
+					list.setFilter(
+						'type',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
+			>
+				<option value="">Buy and sell</option>
+				<option v-for="t in typeOptions" :key="t" :value="t">
+					{{ t }}
+				</option>
+			</select>
+		</ListToolbar>
 
 		<main class="content">
 			<div

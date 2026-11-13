@@ -102,7 +102,7 @@ function since(iso: string): string {
 			<ul v-if="uptimeTop.length" class="area-items">
 				<li v-for="inc in uptimeTop" :key="inc.id">
 					<RouterLink
-						:to="{ path: '/monitoring', query: { tab: 'uptime' } }"
+						:to="{ name: 'monitoring', params: { area: 'uptime' } }"
 						class="item-link"
 					>
 						<span class="font-medium">{{ inc.domain }}</span>
@@ -127,7 +127,7 @@ function since(iso: string): string {
 			</p>
 			<footer class="area-foot">
 				<RouterLink
-					:to="{ path: '/monitoring', query: { tab: 'uptime' } }"
+					:to="{ name: 'monitoring', params: { area: 'uptime' } }"
 					class="btn btn-text btn-sm"
 				>
 					Open Uptime →
@@ -150,8 +150,9 @@ function since(iso: string): string {
 				<li v-for="inc in securityTop" :key="inc.id">
 					<RouterLink
 						:to="{
-							path: '/monitoring',
-							query: { tab: 'security', incident: inc.id },
+							name: 'monitoring',
+							params: { area: 'security' },
+							query: { incident: inc.id },
 						}"
 						class="item-link"
 					>
@@ -178,7 +179,7 @@ function since(iso: string): string {
 			</p>
 			<footer class="area-foot">
 				<RouterLink
-					:to="{ path: '/monitoring', query: { tab: 'security' } }"
+					:to="{ name: 'monitoring', params: { area: 'security' } }"
 					class="btn btn-text btn-sm"
 				>
 					Open Security →
@@ -206,8 +207,8 @@ function since(iso: string): string {
 				>
 					<RouterLink
 						:to="{
-							path: '/monitoring',
-							query: { tab: 'vulnerabilities' },
+							name: 'monitoring',
+							params: { area: 'vulnerabilities' },
 						}"
 						class="item-link"
 					>
@@ -249,8 +250,8 @@ function since(iso: string): string {
 			<footer class="area-foot">
 				<RouterLink
 					:to="{
-						path: '/monitoring',
-						query: { tab: 'vulnerabilities' },
+						name: 'monitoring',
+						params: { area: 'vulnerabilities' },
 					}"
 					class="btn btn-text btn-sm"
 				>

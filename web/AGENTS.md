@@ -16,7 +16,9 @@ Styles are modularized into specific files within `src/styles/`. Avoid a monolit
 
 - `variables.css`: Global CSS custom properties (colors, spacing, z-index).
 - `base.css`: HTML resets, base element styles (input, select, a), and generic text utilities.
-- `layout.css`: Layout containers (`view-container`, `grid-2-cols`), flex helpers, and app shell styles.
+- `layout.css`: Layout containers (`view-container`, `grid-2-cols`) and flex helpers.
+- `lists.css`: List toolbars, sortable headers, filter chips and pagination.
+- `shell.css`: The app shell: sidebar (collapsible rail, mobile drawer), top bar with breadcrumbs, user menu, and page widths.
 - `components.css`: Shared component styles (buttons, cards, tables, badges, tabs, accordions).
 - `modals.css`: Standardized modal overlay and content styles.
 - `auth.css`: Styles specific to the login and authentication flow.
@@ -28,7 +30,7 @@ Styles are modularized into specific files within `src/styles/`. Avoid a monolit
 
 - **Colors**: Use `var(--primary)`, `var(--text-main)`, `var(--bg-card)`, etc.
 - **State**: Use status variables like `var(--error-text)`, `var(--badge-active-bg)`.
-- **Dark Mode**: Support is handled automatically through these variables via `@media (prefers-color-scheme: dark)`.
+- **Dark Mode**: Color variables are `light-dark(<light>, <dark>)` pairs in `variables.css`. They follow the system, or the theme chosen in the user menu (`html[data-theme]`, `composables/useTheme.ts`). Give new colors both values there; don't add `prefers-color-scheme` media queries. Code that draws colors itself (charts on a canvas) reads them with `cssColor()` and redraws when `useTheme().isDark` changes.
 
 ## 3. Location of Styles
 
@@ -46,13 +48,33 @@ Use existing class structures to ensure UI consistency:
 - **Badges**: Use `.status-badge` with state classes (`.active`, `.error`, `.info`, `.badge-sm`).
 - **Modals**: Use `.modal-overlay` and `.modal-content.card`. Use `.modal-header` with `.modal-close`.
 
-## 5. Responsive Utilities
+## 5. Navigation and Page Width
+
+- The sidebar is defined as data in `src/navigation.ts` (groups and items). Add new sections there, not in `AppSidebar.vue`.
+- Every route sets `meta.nav` to the sidebar item it belongs to; this drives the active item, the breadcrumbs and `document.title`. Pages under a section (a detail view) also set `meta.title`.
+- `meta.width` sets how wide the page's `.view-container` may grow: `wide` for lists and dashboards, the default for detail pages, `narrow` for forms. Views must not set their own `max-width`.
+- A page's tabs and sections are routes, not `?tab=` queries or local state: path params (`/site/:id/:tab?`, `/monitoring/:area?/:section?`, `/settings/:tab?`) with the default left out. Render them with `RouteTabs` in `ViewHeader`'s `#tabs` slot. A detail page's tabs use `replace`, so its back link still finds the list it came from. When renaming a route, add a redirect for the old URL (Slack messages and bookmarks link to them).
+- Detail pages pass `back` to `ViewHeader` (`{ label, to }`). It goes back in history when the previous entry is that list, so the list returns with its search, sort and page; otherwise it opens `to`. Use `useBackLink` for other ways back (e.g. after a delete).
+- Detail pages lay out their content with `.detail-layout`: `.detail-main` for tables and activity, `.detail-aside` for info cards, notes and links. The aside sits beside the main column when the page area (the `page` size container) is at least 1200px wide, and below it otherwise; add `.detail-aside-first` and put the aside first in the markup when it should lead on narrow screens. Use `@container page (...)` rather than viewport media queries for layout inside a page, since the sidebar takes a varying share of the window.
+- The quick-jump (`CommandPalette`, Ctrl+K / ⌘K) lists sites, plugins, organizations and pages. When adding a section or sub-page worth jumping to, add it to its page list.
+- Detail pages name themselves with `usePageTitle(() => item.value?.name)`, which the breadcrumbs and the browser tab use.
+
+## 6. Lists
+
+Every list view uses the shared list system, so search, sort, filters and paging behave and look the same everywhere:
+
+- `useListState` (`src/composables/useListState.ts`) keeps the state in the query string: `?q=&sort=&dir=&page=&per=` plus the list's declared filters. Defaults are left out, and query keys the list doesn't manage (e.g. `?task=`, `?site=`) are kept. Don't keep list state in local refs or in path params.
+- `useClientList` searches, filters, sorts and pages items held in memory. For a search that runs on the server, watch `list.query` and fetch, and leave out the `search` option.
+- Render with `ListToolbar` (search, filter selects and `.filter-chip` toggles in the default slot, actions in `#actions`), `SortableTh` for sortable headers, and `Pagination` under the table.
+- Give the row's main cell a `RouterLink` with `.row-link` and `@click.stop`, so it opens in a new tab with a middle click.
+
+## 7. Responsive Utilities
 
 - Use `.hide-mobile` and `.show-mobile` for simple toggling.
 - Use responsive table utilities like `.hide-col-3-sm` to drop less important columns on small screens.
 - Prefer CSS Grid (`.grid-2-cols`) and Flexbox over fixed widths.
 
-## 6. CSS Nesting
+## 8. CSS Nesting
 
 The project uses modern CSS nesting. You can nest selectors inside their parents to improve readability:
 
@@ -65,7 +87,7 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 }
 ```
 
-## 7. Icons
+## 9. Icons
 
 **DO NOT** use inline SVGs in components or views. Use the `<AppIcon>` component.
 
@@ -74,13 +96,13 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 - Usage: `<AppIcon name="settings" size="18" />`.
 - To add a new icon: create `src/components/icons/IconMyIcon.vue` with the SVG markup and register it in the `iconMap` in `AppIcon.vue`.
 
-## 8. API Documentation
+## 10. API Documentation
 
 For information regarding backend API endpoints, payloads, and authentication, refer to the official API specification:
 
 - [API Specification (API_SPECS.md)](https://github.com/JCO-Digital/jman/blob/main/docs/API_SPECS.md)
 
-## 9. Code Design & Architecture
+## 11. Code Design & Architecture
 
 The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 
@@ -122,7 +144,7 @@ The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 
 When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.
 
-## 10. Intentional Design Decisions
+## 12. Intentional Design Decisions
 
 This section documents choices that look like mistakes but are deliberate. Do not "fix" them without understanding the rationale.
 

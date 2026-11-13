@@ -43,7 +43,7 @@ const patched = computed(() =>
 			</span>
 			<router-link
 				v-if="authStore.canEdit"
-				:to="{ name: 'settings', query: { tab: 'backports' } }"
+				:to="{ name: 'settings', params: { tab: 'backports' } }"
 				class="font-xs"
 			>
 				Manage rules

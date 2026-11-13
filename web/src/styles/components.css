@@ -41,6 +41,16 @@
 	flex-direction: column;
 	align-items: flex-start;
 	gap: 4px;
+	min-width: 0;
+
+	& h1 {
+		overflow-wrap: anywhere;
+	}
+}
+
+.header-subtitle {
+	color: var(--text-muted);
+	font-size: 14px;
 }
 
 /* Cards */
@@ -293,14 +303,6 @@
 		white-space: nowrap;
 	}
 
-	&.sortable th {
-		cursor: pointer;
-
-		&:hover {
-			background-color: var(--bg-hover);
-		}
-	}
-
 	& .clickable-row {
 		cursor: pointer;
 
@@ -412,28 +414,6 @@
 }
 
 /* Forms & Controls */
-.controls {
-	display: flex;
-	gap: 16px;
-	margin-bottom: 24px;
-	align-items: center;
-	flex-wrap: wrap;
-
-	@media (max-width: 640px) {
-		flex-direction: column;
-		align-items: stretch;
-	}
-}
-
-.search-input {
-	flex: 1;
-	max-width: 400px;
-
-	@media (max-width: 640px) {
-		max-width: none;
-	}
-}
-
 .form-group {
 	display: flex;
 	flex-direction: column;
@@ -603,76 +583,60 @@
 
 /* Status badges for contact types */
 .status-badge.main {
-	background-color: rgba(59, 130, 246, 0.1);
-	color: #3b82f6;
+	background-color: light-dark(
+		rgba(59, 130, 246, 0.1),
+		rgba(59, 130, 246, 0.2)
+	);
+	color: light-dark(#3b82f6, #60a5fa);
 }
 
 .status-badge.technical {
-	background-color: rgba(16, 185, 129, 0.1);
-	color: #10b981;
+	background-color: light-dark(
+		rgba(16, 185, 129, 0.1),
+		rgba(16, 185, 129, 0.2)
+	);
+	color: light-dark(#10b981, #34d399);
 }
 
 .status-badge.billing {
-	background-color: rgba(245, 158, 11, 0.1);
-	color: #f59e0b;
+	background-color: light-dark(
+		rgba(245, 158, 11, 0.1),
+		rgba(245, 158, 11, 0.2)
+	);
+	color: light-dark(#f59e0b, #fbbf24);
 }
 
 /* Status badges for site environment classification */
 .status-badge.production {
-	background-color: rgba(16, 185, 129, 0.1);
-	color: #10b981;
+	background-color: light-dark(
+		rgba(16, 185, 129, 0.1),
+		rgba(16, 185, 129, 0.2)
+	);
+	color: light-dark(#10b981, #34d399);
 }
 
 .status-badge.staging {
-	background-color: rgba(245, 158, 11, 0.1);
-	color: #f59e0b;
+	background-color: light-dark(
+		rgba(245, 158, 11, 0.1),
+		rgba(245, 158, 11, 0.2)
+	);
+	color: light-dark(#f59e0b, #fbbf24);
 }
 
 .status-badge.development {
-	background-color: rgba(107, 114, 128, 0.1);
-	color: #6b7280;
+	background-color: light-dark(
+		rgba(107, 114, 128, 0.1),
+		rgba(107, 114, 128, 0.2)
+	);
+	color: light-dark(#6b7280, #9ca3af);
 }
 
 .status-badge.archived {
-	background-color: rgba(100, 116, 139, 0.1);
-	color: #64748b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.status-badge.main {
-		background-color: rgba(59, 130, 246, 0.2);
-		color: #60a5fa;
-	}
-
-	.status-badge.technical {
-		background-color: rgba(16, 185, 129, 0.2);
-		color: #34d399;
-	}
-
-	.status-badge.billing {
-		background-color: rgba(245, 158, 11, 0.2);
-		color: #fbbf24;
-	}
-
-	.status-badge.production {
-		background-color: rgba(16, 185, 129, 0.2);
-		color: #34d399;
-	}
-
-	.status-badge.staging {
-		background-color: rgba(245, 158, 11, 0.2);
-		color: #fbbf24;
-	}
-
-	.status-badge.development {
-		background-color: rgba(107, 114, 128, 0.2);
-		color: #9ca3af;
-	}
-
-	.status-badge.archived {
-		background-color: rgba(100, 116, 139, 0.2);
-		color: #94a3b8;
-	}
+	background-color: light-dark(
+		rgba(100, 116, 139, 0.1),
+		rgba(100, 116, 139, 0.2)
+	);
+	color: light-dark(#64748b, #94a3b8);
 }
 
 /* Audit & Meta Info */
@@ -801,6 +765,63 @@
 	}
 }
 
+/* Routed tabs (RouteTabs): the sections of a page, as links. They sit
+   under the page header (its #tabs slot), above the section's content. */
+.route-tabs {
+	display: flex;
+	gap: var(--space-1);
+	margin-bottom: var(--space-6);
+	border-bottom: 1px solid var(--border-color);
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	scrollbar-width: none;
+
+	@media (max-width: 640px) {
+		margin-bottom: var(--space-4);
+	}
+}
+
+.route-tab {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-2);
+	padding: var(--space-3) var(--space-4);
+	margin-bottom: -1px;
+	border-bottom: 2px solid transparent;
+	color: var(--text-muted);
+	font-size: 14px;
+	font-weight: 500;
+	text-decoration: none;
+	white-space: nowrap;
+
+	&:hover {
+		color: var(--text-heading);
+		text-decoration: none;
+	}
+
+	&.active {
+		color: var(--primary);
+		border-bottom-color: var(--primary);
+	}
+
+	@media (max-width: 640px) {
+		padding: var(--space-2) var(--space-3);
+	}
+}
+
+.tab-badge {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 20px;
+	padding: 1px 7px;
+	border-radius: 999px;
+	font-size: 11px;
+	font-weight: 700;
+	background: var(--error-border);
+	color: var(--primary-text);
+}
+
 /* Form Helpers */
 .readonly-value {
 	padding: 10px 12px;
@@ -851,18 +872,6 @@
 
 	@media (max-width: 640px) {
 		flex-direction: column;
-	}
-}
-
-.status-select {
-	width: 180px;
-	padding: 0.625rem;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 0.875rem;
-
-	@media (max-width: 640px) {
-		width: 100%;
 	}
 }
 

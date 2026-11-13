@@ -7,7 +7,11 @@ import { exportReportToCsv } from "../../utils/csvExport";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
+import SortableTh from "../../components/SortableTh.vue";
 import Pagination from "../../components/Pagination.vue";
+import { useListState } from "../../composables/useListState";
+import { useClientList } from "../../composables/useClientList";
+import { usePageTitle } from "../../composables/usePageTitle";
 
 const props = defineProps<{
 	id: string;
@@ -24,12 +28,8 @@ const result = ref<ReportResult | null>(null);
 const isRunning = ref(false);
 const error = ref<string | null>(null);
 
-const sortKey = ref<string | null>(null);
-const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(1);
-const rowsPerPage = ref(50);
-
 const report = computed(() => reportsStore.getReport(props.id));
+usePageTitle(() => report.value?.name);
 const hasDateRange = computed(
 	() => report.value?.params.some((p) => p.type === "daterange") ?? false,
 );
@@ -83,8 +83,8 @@ const runReport = async () => {
 			end: end.value,
 			...selectValues.value,
 		});
-		sortKey.value = null;
-		currentPage.value = 1;
+		// A new result starts unsorted, on the first page.
+		router.replace(list.location({ sort: "", page: 1 }));
 	} catch (e: any) {
 		error.value = e.message;
 		result.value = null;
@@ -93,54 +93,17 @@ const runReport = async () => {
 	}
 };
 
-const handleSort = (key: string) => {
-	if (sortKey.value === key) {
-		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
-	} else {
-		sortKey.value = key;
-		sortOrder.value = "asc";
-	}
-	currentPage.value = 1;
-};
-
-const sortedRows = computed(() => {
-	const rows = result.value?.rows ?? [];
-	const key = sortKey.value;
-	if (!key) return rows;
-
-	return [...rows].sort((a, b) => {
-		let valA: string | number = a[key] ?? "";
-		let valB: string | number = b[key] ?? "";
-		if (typeof valA === "string") valA = valA.toLowerCase();
-		if (typeof valB === "string") valB = valB.toLowerCase();
-
-		if (valA < valB) return sortOrder.value === "asc" ? -1 : 1;
-		if (valA > valB) return sortOrder.value === "asc" ? 1 : -1;
-		return 0;
-	});
+// The sort and page are in the URL (?sort=&dir=&page=&per=), like other
+// lists. The sortable columns are the result's; unsorted keeps the rows in
+// the report's own order.
+const list = useListState<string>({
+	sortKeys: () => result.value?.columns.map((c) => c.key) ?? [],
+	defaultSort: "",
 });
 
-const totalPages = computed(
-	() => Math.ceil(sortedRows.value.length / rowsPerPage.value) || 1,
-);
-
-const paginatedRows = computed(() => {
-	const startIndex = (currentPage.value - 1) * rowsPerPage.value;
-	return sortedRows.value.slice(startIndex, startIndex + rowsPerPage.value);
+const rows = useClientList(() => result.value?.rows ?? [], list, {
+	sortValue: (row, key) => row[key],
 });
-
-const prevPage = () => {
-	if (currentPage.value > 1) currentPage.value--;
-};
-
-const nextPage = () => {
-	if (currentPage.value < totalPages.value) currentPage.value++;
-};
-
-const handleRowsPerPageUpdate = (newRowsPerPage: number) => {
-	rowsPerPage.value = newRowsPerPage;
-	currentPage.value = 1;
-};
 
 const handleExport = () => {
 	if (!result.value) return;
@@ -171,17 +134,13 @@ const formatCell = (value: unknown, type: string) => {
 	}
 	return value;
 };
-
-const goBack = () => {
-	router.push({ name: "reports" });
-};
 </script>
 
 <template>
 	<div class="view-container">
 		<ViewHeader
 			:title="report?.name || 'Report'"
-			:back-button="{ text: 'Reports', onClick: goBack }"
+			:back="{ label: 'Reports', to: { name: 'reports' } }"
 		/>
 
 		<div v-if="reportsStore.isLoading && !report" class="loading-container">
@@ -260,19 +219,17 @@ const goBack = () => {
 			</div>
 
 			<main v-else-if="result" class="table-container">
-				<table class="data-table sortable">
+				<table class="data-table">
 					<thead>
 						<tr>
-							<th
+							<SortableTh
 								v-for="col in result.columns"
 								:key="col.key"
-								@click="handleSort(col.key)"
+								:list="list"
+								:sort-key="col.key"
 							>
 								{{ col.label }}
-								<span v-if="sortKey === col.key">{{
-									sortOrder === "asc" ? "↑" : "↓"
-								}}</span>
-							</th>
+							</SortableTh>
 						</tr>
 					</thead>
 					<tbody>
@@ -288,7 +245,10 @@ const goBack = () => {
 								}}
 							</td>
 						</tr>
-						<tr v-for="(row, index) in paginatedRows" :key="index">
+						<tr
+							v-for="(row, index) in rows.pageItems.value"
+							:key="index"
+						>
 							<td v-for="col in result.columns" :key="col.key">
 								{{ formatCell(row[col.key], col.type) }}
 							</td>
@@ -297,12 +257,9 @@ const goBack = () => {
 				</table>
 				<Pagination
 					v-if="result.rows.length > 0"
-					:current-page="currentPage"
-					:total-pages="totalPages"
-					:rows-per-page="rowsPerPage"
-					@update:rows-per-page="handleRowsPerPageUpdate"
-					@prev="prevPage"
-					@next="nextPage"
+					:list="list"
+					:page="rows.page.value"
+					:total="rows.total.value"
 				/>
 			</main>
 		</template>

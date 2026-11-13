@@ -222,7 +222,7 @@ func alertEscalation(id int64) {
 	if rank := config.ScanSlackAlertRank(); rank > 0 && critical >= rank {
 		msg := fmt.Sprintf("🔴 *Security* — incident on *%s* is now critical: %s", inc.Domain, inc.Escalation)
 		if base := strings.TrimSuffix(config.Cfg.WebURL, "/"); base != "" {
-			msg += fmt.Sprintf(" (<%s/monitoring?tab=security&incident=%d|incident #%d>)", base, inc.ID, inc.ID)
+			msg += fmt.Sprintf(" (<%s/monitoring/security?incident=%d|incident #%d>)", base, inc.ID, inc.ID)
 		}
 		if err := slack.SendMessageToChannel(msg, securitySlackChannel(), true); err != nil {
 			verb.LogPrintf(verb.Normal, "Failed to send Slack escalation for %s: %v", inc.Domain, err)
@@ -249,7 +249,7 @@ func securitySlackMessage(inc *models.Incident, findings []models.StoredScanFind
 	}
 	fmt.Fprintf(&b, "🚨 *Security* — %s on *%s*", what, inc.Domain)
 	if base := strings.TrimSuffix(config.Cfg.WebURL, "/"); base != "" {
-		fmt.Fprintf(&b, " (<%s/monitoring?tab=security&incident=%d|incident #%d>)", base, inc.ID, inc.ID)
+		fmt.Fprintf(&b, " (<%s/monitoring/security?incident=%d|incident #%d>)", base, inc.ID, inc.ID)
 	}
 	for i, f := range findings {
 		if i == maxSlackScanFindings {

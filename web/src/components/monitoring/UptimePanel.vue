@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import { useIncidentStore } from "../../stores/incidents";
 import { useMonitorStore } from "../../stores/monitor";
 import { useDataStore } from "../../stores/data";
@@ -10,6 +11,7 @@ import { useRouteSection } from "../../composables/useRouteSection";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import Pagination from "../Pagination.vue";
+import { useListState } from "../../composables/useListState";
 import SectionBar from "./SectionBar.vue";
 import EmptyState from "./EmptyState.vue";
 import MonitorChecksPanel from "./MonitorChecksPanel.vue";
@@ -36,6 +38,7 @@ const authStore = useAuthStore();
 const toastStore = useToastStore();
 const { confirm } = useConfirm();
 
+const router = useRouter();
 const section = useRouteSection(sectionKeys, "incidents");
 const sections = computed<Section<SectionKey>[]>(() => [
 	{
@@ -51,10 +54,10 @@ const sections = computed<Section<SectionKey>[]>(() => [
 const checksPanel = ref<InstanceType<typeof MonitorChecksPanel> | null>(null);
 const rulesPanel = ref<InstanceType<typeof MonitorRulesPanel> | null>(null);
 
-const activePage = ref(1);
-const activeLimit = ref(50);
-const historyPage = ref(1);
-const historyLimit = ref(50);
+// The incidents and history sections each show one server-paged list,
+// whose page is in the URL (?page=&per=) like every list's. Choosing
+// another section drops the page.
+const list = useListState({ sortKeys: [], defaultSort: "" });
 
 // Pause modal state
 const showPauseModal = ref(false);
@@ -74,10 +77,7 @@ onMounted(() => {
 	monitorStore.ensureChecks().catch(() => {});
 });
 
-watch(section, (s) => {
-	if (s === "history") historyPage.value = 1;
-	refresh();
-});
+watch([section, list.page, list.perPage], refresh);
 
 function refresh() {
 	switch (section.value) {
@@ -100,71 +100,30 @@ defineExpose({ refresh });
 
 function loadActiveIncidents() {
 	return incidentStore.fetchActiveIncidents(
-		activePage.value,
-		activeLimit.value,
+		list.page.value,
+		list.perPage.value,
 	);
 }
 
 function loadHistory() {
 	return incidentStore.fetchHistoryIncidents(
-		historyPage.value,
-		historyLimit.value,
+		list.page.value,
+		list.perPage.value,
 	);
-}
-
-const activeTotalPages = computed(() =>
-	Math.max(1, Math.ceil(incidentStore.activeTotal / activeLimit.value)),
-);
-
-function handleActivePrevPage() {
-	if (activePage.value > 1) {
-		activePage.value--;
-		loadActiveIncidents();
-	}
-}
-
-function handleActiveNextPage() {
-	if (activePage.value < activeTotalPages.value) {
-		activePage.value++;
-		loadActiveIncidents();
-	}
-}
-
-function handleActiveRowsPerPageChange(val: number) {
-	activeLimit.value = val;
-	activePage.value = 1;
-	loadActiveIncidents();
 }
 
 // Refetches the current page after an incident leaves the active list, so
 // the next page's rows move up, stepping back if the page is now empty.
 function reloadActiveAfterRemoval() {
-	activePage.value = Math.min(activePage.value, activeTotalPages.value);
-	loadActiveIncidents();
-}
-
-const historyTotalPages = computed(() =>
-	Math.max(1, Math.ceil(incidentStore.historyTotal / historyLimit.value)),
-);
-
-function handlePrevPage() {
-	if (historyPage.value > 1) {
-		historyPage.value--;
-		loadHistory();
+	const lastPage = Math.max(
+		1,
+		Math.ceil(incidentStore.activeTotal / list.perPage.value),
+	);
+	if (list.page.value > lastPage) {
+		router.replace(list.location({ page: lastPage }));
+	} else {
+		loadActiveIncidents();
 	}
-}
-
-function handleNextPage() {
-	if (historyPage.value < historyTotalPages.value) {
-		historyPage.value++;
-		loadHistory();
-	}
-}
-
-function handleRowsPerPageChange(val: number) {
-	historyLimit.value = val;
-	historyPage.value = 1;
-	loadHistory();
 }
 
 function getSiteIdForDomain(domain: string): string | null {
@@ -427,12 +386,9 @@ const canEdit = computed(() => authStore.canEdit);
 
 				<div class="pagination-wrapper">
 					<Pagination
-						:current-page="activePage"
-						:total-pages="activeTotalPages"
-						:rows-per-page="activeLimit"
-						@prev="handleActivePrevPage"
-						@next="handleActiveNextPage"
-						@update:rows-per-page="handleActiveRowsPerPageChange"
+						:list="list"
+						:page="list.page.value"
+						:total="incidentStore.activeTotal"
 					/>
 				</div>
 			</div>
@@ -525,12 +481,9 @@ const canEdit = computed(() => authStore.canEdit);
 
 				<div class="pagination-wrapper">
 					<Pagination
-						:current-page="historyPage"
-						:total-pages="historyTotalPages"
-						:rows-per-page="historyLimit"
-						@prev="handlePrevPage"
-						@next="handleNextPage"
-						@update:rows-per-page="handleRowsPerPageChange"
+						:list="list"
+						:page="list.page.value"
+						:total="incidentStore.historyTotal"
 					/>
 				</div>
 			</div>

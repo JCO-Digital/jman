@@ -17,6 +17,7 @@ import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
 import PluginRowActions from "../components/PluginRowActions.vue";
 import AppIcon from "../components/AppIcon.vue";
 import NotesWidget from "../components/NotesWidget.vue";
+import { usePageTitle } from "../composables/usePageTitle";
 
 const props = defineProps<{
 	name: string;
@@ -169,13 +170,11 @@ async function updateSites(
 	}
 }
 
-const goBack = () => {
-	router.push({ name: "plugins" });
-};
-
 const goToSite = (siteId: string) => {
 	router.push({ name: "site-detail", params: { id: siteId } });
 };
+
+usePageTitle(() => info.value?.name || props.name);
 
 const manageAssetTemplate = () => {
 	router.push({
@@ -188,7 +187,7 @@ const manageAssetTemplate = () => {
 					name: info.value?.name || props.name,
 				}
 			: {
-					search: props.name,
+					q: props.name,
 				},
 	});
 };
@@ -197,8 +196,8 @@ const manageAssetTemplate = () => {
 <template>
 	<div class="view-container">
 		<ViewHeader
-			title="Plugin Details"
-			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
+			:title="info?.name || name"
+			:back="{ label: 'Plugins', to: { name: 'plugins' } }"
 		>
 			<template v-if="authStore.canEdit" #actions>
 				<button
@@ -221,137 +220,162 @@ const manageAssetTemplate = () => {
 			</template>
 		</ViewHeader>
 
-		<main v-if="sitesWithPlugin.length > 0 || info" class="content mt-4">
-			<PluginInfoCard
-				:info="info"
-				:installation-count="sitesWithPlugin.length"
-			/>
+		<main v-if="sitesWithPlugin.length > 0 || info" class="content">
+			<div class="detail-layout detail-aside-first">
+				<aside class="detail-aside">
+					<PluginInfoCard
+						:info="info"
+						:installation-count="sitesWithPlugin.length"
+					/>
 
-			<NotesWidget parent-type="Plugin" :parent-id="name" />
+					<NotesWidget parent-type="Plugin" :parent-id="name" />
+				</aside>
+				<div class="detail-main">
+					<PluginVulnerabilityList
+						v-if="
+							info?.vulnerabilities &&
+							info.vulnerabilities.length > 0
+						"
+						:vulnerabilities="info.vulnerabilities"
+						:slug="name"
+					/>
 
-			<PluginVulnerabilityList
-				v-if="info?.vulnerabilities && info.vulnerabilities.length > 0"
-				:vulnerabilities="info.vulnerabilities"
-				:slug="name"
-			/>
-
-			<section class="card">
-				<div class="card-header">
-					<h2>Installed on Sites</h2>
-					<div v-if="showActions" class="plugin-card-actions">
-						<button
-							class="btn btn-outline btn-sm"
-							:disabled="!!checkProgress"
-							@click="checkForUpdates"
-						>
-							<span
-								v-if="checkProgress"
-								class="spinner spinner-small"
-							></span>
-							{{
-								checkProgress
-									? `Checking ${checkProgress}…`
-									: "Check for updates"
-							}}
-						</button>
-						<button
-							v-if="vulnerableUpdatable.length"
-							class="btn btn-outline btn-sm"
-							@click="updateSites(vulnerableUpdatable, true)"
-						>
-							Update vulnerable ({{ vulnerableUpdatable.length }})
-						</button>
-						<button
-							v-if="updatableSites.length"
-							class="btn btn-primary btn-sm"
-							@click="updateSites(updatableSites, false)"
-						>
-							Update all ({{ updatableSites.length }})
-						</button>
-					</div>
+					<section class="card">
+						<div class="card-header">
+							<h2>Installed on Sites</h2>
+							<div v-if="showActions" class="plugin-card-actions">
+								<button
+									class="btn btn-outline btn-sm"
+									:disabled="!!checkProgress"
+									@click="checkForUpdates"
+								>
+									<span
+										v-if="checkProgress"
+										class="spinner spinner-small"
+									></span>
+									{{
+										checkProgress
+											? `Checking ${checkProgress}…`
+											: "Check for updates"
+									}}
+								</button>
+								<button
+									v-if="vulnerableUpdatable.length"
+									class="btn btn-outline btn-sm"
+									@click="
+										updateSites(vulnerableUpdatable, true)
+									"
+								>
+									Update vulnerable ({{
+										vulnerableUpdatable.length
+									}})
+								</button>
+								<button
+									v-if="updatableSites.length"
+									class="btn btn-primary btn-sm"
+									@click="updateSites(updatableSites, false)"
+								>
+									Update all ({{ updatableSites.length }})
+								</button>
+							</div>
+						</div>
+						<div class="table-container">
+							<table class="data-table">
+								<thead>
+									<tr>
+										<th>Site Domain</th>
+										<th>Version</th>
+										<th>Status</th>
+										<th>Vuln</th>
+										<th
+											v-if="showActions"
+											class="text-right"
+										>
+											Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									<tr
+										v-for="item in sitesWithPlugin"
+										:key="item.site_id"
+										class="clickable-row"
+										@click="goToSite(item.site_id)"
+									>
+										<td class="font-medium">
+											{{ item.site_domain }}
+											<span
+												v-if="item.locked"
+												class="status-badge badge-sm warning"
+												title="Update-locked: fix releases only"
+											>
+												<AppIcon
+													name="lock"
+													size="11"
+												/>
+												Locked
+											</span>
+										</td>
+										<td>
+											{{ item.version }}
+											<span
+												v-if="
+													availablePluginUpdate(item)
+												"
+												class="plugin-update-available"
+												:title="`Update available: ${availablePluginUpdate(item)}`"
+											>
+												→
+												{{
+													availablePluginUpdate(item)
+												}}
+											</span>
+										</td>
+										<td>
+											<span
+												:class="[
+													'status-badge',
+													item.status.toLowerCase(),
+												]"
+											>
+												{{ item.status }}
+											</span>
+										</td>
+										<td>
+											<span
+												v-if="item.isVulnerable"
+												class="status-badge"
+												:class="
+													item.suppressed
+														? 'warning'
+														: 'error'
+												"
+											>
+												{{
+													item.suppressed
+														? "Suppressed"
+														: "Yes"
+												}}
+											</span>
+											<span v-else class="text-muted"
+												>—</span
+											>
+										</td>
+										<td v-if="showActions">
+											<PluginRowActions
+												v-if="item.canManage"
+												:site-id="item.site_id"
+												:site-name="item.site_domain"
+												:plugin="item"
+											/>
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
 				</div>
-				<div class="table-container">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Site Domain</th>
-								<th>Version</th>
-								<th>Status</th>
-								<th>Vuln</th>
-								<th v-if="showActions" class="text-right">
-									Actions
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-for="item in sitesWithPlugin"
-								:key="item.site_id"
-								class="clickable-row"
-								@click="goToSite(item.site_id)"
-							>
-								<td class="font-medium">
-									{{ item.site_domain }}
-									<span
-										v-if="item.locked"
-										class="status-badge badge-sm warning"
-										title="Update-locked: fix releases only"
-									>
-										<AppIcon name="lock" size="11" />
-										Locked
-									</span>
-								</td>
-								<td>
-									{{ item.version }}
-									<span
-										v-if="availablePluginUpdate(item)"
-										class="plugin-update-available"
-										:title="`Update available: ${availablePluginUpdate(item)}`"
-									>
-										→ {{ availablePluginUpdate(item) }}
-									</span>
-								</td>
-								<td>
-									<span
-										:class="[
-											'status-badge',
-											item.status.toLowerCase(),
-										]"
-									>
-										{{ item.status }}
-									</span>
-								</td>
-								<td>
-									<span
-										v-if="item.isVulnerable"
-										class="status-badge"
-										:class="
-											item.suppressed
-												? 'warning'
-												: 'error'
-										"
-									>
-										{{
-											item.suppressed
-												? "Suppressed"
-												: "Yes"
-										}}
-									</span>
-									<span v-else class="text-muted">—</span>
-								</td>
-								<td v-if="showActions">
-									<PluginRowActions
-										v-if="item.canManage"
-										:site-id="item.site_id"
-										:site-name="item.site_domain"
-										:plugin="item"
-									/>
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</section>
+			</div>
 		</main>
 
 		<main v-else class="content mt-4">
@@ -362,7 +386,10 @@ const manageAssetTemplate = () => {
 				/>
 				<div v-else class="empty-state">
 					<p>Plugin details not found.</p>
-					<button class="back-btn mt-4" @click="goBack">
+					<button
+						class="back-btn mt-4"
+						@click="router.push({ name: 'plugins' })"
+					>
 						Go back to plugins
 					</button>
 				</div>
