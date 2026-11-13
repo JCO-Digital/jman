@@ -230,7 +230,7 @@ const handleDelete = async () => {
 		toast.addToast("Failed to delete: " + err, "error");
 		return;
 	}
-	router.push({ name: "inventory" });
+	backToList();
 };
 
 const handleUnlink = async (link: InventoryLinkPayload) => {
@@ -244,6 +244,20 @@ const handleUnlink = async (link: InventoryLinkPayload) => {
 	await load();
 };
 
+// A list URL: /inventory[/<type|all>[/<page>[/<rowsPerPage>]]][?...].
+const LIST_PATH = /^\/inventory(\/[a-z]+)?(\/\d+){0,2}\/?(\?.*)?$/;
+
+// backToList returns to the list the way it was left (type, page, search)
+// when the previous page was the list; otherwise it opens the list.
+const backToList = () => {
+	const back = (window.history.state as { back?: unknown } | null)?.back;
+	if (typeof back === "string" && LIST_PATH.test(back)) {
+		router.back();
+	} else {
+		router.push({ name: "inventory" });
+	}
+};
+
 const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 </script>
 
@@ -253,7 +267,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 			:title="item ? displayName : 'Inventory item'"
 			:back-button="{
 				text: 'Inventory',
-				onClick: () => router.push({ name: 'inventory' }),
+				onClick: backToList,
 			}"
 		>
 			<template #actions>

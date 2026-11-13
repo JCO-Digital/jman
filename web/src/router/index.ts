@@ -96,9 +96,21 @@ const router = createRouter({
 			component: () => import("../views/Assets/PaymentMethodsView.vue"),
 		},
 		{
-			path: "/inventory",
+			// /inventory[/<type|all>[/<page>[/<rowsPerPage>]]]: the type is
+			// lower-case letters, so it matches neither an item's UUID nor
+			// the old numeric billing URLs below, which rank higher anyway.
+			path: "/inventory/:type([a-z]+)?/:page(\\d+)?/:rowsPerPage(\\d+)?",
 			name: "inventory",
 			component: () => import("../views/Inventory/InventoryListView.vue"),
+			props: (route) => ({
+				type: route.params.type || undefined,
+				page: route.params.page
+					? parseInt(route.params.page as string, 10)
+					: undefined,
+				rowsPerPage: route.params.rowsPerPage
+					? parseInt(route.params.rowsPerPage as string, 10)
+					: undefined,
+			}),
 		},
 		// The billing assets used to live under /inventory: keep old
 		// bookmarks working. Item IDs are UUIDs, so these can't be items.
