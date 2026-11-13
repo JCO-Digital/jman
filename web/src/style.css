@@ -3,6 +3,7 @@
 @import "./styles/layout.css";
 @import "./styles/shell.css";
 @import "./styles/components.css";
+@import "./styles/lists.css";
 @import "./styles/modals.css";
 @import "./styles/auth.css";
 @import "./styles/toasts.css";
@@ -37,49 +38,6 @@
 			}
 
 			color: var(--text-heading);
-		}
-	}
-}
-
-/* Pagination Control */
-.pagination {
-	display: flex;
-	justify-content: space-between;
-	align-items: center;
-	padding: 12px 16px;
-	background-color: var(--bg-table-header);
-	border-top: 1px solid var(--border-color);
-	flex-wrap: wrap;
-	gap: 12px;
-
-	& .rows-per-page select {
-		margin-left: 8px;
-		padding: 4px;
-	}
-
-	& .page-controls {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-
-		& button {
-			padding: 6px 12px;
-			border: 1px solid var(--border-input);
-			background-color: var(--bg-card);
-			border-radius: 4px;
-			cursor: pointer;
-			color: var(--text-main);
-			transition: all 0.2s;
-
-			&:hover:not(:disabled) {
-				background-color: var(--bg-hover);
-			}
-
-			&:disabled {
-				background-color: var(--bg-disabled);
-				color: var(--text-disabled);
-				cursor: not-allowed;
-			}
 		}
 	}
 }

@@ -1,4 +1,9 @@
-import { createRouter, createWebHistory } from "vue-router";
+import {
+	createRouter,
+	createWebHistory,
+	type RouteLocationNormalized,
+	type RouteRecordRaw,
+} from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { findNavItem, type NavKey } from "../navigation";
 
@@ -18,6 +23,25 @@ declare module "vue-router" {
 	}
 }
 
+// Lists used to keep the page and rows per page in the path (/sites/2/100);
+// they are in the query now (?page=2&per=100), like the rest of a list's
+// state. These keep the old URLs working.
+function pagingQuery(to: Pick<RouteLocationNormalized, "params" | "query">) {
+	const { page, rowsPerPage } = to.params;
+	return {
+		...to.query,
+		page: page && page !== "1" ? String(page) : undefined,
+		per: rowsPerPage ? String(rowsPerPage) : undefined,
+	};
+}
+
+function legacyPaging(path: string, name: string): RouteRecordRaw {
+	return {
+		path: `${path}/:page(\\d+)/:rowsPerPage(\\d+)?`,
+		redirect: (to) => ({ name, query: pagingQuery(to) }),
+	};
+}
+
 const router = createRouter({
 	history: createWebHistory(import.meta.env.BASE_URL),
 	routes: [
@@ -35,33 +59,19 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/plugins/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			path: "/plugins",
 			name: "plugins",
 			meta: { nav: "plugins", width: "wide" },
 			component: () => import("../views/PluginsView.vue"),
-			props: (route) => ({
-				page: route.params.page
-					? parseInt(route.params.page as string, 10)
-					: undefined,
-				rowsPerPage: route.params.rowsPerPage
-					? parseInt(route.params.rowsPerPage as string, 10)
-					: undefined,
-			}),
 		},
+		legacyPaging("/plugins", "plugins"),
 		{
-			path: "/users/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			path: "/users",
 			name: "users",
 			meta: { nav: "users", width: "wide" },
 			component: () => import("../views/UsersView.vue"),
-			props: (route) => ({
-				page: route.params.page
-					? parseInt(route.params.page as string, 10)
-					: undefined,
-				rowsPerPage: route.params.rowsPerPage
-					? parseInt(route.params.rowsPerPage as string, 10)
-					: undefined,
-			}),
 		},
+		legacyPaging("/users", "users"),
 		{
 			path: "/plugin/:name",
 			name: "plugin-detail",
@@ -70,19 +80,12 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/sites/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			path: "/sites",
 			name: "sites",
 			meta: { nav: "sites", width: "wide" },
 			component: () => import("../views/SitesView.vue"),
-			props: (route) => ({
-				page: route.params.page
-					? parseInt(route.params.page as string, 10)
-					: undefined,
-				rowsPerPage: route.params.rowsPerPage
-					? parseInt(route.params.rowsPerPage as string, 10)
-					: undefined,
-			}),
 		},
+		legacyPaging("/sites", "sites"),
 		{
 			path: "/organizations",
 			name: "organizations",
@@ -97,19 +100,12 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/billing/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			path: "/billing",
 			name: "assets",
 			meta: { nav: "assets", width: "wide" },
 			component: () => import("../views/Assets/AssetsListView.vue"),
-			props: (route) => ({
-				page: route.params.page
-					? parseInt(route.params.page as string, 10)
-					: undefined,
-				rowsPerPage: route.params.rowsPerPage
-					? parseInt(route.params.rowsPerPage as string, 10)
-					: undefined,
-			}),
 		},
+		legacyPaging("/billing", "assets"),
 		{
 			path: "/billing/templates",
 			name: "asset-templates",
@@ -123,21 +119,34 @@ const router = createRouter({
 			component: () => import("../views/Assets/PaymentMethodsView.vue"),
 		},
 		{
-			// /inventory[/<type|all>[/<page>[/<rowsPerPage>]]]: the type is
-			// lower-case letters, so it matches neither an item's UUID nor
-			// the old numeric billing URLs below, which rank higher anyway.
-			path: "/inventory/:type([a-z]+)?/:page(\\d+)?/:rowsPerPage(\\d+)?",
+			// /inventory[/<type>]: the type is lower-case letters, so it
+			// matches neither an item's UUID nor the old numeric billing
+			// URLs below. The rest of the list's state is in the query.
+			path: "/inventory/:type([a-z]+)?",
 			name: "inventory",
 			meta: { nav: "inventory", width: "wide" },
 			component: () => import("../views/Inventory/InventoryListView.vue"),
 			props: (route) => ({
-				type: route.params.type || undefined,
-				page: route.params.page
-					? parseInt(route.params.page as string, 10)
-					: undefined,
-				rowsPerPage: route.params.rowsPerPage
-					? parseInt(route.params.rowsPerPage as string, 10)
-					: undefined,
+				type:
+					route.params.type && route.params.type !== "all"
+						? route.params.type
+						: undefined,
+			}),
+			// The search was ?search= before the lists shared ?q=.
+			beforeEnter: (to) => {
+				if (typeof to.query.search !== "string") return true;
+				const { search, ...query } = to.query;
+				return { ...to, query: { ...query, q: search } };
+			},
+		},
+		{
+			path: "/inventory/:type([a-z]+)/:page(\\d+)/:rowsPerPage(\\d+)?",
+			redirect: (to) => ({
+				name: "inventory",
+				params: {
+					type: to.params.type === "all" ? "" : to.params.type,
+				},
+				query: pagingQuery(to),
 			}),
 		},
 		// The billing assets used to live under /inventory: keep old
@@ -149,7 +158,7 @@ const router = createRouter({
 		},
 		{
 			path: "/inventory/:page(\\d+)/:rowsPerPage(\\d+)?",
-			redirect: (to) => ({ name: "assets", params: to.params }),
+			redirect: (to) => ({ name: "assets", query: pagingQuery(to) }),
 		},
 		{
 			path: "/inventory/:id",

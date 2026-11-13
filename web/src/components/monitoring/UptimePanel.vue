@@ -9,7 +9,7 @@ import { useConfirm } from "../../composables/useConfirm";
 import { useRouteSection } from "../../composables/useRouteSection";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
-import Pagination from "../Pagination.vue";
+import PanelPagination from "./PanelPagination.vue";
 import SectionBar from "./SectionBar.vue";
 import EmptyState from "./EmptyState.vue";
 import MonitorChecksPanel from "./MonitorChecksPanel.vue";
@@ -426,7 +426,7 @@ const canEdit = computed(() => authStore.canEdit);
 				</table>
 
 				<div class="pagination-wrapper">
-					<Pagination
+					<PanelPagination
 						:current-page="activePage"
 						:total-pages="activeTotalPages"
 						:rows-per-page="activeLimit"
@@ -524,7 +524,7 @@ const canEdit = computed(() => authStore.canEdit);
 				</table>
 
 				<div class="pagination-wrapper">
-					<Pagination
+					<PanelPagination
 						:current-page="historyPage"
 						:total-pages="historyTotalPages"
 						:rows-per-page="historyLimit"

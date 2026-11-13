@@ -1,52 +1,55 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { ref, computed, onMounted } from "vue";
+import { RouterLink, useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useIgnoreStore } from "../stores/ignore";
 import { useOrganizationStore } from "../stores/organization";
 import type { EnrichedSite, SiteEnvironment, Organization } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
+import ListToolbar from "../components/ListToolbar.vue";
+import SortableTh from "../components/SortableTh.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
+import { useListState } from "../composables/useListState";
+import { useClientList } from "../composables/useClientList";
 import { formatBytes } from "../utils/format";
-
-const props = defineProps<{
-	page?: number;
-	rowsPerPage?: number;
-}>();
 
 const router = useRouter();
 const dataStore = useDataStore();
 const ignoreStore = useIgnoreStore();
 const organizationStore = useOrganizationStore();
 
-const searchQuery = ref("");
-const filterEnvironment = ref<SiteEnvironment | "unclassified" | "">("");
-const filterMultisite = ref(false);
-const filterFileMods = ref<"" | "enabled" | "disabled">("");
-const sortKey = ref<keyof EnrichedSite>("domain");
-const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(props.page || 1);
-const rowsPerPage = ref(props.rowsPerPage || 50);
+const ENVIRONMENTS = [
+	"production",
+	"staging",
+	"development",
+	"archived",
+	"unclassified",
+] as const;
+
+// /sites?q=&sort=&dir=&page=&per=&env=&multisite=1&filemods=enabled|disabled
+const list = useListState({
+	sortKeys: [
+		"domain",
+		"organization",
+		"server",
+		"environment",
+		"plugins",
+		"vulns",
+	],
+	defaultSort: "domain",
+	descFirst: ["plugins", "vulns"],
+	filters: {
+		env: ENVIRONMENTS,
+		multisite: ["1"],
+		filemods: ["enabled", "disabled"],
+	},
+});
 
 const batchMode = ref(false);
 const selectedSiteIds = ref<Set<string>>(new Set());
 const batchEnvironment = ref<SiteEnvironment | "">("");
 const isApplyingBatch = ref(false);
-
-watch(
-	() => props.page,
-	(newVal) => {
-		currentPage.value = newVal || 1;
-	},
-);
-
-watch(
-	() => props.rowsPerPage,
-	(newVal) => {
-		rowsPerPage.value = newVal || 50;
-	},
-);
 
 onMounted(() => {
 	ignoreStore.fetchIgnoreEntries();
@@ -66,46 +69,9 @@ const getOrganizationName = (orgId?: number) => {
 	return organizationsById.value.get(orgId)?.name || "";
 };
 
-const updateRoute = (page: number, rpp: number) => {
-	router.push({
-		name: "sites",
-		params: {
-			page: page.toString(),
-			rowsPerPage: rpp.toString(),
-		},
-	});
+const toggleFilter = (name: "multisite" | "filemods", value: string) => {
+	list.setFilter(name, list.filters.value[name] === value ? "" : value);
 };
-
-const handleSort = (key: keyof EnrichedSite) => {
-	if (sortKey.value === key) {
-		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
-	} else {
-		sortKey.value = key;
-		sortOrder.value = "asc";
-	}
-};
-
-const toggleFilterMultisite = () => {
-	filterMultisite.value = !filterMultisite.value;
-	updateRoute(1, rowsPerPage.value);
-};
-
-const toggleFilterFileMods = (status: "enabled" | "disabled") => {
-	if (filterFileMods.value === status) {
-		filterFileMods.value = "";
-	} else {
-		filterFileMods.value = status;
-	}
-	updateRoute(1, rowsPerPage.value);
-};
-
-const hasActiveFilters = computed(
-	() =>
-		Boolean(searchQuery.value) ||
-		Boolean(filterEnvironment.value) ||
-		filterMultisite.value ||
-		Boolean(filterFileMods.value),
-);
 
 // The Vulns column counts plugin and WordPress core vulnerabilities.
 function vulnCount(site: EnrichedSite): number {
@@ -134,75 +100,38 @@ function vulnTitle(site: EnrichedSite): string {
 	return `${n} ${n === 1 ? "vulnerability" : "vulnerabilities"}: ${parts.join(", ")}`;
 }
 
-const filteredAndSortedSites = computed(() => {
-	let result = dataStore.enrichedSites;
-
-	if (searchQuery.value) {
-		const query = searchQuery.value.toLowerCase();
-		result = result.filter((site) => {
-			return site.domain.toLowerCase().includes(query);
-		});
-	}
-
-	if (filterEnvironment.value) {
-		result = result.filter((site) =>
-			filterEnvironment.value === "unclassified"
-				? !site.environment
-				: site.environment === filterEnvironment.value,
-		);
-	}
-
-	if (filterMultisite.value) {
-		result = result.filter((site) => site.wp_flags?.is_multisite);
-	}
-
-	if (filterFileMods.value === "enabled") {
-		result = result.filter((site) => !site.wp_flags?.disallow_file_mods);
-	} else if (filterFileMods.value === "disabled") {
-		result = result.filter((site) =>
-			Boolean(site.wp_flags?.disallow_file_mods),
-		);
-	}
-
-	result = [...result].sort((a, b) => {
-		let valA: any = a[sortKey.value];
-		let valB: any = b[sortKey.value];
-
-		if (sortKey.value === "organization_id") {
-			valA = getOrganizationName(a.organization_id).toLowerCase();
-			valB = getOrganizationName(b.organization_id).toLowerCase();
-		} else if (sortKey.value === "server") {
-			valA = a.server.toLowerCase();
-			valB = b.server.toLowerCase();
-		} else if (sortKey.value === "plugins") {
-			valA = a.plugins.length;
-			valB = b.plugins.length;
-		} else if (sortKey.value === "vulnerabilities") {
-			valA = vulnCount(a);
-			valB = vulnCount(b);
-		} else if (typeof valA === "string") {
-			valA = valA.toLowerCase();
-			valB = valB.toLowerCase();
+const sites = useClientList(() => dataStore.enrichedSites, list, {
+	search: (site, q) => site.domain.toLowerCase().includes(q),
+	filter: (site) => {
+		const f = list.filters.value;
+		if (f.env === "unclassified" && site.environment) return false;
+		if (f.env && f.env !== "unclassified" && site.environment !== f.env)
+			return false;
+		if (f.multisite && !site.wp_flags?.is_multisite) return false;
+		const fileModsOff = Boolean(site.wp_flags?.disallow_file_mods);
+		if (f.filemods === "enabled" && fileModsOff) return false;
+		if (f.filemods === "disabled" && !fileModsOff) return false;
+		return true;
+	},
+	sortValue: (site, key) => {
+		switch (key) {
+			case "domain":
+				return site.domain;
+			case "organization":
+				return getOrganizationName(site.organization_id);
+			case "server":
+				return site.server;
+			case "environment":
+				return site.environment;
+			case "plugins":
+				return site.plugins.length;
+			case "vulns":
+				return vulnCount(site);
 		}
-
-		if (valA < valB) return sortOrder.value === "asc" ? -1 : 1;
-		if (valA > valB) return sortOrder.value === "asc" ? 1 : -1;
-		return 0;
-	});
-
-	return result;
+	},
 });
 
-const totalPages = computed(
-	() =>
-		Math.ceil(filteredAndSortedSites.value.length / rowsPerPage.value) || 1,
-);
-
-const paginatedSites = computed(() => {
-	const start = (currentPage.value - 1) * rowsPerPage.value;
-	const end = start + rowsPerPage.value;
-	return filteredAndSortedSites.value.slice(start, end);
-});
+const paginatedSites = sites.pageItems;
 
 const allOnPageSelected = computed(
 	() =>
@@ -251,22 +180,6 @@ const applyBatchEnvironment = async () => {
 	} finally {
 		isApplyingBatch.value = false;
 	}
-};
-
-const prevPage = () => {
-	if (currentPage.value > 1) {
-		updateRoute(currentPage.value - 1, rowsPerPage.value);
-	}
-};
-
-const nextPage = () => {
-	if (currentPage.value < totalPages.value) {
-		updateRoute(currentPage.value + 1, rowsPerPage.value);
-	}
-};
-
-const handleRowsPerPageUpdate = (newRpp: number) => {
-	updateRoute(1, newRpp);
 };
 
 const goToSite = (id: string) => {
@@ -332,71 +245,59 @@ function timeSince(dateString: string) {
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
 		</div>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search sites by name or URL..."
-				class="search-input"
-				@input="updateRoute(1, rowsPerPage)"
-			/>
-
+		<ListToolbar :list="list" placeholder="Search sites by domain">
 			<select
-				v-model="filterEnvironment"
-				@change="updateRoute(1, rowsPerPage)"
+				:value="list.filters.value.env"
+				aria-label="Environment"
+				@change="
+					list.setFilter(
+						'env',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
 			>
-				<option value="">All Environments</option>
+				<option value="">All environments</option>
 				<option value="production">Production</option>
 				<option value="staging">Staging</option>
 				<option value="development">Development</option>
 				<option value="archived">Archived</option>
 				<option value="unclassified">Unclassified</option>
 			</select>
-
-			<div class="btn-group">
-				<button
-					type="button"
-					class="btn"
-					:class="filterMultisite ? 'btn-primary' : 'btn-outline'"
-					@click="toggleFilterMultisite"
-				>
-					Multisite
-				</button>
-				<button
-					type="button"
-					class="btn"
-					:class="
-						filterFileMods === 'enabled'
-							? 'btn-primary'
-							: 'btn-outline'
-					"
-					@click="toggleFilterFileMods('enabled')"
-				>
-					File Mods Enabled
-				</button>
-				<button
-					type="button"
-					class="btn"
-					:class="
-						filterFileMods === 'disabled'
-							? 'btn-primary'
-							: 'btn-outline'
-					"
-					@click="toggleFilterFileMods('disabled')"
-				>
-					File Mods Disabled
-				</button>
-			</div>
-
 			<button
 				type="button"
-				class="btn"
-				:class="batchMode ? 'btn-primary' : 'btn-outline'"
-				@click="toggleBatchMode"
+				class="filter-chip"
+				:aria-pressed="list.filters.value.multisite === '1'"
+				@click="toggleFilter('multisite', '1')"
 			>
-				{{ batchMode ? "Cancel Batch Edit" : "Batch Edit" }}
+				Multisite
 			</button>
-		</div>
+			<button
+				type="button"
+				class="filter-chip"
+				:aria-pressed="list.filters.value.filemods === 'enabled'"
+				@click="toggleFilter('filemods', 'enabled')"
+			>
+				File mods enabled
+			</button>
+			<button
+				type="button"
+				class="filter-chip"
+				:aria-pressed="list.filters.value.filemods === 'disabled'"
+				@click="toggleFilter('filemods', 'disabled')"
+			>
+				File mods disabled
+			</button>
+			<template #actions>
+				<button
+					type="button"
+					class="btn"
+					:class="batchMode ? 'btn-primary' : 'btn-outline'"
+					@click="toggleBatchMode"
+				>
+					{{ batchMode ? "Cancel batch edit" : "Batch edit" }}
+				</button>
+			</template>
+		</ListToolbar>
 
 		<div v-if="batchMode" class="card-muted batch-action-bar">
 			<span class="font-medium"
@@ -419,7 +320,7 @@ function timeSince(dateString: string) {
 		</div>
 
 		<main class="table-container">
-			<table class="data-table sortable">
+			<table class="data-table">
 				<thead>
 					<tr>
 						<th v-if="batchMode" class="col-narrow text-center">
@@ -429,54 +330,48 @@ function timeSince(dateString: string) {
 								@click="toggleSelectAllOnPage"
 							/>
 						</th>
-						<th class="col-expand" @click="handleSort('domain')">
+						<SortableTh
+							:list="list"
+							sort-key="domain"
+							class="col-expand"
+						>
 							Site Name
-							<span v-if="sortKey === 'domain'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="organization"
 							class="col-medium"
-							@click="handleSort('organization_id')"
 						>
 							Organization
-							<span v-if="sortKey === 'organization_id'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th class="col-wide" @click="handleSort('server')">
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="server"
+							class="col-wide"
+						>
 							Server
-							<span v-if="sortKey === 'server'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="environment"
 							class="col-narrow text-center"
-							@click="handleSort('environment')"
 						>
 							Environment
-							<span v-if="sortKey === 'environment'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="plugins"
 							class="col-narrow text-center"
-							@click="handleSort('plugins')"
 						>
 							Plugins
-							<span v-if="sortKey === 'plugins'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="vulns"
 							class="col-narrow text-center"
-							@click="handleSort('vulnerabilities')"
 						>
 							Vulns
-							<span v-if="sortKey === 'vulnerabilities'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
@@ -491,12 +386,12 @@ function timeSince(dateString: string) {
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
 						<td colspan="6" class="empty-state">
-							<span v-if="searchQuery"
+							<span v-if="list.query.value"
 								>No sites found matching "{{
-									searchQuery
+									list.query.value
 								}}".</span
 							>
-							<span v-else-if="hasActiveFilters"
+							<span v-else-if="list.narrowed.value"
 								>No sites found matching the selected
 								filters.</span
 							>
@@ -518,7 +413,18 @@ function timeSince(dateString: string) {
 						</td>
 						<td class="font-medium truncate col-expand">
 							<div class="flex-row gap-2">
-								<span class="truncate">{{ site.domain }}</span>
+								<RouterLink
+									:to="{
+										name: 'site-detail',
+										params: { id: site.id },
+									}"
+									class="row-link truncate"
+									@click.stop="
+										batchMode && $event.preventDefault()
+									"
+								>
+									{{ site.domain }}
+								</RouterLink>
 								<span
 									v-if="site.wp_flags?.is_multisite"
 									class="status-badge badge-sm info"
@@ -636,19 +542,10 @@ function timeSince(dateString: string) {
 			</table>
 
 			<Pagination
-				:current-page="currentPage"
-				:total-pages="totalPages"
-				:rows-per-page="rowsPerPage"
-				@update:rows-per-page="handleRowsPerPageUpdate"
-				@prev="prevPage"
-				@next="nextPage"
+				:list="list"
+				:page="sites.page.value"
+				:total="sites.total.value"
 			/>
 		</main>
 	</div>
 </template>
-
-<style scoped>
-.controls {
-	flex-wrap: wrap;
-}
-</style>

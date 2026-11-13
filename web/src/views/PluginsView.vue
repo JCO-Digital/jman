@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { onMounted } from "vue";
+import { RouterLink, useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useIgnoreStore } from "../stores/ignore";
 import ViewHeader from "../components/ViewHeader.vue";
+import ListToolbar from "../components/ListToolbar.vue";
+import SortableTh from "../components/SortableTh.vue";
 import Pagination from "../components/Pagination.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
-
-const props = defineProps<{
-	page?: number;
-	rowsPerPage?: number;
-}>();
+import { useListState } from "../composables/useListState";
+import { useClientList } from "../composables/useClientList";
 
 const router = useRouter();
 const dataStore = useDataStore();
@@ -20,109 +19,33 @@ onMounted(() => {
 	ignoreStore.fetchIgnoreEntries();
 });
 
-const searchQuery = ref("");
-const sortKey = ref<
-	"name" | "count" | "version" | "author" | "vulnerabilities"
->("name");
-const sortOrder = ref<"asc" | "desc">("asc");
-const currentPage = ref(props.page || 1);
-const rowsPerPage = ref(props.rowsPerPage || 50);
-
-watch(
-	() => props.page,
-	(newVal) => {
-		currentPage.value = newVal || 1;
-	},
-);
-
-watch(
-	() => props.rowsPerPage,
-	(newVal) => {
-		rowsPerPage.value = newVal || 50;
-	},
-);
-
-const updateRoute = (page: number, rpp: number) => {
-	router.push({
-		name: "plugins",
-		params: {
-			page: page.toString(),
-			rowsPerPage: rpp.toString(),
-		},
-	});
-};
-
-const handleSort = (
-	key: "name" | "count" | "version" | "author" | "vulnerabilities",
-) => {
-	if (sortKey.value === key) {
-		sortOrder.value = sortOrder.value === "asc" ? "desc" : "asc";
-	} else {
-		sortKey.value = key;
-		sortOrder.value = "asc";
-	}
-};
-
-const uniquePlugins = computed(() => {
-	let filtered = [...dataStore.enrichedPlugins];
-
-	if (searchQuery.value) {
-		const query = searchQuery.value.toLowerCase();
-		filtered = filtered.filter(
-			(p) =>
-				p.name.toLowerCase().includes(query) ||
-				p.slug.toLowerCase().includes(query) ||
-				p.author.toLowerCase().includes(query),
-		);
-	}
-
-	filtered.sort((a, b) => {
-		let valA: any = (a as any)[sortKey.value];
-		let valB: any = (b as any)[sortKey.value];
-
-		if (sortKey.value === "vulnerabilities") {
-			valA = (valA as any[]).length;
-			valB = (valB as any[]).length;
-		}
-
-		if (typeof valA === "string") {
-			valA = valA.toLowerCase();
-			valB = valB.toLowerCase();
-		}
-
-		if (valA < valB) return sortOrder.value === "asc" ? -1 : 1;
-		if (valA > valB) return sortOrder.value === "asc" ? 1 : -1;
-		return 0;
-	});
-
-	return filtered;
+// /plugins?q=&sort=&dir=&page=&per=
+const list = useListState({
+	sortKeys: ["name", "version", "author", "sites", "vulns"],
+	defaultSort: "name",
+	descFirst: ["sites", "vulns"],
 });
 
-const totalPages = computed(
-	() => Math.ceil(uniquePlugins.value.length / rowsPerPage.value) || 1,
-);
-
-const paginatedPlugins = computed(() => {
-	const start = (currentPage.value - 1) * rowsPerPage.value;
-	const end = start + rowsPerPage.value;
-	return uniquePlugins.value.slice(start, end);
+const plugins = useClientList(() => dataStore.enrichedPlugins, list, {
+	search: (p, q) =>
+		p.name.toLowerCase().includes(q) ||
+		p.slug.toLowerCase().includes(q) ||
+		p.author.toLowerCase().includes(q),
+	sortValue: (p, key) => {
+		switch (key) {
+			case "name":
+				return p.name;
+			case "version":
+				return p.version;
+			case "author":
+				return p.author;
+			case "sites":
+				return p.count;
+			case "vulns":
+				return p.vulnerabilities.length;
+		}
+	},
 });
-
-const prevPage = () => {
-	if (currentPage.value > 1) {
-		updateRoute(currentPage.value - 1, rowsPerPage.value);
-	}
-};
-
-const nextPage = () => {
-	if (currentPage.value < totalPages.value) {
-		updateRoute(currentPage.value + 1, rowsPerPage.value);
-	}
-};
-
-const handleRowsPerPageUpdate = (newRpp: number) => {
-	updateRoute(1, newRpp);
-};
 
 const goToPlugin = (name: string) => {
 	router.push({
@@ -140,56 +63,50 @@ const goToPlugin = (name: string) => {
 			<p><strong>Error loading data:</strong> {{ dataStore.error }}</p>
 		</div>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search plugins by name..."
-				class="search-input"
-				@input="updateRoute(1, rowsPerPage)"
-			/>
-		</div>
+		<ListToolbar
+			:list="list"
+			placeholder="Search plugins by name, slug or author"
+		/>
 
 		<main class="table-container">
-			<table class="data-table sortable">
+			<table class="data-table">
 				<thead>
 					<tr>
-						<th class="col-expand" @click="handleSort('name')">
+						<SortableTh
+							:list="list"
+							sort-key="name"
+							class="col-expand"
+						>
 							Plugin Name
-							<span v-if="sortKey === 'name'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th class="col-version" @click="handleSort('version')">
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="version"
+							class="col-version"
+						>
 							Version
-							<span v-if="sortKey === 'version'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th class="col-wide" @click="handleSort('author')">
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="author"
+							class="col-wide"
+						>
 							Author
-							<span v-if="sortKey === 'author'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="sites"
 							class="col-narrow text-center"
-							@click="handleSort('count')"
 						>
 							Sites
-							<span v-if="sortKey === 'count'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
-						<th
+						</SortableTh>
+						<SortableTh
+							:list="list"
+							sort-key="vulns"
 							class="col-narrow text-center"
-							@click="handleSort('vulnerabilities')"
 						>
 							Vulns
-							<span v-if="sortKey === 'vulnerabilities'">{{
-								sortOrder === "asc" ? "↑" : "↓"
-							}}</span>
-						</th>
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
@@ -203,26 +120,33 @@ const goToPlugin = (name: string) => {
 							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
-					<tr v-else-if="paginatedPlugins.length === 0">
+					<tr v-else-if="plugins.pageItems.value.length === 0">
 						<td colspan="5" class="empty-state">
-							<span v-if="searchQuery"
+							<span v-if="list.query.value"
 								>No plugins found matching "{{
-									searchQuery
+									list.query.value
 								}}".</span
 							>
 							<span v-else>No plugins available.</span>
 						</td>
 					</tr>
 					<tr
-						v-for="plugin in paginatedPlugins"
+						v-for="plugin in plugins.pageItems.value"
 						:key="plugin.slug"
 						class="clickable-row"
 						@click="goToPlugin(plugin.slug)"
 					>
 						<td class="truncate col-expand">
-							<div class="plugin-title">
+							<RouterLink
+								:to="{
+									name: 'plugin-detail',
+									params: { name: plugin.slug },
+								}"
+								class="plugin-title row-link"
+								@click.stop
+							>
 								{{ plugin.shortName }}
-							</div>
+							</RouterLink>
 							<div class="sub-text">
 								{{ plugin.slug }}
 							</div>
@@ -258,12 +182,9 @@ const goToPlugin = (name: string) => {
 			</table>
 
 			<Pagination
-				:current-page="currentPage"
-				:total-pages="totalPages"
-				:rows-per-page="rowsPerPage"
-				@update:rows-per-page="handleRowsPerPageUpdate"
-				@prev="prevPage"
-				@next="nextPage"
+				:list="list"
+				:page="plugins.page.value"
+				:total="plugins.total.value"
 			/>
 		</main>
 	</div>

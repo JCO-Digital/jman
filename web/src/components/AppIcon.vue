@@ -34,6 +34,7 @@ import IconDashboard from "./icons/IconDashboard.vue";
 import IconLogout from "./icons/IconLogout.vue";
 import IconSidebar from "./icons/IconSidebar.vue";
 import IconUsers from "./icons/IconUsers.vue";
+import IconSearch from "./icons/IconSearch.vue";
 
 const props = defineProps<{
 	name: string;
@@ -75,6 +76,7 @@ const iconMap: Record<string, Component> = {
 	logout: IconLogout,
 	sidebar: IconSidebar,
 	users: IconUsers,
+	search: IconSearch,
 };
 
 const icon = computed(() => iconMap[props.name]);

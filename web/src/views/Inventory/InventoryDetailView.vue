@@ -230,7 +230,7 @@ const handleUnlink = async (link: InventoryLinkPayload) => {
 	await load();
 };
 
-// A list URL: /inventory[/<type|all>[/<page>[/<rowsPerPage>]]][?...].
+// A list URL: /inventory[/<type>][?...].
 const LIST_PATH = /^\/inventory(\/[a-z]+)?(\/\d+){0,2}\/?(\?.*)?$/;
 
 // backToList returns to the list the way it was left (type, page, search)

@@ -9,7 +9,7 @@ import { useToastStore } from "../../stores/toast";
 import { useConfirm } from "../../composables/useConfirm";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
-import Pagination from "../Pagination.vue";
+import PanelPagination from "./PanelPagination.vue";
 import ScanFindingsTable from "./ScanFindingsTable.vue";
 import ScanTriageModal from "./ScanTriageModal.vue";
 import SectionBar from "./SectionBar.vue";
@@ -538,7 +538,7 @@ function changeHistoryLimit(limit: number) {
 					</tbody>
 				</table>
 				<div class="pagination-wrapper">
-					<Pagination
+					<PanelPagination
 						:current-page="historyPage"
 						:total-pages="historyTotalPages"
 						:rows-per-page="historyLimit"
