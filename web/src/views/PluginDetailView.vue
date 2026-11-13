@@ -188,7 +188,7 @@ const manageAssetTemplate = () => {
 					name: info.value?.name || props.name,
 				}
 			: {
-					search: props.name,
+					q: props.name,
 				},
 	});
 };

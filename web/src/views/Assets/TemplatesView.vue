@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, onMounted } from "vue";
 import { useRoute } from "vue-router";
 import { useAssetStore } from "../../stores/assetStore";
 import { usePaymentMethodsStore } from "../../stores/paymentMethods";
@@ -7,9 +7,12 @@ import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
 import type { Asset, AssetType, BillingFrequency } from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
+import ListToolbar from "../../components/ListToolbar.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { useListState } from "../../composables/useListState";
+import { useClientList } from "../../composables/useClientList";
 
 const assetStore = useAssetStore();
 const paymentMethodsStore = usePaymentMethodsStore();
@@ -18,7 +21,6 @@ const toast = useToastStore();
 const route = useRoute();
 const { confirm } = useConfirm();
 
-const searchQuery = ref((route.query.search as string) || "");
 const showModal = ref(false);
 const editingAsset = ref<Asset | null>(null);
 
@@ -76,16 +78,23 @@ const freqOptions: BillingFrequency[] = [
 	"One-time",
 ];
 
-const filteredAssets = computed(() => {
-	if (!searchQuery.value) return assetStore.assets;
-	const query = searchQuery.value.toLowerCase();
-	return assetStore.assets.filter(
-		(a) =>
-			a.name.toLowerCase().includes(query) ||
-			a.identifier?.toLowerCase().includes(query) ||
-			a.type.toLowerCase().includes(query),
-	);
+// /billing/templates?q=&type=
+const list = useListState({
+	sortKeys: ["name"],
+	defaultSort: "name",
+	filters: { type: assetTypeOptions },
 });
+
+const templates = useClientList(() => assetStore.assets, list, {
+	search: (a, q) =>
+		a.name.toLowerCase().includes(q) ||
+		Boolean(a.identifier?.toLowerCase().includes(q)) ||
+		a.type.toLowerCase().includes(q),
+	filter: (a) =>
+		!list.filters.value.type || a.type === list.filters.value.type,
+	sortValue: (a) => a.name,
+});
+const filteredAssets = templates.sorted;
 
 const loadAssets = async () => {
 	await Promise.all([
@@ -277,14 +286,26 @@ const copyDescriptionAndExtract = async () => {
 			</template>
 		</ViewHeader>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search templates by name, type or identifier..."
-				class="search-input"
-			/>
-		</div>
+		<ListToolbar
+			:list="list"
+			placeholder="Search templates by name, type or identifier"
+		>
+			<select
+				:value="list.filters.value.type"
+				aria-label="Type"
+				@change="
+					list.setFilter(
+						'type',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
+			>
+				<option value="">All types</option>
+				<option v-for="t in assetTypeOptions" :key="t" :value="t">
+					{{ t }}
+				</option>
+			</select>
+		</ListToolbar>
 
 		<main class="content">
 			<div

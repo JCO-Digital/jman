@@ -293,14 +293,6 @@
 		white-space: nowrap;
 	}
 
-	&.sortable th {
-		cursor: pointer;
-
-		&:hover {
-			background-color: var(--bg-hover);
-		}
-	}
-
 	& .clickable-row {
 		cursor: pointer;
 
@@ -412,28 +404,6 @@
 }
 
 /* Forms & Controls */
-.controls {
-	display: flex;
-	gap: 16px;
-	margin-bottom: 24px;
-	align-items: center;
-	flex-wrap: wrap;
-
-	@media (max-width: 640px) {
-		flex-direction: column;
-		align-items: stretch;
-	}
-}
-
-.search-input {
-	flex: 1;
-	max-width: 400px;
-
-	@media (max-width: 640px) {
-		max-width: none;
-	}
-}
-
 .form-group {
 	display: flex;
 	flex-direction: column;
@@ -851,18 +821,6 @@
 
 	@media (max-width: 640px) {
 		flex-direction: column;
-	}
-}
-
-.status-select {
-	width: 180px;
-	padding: 0.625rem;
-	border: 1px solid var(--border-input);
-	border-radius: 4px;
-	font-size: 0.875rem;
-
-	@media (max-width: 640px) {
-		width: 100%;
 	}
 }
 

@@ -5,8 +5,13 @@ import { useAuthStore } from "../stores/auth";
 import { useUserStore } from "../stores/user";
 import { useDataStore } from "../stores/data";
 import AppIcon from "../components/AppIcon.vue";
-import type { Task, TaskStatus, TaskPriority, TaskType } from "../types";
+import type { Task, TaskStatus, TaskPriority } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
+import ListToolbar from "../components/ListToolbar.vue";
+import SortableTh from "../components/SortableTh.vue";
+import Pagination from "../components/Pagination.vue";
+import { useListState } from "../composables/useListState";
+import { useClientList } from "../composables/useClientList";
 import TaskFormModal from "../components/TaskFormModal.vue";
 import { useTaskModal } from "../composables/useTaskModal";
 import { getVulnerabilityStatus } from "../utils/taskVulnerability";
@@ -21,13 +26,33 @@ const dataStore = useDataStore();
 const { openTask } = useTaskModal();
 const showFormModal = ref(false);
 
-// Filters
-const searchQuery = ref("");
-const filterStatus = ref<TaskStatus | "" | "open">("open");
-const filterPriority = ref<TaskPriority | "">("");
-const filterType = ref<TaskType | "">("");
-const filterAssignedTo = ref("");
-const filterDueDate = ref<"" | "past" | "week" | "month" | "quarter">("");
+// /tasks?q=&sort=&dir=&page=&per=&status=&priority=&type=&due=&assignee=
+// The status filter's default ("") is every task but the completed ones;
+// "all" shows those too. ?task=<id> (the open task) is kept alongside.
+const list = useListState({
+	sortKeys: ["title", "status", "priority", "type", "assignee", "due"],
+	defaultSort: "",
+	descFirst: ["priority"],
+	filters: {
+		status: [
+			"all",
+			"pending",
+			"in_progress",
+			"overdue",
+			"completed",
+			"skipped",
+			"on_hold",
+			"blocked",
+		],
+		priority: ["high", "medium", "low"],
+		type: ["one-time", "repeating", "dynamic"],
+		due: ["past", "week", "month", "quarter"],
+		assignee: true,
+	},
+});
+
+const setFilter = (name: keyof typeof list.filters.value, e: Event) =>
+	list.setFilter(name, (e.target as HTMLSelectElement).value);
 
 onMounted(() => {
 	taskStore.fetchTasks();
@@ -53,60 +78,65 @@ function getDueDateBound(option: string): Date | null {
 	return null;
 }
 
-const filteredTasks = computed(() => {
-	let result = taskStore.tasks;
+const PRIORITY_RANK: Record<TaskPriority, number> = {
+	low: 1,
+	medium: 2,
+	high: 3,
+};
 
-	if (searchQuery.value) {
-		const q = searchQuery.value.toLowerCase();
-		result = result.filter(
-			(t) =>
-				t.title.toLowerCase().includes(q) ||
-				t.description?.toLowerCase().includes(q),
-		);
-	}
+function matchesDue(task: Task, due: string): boolean {
+	if (!due) return true;
+	if (!task.due_date) return false;
+	const date = new Date(task.due_date);
+	if (due === "past") return date < now;
+	const bound = getDueDateBound(due);
+	return !bound || (date >= now && date <= bound);
+}
 
-	if (filterStatus.value) {
-		if (filterStatus.value === "open") {
-			result = result.filter((t) => t.status !== "completed");
-		} else {
-			result = result.filter((t) => t.status === filterStatus.value);
-		}
-	}
-
-	if (filterPriority.value) {
-		result = result.filter((t) => t.priority === filterPriority.value);
-	}
-
-	if (filterType.value) {
-		result = result.filter((t) => t.type === filterType.value);
-	}
-
-	if (filterAssignedTo.value) {
-		const q = filterAssignedTo.value.toLowerCase();
-		result = result.filter((t) => t.assigned_to?.toLowerCase().includes(q));
-	}
-
-	if (filterDueDate.value) {
-		if (filterDueDate.value === "past") {
-			result = result.filter(
-				(t) => t.due_date && new Date(t.due_date) < now,
-			);
-		} else {
-			const bound = getDueDateBound(filterDueDate.value);
-			if (bound) {
-				result = result.filter(
-					(t) =>
-						t.due_date &&
-						new Date(t.due_date) >= now &&
-						new Date(t.due_date) <= bound,
-				);
-			}
-		}
-	}
-
-	return [...result].sort(
+// Unsorted, paused tasks (on hold, blocked) go after the others.
+const tasksPausedLast = computed(() =>
+	[...taskStore.tasks].sort(
 		(a, b) => Number(isPaused(a.status)) - Number(isPaused(b.status)),
-	);
+	),
+);
+
+// The people tasks are assigned to, for the filter.
+const assignees = computed(() =>
+	[...new Set(taskStore.tasks.map((t) => t.assigned_to).filter(Boolean))]
+		.map((a) => ({ value: a!, label: userStore.resolveDisplayName(a) }))
+		.sort((a, b) => a.label.localeCompare(b.label)),
+);
+
+const tasks = useClientList(tasksPausedLast, list, {
+	search: (t, q) =>
+		t.title.toLowerCase().includes(q) ||
+		Boolean(t.description?.toLowerCase().includes(q)),
+	filter: (t) => {
+		const f = list.filters.value;
+		if (f.status === "" && t.status === "completed") return false;
+		if (f.status && f.status !== "all" && t.status !== f.status)
+			return false;
+		if (f.priority && t.priority !== f.priority) return false;
+		if (f.type && t.type !== f.type) return false;
+		if (f.assignee && t.assigned_to !== f.assignee) return false;
+		return matchesDue(t, f.due);
+	},
+	sortValue: (t, key) => {
+		switch (key) {
+			case "title":
+				return t.title;
+			case "status":
+				return t.status;
+			case "priority":
+				return PRIORITY_RANK[t.priority];
+			case "type":
+				return t.type;
+			case "assignee":
+				return userStore.resolveDisplayName(t.assigned_to);
+			case "due":
+				return t.due_date;
+		}
+	},
 });
 
 function openCreate() {
@@ -155,55 +185,68 @@ function vulnStatus(task: Task) {
 			</template>
 		</ViewHeader>
 
-		<div class="controls">
-			<input
-				v-model="searchQuery"
-				type="text"
-				placeholder="Search tasks..."
-				class="search-input"
-			/>
-
-			<select v-model="filterStatus">
-				<option value="open">All but completed</option>
-				<option value="">All Statuses</option>
+		<ListToolbar :list="list" placeholder="Search tasks">
+			<select
+				:value="list.filters.value.status"
+				aria-label="Status"
+				@change="setFilter('status', $event)"
+			>
+				<option value="">All but completed</option>
+				<option value="all">All statuses</option>
 				<option value="pending">Pending</option>
-				<option value="in_progress">In Progress</option>
+				<option value="in_progress">In progress</option>
 				<option value="overdue">Overdue</option>
 				<option value="completed">Completed</option>
 				<option value="skipped">Skipped</option>
-				<option value="on_hold">On Hold</option>
+				<option value="on_hold">On hold</option>
 				<option value="blocked">Blocked</option>
 			</select>
 
-			<select v-model="filterPriority">
-				<option value="">All Priorities</option>
+			<select
+				:value="list.filters.value.priority"
+				aria-label="Priority"
+				@change="setFilter('priority', $event)"
+			>
+				<option value="">All priorities</option>
 				<option value="high">High</option>
 				<option value="medium">Medium</option>
 				<option value="low">Low</option>
 			</select>
 
-			<select v-model="filterType">
-				<option value="">All Types</option>
+			<select
+				:value="list.filters.value.type"
+				aria-label="Type"
+				@change="setFilter('type', $event)"
+			>
+				<option value="">All types</option>
 				<option value="one-time">One-time</option>
 				<option value="repeating">Repeating</option>
 				<option value="dynamic">Dynamic</option>
 			</select>
 
-			<select v-model="filterDueDate">
-				<option value="">Any Due Date</option>
-				<option value="past">Past Due</option>
-				<option value="week">Due This Week</option>
-				<option value="month">Due This Month</option>
-				<option value="quarter">Due This Quarter</option>
+			<select
+				:value="list.filters.value.due"
+				aria-label="Due date"
+				@change="setFilter('due', $event)"
+			>
+				<option value="">Any due date</option>
+				<option value="past">Past due</option>
+				<option value="week">Due this week</option>
+				<option value="month">Due this month</option>
+				<option value="quarter">Due this quarter</option>
 			</select>
 
-			<input
-				v-model="filterAssignedTo"
-				type="text"
-				placeholder="Assigned to..."
-				class="search-input max-w-160"
-			/>
-		</div>
+			<select
+				:value="list.filters.value.assignee"
+				aria-label="Assigned to"
+				@change="setFilter('assignee', $event)"
+			>
+				<option value="">Anyone</option>
+				<option v-for="a in assignees" :key="a.value" :value="a.value">
+					{{ a.label }}
+				</option>
+			</select>
+		</ListToolbar>
 
 		<div v-if="taskStore.error" class="error-banner">
 			<p><strong>Error:</strong> {{ taskStore.error }}</p>
@@ -213,12 +256,24 @@ function vulnStatus(task: Task) {
 			<table class="data-table">
 				<thead>
 					<tr>
-						<th>Title</th>
-						<th>Status</th>
-						<th>Priority</th>
-						<th>Type</th>
-						<th>Assigned To</th>
-						<th>Due Date</th>
+						<SortableTh :list="list" sort-key="title"
+							>Title</SortableTh
+						>
+						<SortableTh :list="list" sort-key="status">
+							Status
+						</SortableTh>
+						<SortableTh :list="list" sort-key="priority">
+							Priority
+						</SortableTh>
+						<SortableTh :list="list" sort-key="type"
+							>Type</SortableTh
+						>
+						<SortableTh :list="list" sort-key="assignee">
+							Assigned To
+						</SortableTh>
+						<SortableTh :list="list" sort-key="due">
+							Due Date
+						</SortableTh>
 					</tr>
 				</thead>
 				<tbody>
@@ -231,11 +286,11 @@ function vulnStatus(task: Task) {
 							Loading tasks…
 						</td>
 					</tr>
-					<tr v-else-if="filteredTasks.length === 0">
+					<tr v-else-if="tasks.pageItems.value.length === 0">
 						<td colspan="6" class="empty-state">No tasks found.</td>
 					</tr>
 					<tr
-						v-for="task in filteredTasks"
+						v-for="task in tasks.pageItems.value"
 						:key="task.id"
 						class="clickable-row"
 						@click="openTask(task.id)"
@@ -315,6 +370,11 @@ function vulnStatus(task: Task) {
 					</tr>
 				</tbody>
 			</table>
+			<Pagination
+				:list="list"
+				:page="tasks.page.value"
+				:total="tasks.total.value"
+			/>
 		</main>
 
 		<TaskFormModal
