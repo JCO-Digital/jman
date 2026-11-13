@@ -1,6 +1,18 @@
 # Changelog
 
-## 7.35.0 (2026-11-13)
+## 7.36.0 (2026-11-13)
+
+#### Features
+
+- inventory: Info column with domain expiry and server summary; expiry filter (60398f5)
+- inventory: drop the Updated column from the inventory list (ffd58d2)
+- inventory: site-list style inventory list with routed type, paging and search (f31eb77)
+
+#### Bug Fixes
+
+- inventory: starting a search adds a history entry; refining it replaces (bc216c3)
+
+## v7.35.0 (2026-11-13)
 
 #### Features
 
