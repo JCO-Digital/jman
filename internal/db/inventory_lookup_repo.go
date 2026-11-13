@@ -124,3 +124,26 @@ func ListDueInventoryDomainLookups(okBefore, failedBefore time.Time, limit int) 
 	}
 	return due, rows.Err()
 }
+
+// ListInventoryDomainLookups returns every stored registry lookup, keyed by
+// item ID, for the inventory list.
+func ListInventoryDomainLookups() (map[string]*models.InventoryDomainLookup, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := db.Query(`SELECT ` + inventoryDomainLookupColumns + ` FROM inventory_domain_lookups`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list domain lookups: %w", err)
+	}
+	defer rows.Close()
+	lookups := map[string]*models.InventoryDomainLookup{}
+	for rows.Next() {
+		l, err := scanInventoryDomainLookup(rows)
+		if err != nil {
+			return nil, err
+		}
+		lookups[l.ItemID] = l
+	}
+	return lookups, rows.Err()
+}

@@ -16,6 +16,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { expiryBadge } from "../../utils/inventory";
 import { displayDomain, formatBytes, providerName } from "../../utils/format";
 
 const route = useRoute();
@@ -160,22 +161,7 @@ const handleLookup = async () => {
 	}
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-// Days until the domain expires (negative once it has), or null.
-const expiresInDays = computed(() => {
-	const at = lookup.value?.expires_at;
-	if (!at) return null;
-	return Math.floor((new Date(at).getTime() - Date.now()) / DAY_MS);
-});
-
-const expiryBadge = computed(() => {
-	const days = expiresInDays.value;
-	if (days === null) return null;
-	if (days < 0) return { cls: "error", text: "expired" };
-	if (days <= 30) return { cls: "warning", text: `in ${days} days` };
-	return { cls: "active", text: `in ${days} days` };
-});
+const lookupExpiryBadge = computed(() => expiryBadge(lookup.value?.expires_at));
 
 const sourceLabel = (source: string) =>
 	({ rdap: "RDAP", whois: "WHOIS", "rdap+whois": "RDAP and WHOIS" })[
@@ -230,7 +216,7 @@ const handleDelete = async () => {
 		toast.addToast("Failed to delete: " + err, "error");
 		return;
 	}
-	router.push({ name: "inventory" });
+	backToList();
 };
 
 const handleUnlink = async (link: InventoryLinkPayload) => {
@@ -244,6 +230,20 @@ const handleUnlink = async (link: InventoryLinkPayload) => {
 	await load();
 };
 
+// A list URL: /inventory[/<type|all>[/<page>[/<rowsPerPage>]]][?...].
+const LIST_PATH = /^\/inventory(\/[a-z]+)?(\/\d+){0,2}\/?(\?.*)?$/;
+
+// backToList returns to the list the way it was left (type, page, search)
+// when the previous page was the list; otherwise it opens the list.
+const backToList = () => {
+	const back = (window.history.state as { back?: unknown } | null)?.back;
+	if (typeof back === "string" && LIST_PATH.test(back)) {
+		router.back();
+	} else {
+		router.push({ name: "inventory" });
+	}
+};
+
 const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 </script>
 
@@ -253,7 +253,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 			:title="item ? displayName : 'Inventory item'"
 			:back-button="{
 				text: 'Inventory',
-				onClick: () => router.push({ name: 'inventory' }),
+				onClick: backToList,
 			}"
 		>
 			<template #actions>
@@ -463,14 +463,14 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 													formatDay(lookup.expires_at)
 												}}
 												<span
-													v-if="expiryBadge"
+													v-if="lookupExpiryBadge"
 													:class="[
 														'status-badge',
 														'badge-sm',
-														expiryBadge.cls,
+														lookupExpiryBadge.cls,
 													]"
 												>
-													{{ expiryBadge.text }}
+													{{ lookupExpiryBadge.text }}
 												</span>
 											</template>
 											<template v-else>

@@ -1451,6 +1451,11 @@ export interface InventoryItem {
 	site_id?: string | null;
 	server_id?: string | null;
 	links?: InventoryItemLink[];
+	/**
+	 * A domain item's registry lookup, once it has been looked up under its
+	 * current name (in the list and the item responses).
+	 */
+	domain_lookup?: InventoryDomainLookup;
 	created_at: string;
 	created_by: string;
 	updated_at: string;
@@ -1502,8 +1507,6 @@ export interface InventoryDomainLookup {
 export interface InventoryItemResponse extends InventoryItem {
 	/** Other items matching type+name that the link/dismiss prompt offers. */
 	matches?: InventoryItem[];
-	/** A domain item's registry lookup, once it has been looked up. */
-	domain_lookup?: InventoryDomainLookup;
 }
 
 export interface InventoryLinkPayload {
