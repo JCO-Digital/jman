@@ -33,6 +33,9 @@ func (c *Client) rdapBase(ctx context.Context, domain string) (string, error) {
 		if base, ok := c.bootstrap[suffix]; ok {
 			return base, nil
 		}
+		if base, ok := c.RDAPServers[suffix]; ok {
+			return base, nil
+		}
 	}
 	return "", nil
 }
@@ -172,21 +175,29 @@ func findRegistrar(entities []rdapEntity) *rdapEntity {
 	return nil
 }
 
-// entityName is an entity's vCard "fn" (formatted name), else its handle.
+// entityName is an entity's vCard "fn" (formatted name), else its "org"
+// (SWITCH's .ch registrars have only that), else its handle.
 func entityName(e *rdapEntity) string {
+	props := map[string]string{}
 	if len(e.VCard) == 2 {
-		var props [][]json.RawMessage
-		if json.Unmarshal(e.VCard[1], &props) == nil {
-			for _, p := range props {
+		var list [][]json.RawMessage
+		if json.Unmarshal(e.VCard[1], &list) == nil {
+			for _, p := range list {
 				if len(p) < 4 {
 					continue
 				}
 				var name, value string
-				if json.Unmarshal(p[0], &name) == nil && name == "fn" &&
-					json.Unmarshal(p[3], &value) == nil && strings.TrimSpace(value) != "" {
-					return strings.TrimSpace(value)
+				if json.Unmarshal(p[0], &name) == nil && json.Unmarshal(p[3], &value) == nil {
+					if v := strings.TrimSpace(value); v != "" && props[name] == "" {
+						props[name] = v
+					}
 				}
 			}
+		}
+	}
+	for _, name := range []string{"fn", "org"} {
+		if v := props[name]; v != "" {
+			return v
 		}
 	}
 	return strings.TrimSpace(e.Handle)

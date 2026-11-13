@@ -18,10 +18,15 @@ to external APIs** ("providers"), starting with SpinupWP. A provider link is
 what survives: syncs refresh the linked item's `provider_data`, never its
 manual fields.
 
-- Manual and provider-linked items with the same type+name are kept
-  **separate**; the web UI prompts "link / dismiss" when a match is found.
-- Sync never creates duplicates of linked items, and never touches
-  `origin = 'manual'` items.
+- A **domain** is identified by its name (the apex, in ASCII/Punycode form):
+  a synced domain joins the active domain item of the same name, whether it
+  was imported, entered by hand or made by another provider. Other types
+  (servers) with the same type+name stay **separate**; the web UI prompts
+  "link / dismiss" when a match is found, and servers can be matched by IP
+  (see Providers).
+- Sync never creates duplicates of linked items. On a manual item it joins,
+  it writes only the provider-owned fields, never `details`, and never marks
+  it removed.
 - The system stores **no secrets** — at most usernames. `details` is free
   text/JSON visible to every API user.
 
@@ -179,9 +184,27 @@ separate from `details` (manual) and `provider_data` (per provider link).
 - **WHOIS for the gaps**: when RDAP leaves a field out, or a TLD has no RDAP,
   the registry's WHOIS server is asked if `whoisServers` (`whois.go`) has an
   entry for the TLD: its address and the keys of the "key: value" lines that
-  hold each field. Only `.fi` is configured: rdap.fi has no registrar, which
-  `whois.fi` publishes (in Latin-1). Adding a WHOIS-only TLD is an entry in
-  that map.
+  hold each field. A key `section.key` reads a key inside a section (a line
+  `Registrar:` followed by `name: ...`), and a section's own key its lines
+  without a key. Adding a TLD is an entry in that map. Configured, each from a
+  real answer of its server:
+
+  | TLD | Server | Registrar | Expiry | Nameservers |
+  |---|---|---|---|---|
+  | `.fi` | `whois.fi` (Latin-1), for the registrar rdap.fi lacks | `registrar` | — (RDAP) | — (RDAP) |
+  | `.se` | `whois.iis.se` | `registrar` | `expires` | `nserver` |
+  | `.ee` | `whois.tld.ee` | `registrar.name` | `expire` | `nserver` |
+  | `.dk` | `whois.punktum.dk` | `registrar` (absent for direct registrations) | `expires` | `hostname` |
+  | `.io`, `.me`, `.ie` | `whois.nic.io`, `whois.nic.me`, `whois.weare.ie` (gTLD style) | `registrar` | `registry expiry date` | `name server` |
+  | `.eu` | `whois.eu` | `registrar.name` | not published | `name servers` section |
+
+- **`.ch`** has no port-43 WHOIS for clients like jman-api and isn't in the
+  bootstrap file, but SWITCH's RDAP (`https://rdap.nic.ch/`, in
+  `rdapServers`) gives the nameservers and the registrar (as the vCard `org`).
+  It publishes no expiry date.
+- A WHOIS answer saying the domain doesn't exist is stored like RDAP's "not
+  found"; one with none of the configured fields (a rate limit notice, a
+  refusal) is a failed lookup.
 - A TLD with neither is stored with an "unsupported" error. A field the
   registry doesn't publish stays empty; the UI says "Not published by the
   registry".
@@ -192,6 +215,36 @@ separate from `details` (manual) and `provider_data` (per provider link).
   its time (`last_success_at`); a "not found at the registry" answer clears
   the data.
 - Only the domain name is sent, straight to the TLD's registry.
+
+## Importing domains
+
+`POST /api/inventory/import` (`internal/inventory/importer`, "Import domains"
+in the web UI) imports domains from a CSV file with a header row, comma- or
+semicolon-separated; quoted fields may span lines. The UI reads the file as
+UTF-8, else as Windows-1252.
+
+- The **domain** comes from one column (the first by default): the cell's
+  first word, else the first later word that is a domain with a known
+  top-level domain ("IRTISANOTTU 12/25 example.fi"). It is reduced to its
+  apex and stored in ASCII form (`billnäs.fi` → `xn--billns-fua.fi`). The
+  rest of the cell ("(ei laskutusta)") is kept in `details.domain_note`, or
+  the whole cell when the domain wasn't its first word. Rows without a domain
+  are skipped and listed.
+- Every **other column** becomes a `details` field, under its header unless
+  `columns` maps the header to another key, or to `""` to skip it. Empty
+  cells are left out.
+- **Rows naming the same domain** are merged; a value that differs from an
+  earlier row's is reported as an in-file conflict and the first is kept.
+- A domain that **already exists** gets the fields merged into the preferred
+  item of that name (active, then provider-linked, then oldest): empty fields
+  are filled, equal ones left alone, and differing ones reported as conflicts
+  and kept, unless `overwrite` is set. Otherwise a manual domain item is
+  created.
+- `dry_run` plans without writing. The UI previews first and imports with the
+  options it previewed; the server plans again on import, against the
+  inventory as it is then.
+- Imported domains get registry lookups like any domain item, and a domain
+  SpinupWP lists later joins the imported item.
 
 ## REST API
 
@@ -208,6 +261,7 @@ separate from `details` (manual) and `provider_data` (per provider link).
 | `POST /api/inventory/items/{id}/dismiss` | edit | dismiss a match prompt |
 | `POST /api/inventory/items/{id}/lookup` | edit | look a domain item up at its registry now (a lookup less than a minute old is returned as it is) |
 | `POST /api/inventory/sync/{provider}` | edit | run a provider sync now |
+| `POST /api/inventory/import` | edit | import domains from CSV (`dry_run` previews) |
 
 ## Web UI
 
@@ -227,6 +281,7 @@ separate from `details` (manual) and `provider_data` (per provider link).
 - `internal/inventory/` — provider framework, registry, sync runner
 - `internal/inventory/spinupwp/` — SpinupWP provider
 - `internal/inventory/domainlookup/` — RDAP/WHOIS registry lookups of domain items; `internal/db/inventory_lookup_repo.go` stores them
+- `internal/inventory/importer/` — CSV domain import; `web/src/components/InventoryImportModal.vue` is its UI
 - `internal/inventory/hetzner/` — Hetzner Cloud provider
 - `internal/db/migrate_inventory_provider_data.go` — one-time migration keying the old flat `provider_data` (all SpinupWP's) by provider
 - `internal/api/inventory_handlers.go` — REST handlers, registered in `handlers.go`

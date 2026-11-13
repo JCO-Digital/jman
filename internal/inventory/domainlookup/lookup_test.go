@@ -75,6 +75,11 @@ func newTestClient(t *testing.T) (*Client, *fakeRegistry) {
 	mux.HandleFunc("/fi/domain/xn--hkkinen-5wa.fi", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, rdapFi)
 	})
+	// SWITCH's .ch RDAP: no expiry, registrar only as a vCard "org".
+	mux.HandleFunc("/ch/domain/example.ch", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"nameservers": [{"ldhName": "ns1.example.ch"}], "events": [],
+		  "entities": [{"roles": ["registrar"], "vcardArray": ["vcard", [["version", {}, "text", "4.0"], ["org", {}, "text", "Example Registrar SA"]]]}]}`)
+	})
 	srv = httptest.NewServer(mux) // unknown paths answer 404
 	t.Cleanup(srv.Close)
 	reg.rdap = srv
@@ -83,6 +88,7 @@ func newTestClient(t *testing.T) (*Client, *fakeRegistry) {
 	c.HTTP = srv.Client()
 	c.BootstrapURL = srv.URL + "/dns.json"
 	c.MinInterval = 0
+	c.RDAPServers = map[string]string{"ch": srv.URL + "/ch/"}
 	c.WhoisServers = map[string]WhoisServer{
 		"fi": whoisServers["fi"],
 		"se": {Address: "whois.example:43", Registrar: []string{"registrar"}, Expires: []string{"expires"}, Nameservers: []string{"nserver"}, ExpiresLayouts: []string{"2006-01-02"}},
@@ -199,5 +205,19 @@ func TestDecodeWhois(t *testing.T) {
 	}
 	if got := decodeWhois([]byte("registrar: Häme Oy")); got != "registrar: Häme Oy" {
 		t.Errorf("UTF-8: %q", got)
+	}
+}
+
+func TestLookupRDAPServerOverride(t *testing.T) {
+	c, reg := newTestClient(t)
+	res, err := c.Lookup(context.Background(), "example.ch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Source != "rdap" || res.Registrar != "Example Registrar SA" || res.ExpiresAt != nil || len(res.Nameservers) != 1 {
+		t.Errorf("result: %+v", res)
+	}
+	if reg.whoisQueries.Load() != 0 {
+		t.Error("WHOIS asked for .ch")
 	}
 }

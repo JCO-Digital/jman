@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,7 +11,8 @@ import (
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/inventory"
 	"github.com/JCO-Digital/jman/internal/inventory/domainlookup"
-	_ "github.com/JCO-Digital/jman/internal/inventory/hetzner"  // register the Hetzner Cloud provider
+	_ "github.com/JCO-Digital/jman/internal/inventory/hetzner" // register the Hetzner Cloud provider
+	"github.com/JCO-Digital/jman/internal/inventory/importer"
 	_ "github.com/JCO-Digital/jman/internal/inventory/spinupwp" // register the SpinupWP provider
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/refresh"
@@ -563,4 +565,57 @@ func SyncInventoryProviderHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, result)
+}
+
+// maxImportBody caps the size of an import request (the CSV plus options).
+const maxImportBody = 8 << 20
+
+// inventoryImportRequest is a domain import: the CSV text and how to read
+// it. With DryRun nothing is written; the plan says what an import would do.
+type inventoryImportRequest struct {
+	CSV string `json:"csv"`
+	importer.Options
+	DryRun bool `json:"dry_run"`
+}
+
+// inventoryImportResponse is the plan and, for a real import, what it did.
+type inventoryImportResponse struct {
+	*importer.Plan
+	DryRun  bool `json:"dry_run"`
+	Created int  `json:"created"`
+	Updated int  `json:"updated"`
+}
+
+// ImportInventoryDomainsHandler imports domains from a CSV file (see
+// internal/inventory/importer). The client previews with dry_run, then
+// sends the same request without it; the plan is made again from the
+// inventory as it is then, so nothing stale is applied.
+func ImportInventoryDomainsHandler(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxImportBody)
+	var req inventoryImportRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body (at most 8 MB)")
+		return
+	}
+	plan, err := importer.Build(req.CSV, req.Options)
+	if errors.Is(err, importer.ErrInput) {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "ImportInventoryDomainsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	resp := inventoryImportResponse{Plan: plan, DryRun: req.DryRun}
+	if !req.DryRun {
+		resp.Created, resp.Updated, err = importer.Apply(plan, getUsername(r))
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "ImportInventoryDomainsHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, fmt.Sprintf("Import stopped after %d created and %d updated: %v", resp.Created, resp.Updated, err))
+			return
+		}
+		verb.LogPrintf(verb.Normal, "%s imported domains: %d created, %d updated", getUsername(r), resp.Created, resp.Updated)
+	}
+	WriteJSON(w, http.StatusOK, resp)
 }

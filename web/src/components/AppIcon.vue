@@ -5,6 +5,7 @@ import IconBell from "./icons/IconBell.vue";
 import IconCheck from "./icons/IconCheck.vue";
 import IconChevronRight from "./icons/IconChevronRight.vue";
 import IconCopy from "./icons/IconCopy.vue";
+import IconUpload from "./icons/IconUpload.vue";
 import IconCreditCard from "./icons/IconCreditCard.vue";
 import IconDragHandle from "./icons/IconDragHandle.vue";
 import IconEdit from "./icons/IconEdit.vue";
@@ -38,6 +39,7 @@ const iconMap: Record<string, Component> = {
 	check: IconCheck,
 	"chevron-right": IconChevronRight,
 	copy: IconCopy,
+	upload: IconUpload,
 	"credit-card": IconCreditCard,
 	"drag-handle": IconDragHandle,
 	edit: IconEdit,

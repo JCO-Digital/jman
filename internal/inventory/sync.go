@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 
@@ -27,8 +28,9 @@ type SyncResult struct {
 	Updated      int `json:"updated"`
 	LinksAdded   int `json:"links_added"`
 	LinksRemoved int `json:"links_removed"`
-	// Matched counts new entities that joined another provider's item
-	// through a match key (see Matcher).
+	// Matched counts new entities that joined an item made otherwise: a
+	// domain item of the same name, or another provider's item through a
+	// match key (see Matcher).
 	Matched int `json:"matched"`
 	// Removed counts items marked status='removed' because their last
 	// provider link disappeared.
@@ -64,7 +66,8 @@ type syncTarget struct {
 //     origin='provider' item left with no links is marked removed.
 //
 // A new entity first joins the item another entity of this provider with
-// the same (type, name) is linked to; else, for a provider with match keys
+// the same (type, name) is linked to; else a domain joins the active domain
+// item of the same name, whatever made it; else, for a provider with match keys
 // (Matcher), the item of another provider whose snapshot has one of its
 // keys, e.g. the SpinupWP server with a Hetzner server's IPv4 address; else
 // it gets its own item.
@@ -195,6 +198,19 @@ func Sync(ctx context.Context, providerName string) (SyncResult, error) {
 					result.Matched++
 					break
 				}
+			}
+		}
+		if !shared && ext.Type == models.InventoryItemTypeDomain {
+			// A domain is identified by its name: join the domain item that
+			// is already there, imported or entered by hand or from another
+			// provider, instead of making a second one.
+			id, err := existingDomainItem(ext.Name)
+			if err != nil {
+				return result, err
+			}
+			if id != "" {
+				itemID, shared = id, true
+				result.Matched++
 			}
 		}
 		if !shared {
@@ -361,6 +377,40 @@ func matchIndex(providerName string) (map[string]string, error) {
 		delete(index, key)
 	}
 	return index, nil
+}
+
+// existingDomainItem returns the ID of the active domain item named name
+// that a new domain entity should join (see PreferredItems), or "".
+func existingDomainItem(name string) (string, error) {
+	items, err := db.FindInventoryItemsByTypeName(models.InventoryItemTypeDomain, name)
+	if err != nil {
+		return "", err
+	}
+	for _, it := range PreferredItems(items) {
+		if it.Status == models.InventoryItemStatusActive {
+			return it.ID, nil
+		}
+	}
+	return "", nil
+}
+
+// PreferredItems orders items of one type and name by which one a new link
+// or an import should go to: active before removed, then linked to a
+// provider, then oldest first (the order they are given in).
+func PreferredItems(items []models.InventoryItem) []models.InventoryItem {
+	sorted := append([]models.InventoryItem(nil), items...)
+	rank := func(it models.InventoryItem) int {
+		r := 0
+		if it.Status != models.InventoryItemStatusActive {
+			r += 2
+		}
+		if len(it.Links) == 0 {
+			r++
+		}
+		return r
+	}
+	sort.SliceStable(sorted, func(i, j int) bool { return rank(sorted[i]) < rank(sorted[j]) })
+	return sorted
 }
 
 // nameOwner is the provider whose sync writes the item's name: the one that

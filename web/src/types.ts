@@ -1522,3 +1522,51 @@ export interface InventorySyncResult {
 	removed: number;
 	skipped?: boolean;
 }
+
+/** How to read a domain import CSV (POST /api/inventory/import). */
+export interface InventoryImportOptions {
+	/** Header of the domain column; the first column when empty. */
+	domain_column?: string;
+	/** Column header → details key; "" skips the column. Unlisted columns keep their header. */
+	columns?: Record<string, string>;
+	/** Replace existing details values that differ; otherwise they are conflicts. */
+	overwrite?: boolean;
+}
+
+export type InventoryImportAction = "create" | "update" | "unchanged" | "skip";
+
+export interface InventoryImportConflict {
+	key: string;
+	existing: string;
+	imported: string;
+	/** True when two rows of the file disagree (existing is the earlier row's). */
+	in_file?: boolean;
+}
+
+export interface InventoryImportRow {
+	lines: number[];
+	raw: string;
+	domain?: string;
+	action: InventoryImportAction;
+	reason?: string;
+	item_id?: string;
+	details?: Record<string, unknown>;
+	changes?: string[];
+	conflicts?: InventoryImportConflict[];
+}
+
+export interface InventoryImportResult {
+	headers: string[];
+	domain_column: string;
+	rows: InventoryImportRow[];
+	summary: {
+		create: number;
+		update: number;
+		unchanged: number;
+		skip: number;
+		conflicts: number;
+	};
+	dry_run: boolean;
+	created: number;
+	updated: number;
+}
