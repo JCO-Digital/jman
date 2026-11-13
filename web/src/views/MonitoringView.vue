@@ -121,10 +121,6 @@ function refresh() {
 </template>
 
 <style scoped>
-.monitoring-view {
-	max-width: 1400px;
-}
-
 .area-tabs {
 	display: flex;
 	overflow-x: auto;

@@ -16,7 +16,8 @@ Styles are modularized into specific files within `src/styles/`. Avoid a monolit
 
 - `variables.css`: Global CSS custom properties (colors, spacing, z-index).
 - `base.css`: HTML resets, base element styles (input, select, a), and generic text utilities.
-- `layout.css`: Layout containers (`view-container`, `grid-2-cols`), flex helpers, and app shell styles.
+- `layout.css`: Layout containers (`view-container`, `grid-2-cols`) and flex helpers.
+- `shell.css`: The app shell: sidebar (collapsible rail, mobile drawer), top bar with breadcrumbs, user menu, and page widths.
 - `components.css`: Shared component styles (buttons, cards, tables, badges, tabs, accordions).
 - `modals.css`: Standardized modal overlay and content styles.
 - `auth.css`: Styles specific to the login and authentication flow.
@@ -46,13 +47,19 @@ Use existing class structures to ensure UI consistency:
 - **Badges**: Use `.status-badge` with state classes (`.active`, `.error`, `.info`, `.badge-sm`).
 - **Modals**: Use `.modal-overlay` and `.modal-content.card`. Use `.modal-header` with `.modal-close`.
 
-## 5. Responsive Utilities
+## 5. Navigation and Page Width
+
+- The sidebar is defined as data in `src/navigation.ts` (groups and items). Add new sections there, not in `AppSidebar.vue`.
+- Every route sets `meta.nav` to the sidebar item it belongs to; this drives the active item, the breadcrumbs and `document.title`. Pages under a section (a detail view) also set `meta.title`.
+- `meta.width` sets how wide the page's `.view-container` may grow: `wide` for lists and dashboards, the default for detail pages, `narrow` for forms. Views must not set their own `max-width`.
+
+## 6. Responsive Utilities
 
 - Use `.hide-mobile` and `.show-mobile` for simple toggling.
 - Use responsive table utilities like `.hide-col-3-sm` to drop less important columns on small screens.
 - Prefer CSS Grid (`.grid-2-cols`) and Flexbox over fixed widths.
 
-## 6. CSS Nesting
+## 7. CSS Nesting
 
 The project uses modern CSS nesting. You can nest selectors inside their parents to improve readability:
 
@@ -65,7 +72,7 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 }
 ```
 
-## 7. Icons
+## 8. Icons
 
 **DO NOT** use inline SVGs in components or views. Use the `<AppIcon>` component.
 
@@ -74,13 +81,13 @@ The project uses modern CSS nesting. You can nest selectors inside their parents
 - Usage: `<AppIcon name="settings" size="18" />`.
 - To add a new icon: create `src/components/icons/IconMyIcon.vue` with the SVG markup and register it in the `iconMap` in `AppIcon.vue`.
 
-## 8. API Documentation
+## 9. API Documentation
 
 For information regarding backend API endpoints, payloads, and authentication, refer to the official API specification:
 
 - [API Specification (API_SPECS.md)](https://github.com/JCO-Digital/jman/blob/main/docs/API_SPECS.md)
 
-## 9. Code Design & Architecture
+## 10. Code Design & Architecture
 
 The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 
@@ -122,7 +129,7 @@ The project is built with **Vue 3**, **TypeScript**, and **Vite**.
 
 When creating new features, always check `src/styles/` first to see if a utility or component class already exists before creating new ones.
 
-## 10. Intentional Design Decisions
+## 11. Intentional Design Decisions
 
 This section documents choices that look like mistakes but are deliberate. Do not "fix" them without understanding the rationale.
 
