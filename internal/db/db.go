@@ -1514,6 +1514,10 @@ func initAPISchema() error {
 		return fmt.Errorf("failed to skip auto-generated vulnerability tasks: %w", err)
 	}
 
+	if err := KeyInventoryProviderData(apiDB.DB); err != nil {
+		return fmt.Errorf("failed to key inventory provider data by provider: %w", err)
+	}
+
 	return nil
 }
 

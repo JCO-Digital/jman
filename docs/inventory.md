@@ -37,7 +37,7 @@ inventory_items
   description   TEXT DEFAULT ''
   tags          TEXT DEFAULT '[]'       -- JSON array of strings
   details       TEXT DEFAULT '{}'       -- JSON, manual, free-form per type (IPs, access/username, services, registrar, DNS servers, expiry, ...)
-  provider_data TEXT DEFAULT '{}'       -- JSON snapshot from the linked API; refreshed by syncs, read-only
+  provider_data TEXT DEFAULT '{}'       -- JSON snapshot from each linked API, keyed by provider name; refreshed by syncs, read-only
   site_id       TEXT                    -- optional soft ref to a functional site (inventory.db)
   server_id     TEXT                    -- optional soft ref to a functional server
   created_at / created_by / updated_at / updated_by
@@ -80,12 +80,19 @@ type Provider interface {
     Name() string
     Fetch(ctx context.Context) ([]ExternalItem, error)
 }
+
+// Optional: entities that can be recognized in another provider's snapshot.
+type Matcher interface {
+    MatchKeys(itemType models.InventoryItemType, data map[string]any) []string
+}
 ```
 
-`Sync(ctx, providerName)` upserts items by link: existing link → refresh
-`provider_data`, `name` and status; new entity → link it to the item another
-entity of the same `(type, name)` is linked to, or else create an item
-(`origin='provider'`, deterministic UUIDv5) plus link; links whose entity
+`Sync(ctx, providerName)` upserts items by link: existing link → refresh the
+provider's `provider_data` entry, `name` and status; new entity → link it to
+the item another entity of this provider with the same `(type, name)` is
+linked to, else to the item of another provider whose snapshot shares a match
+key with it (see below), or else create an item (`origin='provider'`,
+deterministic UUIDv5) plus link; links whose entity
 disappeared are deleted, and an `origin='provider'` item left with no links is
 marked `status='removed'` (kept for history, like SpinupWP sites today).
 
@@ -93,9 +100,25 @@ marked `status='removed'` (kept for history, like SpinupWP sites today).
   item that still exists under its deterministic UUID, and that item becomes
   `active` again. Unlinking a provider-created item therefore only lasts until
   the next sync.
-- An item with several links takes `name`, `provider_data` and the site link
-  from one entity: the one it was created for, else the one with the smallest
-  `(provider_type, provider_id)`. The fetch order doesn't matter.
+- `provider_data` is keyed by provider (`{"spinupwp": {...}, "hetzner":
+  {...}}`). Each sync writes only its own entry, so one item can be linked to
+  several providers without their syncs overwriting each other. A provider's
+  entry is dropped when the item has no link of that provider left.
+- An item with several links of one provider takes that provider's snapshot
+  and the site link from one entity: the one it was created for, else the one
+  with the smallest `(provider_type, provider_id)`. The fetch order doesn't
+  matter.
+- The **name** is written only by the provider that owns it: the one whose
+  entity created the item, else the first by name among its links. A server
+  that SpinupWP and Hetzner name differently keeps its creator's name.
+- **Matching across providers**: a provider implementing `Matcher` returns
+  match keys for a snapshot. A new entity joins the active item whose snapshot
+  from another (`Matcher`) provider it still links has one of its keys. Keys
+  are read from the stored snapshots, so it doesn't matter which provider
+  syncs first. A key found on two items is ambiguous and matches nothing.
+  Servers match by public IPv4 address (`ipv4:<address>`; private, loopback
+  and other non-public addresses never match), so a Hetzner Cloud server
+  joins the SpinupWP server it runs. `SyncResult.matched` counts these joins.
 - `site_id` is only filled in when the item has none, so a site link set by
   hand stays (clearing it lets the sync fill it in again).
 - Items are written only when something changed, and a sync never touches
@@ -104,8 +127,10 @@ marked `status='removed'` (kept for history, like SpinupWP sites today).
   returned no entities of (no sites but all servers is taken for a partial
   fetch). The last entity of a type is therefore never removed automatically.
 
-The first provider is **SpinupWP** (`internal/inventory/spinupwp`), reusing
-`internal/fetch/spinupwp`:
+### SpinupWP
+
+**SpinupWP** (`internal/inventory/spinupwp`) reads the shared servers/sites
+cache:
 
 - servers → `type=server` items (`provider_type='server'`, `provider_id` =
   SpinupWP server ID); `provider_data` carries IP, SSH port, provider,
@@ -117,6 +142,24 @@ The first provider is **SpinupWP** (`internal/inventory/spinupwp`), reusing
   `site_id`; `provider_data` carries only domain facts (`domain`,
   `apex_domain`, `additional`, `certificate_expires`), not the site's
   PHP version, status, environment and so on.
+
+### Hetzner Cloud
+
+**Hetzner Cloud** (`internal/inventory/hetzner`) lists the cloud servers of
+every project in `hetznerApiTokens` (jman-api config, one API token per
+project; read-only tokens are enough; `JMAN_HETZNERAPITOKENS` takes them
+comma-separated). Without tokens the provider is skipped.
+
+- servers → `type=server` items (`provider_type='cloud_server'`,
+  `provider_id` = Hetzner server ID, unique across projects); `provider_data`
+  carries status, server type, cores, `memory_gb`, `disk_gb`, CPU type,
+  architecture, location/city/country, `ipv4`/`ipv6`, image, backup window,
+  labels, `delete_protection` and `created_at` (not the ID or name, which the
+  link and the item hold, nor traffic counters, which change all the time).
+- It reads up to 50 servers per page via `GET /v1/servers`. A failure in any
+  project fails the whole fetch, so a sync never removes the servers of a
+  project it couldn't read.
+- Servers match SpinupWP servers by public IPv4 address (above).
 
 Sync runs after every successful fast tick of jman-api's refresh scheduler
 (`internal/refresh`), and manually via `POST /api/inventory/sync/{provider}`.
@@ -184,6 +227,8 @@ separate from `details` (manual) and `provider_data` (per provider link).
 - `internal/inventory/` — provider framework, registry, sync runner
 - `internal/inventory/spinupwp/` — SpinupWP provider
 - `internal/inventory/domainlookup/` — RDAP/WHOIS registry lookups of domain items; `internal/db/inventory_lookup_repo.go` stores them
+- `internal/inventory/hetzner/` — Hetzner Cloud provider
+- `internal/db/migrate_inventory_provider_data.go` — one-time migration keying the old flat `provider_data` (all SpinupWP's) by provider
 - `internal/api/inventory_handlers.go` — REST handlers, registered in `handlers.go`
 - Notes attach through the generic notes system (`/api/notes`) with
   `parent_type = "InventoryItem"`; the detail view embeds `NotesWidget`. The

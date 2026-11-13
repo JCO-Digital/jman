@@ -178,3 +178,13 @@ export function displayDomain(domain: string): string {
 		})
 		.join(".");
 }
+
+const PROVIDER_LABELS: Record<string, string> = {
+	spinupwp: "SpinupWP",
+	hetzner: "Hetzner Cloud",
+};
+
+/** The display name of an inventory provider ("hetzner" → "Hetzner Cloud"). */
+export function providerName(provider: string): string {
+	return PROVIDER_LABELS[provider] ?? provider;
+}

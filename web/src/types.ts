@@ -1443,8 +1443,11 @@ export interface InventoryItem {
 	tags: string[];
 	/** Free-form manual fields; no secrets, at most usernames. */
 	details: Record<string, unknown>;
-	/** Latest snapshot from the linked API; read-only, written by syncs. */
-	provider_data: Record<string, unknown>;
+	/**
+	 * Latest snapshot from each linked API, keyed by provider name
+	 * ({"spinupwp": {...}, "hetzner": {...}}); read-only, written by syncs.
+	 */
+	provider_data: Record<string, Record<string, unknown>>;
 	site_id?: string | null;
 	server_id?: string | null;
 	links?: InventoryItemLink[];

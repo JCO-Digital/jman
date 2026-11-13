@@ -116,3 +116,12 @@ func Items(servers []models.Server, sites []models.Site) []inventory.ExternalIte
 
 	return items
 }
+
+// MatchKeys implements inventory.Matcher: a server is recognized by its
+// IPv4 address, so a Hetzner server joins the SpinupWP server it is.
+func (Provider) MatchKeys(itemType models.InventoryItemType, data map[string]any) []string {
+	if itemType != models.InventoryItemTypeServer {
+		return nil
+	}
+	return inventory.IPv4MatchKeys(data["ip_address"])
+}

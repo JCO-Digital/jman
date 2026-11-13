@@ -129,6 +129,12 @@ type AppConfig struct {
 	// update notice. Defaults to jman-api's own version.
 	LatestCLIVersion string `toml:"latestCliVersion" mapstructure:"latestCliVersion"`
 
+	// HetznerAPITokens are Hetzner Cloud API tokens, one per Hetzner
+	// project, whose servers the inventory's hetzner provider lists (see
+	// docs/inventory.md). Read-only tokens are enough. In the environment,
+	// JMAN_HETZNERAPITOKENS takes them comma-separated.
+	HetznerAPITokens []string `toml:"hetznerApiTokens" mapstructure:"hetznerApiTokens"`
+
 	// AnthropicAPIKey is the Claude API key jman-api's AI gateway uses (see
 	// docs/ai-gateway.md). The key's Anthropic organization must have zero
 	// data retention (ZDR) enabled; AIZDRConfirmed says it has.
@@ -317,6 +323,7 @@ func loadConfig() error {
 		"latestCliVersion":           "LATESTCLIVERSION",
 		"apiUrl":                     "APIURL",
 		"anthropicApiKey":            "ANTHROPICAPIKEY",
+		"hetznerApiTokens":           "HETZNERAPITOKENS",
 		"aiEnabled":                  "AIENABLED",
 		"aiZdrConfirmed":             "AIZDRCONFIRMED",
 		"aiFake":                     "AIFAKE",

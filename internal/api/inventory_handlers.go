@@ -10,6 +10,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/inventory"
 	"github.com/JCO-Digital/jman/internal/inventory/domainlookup"
+	_ "github.com/JCO-Digital/jman/internal/inventory/hetzner"  // register the Hetzner Cloud provider
 	_ "github.com/JCO-Digital/jman/internal/inventory/spinupwp" // register the SpinupWP provider
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/refresh"
@@ -461,6 +462,9 @@ func LinkInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
+		// The provider's snapshot moves with the link: the next sync
+		// writes it on this item.
+		_ = db.DropInventoryItemProviderData(other.ID, req.Provider)
 		if remaining, _ := db.ListInventoryItemLinks(other.ID); len(remaining) == 0 && other.Origin == models.InventoryItemOriginProvider {
 			_ = db.SetInventoryItemStatus(other.ID, models.InventoryItemStatusRemoved)
 		}
@@ -502,6 +506,7 @@ func UnlinkInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
+	_ = db.DropInventoryItemProviderData(item.ID, provider)
 	if remaining, _ := db.ListInventoryItemLinks(item.ID); len(remaining) == 0 && item.Origin == models.InventoryItemOriginProvider {
 		_ = db.SetInventoryItemStatus(item.ID, models.InventoryItemStatusRemoved)
 	}

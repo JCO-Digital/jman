@@ -16,7 +16,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
-import { displayDomain, formatBytes } from "../../utils/format";
+import { displayDomain, formatBytes, providerName } from "../../utils/format";
 
 const route = useRoute();
 const router = useRouter();
@@ -115,8 +115,16 @@ const toEntries = (data: Record<string, unknown> | undefined) =>
 
 const detailEntries = computed(() => toEntries(item.value?.details));
 
-const providerDataEntries = computed(() =>
-	toEntries(item.value?.provider_data),
+// One section per provider the item has a snapshot from.
+const providerSections = computed(() =>
+	Object.entries(item.value?.provider_data ?? {})
+		.map(([provider, data]) => ({
+			provider,
+			label: providerName(provider),
+			entries: toEntries(data),
+		}))
+		.filter((s) => s.entries.length > 0)
+		.sort((a, b) => a.label.localeCompare(b.label)),
 );
 
 // The link/dismiss prompt: for every undismissed match, its first link.
@@ -513,7 +521,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 							</thead>
 							<tbody>
 								<tr v-for="link in item.links" :key="link.id">
-									<td>{{ link.provider }}</td>
+									<td>{{ providerName(link.provider) }}</td>
 									<td>{{ link.provider_type }}</td>
 									<td>{{ link.provider_id }}</td>
 									<td v-if="authStore.canEdit">
@@ -552,15 +560,19 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 					</div>
 				</div>
 
-				<div v-if="providerDataEntries.length > 0" class="card">
+				<div
+					v-for="section in providerSections"
+					:key="section.provider"
+					class="card"
+				>
 					<div class="card-header">
-						<h3>Provider data (read-only)</h3>
+						<h3>{{ section.label }} data (read-only)</h3>
 					</div>
 					<div class="table-container">
 						<table class="data-table">
 							<tbody>
 								<tr
-									v-for="entry in providerDataEntries"
+									v-for="entry in section.entries"
 									:key="entry.key"
 								>
 									<th>{{ entry.label }}</th>

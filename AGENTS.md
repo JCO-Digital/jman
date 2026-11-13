@@ -67,7 +67,7 @@
 
 ### Configuration
 
-- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`, and for the AI gateway `anthropicApiKey`, `aiEnabled`, `aiZdrConfirmed`, `aiFake`, `aiDailyBudgetUsd` and `aiAgents`.
+- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`, `hetznerApiTokens` for the inventory's Hetzner Cloud provider, and for the AI gateway `anthropicApiKey`, `aiEnabled`, `aiZdrConfirmed`, `aiFake`, `aiDailyBudgetUsd` and `aiAgents`.
 - **API Users**: `jman-api` uses a separate `users.toml` for authentication, storing bcrypt-hashed passwords and TOTP secrets.
 - **XDG Support**: Follows XDG Base Directory Specification for configuration and data storage.
 
