@@ -16,7 +16,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
-import { formatBytes } from "../../utils/format";
+import { displayDomain, formatBytes } from "../../utils/format";
 
 const route = useRoute();
 const router = useRouter();
@@ -30,6 +30,14 @@ const item = ref<InventoryItemResponse | null>(null);
 const showModal = ref(false);
 
 const id = computed(() => String(route.params.id));
+
+// Domain names are shown in Unicode in the title; everywhere else on the
+// page shows the stored (Punycode) form.
+const displayName = computed(() =>
+	item.value?.type === "domain"
+		? displayDomain(item.value.name)
+		: (item.value?.name ?? ""),
+);
 
 // True when the item could not be loaded (deleted, unknown ID, API error).
 const loadFailed = ref(false);
@@ -118,6 +126,56 @@ const matchPrompts = computed(() =>
 		.filter((p) => p.link !== undefined),
 );
 
+// --- Registry lookup (domain items) ---
+
+const lookup = computed(() =>
+	// A lookup made under another name (before a rename) is not shown.
+	item.value?.domain_lookup?.domain === item.value?.name
+		? item.value?.domain_lookup
+		: undefined,
+);
+const lookingUp = ref(false);
+
+const handleLookup = async () => {
+	if (!item.value) return;
+	lookingUp.value = true;
+	try {
+		const result = await inventoryStore.lookupDomain(item.value.id);
+		item.value = { ...item.value, domain_lookup: result };
+		if (result.error) {
+			toast.addToast("Lookup failed: " + result.error, "error");
+		}
+	} catch (e: any) {
+		toast.addToast("Lookup failed: " + e.message, "error");
+	} finally {
+		lookingUp.value = false;
+	}
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Days until the domain expires (negative once it has), or null.
+const expiresInDays = computed(() => {
+	const at = lookup.value?.expires_at;
+	if (!at) return null;
+	return Math.floor((new Date(at).getTime() - Date.now()) / DAY_MS);
+});
+
+const expiryBadge = computed(() => {
+	const days = expiresInDays.value;
+	if (days === null) return null;
+	if (days < 0) return { cls: "error", text: "expired" };
+	if (days <= 30) return { cls: "warning", text: `in ${days} days` };
+	return { cls: "active", text: `in ${days} days` };
+});
+
+const sourceLabel = (source: string) =>
+	({ rdap: "RDAP", whois: "WHOIS", "rdap+whois": "RDAP and WHOIS" })[
+		source
+	] ?? source;
+
+const formatDay = (dateStr: string) => new Date(dateStr).toLocaleDateString();
+
 const handleLink = async (link: InventoryLinkPayload) => {
 	if (!item.value) return;
 	const updated = await inventoryStore.linkItem(item.value.id, link);
@@ -184,7 +242,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 <template>
 	<div class="view-container">
 		<ViewHeader
-			:title="item ? item.name : 'Inventory item'"
+			:title="item ? displayName : 'Inventory item'"
 			:back-button="{
 				text: 'Inventory',
 				onClick: () => router.push({ name: 'inventory' }),
@@ -347,6 +405,90 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 							</tbody>
 						</table>
 					</div>
+				</div>
+
+				<div v-if="item.type === 'domain'" class="card">
+					<div class="card-header">
+						<h3>Registration</h3>
+						<button
+							v-if="authStore.canEdit"
+							class="btn btn-outline btn-sm"
+							:disabled="lookingUp"
+							@click="handleLookup"
+						>
+							<AppIcon name="refresh" size="16" />
+							{{ lookingUp ? "Looking up..." : "Look up now" }}
+						</button>
+					</div>
+					<p v-if="!lookup" class="text-muted">
+						Not looked up yet. Domains are looked up at their
+						registry once a day.
+					</p>
+					<template v-else>
+						<p v-if="lookup.error" class="form-error">
+							Last lookup failed: {{ lookup.error }}
+							<template v-if="lookup.last_success_at">
+								— showing the result from
+								{{ formatDate(lookup.last_success_at) }}.
+							</template>
+						</p>
+						<div
+							v-if="lookup.last_success_at"
+							class="table-container"
+						>
+							<table class="data-table">
+								<tbody>
+									<tr>
+										<th>Registrar</th>
+										<td>
+											{{
+												lookup.registrar ||
+												"Not published by the registry"
+											}}
+										</td>
+									</tr>
+									<tr>
+										<th>Expires</th>
+										<td>
+											<template v-if="lookup.expires_at">
+												{{
+													formatDay(lookup.expires_at)
+												}}
+												<span
+													v-if="expiryBadge"
+													:class="[
+														'status-badge',
+														'badge-sm',
+														expiryBadge.cls,
+													]"
+												>
+													{{ expiryBadge.text }}
+												</span>
+											</template>
+											<template v-else>
+												Not published by the registry
+											</template>
+										</td>
+									</tr>
+									<tr>
+										<th>Nameservers</th>
+										<td>
+											{{
+												lookup.nameservers.join(", ") ||
+												"Not published by the registry"
+											}}
+										</td>
+									</tr>
+								</tbody>
+							</table>
+						</div>
+						<p class="text-muted">
+							Checked {{ formatDate(lookup.checked_at) }}
+							<template v-if="lookup.source">
+								via {{ sourceLabel(lookup.source) }}</template
+							>.
+						</p>
+					</template>
 				</div>
 
 				<div class="card">

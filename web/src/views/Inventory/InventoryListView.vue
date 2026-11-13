@@ -10,6 +10,7 @@ import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { displayDomain } from "../../utils/format";
 
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
@@ -144,6 +145,11 @@ const providerLabel = (item: InventoryItem) => {
 	return [...new Set(links.map((l) => l.provider))].join(", ");
 };
 
+// Domain names are shown in Unicode; the stored (Punycode) name is the
+// cell's tooltip.
+const displayName = (item: InventoryItem) =>
+	item.type === "domain" ? displayDomain(item.name) : item.name;
+
 const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 </script>
 
@@ -228,7 +234,15 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 								})
 							"
 						>
-							<td>{{ item.name }}</td>
+							<td
+								:title="
+									displayName(item) !== item.name
+										? item.name
+										: undefined
+								"
+							>
+								{{ displayName(item) }}
+							</td>
 							<td>
 								<span class="status-badge info">{{
 									item.type

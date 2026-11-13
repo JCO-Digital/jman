@@ -1267,6 +1267,28 @@ func initAPISchema() error {
 			},
 			PrimaryKey: []string{"item_id", "provider", "provider_type", "provider_id"},
 		},
+		{
+			// inventory_domain_lookups holds what a domain item's registry
+			// publishes (nameservers, registrar, expiry), looked up through
+			// RDAP/WHOIS by internal/inventory/domainlookup.
+			Name: "inventory_domain_lookups",
+			Columns: map[string]string{
+				"item_id": "TEXT PRIMARY KEY REFERENCES inventory_items(id) ON DELETE CASCADE",
+				// The name that was looked up; differs from the item's
+				// name after a rename, which makes the lookup due.
+				"domain":      "TEXT NOT NULL",
+				"nameservers": "TEXT NOT NULL DEFAULT '[]'",
+				"registrar":   "TEXT NOT NULL DEFAULT ''",
+				"expires_at":  "DATETIME",
+				// 'rdap', 'whois' or 'rdap+whois'.
+				"source": "TEXT NOT NULL DEFAULT ''",
+				// Why the last lookup failed; the data columns then keep
+				// the last successful result.
+				"error":           "TEXT NOT NULL DEFAULT ''",
+				"checked_at":      "DATETIME NOT NULL",
+				"last_success_at": "DATETIME",
+			},
+		},
 	}
 
 	// Before migrateTable drops the old job columns.

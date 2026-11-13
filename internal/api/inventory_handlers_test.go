@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
@@ -356,5 +357,43 @@ func TestNotesAcceptInventoryItemParent(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &notes)
 	if len(notes) != 1 || notes[0].Content != "Runs MariaDB 11" || notes[0].ParentType != models.NoteParentTypeInventoryItem {
 		t.Fatalf("notes: %+v", notes)
+	}
+}
+
+func TestInventoryDomainLookupHandlers(t *testing.T) {
+	ctx := setupInventoryHandlerTest(t)
+
+	server := models.InventoryItem{Type: models.InventoryItemTypeServer, Name: "web1.internal"}
+	if err := db.InsertInventoryItem(&server, "tester"); err != nil {
+		t.Fatal(err)
+	}
+	w := doInventoryRequest(t, ctx, "POST", "/api/inventory/items/"+server.ID+"/lookup", "", LookupInventoryDomainHandler, map[string]string{"id": server.ID})
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("lookup of a server: %d %s", w.Code, w.Body.String())
+	}
+
+	domain := models.InventoryItem{Type: models.InventoryItemTypeDomain, Name: "example.com"}
+	if err := db.InsertInventoryItem(&domain, "tester"); err != nil {
+		t.Fatal(err)
+	}
+	// A fresh stored lookup is returned as it is, without asking a registry.
+	now := time.Now().UTC()
+	stored := &models.InventoryDomainLookup{ItemID: domain.ID, Domain: "example.com", Registrar: "Example Registrar Inc.", Nameservers: []string{"ns1.example.com"}, Source: "rdap", CheckedAt: now, LastSuccessAt: &now}
+	if err := db.SaveInventoryDomainLookup(stored); err != nil {
+		t.Fatal(err)
+	}
+	w = doInventoryRequest(t, ctx, "POST", "/api/inventory/items/"+domain.ID+"/lookup", "", LookupInventoryDomainHandler, map[string]string{"id": domain.ID})
+	var got models.InventoryDomainLookup
+	json.Unmarshal(w.Body.Bytes(), &got)
+	if w.Code != http.StatusOK || got.Registrar != "Example Registrar Inc." {
+		t.Fatalf("recent lookup: %d %s", w.Code, w.Body.String())
+	}
+
+	// The item response carries the lookup.
+	w = doInventoryRequest(t, ctx, "GET", "/api/inventory/items/"+domain.ID, "", GetInventoryItemHandler, map[string]string{"id": domain.ID})
+	var resp InventoryItemResponse
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.DomainLookup == nil || resp.DomainLookup.Nameservers[0] != "ns1.example.com" {
+		t.Fatalf("item response: %s", w.Body.String())
 	}
 }

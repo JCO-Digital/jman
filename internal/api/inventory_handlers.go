@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/inventory"
+	"github.com/JCO-Digital/jman/internal/inventory/domainlookup"
 	_ "github.com/JCO-Digital/jman/internal/inventory/spinupwp" // register the SpinupWP provider
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/refresh"
@@ -253,10 +255,12 @@ func CreateInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusCreated, created)
 }
 
-// InventoryItemResponse is one item with its undismissed match suggestions.
+// InventoryItemResponse is one item with its undismissed match suggestions
+// and, for a domain item, its registry lookup.
 type InventoryItemResponse struct {
 	models.InventoryItem
-	Matches []models.InventoryItem `json:"matches,omitempty"`
+	Matches      []models.InventoryItem        `json:"matches,omitempty"`
+	DomainLookup *models.InventoryDomainLookup `json:"domain_lookup,omitempty"`
 }
 
 // GetInventoryItemHandler returns one item with its links and the other items
@@ -272,7 +276,49 @@ func GetInventoryItemHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	WriteJSON(w, http.StatusOK, InventoryItemResponse{InventoryItem: *item, Matches: matches})
+	resp := InventoryItemResponse{InventoryItem: *item, Matches: matches}
+	if item.Type == models.InventoryItemTypeDomain {
+		lookup, err := db.GetInventoryDomainLookup(item.ID)
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "GetInventoryItemHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		resp.DomainLookup = lookup
+	}
+	WriteJSON(w, http.StatusOK, resp)
+}
+
+// LookupInventoryDomainHandler looks a domain item up at its registry now
+// and answers with the stored lookup. A lookup less than
+// domainlookup.ManualMinInterval old for the same name is returned as it is,
+// so repeated clicks don't query the registry again.
+func LookupInventoryDomainHandler(w http.ResponseWriter, r *http.Request) {
+	item, ok := loadInventoryItem(w, r)
+	if !ok {
+		return
+	}
+	if item.Type != models.InventoryItemTypeDomain {
+		WriteError(w, http.StatusBadRequest, "Only domain items can be looked up")
+		return
+	}
+	prev, err := db.GetInventoryDomainLookup(item.ID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "LookupInventoryDomainHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if prev != nil && prev.Domain == item.Name && time.Since(prev.CheckedAt) < domainlookup.ManualMinInterval {
+		WriteJSON(w, http.StatusOK, prev)
+		return
+	}
+	lookup, err := domainlookup.LookupItem(r.Context(), item.ID, item.Name)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "LookupInventoryDomainHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Lookup failed: "+err.Error())
+		return
+	}
+	WriteJSON(w, http.StatusOK, lookup)
 }
 
 // loadInventoryItem reads the {id} path value and loads the item, writing the

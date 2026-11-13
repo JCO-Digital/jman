@@ -12,6 +12,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/inventory"
+	"github.com/JCO-Digital/jman/internal/inventory/domainlookup"
 	_ "github.com/JCO-Digital/jman/internal/inventory/spinupwp" // register the SpinupWP provider
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/vuln"
@@ -117,6 +118,10 @@ func runFastTick() {
 // and sends a one-off Slack alert for each newly found vulnerability, right
 // after the data that feeds them is fetched.
 func runSlowTick() {
+	// Registry lookups of inventory domains don't depend on the refresh
+	// below, and pace themselves per registry, so they run alongside it.
+	go runDomainLookups()
+
 	if err := cache.RunFullRefresh(slowTTL()); err != nil {
 		log.Printf("Refresh scheduler: full refresh failed: %v", err)
 		return
@@ -143,4 +148,15 @@ func runSlowTick() {
 // (see RefreshServersAndSites).
 func slowTTL() time.Duration {
 	return 0
+}
+
+// runDomainLookups refreshes the registry data (nameservers, registrar,
+// expiry) of the inventory's domain items whose lookup is due. Failures are
+// stored with each item and only logged here.
+func runDomainLookups() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
+	defer cancel()
+	if _, err := domainlookup.RefreshDue(ctx); err != nil {
+		log.Printf("Refresh scheduler: domain lookups: %v", err)
+	}
 }

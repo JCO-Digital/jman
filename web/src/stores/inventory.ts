@@ -1,6 +1,7 @@
 import { ref } from "vue";
 import { defineStore } from "pinia";
 import type {
+	InventoryDomainLookup,
 	InventoryItem,
 	InventoryItemPayload,
 	InventoryItemResponse,
@@ -198,6 +199,15 @@ export const useInventoryStore = defineStore("inventory", () => {
 		}
 	}
 
+	/** Looks a domain item up at its registry now; throws on failure. */
+	async function lookupDomain(id: string): Promise<InventoryDomainLookup> {
+		const res = await apiFetch(`${BASE_URL}/inventory/items/${id}/lookup`, {
+			method: "POST",
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		return await res.json();
+	}
+
 	async function syncProvider(
 		provider: string,
 	): Promise<InventorySyncResult | null> {
@@ -232,6 +242,7 @@ export const useInventoryStore = defineStore("inventory", () => {
 		linkItem,
 		unlinkItem,
 		dismissMatch,
+		lookupDomain,
 		syncProvider,
 	};
 });

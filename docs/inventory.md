@@ -122,6 +122,34 @@ Sync runs after every successful fast tick of jman-api's refresh scheduler
 (`internal/refresh`), and manually via `POST /api/inventory/sync/{provider}`.
 The CLI does not consume inventory data (no `cliproto.Snapshot` change).
 
+## Domain registry lookups
+
+Every active domain item, whatever its origin, is looked up at its registry
+(`internal/inventory/domainlookup`) for its delegated nameservers, registrar
+and expiry date. The result is stored per item in `inventory_domain_lookups`,
+separate from `details` (manual) and `provider_data` (per provider link).
+
+- **RDAP first**: the registry's RDAP server comes from IANA's bootstrap file
+  (`https://data.iana.org/rdap/dns.json`, cached for a day). `expiration`
+  event → expiry, `nameservers` → nameservers, the `registrar` entity's vCard
+  name → registrar.
+- **WHOIS for the gaps**: when RDAP leaves a field out, or a TLD has no RDAP,
+  the registry's WHOIS server is asked if `whoisServers` (`whois.go`) has an
+  entry for the TLD: its address and the keys of the "key: value" lines that
+  hold each field. Only `.fi` is configured: rdap.fi has no registrar, which
+  `whois.fi` publishes (in Latin-1). Adding a WHOIS-only TLD is an entry in
+  that map.
+- A TLD with neither is stored with an "unsupported" error. A field the
+  registry doesn't publish stays empty; the UI says "Not published by the
+  registry".
+- **Schedule**: each slow tick looks up at most 40 due items: never looked up,
+  renamed since, last success older than 24 hours, or last failure older than
+  6 hours. Requests to one registry host are at least 2 seconds apart.
+- A failed lookup stores its error and keeps the last successful data and
+  its time (`last_success_at`); a "not found at the registry" answer clears
+  the data.
+- Only the domain name is sent, straight to the TLD's registry.
+
 ## REST API
 
 | Method & path | Auth | Purpose |
@@ -129,12 +157,13 @@ The CLI does not consume inventory data (no `cliproto.Snapshot` change).
 | `GET /api/inventory/types` | basic | item types + their `details` template (key/kind/hint per field; the UI renders it as a form, empty fields are not saved, with an add-field button and a raw-JSON editor toggle) |
 | `GET /api/inventory/items?type=&status=&search=` | basic | list, joined with links |
 | `POST /api/inventory/items` | edit | create manual item; domain names normalized to apex; `409` + `existing_item_id` on type+name match |
-| `GET /api/inventory/items/{id}` | basic | item + links + match suggestions (undismissed) |
+| `GET /api/inventory/items/{id}` | basic | item + links + match suggestions (undismissed) + `domain_lookup` for domain items |
 | `PATCH /api/inventory/items/{id}` | edit | edit manual fields; provider-owned fields rejected on linked items |
 | `DELETE /api/inventory/items/{id}` | edit | manual items only; provider-linked → `409` |
 | `POST /api/inventory/items/{id}/links` | edit | link an external entity to the item (merges the auto-created item into it) |
 | `DELETE /api/inventory/items/{id}/links/{provider}/{providerType}/{providerId}` | edit | unlink |
 | `POST /api/inventory/items/{id}/dismiss` | edit | dismiss a match prompt |
+| `POST /api/inventory/items/{id}/lookup` | edit | look a domain item up at its registry now (a lookup less than a minute old is returned as it is) |
 | `POST /api/inventory/sync/{provider}` | edit | run a provider sync now |
 
 ## Web UI
@@ -144,7 +173,8 @@ The CLI does not consume inventory data (no `cliproto.Snapshot` change).
 - New "Inventory" nav section at `/inventory`: list with type filter, search,
   provider badge and a sync button; detail/edit view with a type-specific form
   writing `details`, the links list, and the link/dismiss prompt when a manual
-  item matches a synced item of the same type+name.
+  item matches a synced item of the same type+name. Domain items have a
+  Registration card with the registry lookup and a "Look up now" button.
 
 ## Files
 
@@ -153,6 +183,7 @@ The CLI does not consume inventory data (no `cliproto.Snapshot` change).
 - `internal/db/db.go` — the three table definitions in `initAPISchema`
 - `internal/inventory/` — provider framework, registry, sync runner
 - `internal/inventory/spinupwp/` — SpinupWP provider
+- `internal/inventory/domainlookup/` — RDAP/WHOIS registry lookups of domain items; `internal/db/inventory_lookup_repo.go` stores them
 - `internal/api/inventory_handlers.go` — REST handlers, registered in `handlers.go`
 - Notes attach through the generic notes system (`/api/notes`) with
   `parent_type = "InventoryItem"`; the detail view embeds `NotesWidget`. The
