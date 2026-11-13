@@ -126,7 +126,7 @@ onMounted(async () => {
 	]);
 });
 
-type SortKey = "name" | "type" | "status" | "provider" | "updated_at";
+type SortKey = "name" | "type" | "status" | "provider";
 const sortKey = ref<SortKey>("name");
 const sortOrder = ref<"asc" | "desc">("asc");
 
@@ -159,8 +159,6 @@ const sortValue = (item: InventoryItem, key: SortKey): string => {
 			return displayName(item).toLowerCase();
 		case "provider":
 			return providerLabel(item).toLowerCase();
-		case "updated_at":
-			return item.updated_at;
 		default:
 			return String(item[key]);
 	}
@@ -298,12 +296,6 @@ const syncAll = async () => {
 	}
 	await load();
 };
-
-const formatDate = (dateStr: string) =>
-	new Date(dateStr).toLocaleString("de-DE", {
-		dateStyle: "short",
-		timeStyle: "short",
-	});
 </script>
 
 <template>
@@ -379,12 +371,6 @@ const formatDate = (dateStr: string) =>
 							Provider {{ sortIndicator("provider") }}
 						</th>
 						<th class="col-medium hide-mobile">Tags</th>
-						<th
-							class="col-medium hide-mobile"
-							@click="handleSort('updated_at')"
-						>
-							Updated {{ sortIndicator("updated_at") }}
-						</th>
 						<th v-if="authStore.canEdit" class="col-narrow"></th>
 					</tr>
 				</thead>
@@ -395,13 +381,13 @@ const formatDate = (dateStr: string) =>
 							inventoryStore.items.length === 0
 						"
 					>
-						<td :colspan="authStore.canEdit ? 7 : 6">
+						<td :colspan="authStore.canEdit ? 6 : 5">
 							<LoadingSpinner message="Loading inventory..." />
 						</td>
 					</tr>
 					<tr v-else-if="pageItems.length === 0">
 						<td
-							:colspan="authStore.canEdit ? 7 : 6"
+							:colspan="authStore.canEdit ? 6 : 5"
 							class="empty-state"
 						>
 							<span v-if="routeSearch"
@@ -451,9 +437,6 @@ const formatDate = (dateStr: string) =>
 						</td>
 						<td class="col-medium truncate hide-mobile">
 							{{ (item.tags ?? []).join(", ") }}
-						</td>
-						<td class="col-medium hide-mobile">
-							{{ formatDate(item.updated_at) }}
 						</td>
 						<td
 							v-if="authStore.canEdit"
