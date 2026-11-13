@@ -81,3 +81,25 @@ type InventoryLinkDismissal struct {
 	CreatedAt    time.Time `json:"created_at"`
 	CreatedBy    string    `json:"created_by"`
 }
+
+// InventoryDomainLookup is what the domain's registry publishes about a
+// domain item: its delegated nameservers, registrar and expiry date. It is
+// looked up through RDAP, with WHOIS for what a registry's RDAP leaves out,
+// and refreshed daily (see internal/inventory/domainlookup). A field the
+// registry doesn't publish stays empty.
+type InventoryDomainLookup struct {
+	ItemID string `json:"item_id"`
+	// Domain is the name that was looked up; a lookup whose Domain differs
+	// from the item's name is stale.
+	Domain      string     `json:"domain"`
+	Nameservers []string   `json:"nameservers"`
+	Registrar   string     `json:"registrar"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	// Source is where the data came from: "rdap", "whois" or "rdap+whois".
+	Source string `json:"source"`
+	// Error is why the last lookup failed. The other fields then still hold
+	// the result of the last successful lookup, from LastSuccessAt.
+	Error         string     `json:"error,omitempty"`
+	CheckedAt     time.Time  `json:"checked_at"`
+	LastSuccessAt *time.Time `json:"last_success_at,omitempty"`
+}

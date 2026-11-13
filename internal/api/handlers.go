@@ -197,6 +197,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/inventory/items/{id}/links", edit(LinkInventoryItemHandler))
 	mux.Handle("DELETE /api/inventory/items/{id}/links/{provider}/{providerType}/{providerId}", edit(UnlinkInventoryItemHandler))
 	mux.Handle("POST /api/inventory/items/{id}/dismiss", edit(DismissInventoryLinkMatchHandler))
+	mux.Handle("POST /api/inventory/items/{id}/lookup", edit(LookupInventoryDomainHandler))
 	mux.Handle("POST /api/inventory/sync/{provider}", edit(SyncInventoryProviderHandler))
 
 	// --- Site linking routes ---

@@ -1477,9 +1477,30 @@ export interface InventoryTypeInfo {
 	detail_fields: InventoryDetailField[];
 }
 
+/**
+ * What a domain item's registry publishes (RDAP, with WHOIS for what RDAP
+ * leaves out). Empty fields are not published by the registry.
+ */
+export interface InventoryDomainLookup {
+	item_id: string;
+	/** The name that was looked up. */
+	domain: string;
+	nameservers: string[];
+	registrar: string;
+	expires_at?: string;
+	/** "rdap", "whois" or "rdap+whois"; "" before the first success. */
+	source: string;
+	/** Why the last lookup failed; the data is then from last_success_at. */
+	error?: string;
+	checked_at: string;
+	last_success_at?: string;
+}
+
 export interface InventoryItemResponse extends InventoryItem {
 	/** Other items matching type+name that the link/dismiss prompt offers. */
 	matches?: InventoryItem[];
+	/** A domain item's registry lookup, once it has been looked up. */
+	domain_lookup?: InventoryDomainLookup;
 }
 
 export interface InventoryLinkPayload {
