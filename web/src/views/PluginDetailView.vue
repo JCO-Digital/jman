@@ -17,6 +17,7 @@ import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
 import PluginRowActions from "../components/PluginRowActions.vue";
 import AppIcon from "../components/AppIcon.vue";
 import NotesWidget from "../components/NotesWidget.vue";
+import { usePageTitle } from "../composables/usePageTitle";
 
 const props = defineProps<{
 	name: string;
@@ -169,13 +170,11 @@ async function updateSites(
 	}
 }
 
-const goBack = () => {
-	router.push({ name: "plugins" });
-};
-
 const goToSite = (siteId: string) => {
 	router.push({ name: "site-detail", params: { id: siteId } });
 };
+
+usePageTitle(() => info.value?.name || props.name);
 
 const manageAssetTemplate = () => {
 	router.push({
@@ -197,8 +196,8 @@ const manageAssetTemplate = () => {
 <template>
 	<div class="view-container">
 		<ViewHeader
-			title="Plugin Details"
-			:back-button="{ text: 'Back to Plugins', onClick: goBack }"
+			:title="info?.name || name"
+			:back="{ label: 'Plugins', to: { name: 'plugins' } }"
 		>
 			<template v-if="authStore.canEdit" #actions>
 				<button
@@ -362,7 +361,10 @@ const manageAssetTemplate = () => {
 				/>
 				<div v-else class="empty-state">
 					<p>Plugin details not found.</p>
-					<button class="back-btn mt-4" @click="goBack">
+					<button
+						class="back-btn mt-4"
+						@click="router.push({ name: 'plugins' })"
+					>
 						Go back to plugins
 					</button>
 				</div>

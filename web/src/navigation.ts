@@ -74,7 +74,7 @@ export const navGroups: NavGroup[] = [
 			{
 				key: "assets",
 				label: "Assets",
-				to: "/billing",
+				to: "/assets",
 				icon: "credit-card",
 			},
 			{

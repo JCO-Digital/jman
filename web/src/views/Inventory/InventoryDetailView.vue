@@ -18,6 +18,8 @@ import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
 import { expiryBadge } from "../../utils/inventory";
 import { displayDomain, formatBytes, providerName } from "../../utils/format";
+import { useBackLink } from "../../composables/useBackLink";
+import { usePageTitle } from "../../composables/usePageTitle";
 
 const route = useRoute();
 const router = useRouter();
@@ -203,6 +205,11 @@ const handleSave = async (payload: InventoryItemPayload) => {
 	await load();
 };
 
+// After a delete, back to the list as it was left (or the plain list).
+const { go: backToList } = useBackLink({ name: "inventory" });
+
+usePageTitle(() => (item.value ? displayName.value : null));
+
 const handleDelete = async () => {
 	if (!item.value) return;
 	if (
@@ -230,20 +237,6 @@ const handleUnlink = async (link: InventoryLinkPayload) => {
 	await load();
 };
 
-// A list URL: /inventory[/<type>][?...].
-const LIST_PATH = /^\/inventory(\/[a-z]+)?(\/\d+){0,2}\/?(\?.*)?$/;
-
-// backToList returns to the list the way it was left (type, page, search)
-// when the previous page was the list; otherwise it opens the list.
-const backToList = () => {
-	const back = (window.history.state as { back?: unknown } | null)?.back;
-	if (typeof back === "string" && LIST_PATH.test(back)) {
-		router.back();
-	} else {
-		router.push({ name: "inventory" });
-	}
-};
-
 const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 </script>
 
@@ -251,10 +244,7 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 	<div class="view-container">
 		<ViewHeader
 			:title="item ? displayName : 'Inventory item'"
-			:back-button="{
-				text: 'Inventory',
-				onClick: backToList,
-			}"
+			:back="{ label: 'Inventory', to: { name: 'inventory' } }"
 		>
 			<template #actions>
 				<div

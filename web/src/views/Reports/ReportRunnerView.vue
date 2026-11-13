@@ -11,6 +11,7 @@ import SortableTh from "../../components/SortableTh.vue";
 import Pagination from "../../components/Pagination.vue";
 import { useListState } from "../../composables/useListState";
 import { useClientList } from "../../composables/useClientList";
+import { usePageTitle } from "../../composables/usePageTitle";
 
 const props = defineProps<{
 	id: string;
@@ -28,6 +29,7 @@ const isRunning = ref(false);
 const error = ref<string | null>(null);
 
 const report = computed(() => reportsStore.getReport(props.id));
+usePageTitle(() => report.value?.name);
 const hasDateRange = computed(
 	() => report.value?.params.some((p) => p.type === "daterange") ?? false,
 );
@@ -132,17 +134,13 @@ const formatCell = (value: unknown, type: string) => {
 	}
 	return value;
 };
-
-const goBack = () => {
-	router.push({ name: "reports" });
-};
 </script>
 
 <template>
 	<div class="view-container">
 		<ViewHeader
 			:title="report?.name || 'Report'"
-			:back-button="{ text: 'Reports', onClick: goBack }"
+			:back="{ label: 'Reports', to: { name: 'reports' } }"
 		/>
 
 		<div v-if="reportsStore.isLoading && !report" class="loading-container">

@@ -9,7 +9,8 @@ import { useToastStore } from "../../stores/toast";
 import { useConfirm } from "../../composables/useConfirm";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
-import PanelPagination from "./PanelPagination.vue";
+import Pagination from "../Pagination.vue";
+import { useListState } from "../../composables/useListState";
 import ScanFindingsTable from "./ScanFindingsTable.vue";
 import ScanTriageModal from "./ScanTriageModal.vue";
 import SectionBar from "./SectionBar.vue";
@@ -62,16 +63,13 @@ const canTriage = computed(() => authStore.canExecute);
 const expanded = ref(new Set<number>());
 const incidentFindings = ref<Record<number, ScanFinding[]>>({});
 const informational = ref<ScanFinding[]>([]);
-const historyPage = ref(1);
-const historyLimit = ref(50);
+// The history section's page is in the URL (?page=&per=), like every
+// list's; choosing another section drops it.
+const list = useListState({ sortKeys: [], defaultSort: "" });
 const showRemoved = ref(false);
 
 const triageMode = ref<"allowlist" | "acknowledge" | null>(null);
 const triageFindings = ref<ScanFinding[]>([]);
-
-const historyTotalPages = computed(() =>
-	Math.max(1, Math.ceil(scanStore.historyTotal / historyLimit.value)),
-);
 
 onMounted(async () => {
 	const id = Number(route.query.incident);
@@ -83,7 +81,7 @@ onMounted(async () => {
 	await refresh();
 });
 
-watch(section, () => refresh());
+watch([section, list.page, list.perPage], () => refresh());
 watch(showRemoved, () => refresh());
 
 async function refresh() {
@@ -103,8 +101,8 @@ async function refresh() {
 				break;
 			case "history":
 				await scanStore.fetchHistoryIncidents(
-					historyPage.value,
-					historyLimit.value,
+					list.page.value,
+					list.perPage.value,
 				);
 				await Promise.all([...expanded.value].map(loadFindings));
 				break;
@@ -309,17 +307,6 @@ async function removeAck(id: number, path: string) {
 			"error",
 		);
 	}
-}
-
-function changeHistoryPage(page: number) {
-	historyPage.value = page;
-	refresh();
-}
-
-function changeHistoryLimit(limit: number) {
-	historyLimit.value = limit;
-	historyPage.value = 1;
-	refresh();
 }
 </script>
 
@@ -538,13 +525,10 @@ function changeHistoryLimit(limit: number) {
 					</tbody>
 				</table>
 				<div class="pagination-wrapper">
-					<PanelPagination
-						:current-page="historyPage"
-						:total-pages="historyTotalPages"
-						:rows-per-page="historyLimit"
-						@prev="changeHistoryPage(historyPage - 1)"
-						@next="changeHistoryPage(historyPage + 1)"
-						@update:rows-per-page="changeHistoryLimit"
+					<Pagination
+						:list="list"
+						:page="list.page.value"
+						:total="scanStore.historyTotal"
 					/>
 				</div>
 			</div>

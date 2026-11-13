@@ -6,6 +6,7 @@ import {
 } from "vue-router";
 import { useAuthStore } from "../stores/auth";
 import { findNavItem, type NavKey } from "../navigation";
+import { clearPageTitle, pageTitle } from "../composables/usePageTitle";
 
 declare module "vue-router" {
 	interface RouteMeta {
@@ -35,6 +36,59 @@ function pagingQuery(to: Pick<RouteLocationNormalized, "params" | "query">) {
 	};
 }
 
+function asArray(v: string | string[] | undefined): string[] {
+	return v === undefined ? [] : Array.isArray(v) ? v : [v];
+}
+
+// Monitoring's area and section were ?tab=<area>&section=<section>, and
+// before the areas had sections ?tab=active|checks|history. Slack alerts
+// still link /monitoring?tab=security&incident=<id>.
+const legacyMonitoringAreas: Record<
+	string,
+	{ area: string; section?: string }
+> = {
+	uptime: { area: "uptime" },
+	security: { area: "security" },
+	vulnerabilities: { area: "vulnerabilities" },
+	active: { area: "uptime" },
+	checks: { area: "uptime", section: "checks" },
+	history: { area: "uptime", section: "history" },
+};
+
+function legacyMonitoringTab(to: RouteLocationNormalized) {
+	const tab = to.query.tab;
+	if (typeof tab !== "string") return null;
+	const { tab: _, section, ...query } = to.query;
+	const legacy = legacyMonitoringAreas[tab];
+	if (!legacy) return { name: "monitoring", query };
+	const sec = typeof section === "string" ? section : legacy.section;
+	return {
+		name: "monitoring",
+		params: { area: legacy.area, section: sec ?? "" },
+		query,
+	};
+}
+
+// URLs from before the tabs were routes and the lists shared ?q=: the
+// location they now are, or null. These run on every navigation, not only
+// when a route is entered, since links within a page use them too.
+function legacyLocation(to: RouteLocationNormalized) {
+	if (to.name === "monitoring") return legacyMonitoringTab(to);
+	if (to.name === "settings" && typeof to.query.tab === "string") {
+		const { tab, ...query } = to.query;
+		return { name: "settings", params: { tab }, query };
+	}
+	if (to.name === "inventory" && typeof to.query.search === "string") {
+		const { search, ...query } = to.query;
+		return {
+			name: "inventory",
+			params: to.params,
+			query: { ...query, q: search },
+		};
+	}
+	return null;
+}
+
 function legacyPaging(path: string, name: string): RouteRecordRaw {
 	return {
 		path: `${path}/:page(\\d+)/:rowsPerPage(\\d+)?`,
@@ -52,7 +106,8 @@ const router = createRouter({
 			meta: { public: true },
 		},
 		{
-			path: "/site/:id",
+			// /site/<id>[/<tab>]: the overview is the default and left out.
+			path: "/site/:id/:tab(updates|users|traffic|ledger)?",
 			name: "site-detail",
 			meta: { nav: "sites", title: "Site" },
 			component: () => import("../views/SiteDetailView.vue"),
@@ -93,30 +148,42 @@ const router = createRouter({
 			component: () => import("../views/OrganizationsView.vue"),
 		},
 		{
-			path: "/organization/:id",
+			// /organization/<id>[/<tab>]: the overview is the default.
+			path: "/organization/:id/:tab(sites|assets)?",
 			name: "organization-detail",
 			meta: { nav: "organizations", title: "Organization" },
 			component: () => import("../views/OrganizationDetailView.vue"),
 			props: true,
 		},
 		{
-			path: "/billing",
+			path: "/assets",
 			name: "assets",
 			meta: { nav: "assets", width: "wide" },
 			component: () => import("../views/Assets/AssetsListView.vue"),
 		},
-		legacyPaging("/billing", "assets"),
+		legacyPaging("/assets", "assets"),
 		{
-			path: "/billing/templates",
+			path: "/assets/templates",
 			name: "asset-templates",
 			meta: { nav: "assets", width: "wide", title: "Templates" },
 			component: () => import("../views/Assets/TemplatesView.vue"),
 		},
 		{
-			path: "/billing/payment-methods",
+			path: "/assets/payment-methods",
 			name: "payment-methods",
 			meta: { nav: "assets", title: "Payment methods" },
 			component: () => import("../views/Assets/PaymentMethodsView.vue"),
+		},
+		// The assets were under /billing before they had their own section.
+		{
+			path: "/billing/:rest(.*)*",
+			redirect: (to) => ({
+				path: [
+					"/assets",
+					...asArray(to.params.rest).filter(Boolean),
+				].join("/"),
+				query: to.query,
+			}),
 		},
 		{
 			// /inventory[/<type>]: the type is lower-case letters, so it
@@ -132,12 +199,6 @@ const router = createRouter({
 						? route.params.type
 						: undefined,
 			}),
-			// The search was ?search= before the lists shared ?q=.
-			beforeEnter: (to) => {
-				if (typeof to.query.search !== "string") return true;
-				const { search, ...query } = to.query;
-				return { ...to, query: { ...query, q: search } };
-			},
 		},
 		{
 			path: "/inventory/:type([a-z]+)/:page(\\d+)/:rowsPerPage(\\d+)?",
@@ -169,10 +230,13 @@ const router = createRouter({
 			props: true,
 		},
 		{
-			path: "/monitoring",
+			// /monitoring[/<area>[/<section>]]: the summary is the default,
+			// and each area's first section is left out too.
+			path: "/monitoring/:area(uptime|security|vulnerabilities)?/:section?",
 			name: "monitoring",
 			meta: { nav: "monitoring", width: "wide" },
 			component: () => import("../views/MonitoringView.vue"),
+			props: true,
 		},
 		{
 			path: "/incidents",
@@ -204,10 +268,11 @@ const router = createRouter({
 			component: () => import("../views/DashboardView.vue"),
 		},
 		{
-			path: "/settings",
+			path: "/settings/:tab?",
 			name: "settings",
 			meta: { nav: "settings" },
 			component: () => import("../views/SettingsView.vue"),
+			props: true,
 		},
 		{
 			path: "/cli-login",
@@ -219,6 +284,9 @@ const router = createRouter({
 });
 
 router.beforeEach(async (to) => {
+	const legacy = legacyLocation(to);
+	if (legacy) return legacy;
+
 	const authStore = useAuthStore();
 	// Wait for the startup session restore before deciding.
 	await authStore.ready;
@@ -244,8 +312,16 @@ router.beforeEach(async (to) => {
 
 // The tab title follows the page; views with a better name (a site's
 // domain) can set document.title themselves after this.
-router.afterEach((to) => {
-	const name = to.meta.title ?? findNavItem(to.meta.nav)?.item.label;
+router.afterEach((to, from) => {
+	// The page's own name (a site's domain) stays while only its tab or
+	// query changes; a view on another page or item sets it again.
+	if (to.name !== from.name || to.params.id !== from.params.id) {
+		clearPageTitle();
+	}
+	const name =
+		pageTitle.value ??
+		to.meta.title ??
+		findNavItem(to.meta.nav)?.item.label;
 	document.title = name ? `${name} · jman` : "jman";
 });
 

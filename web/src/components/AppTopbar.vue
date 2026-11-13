@@ -7,6 +7,7 @@ import { useIncidentStore } from "../stores/incidents";
 import { useVulnStore } from "../stores/vulns";
 import { useSidebar } from "../composables/useSidebar";
 import { findNavItem } from "../navigation";
+import { pageTitle } from "../composables/usePageTitle";
 import AppIcon from "./AppIcon.vue";
 import LoadingSpinner from "./LoadingSpinner.vue";
 
@@ -34,12 +35,13 @@ interface Crumb {
 // page is something under it (a site, a plugin, the asset templates).
 const crumbs = computed<Crumb[]>(() => {
 	const found = findNavItem(route.meta.nav);
-	if (!found) return route.meta.title ? [{ label: route.meta.title }] : [];
+	const title = pageTitle.value ?? route.meta.title;
+	if (!found) return title ? [{ label: title }] : [];
 	const list: Crumb[] = [];
 	if (found.group?.label) list.push({ label: found.group.label });
-	if (route.meta.title) {
+	if (title) {
 		list.push({ label: found.item.label, to: found.item.to });
-		list.push({ label: route.meta.title });
+		list.push({ label: title });
 	} else {
 		list.push({ label: found.item.label });
 	}
@@ -173,7 +175,7 @@ const handleLogout = () => {
 					</div>
 					<RouterLink
 						v-if="restrictedNotice"
-						to="/settings?tab=account"
+						to="/settings"
 						class="nav-restricted-notice"
 						role="menuitem"
 					>
@@ -181,7 +183,7 @@ const handleLogout = () => {
 						<span>{{ restrictedNotice }}</span>
 					</RouterLink>
 					<RouterLink
-						to="/settings?tab=account"
+						to="/settings"
 						class="user-menu-item"
 						role="menuitem"
 					>

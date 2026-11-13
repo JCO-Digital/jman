@@ -53,6 +53,9 @@ Use existing class structures to ensure UI consistency:
 - The sidebar is defined as data in `src/navigation.ts` (groups and items). Add new sections there, not in `AppSidebar.vue`.
 - Every route sets `meta.nav` to the sidebar item it belongs to; this drives the active item, the breadcrumbs and `document.title`. Pages under a section (a detail view) also set `meta.title`.
 - `meta.width` sets how wide the page's `.view-container` may grow: `wide` for lists and dashboards, the default for detail pages, `narrow` for forms. Views must not set their own `max-width`.
+- A page's tabs and sections are routes, not `?tab=` queries or local state: path params (`/site/:id/:tab?`, `/monitoring/:area?/:section?`, `/settings/:tab?`) with the default left out. Render them with `RouteTabs` in `ViewHeader`'s `#tabs` slot. A detail page's tabs use `replace`, so its back link still finds the list it came from. When renaming a route, add a redirect for the old URL (Slack messages and bookmarks link to them).
+- Detail pages pass `back` to `ViewHeader` (`{ label, to }`). It goes back in history when the previous entry is that list, so the list returns with its search, sort and page; otherwise it opens `to`. Use `useBackLink` for other ways back (e.g. after a delete).
+- Detail pages name themselves with `usePageTitle(() => item.value?.name)`, which the breadcrumbs and the browser tab use.
 
 ## 6. Lists
 

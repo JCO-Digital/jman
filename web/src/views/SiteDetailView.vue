@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { RouterLink, useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useMonitorStore } from "../stores/monitor";
 import { useOrganizationStore } from "../stores/organization";
@@ -9,6 +9,7 @@ import { useIgnoreStore } from "../stores/ignore";
 import { useToastStore } from "../stores/toast";
 import type { Organization, Contact, SiteEnvironment } from "../types";
 import ViewHeader from "../components/ViewHeader.vue";
+import RouteTabs, { type RouteTab } from "../components/RouteTabs.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
@@ -21,6 +22,7 @@ import { usePluginUpdatesStore } from "../stores/pluginUpdates";
 import { useCoreUpdateStore } from "../stores/coreUpdate";
 import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useConfirm } from "../composables/useConfirm";
+import { usePageTitle } from "../composables/usePageTitle";
 import NotesWidget from "../components/NotesWidget.vue";
 import SiteUsersCard from "../components/SiteUsersCard.vue";
 import VulnerabilityList from "../components/VulnerabilityList.vue";
@@ -41,8 +43,10 @@ import {
 import type { LedgerStatus, SiteUpdateLedgerEntry } from "../types";
 import { BASE_URL, apiFetch } from "../utils/api";
 
+// /site/<id>[/<tab>]: the overview is the default and left out.
 const props = defineProps<{
 	id: string;
+	tab?: string;
 }>();
 
 const router = useRouter();
@@ -81,7 +85,7 @@ watch(
 			if (match) {
 				router.replace({
 					name: "site-detail",
-					params: { id: match.id },
+					params: { id: match.id, tab: props.tab ?? "" },
 				});
 				return;
 			}
@@ -728,9 +732,46 @@ const serverInfoItems = computed(() => {
 	return items;
 });
 
-const goBack = () => {
-	router.push({ name: "sites" });
-};
+type Tab = "overview" | "updates" | "users" | "traffic" | "ledger";
+
+// The tabs replace the history entry, so the back link (and browser back)
+// return to the list the site was opened from.
+const tabs = computed<RouteTab[]>(() => {
+	const to = (tab: Tab) => ({
+		name: "site-detail",
+		params: { id: props.id, tab: tab === "overview" ? "" : tab },
+	});
+	const s = site.value;
+	const enriched = dataStore.enrichedSites.find((e) => e.id === siteId.value);
+	const vulns = enriched
+		? enriched.vulnerabilities.filter((v) => !v.suppressed).length +
+			enriched.coreVulnerabilities.filter((v) => !v.suppressed).length
+		: 0;
+	const list: RouteTab[] = [
+		{ key: "overview", label: "Overview", to: to("overview") },
+		{
+			key: "updates",
+			label: "Plugins & core",
+			to: to("updates"),
+			count: vulns,
+		},
+	];
+	if (s?.is_wordpress) {
+		list.push({ key: "users", label: "Users", to: to("users") });
+	}
+	list.push(
+		{ key: "traffic", label: "Traffic", to: to("traffic") },
+		{ key: "ledger", label: "Update ledger", to: to("ledger") },
+	);
+	return list;
+});
+
+const activeTab = computed<Tab>(() => {
+	const t = (props.tab || "overview") as Tab;
+	return tabs.value.some((x) => x.key === t) ? t : "overview";
+});
+
+usePageTitle(() => site.value?.domain);
 
 const goToPlugin = (name: string) => {
 	router.push({
@@ -998,509 +1039,723 @@ const unlinkOrganization = async () => {
 <template>
 	<div class="view-container">
 		<ViewHeader
-			title="Site Details"
-			:back-button="{ text: 'Back to Sites', onClick: goBack }"
-		/>
-
-		<main v-if="site" class="content mt-4">
-			<div class="flex-row gap-3 mb-4">
-				<label for="site-environment" class="font-medium"
-					>Environment</label
+			:title="site?.domain ?? 'Site'"
+			:back="{ label: 'Sites', to: { name: 'sites' } }"
+		>
+			<template v-if="site" #subtitle>
+				<span
+					v-if="site.environment"
+					class="status-badge badge-sm"
+					:class="site.environment"
 				>
-				<select
-					id="site-environment"
-					v-model="environmentDraft"
-					:disabled="!authStore.canEdit"
-					@change="onEnvironmentChange"
-				>
-					<option value="">Unclassified</option>
-					<option value="production">Production</option>
-					<option value="staging">Staging</option>
-					<option value="development">Development</option>
-					<option value="archived">Archived</option>
-				</select>
-			</div>
-
-			<div class="grid-2-cols">
-				<InfoCard title="Site Information" :items="siteInfoItems" />
-				<InfoCard
-					v-if="server"
-					title="Server Information"
-					:items="serverInfoItems"
+					{{ site.environment }}
+				</span>
+				{{ serverName }}
+			</template>
+			<template v-if="site" #tabs>
+				<RouteTabs
+					:tabs="tabs"
+					:active="activeTab"
+					label="Site sections"
+					replace
 				/>
-			</div>
+			</template>
+		</ViewHeader>
 
-			<NotesWidget parent-type="Site" :parent-id="site.id" />
-
-			<section class="card mt-4">
-				<div class="card-header">
-					<h2>Organization Information</h2>
-					<div class="flex-row gap-3">
-						<button
-							v-if="organization && authStore.canEdit"
-							class="btn btn-text danger"
-							@click="unlinkOrganization"
-						>
-							Unlink
-						</button>
-						<button
-							v-if="organization"
-							class="btn btn-outline btn-sm"
-							@click="goToOrganization"
-						>
-							View Organization
-						</button>
-						<button
-							v-if="!organization && authStore.canEdit"
-							class="btn btn-primary btn-sm"
-							@click="showLinkModal = true"
-						>
-							Link Organization
-						</button>
-					</div>
+		<main v-if="site" class="content">
+			<template v-if="activeTab === 'overview'">
+				<div class="flex-row gap-3 mb-4">
+					<label for="site-environment" class="font-medium"
+						>Environment</label
+					>
+					<select
+						id="site-environment"
+						v-model="environmentDraft"
+						:disabled="!authStore.canEdit"
+						@change="onEnvironmentChange"
+					>
+						<option value="">Unclassified</option>
+						<option value="production">Production</option>
+						<option value="staging">Staging</option>
+						<option value="development">Development</option>
+						<option value="archived">Archived</option>
+					</select>
 				</div>
 
-				<div v-if="organization">
-					<div class="info-grid">
-						<div class="info-item">
-							<span class="label">Name</span>
-							<span class="value">{{ organization.name }}</span>
-						</div>
-						<div v-if="organization.vat_number" class="info-item">
-							<span class="label">VAT Number</span>
-							<span class="value">{{
-								organization.vat_number
-							}}</span>
+				<div class="grid-2-cols">
+					<InfoCard title="Site Information" :items="siteInfoItems" />
+					<InfoCard
+						v-if="server"
+						title="Server Information"
+						:items="serverInfoItems"
+					/>
+				</div>
+
+				<NotesWidget parent-type="Site" :parent-id="site.id" />
+
+				<section class="card mt-4">
+					<div class="card-header">
+						<h2>Organization Information</h2>
+						<div class="flex-row gap-3">
+							<button
+								v-if="organization && authStore.canEdit"
+								class="btn btn-text danger"
+								@click="unlinkOrganization"
+							>
+								Unlink
+							</button>
+							<button
+								v-if="organization"
+								class="btn btn-outline btn-sm"
+								@click="goToOrganization"
+							>
+								View Organization
+							</button>
+							<button
+								v-if="!organization && authStore.canEdit"
+								class="btn btn-primary btn-sm"
+								@click="showLinkModal = true"
+							>
+								Link Organization
+							</button>
 						</div>
 					</div>
 
-					<div v-if="contacts.length > 0" class="mt-4">
-						<h3 class="sub-text font-medium mb-4">Contacts</h3>
-						<div class="table-container">
-							<table class="data-table">
-								<thead>
-									<tr>
-										<th>Name</th>
-										<th>Type</th>
-										<th>Email</th>
-									</tr>
-								</thead>
-								<tbody>
+					<div v-if="organization">
+						<div class="info-grid">
+							<div class="info-item">
+								<span class="label">Name</span>
+								<span class="value">{{
+									organization.name
+								}}</span>
+							</div>
+							<div
+								v-if="organization.vat_number"
+								class="info-item"
+							>
+								<span class="label">VAT Number</span>
+								<span class="value">{{
+									organization.vat_number
+								}}</span>
+							</div>
+						</div>
+
+						<div v-if="contacts.length > 0" class="mt-4">
+							<h3 class="sub-text font-medium mb-4">Contacts</h3>
+							<div class="table-container">
+								<table class="data-table">
+									<thead>
+										<tr>
+											<th>Name</th>
+											<th>Type</th>
+											<th>Email</th>
+										</tr>
+									</thead>
+									<tbody>
+										<tr
+											v-for="contact in contacts"
+											:key="contact.id"
+										>
+											<td class="font-medium">
+												{{ contact.name }}
+											</td>
+											<td>
+												<span
+													:class="[
+														'status-badge',
+														'badge-sm',
+														contact.type.toLowerCase(),
+													]"
+												>
+													{{ contact.type }}
+												</span>
+											</td>
+											<td class="text-muted">
+												{{ contact.email || "—" }}
+											</td>
+										</tr>
+									</tbody>
+								</table>
+							</div>
+						</div>
+					</div>
+					<div v-else class="empty-state">
+						No organization linked to this site.
+					</div>
+				</section>
+
+				<div class="mt-4">
+					<MonitorHistoryCard
+						:history="history"
+						:domain="site.domain"
+						:site-id="site.id"
+						:server-id="site.server_id"
+					/>
+				</div>
+			</template>
+			<template v-if="activeTab === 'updates'">
+				<section class="card mt-4">
+					<div class="card-header">
+						<h2>Update Lock</h2>
+						<div
+							v-if="authStore.canExecute && site.can_wp_cli"
+							class="flex-row gap-2"
+						>
+							<template v-if="siteLocks.site">
+								<button
+									class="btn btn-outline btn-sm"
+									@click="showLockModal = true"
+								>
+									Edit comment
+								</button>
+								<button
+									class="btn btn-outline btn-sm"
+									@click="unlockSite"
+								>
+									Unlock
+								</button>
+							</template>
+							<button
+								v-else
+								class="btn btn-outline btn-sm"
+								@click="showLockModal = true"
+							>
+								<AppIcon name="lock" size="14" /> Lock updates
+							</button>
+						</div>
+					</div>
+
+					<div v-if="siteLocks.site" class="info-item">
+						<span class="label">Site</span>
+						<span class="value">
+							<span class="status-badge badge-sm warning">
+								<AppIcon name="lock" size="11" /> Fix releases
+								only
+							</span>
+							{{ siteLocks.site.comment || "No comment" }}
+							<span class="text-muted">
+								({{ lockLabel(siteLocks.site) }})
+							</span>
+						</span>
+					</div>
+					<p v-else class="text-muted">
+						Updates on this site aren't locked.
+						{{
+							lockedPlugins.length
+								? "Locked plugins only get fix releases."
+								: "Lock the site, or single plugins below, to only allow fix-release updates."
+						}}
+					</p>
+
+					<div
+						v-for="lock in lockedPlugins"
+						:key="lock.id"
+						class="info-item"
+					>
+						<span class="label">{{ lock.plugin }}</span>
+						<span class="value">
+							{{ lock.comment || "No comment" }}
+							<span class="text-muted"
+								>({{ lockLabel(lock) }})</span
+							>
+						</span>
+					</div>
+
+					<p
+						v-if="coreAutoUpdates === 'major'"
+						class="confirm-option-warning"
+					>
+						WordPress installs major core updates on its own on this
+						site (WP_AUTO_UPDATE_CORE or the wp-admin setting),
+						which the lock can't stop.
+					</p>
+					<p
+						v-else-if="coreAutoUpdates === 'unknown'"
+						class="confirm-option-warning"
+					>
+						WordPress's own core auto-update setting is unknown for
+						this site, so it may install major updates despite the
+						lock.
+					</p>
+					<p
+						v-if="hasLocks && autoUpdatingLockedPlugins.length"
+						class="confirm-option-warning"
+					>
+						WordPress auto-updates these locked plugins on its own,
+						which the lock can't stop:
+						{{ autoUpdatingLockedPlugins.join(", ") }}.
+					</p>
+				</section>
+
+				<section class="card mt-4">
+					<div class="card-header">
+						<h2>WordPress Core</h2>
+						<button
+							v-if="authStore.canExecute && site.can_wp_cli"
+							class="btn btn-outline btn-sm"
+							:disabled="isCheckingCoreUpdate"
+							@click="checkCoreUpdate"
+						>
+							{{
+								isCheckingCoreUpdate
+									? "Checking..."
+									: "Check for Updates"
+							}}
+						</button>
+					</div>
+
+					<p v-if="!site.can_wp_cli" class="text-muted">
+						Core and plugin updates require WP-CLI access to this
+						site.
+					</p>
+
+					<div class="info-item">
+						<span class="label">Installed Version</span>
+						<span class="value flex-row items-center gap-2">
+							{{
+								site.wp_core ? site.wp_core.version : "Unknown"
+							}}
+							<span
+								v-if="
+									site.wp_core &&
+									!site.wp_core.minor_update &&
+									!site.wp_core.major_update
+								"
+								class="status-badge badge-sm active"
+							>
+								Up to date
+							</span>
+							<span
+								v-if="site.wp_core?.minor_update"
+								class="status-badge badge-sm warning"
+							>
+								Minor update available
+							</span>
+							<span
+								v-if="site.wp_core?.major_update"
+								class="status-badge badge-sm error"
+							>
+								Major update available
+							</span>
+							<span
+								v-if="coreVulns.length"
+								class="status-badge badge-sm"
+								:class="
+									coreVulnsSuppressed ? 'warning' : 'error'
+								"
+								:title="
+									coreVulnsSuppressed
+										? 'All vulnerabilities are suppressed via ignore rules'
+										: undefined
+								"
+							>
+								{{ coreVulns.length }}
+								{{
+									coreVulns.length === 1
+										? "vulnerability"
+										: "vulnerabilities"
+								}}
+								<template v-if="coreVulnsMaxCvss != null">
+									· max {{ coreVulnsMaxCvss.toFixed(1) }}
+								</template>
+							</span>
+						</span>
+					</div>
+
+					<div
+						v-if="
+							authStore.canExecute &&
+							site.can_wp_cli &&
+							(site.wp_core?.minor_update ||
+								site.wp_core?.major_update)
+						"
+						class="flex-row gap-3 mt-4"
+					>
+						<button
+							v-if="site.wp_core?.minor_update"
+							class="btn btn-primary btn-sm"
+							:disabled="!!coreJob || !!queueingCoreTarget"
+							@click="runCoreUpdate('minor')"
+						>
+							{{
+								isUpdatingCore.minor
+									? "Updating..."
+									: `Update to ${site.wp_core.minor_update}`
+							}}
+						</button>
+						<button
+							v-if="site.wp_core?.major_update"
+							class="btn btn-outline btn-sm"
+							:disabled="!!coreJob || !!queueingCoreTarget"
+							:title="
+								siteLocks.site
+									? 'Update-locked: asks for confirmation'
+									: undefined
+							"
+							@click="runCoreUpdate('major')"
+						>
+							<AppIcon
+								v-if="siteLocks.site"
+								name="lock"
+								size="12"
+							/>
+							{{
+								isUpdatingCore.major
+									? "Updating..."
+									: `Update to ${site.wp_core.major_update}`
+							}}
+						</button>
+					</div>
+
+					<div v-if="coreVulnItems.length" class="mt-4">
+						<VulnerabilityList
+							:items="coreVulnItems"
+							:can-mark-patched="authStore.canEdit"
+							@mark-patched="
+								(item: VulnListItem) =>
+									openBackport(
+										'core',
+										'',
+										item,
+										site!.wp_core!.version,
+									)
+							"
+						/>
+					</div>
+				</section>
+
+				<section class="card mt-4">
+					<div class="card-header">
+						<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
+						<div
+							v-if="canManagePlugins || vulnerablePlugins.length"
+							class="plugin-card-actions"
+						>
+							<button
+								v-if="vulnerablePlugins.length"
+								class="btn btn-text btn-sm"
+								@click="toggleAllVulnRows"
+							>
+								{{
+									allVulnRowsOpen
+										? "Hide vulnerabilities"
+										: `Show vulnerabilities (${vulnerablePlugins.length} ${vulnerablePlugins.length === 1 ? "plugin" : "plugins"})`
+								}}
+							</button>
+							<template v-if="canManagePlugins">
+								<button
+									class="btn btn-outline btn-sm"
+									:disabled="
+										pluginUpdatesStore.isChecking(site.id)
+									"
+									@click="checkPluginUpdates"
+								>
+									<span
+										v-if="
+											pluginUpdatesStore.isChecking(
+												site.id,
+											)
+										"
+										class="spinner spinner-small"
+									></span>
+									{{
+										pluginUpdatesStore.isChecking(site.id)
+											? "Checking…"
+											: "Check for updates"
+									}}
+								</button>
+								<button
+									v-if="vulnerableUpdatable.length"
+									class="btn btn-outline btn-sm"
+									@click="
+										updatePlugins(vulnerableUpdatable, true)
+									"
+								>
+									Update vulnerable ({{
+										vulnerableUpdatable.length
+									}})
+								</button>
+								<button
+									v-if="updatablePlugins.length"
+									class="btn btn-primary btn-sm"
+									@click="
+										updatePlugins(updatablePlugins, false)
+									"
+								>
+									Update all ({{ updatablePlugins.length }})
+								</button>
+								<button
+									class="btn btn-primary btn-sm"
+									@click="showInstallModal = true"
+								>
+									Install plugin
+								</button>
+							</template>
+						</div>
+					</div>
+					<div class="table-container">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Plugin Name</th>
+									<th>Version</th>
+									<th>Status</th>
+									<th>Vulns</th>
+									<th
+										v-if="canManagePlugins"
+										class="text-right"
+									>
+										Actions
+									</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr
+									v-for="job in jobsStore.activeInstalls(
+										site.id,
+									)"
+									:key="`install-${job.id}`"
+								>
+									<td
+										:colspan="canManagePlugins ? 5 : 4"
+										class="text-muted"
+									>
+										<span class="plugin-actions-pending">
+											<span
+												class="spinner spinner-small"
+											></span>
+											{{
+												job.status === "queued"
+													? "Queued install of"
+													: "Installing"
+											}}
+											{{ job.payload.source }}…
+										</span>
+									</td>
+								</tr>
+								<tr v-if="sitePlugins.length === 0">
+									<td
+										:colspan="canManagePlugins ? 5 : 4"
+										class="empty-state"
+									>
+										No plugins found.
+									</td>
+								</tr>
+								<template
+									v-for="plugin in sitePlugins"
+									:key="plugin.name"
+								>
 									<tr
-										v-for="contact in contacts"
-										:key="contact.id"
+										class="clickable-row"
+										@click="goToPlugin(plugin.name)"
 									>
 										<td class="font-medium">
-											{{ contact.name }}
+											{{ plugin.name }}
+											<span
+												v-if="
+													dataStore.isPluginLocked(
+														site.id,
+														plugin.name,
+													)
+												"
+												class="status-badge badge-sm warning"
+												:title="
+													siteLocks.plugins.get(
+														plugin.name,
+													)?.comment ||
+													siteLocks.site?.comment ||
+													'Update-locked: fix releases only'
+												"
+											>
+												<AppIcon
+													name="lock"
+													size="11"
+												/>
+												Locked
+											</span>
+										</td>
+										<td class="text-muted">
+											{{ plugin.version }}
+											<span
+												v-if="
+													availablePluginUpdate(
+														plugin,
+													)
+												"
+												class="plugin-update-available"
+												:title="`Update available: ${availablePluginUpdate(plugin)}`"
+											>
+												→
+												{{
+													availablePluginUpdate(
+														plugin,
+													)
+												}}
+											</span>
 										</td>
 										<td>
 											<span
 												:class="[
 													'status-badge',
 													'badge-sm',
-													contact.type.toLowerCase(),
+													plugin.status.toLowerCase(),
 												]"
 											>
-												{{ contact.type }}
+												{{ plugin.status }}
 											</span>
 										</td>
-										<td class="text-muted">
-											{{ contact.email || "—" }}
+										<td
+											:class="{
+												'vuln-toggle-cell':
+													plugin.vulnerabilities
+														.length > 0,
+											}"
+											@click="
+												onVulnCellClick($event, plugin)
+											"
+										>
+											<button
+												v-if="
+													plugin.vulnerabilities
+														.length > 0
+												"
+												class="vuln-toggle"
+												:class="{
+													open: openVulnRows.has(
+														plugin.name,
+													),
+												}"
+												:aria-expanded="
+													openVulnRows.has(
+														plugin.name,
+													)
+												"
+												:title="`${plugin.vulnerabilities.length} vulnerabilities${plugin.suppressed ? ' (suppressed)' : ''}: show them here`"
+											>
+												<span
+													class="status-badge badge-sm"
+													:class="
+														plugin.suppressed
+															? 'warning'
+															: 'error'
+													"
+												>
+													{{
+														plugin.vulnerabilities
+															.length
+													}}
+												</span>
+												<AppIcon
+													name="chevron-right"
+													size="12"
+													class="chevron"
+												/>
+											</button>
+											<span v-else class="text-muted"
+												>—</span
+											>
+										</td>
+										<td v-if="canManagePlugins">
+											<PluginRowActions
+												:site-id="site.id"
+												:site-name="site.domain"
+												:plugin="plugin"
+											/>
 										</td>
 									</tr>
-								</tbody>
-							</table>
-						</div>
+									<tr
+										v-if="openVulnRows.has(plugin.name)"
+										class="vuln-detail-row"
+									>
+										<td :colspan="canManagePlugins ? 5 : 4">
+											<div class="vuln-detail">
+												<p class="vuln-detail-note">
+													{{ pluginFixNote(plugin) }}
+												</p>
+												<VulnerabilityList
+													:items="plugin.vulnItems"
+													:can-mark-patched="
+														authStore.canEdit
+													"
+													@mark-patched="
+														(item: VulnListItem) =>
+															openBackport(
+																'plugin',
+																plugin.name,
+																item,
+																plugin.version,
+															)
+													"
+												/>
+											</div>
+										</td>
+									</tr>
+								</template>
+							</tbody>
+						</table>
 					</div>
-				</div>
-				<div v-else class="empty-state">
-					No organization linked to this site.
-				</div>
-			</section>
-
-			<div class="mt-4">
-				<MonitorHistoryCard
-					:history="history"
-					:domain="site.domain"
-					:site-id="site.id"
-					:server-id="site.server_id"
-				/>
-			</div>
-
-			<SiteTrafficCard v-if="site.has_agent" :site-id="site.id" />
-			<section v-else class="card mt-4">
-				<div class="card-header">
-					<h2>Traffic</h2>
-				</div>
-				<p class="text-muted">
-					Traffic analytics require jman-agent on this site's server.
-				</p>
-			</section>
-
-			<section class="card mt-4">
-				<div class="card-header">
-					<h2>Update Lock</h2>
-					<div
-						v-if="authStore.canExecute && site.can_wp_cli"
-						class="flex-row gap-2"
-					>
-						<template v-if="siteLocks.site">
-							<button
-								class="btn btn-outline btn-sm"
-								@click="showLockModal = true"
-							>
-								Edit comment
-							</button>
-							<button
-								class="btn btn-outline btn-sm"
-								@click="unlockSite"
-							>
-								Unlock
-							</button>
-						</template>
+				</section>
+			</template>
+			<template v-if="activeTab === 'users'">
+				<SiteUsersCard v-if="site.is_wordpress" :site="site" />
+			</template>
+			<template v-if="activeTab === 'traffic'">
+				<SiteTrafficCard v-if="site.has_agent" :site-id="site.id" />
+				<section v-else class="card mt-4">
+					<div class="card-header">
+						<h2>Traffic</h2>
+					</div>
+					<p class="text-muted">
+						Traffic analytics require jman-agent on this site's
+						server.
+					</p>
+				</section>
+			</template>
+			<template v-if="activeTab === 'ledger'">
+				<section class="card mt-4">
+					<div class="card-header">
+						<h2>Update Ledger</h2>
 						<button
-							v-else
-							class="btn btn-outline btn-sm"
-							@click="showLockModal = true"
+							v-if="authStore.canEdit"
+							class="btn btn-primary btn-sm"
+							@click="showAddLedgerModal = true"
 						>
-							<AppIcon name="lock" size="14" /> Lock updates
+							Log Manual Update
 						</button>
 					</div>
-				</div>
-
-				<div v-if="siteLocks.site" class="info-item">
-					<span class="label">Site</span>
-					<span class="value">
-						<span class="status-badge badge-sm warning">
-							<AppIcon name="lock" size="11" /> Fix releases only
-						</span>
-						{{ siteLocks.site.comment || "No comment" }}
-						<span class="text-muted">
-							({{ lockLabel(siteLocks.site) }})
-						</span>
-					</span>
-				</div>
-				<p v-else class="text-muted">
-					Updates on this site aren't locked.
-					{{
-						lockedPlugins.length
-							? "Locked plugins only get fix releases."
-							: "Lock the site, or single plugins below, to only allow fix-release updates."
-					}}
-				</p>
-
-				<div
-					v-for="lock in lockedPlugins"
-					:key="lock.id"
-					class="info-item"
-				>
-					<span class="label">{{ lock.plugin }}</span>
-					<span class="value">
-						{{ lock.comment || "No comment" }}
-						<span class="text-muted">({{ lockLabel(lock) }})</span>
-					</span>
-				</div>
-
-				<p
-					v-if="coreAutoUpdates === 'major'"
-					class="confirm-option-warning"
-				>
-					WordPress installs major core updates on its own on this
-					site (WP_AUTO_UPDATE_CORE or the wp-admin setting), which
-					the lock can't stop.
-				</p>
-				<p
-					v-else-if="coreAutoUpdates === 'unknown'"
-					class="confirm-option-warning"
-				>
-					WordPress's own core auto-update setting is unknown for this
-					site, so it may install major updates despite the lock.
-				</p>
-				<p
-					v-if="hasLocks && autoUpdatingLockedPlugins.length"
-					class="confirm-option-warning"
-				>
-					WordPress auto-updates these locked plugins on its own,
-					which the lock can't stop:
-					{{ autoUpdatingLockedPlugins.join(", ") }}.
-				</p>
-			</section>
-
-			<section class="card mt-4">
-				<div class="card-header">
-					<h2>WordPress Core</h2>
-					<button
-						v-if="authStore.canExecute && site.can_wp_cli"
-						class="btn btn-outline btn-sm"
-						:disabled="isCheckingCoreUpdate"
-						@click="checkCoreUpdate"
-					>
-						{{
-							isCheckingCoreUpdate
-								? "Checking..."
-								: "Check for Updates"
-						}}
-					</button>
-				</div>
-
-				<p v-if="!site.can_wp_cli" class="text-muted">
-					Core and plugin updates require WP-CLI access to this site.
-				</p>
-
-				<div class="info-item">
-					<span class="label">Installed Version</span>
-					<span class="value flex-row items-center gap-2">
-						{{ site.wp_core ? site.wp_core.version : "Unknown" }}
-						<span
-							v-if="
-								site.wp_core &&
-								!site.wp_core.minor_update &&
-								!site.wp_core.major_update
-							"
-							class="status-badge badge-sm active"
-						>
-							Up to date
-						</span>
-						<span
-							v-if="site.wp_core?.minor_update"
-							class="status-badge badge-sm warning"
-						>
-							Minor update available
-						</span>
-						<span
-							v-if="site.wp_core?.major_update"
-							class="status-badge badge-sm error"
-						>
-							Major update available
-						</span>
-						<span
-							v-if="coreVulns.length"
-							class="status-badge badge-sm"
-							:class="coreVulnsSuppressed ? 'warning' : 'error'"
-							:title="
-								coreVulnsSuppressed
-									? 'All vulnerabilities are suppressed via ignore rules'
-									: undefined
-							"
-						>
-							{{ coreVulns.length }}
-							{{
-								coreVulns.length === 1
-									? "vulnerability"
-									: "vulnerabilities"
-							}}
-							<template v-if="coreVulnsMaxCvss != null">
-								· max {{ coreVulnsMaxCvss.toFixed(1) }}
-							</template>
-						</span>
-					</span>
-				</div>
-
-				<div
-					v-if="
-						authStore.canExecute &&
-						site.can_wp_cli &&
-						(site.wp_core?.minor_update ||
-							site.wp_core?.major_update)
-					"
-					class="flex-row gap-3 mt-4"
-				>
-					<button
-						v-if="site.wp_core?.minor_update"
-						class="btn btn-primary btn-sm"
-						:disabled="!!coreJob || !!queueingCoreTarget"
-						@click="runCoreUpdate('minor')"
-					>
-						{{
-							isUpdatingCore.minor
-								? "Updating..."
-								: `Update to ${site.wp_core.minor_update}`
-						}}
-					</button>
-					<button
-						v-if="site.wp_core?.major_update"
-						class="btn btn-outline btn-sm"
-						:disabled="!!coreJob || !!queueingCoreTarget"
-						:title="
-							siteLocks.site
-								? 'Update-locked: asks for confirmation'
-								: undefined
-						"
-						@click="runCoreUpdate('major')"
-					>
-						<AppIcon v-if="siteLocks.site" name="lock" size="12" />
-						{{
-							isUpdatingCore.major
-								? "Updating..."
-								: `Update to ${site.wp_core.major_update}`
-						}}
-					</button>
-				</div>
-
-				<div v-if="coreVulnItems.length" class="mt-4">
-					<VulnerabilityList
-						:items="coreVulnItems"
-						:can-mark-patched="authStore.canEdit"
-						@mark-patched="
-							(item: VulnListItem) =>
-								openBackport(
-									'core',
-									'',
-									item,
-									site!.wp_core!.version,
-								)
-						"
-					/>
-				</div>
-			</section>
-
-			<section class="card mt-4">
-				<div class="card-header">
-					<h2>Installed Plugins ({{ sitePlugins.length }})</h2>
-					<div
-						v-if="canManagePlugins || vulnerablePlugins.length"
-						class="plugin-card-actions"
-					>
-						<button
-							v-if="vulnerablePlugins.length"
-							class="btn btn-text btn-sm"
-							@click="toggleAllVulnRows"
-						>
-							{{
-								allVulnRowsOpen
-									? "Hide vulnerabilities"
-									: `Show vulnerabilities (${vulnerablePlugins.length} ${vulnerablePlugins.length === 1 ? "plugin" : "plugins"})`
-							}}
-						</button>
-						<template v-if="canManagePlugins">
-							<button
-								class="btn btn-outline btn-sm"
-								:disabled="
-									pluginUpdatesStore.isChecking(site.id)
-								"
-								@click="checkPluginUpdates"
-							>
-								<span
-									v-if="
-										pluginUpdatesStore.isChecking(site.id)
-									"
-									class="spinner spinner-small"
-								></span>
-								{{
-									pluginUpdatesStore.isChecking(site.id)
-										? "Checking…"
-										: "Check for updates"
-								}}
-							</button>
-							<button
-								v-if="vulnerableUpdatable.length"
-								class="btn btn-outline btn-sm"
-								@click="
-									updatePlugins(vulnerableUpdatable, true)
-								"
-							>
-								Update vulnerable ({{
-									vulnerableUpdatable.length
-								}})
-							</button>
-							<button
-								v-if="updatablePlugins.length"
-								class="btn btn-primary btn-sm"
-								@click="updatePlugins(updatablePlugins, false)"
-							>
-								Update all ({{ updatablePlugins.length }})
-							</button>
-							<button
-								class="btn btn-primary btn-sm"
-								@click="showInstallModal = true"
-							>
-								Install plugin
-							</button>
-						</template>
-					</div>
-				</div>
-				<div class="table-container">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Plugin Name</th>
-								<th>Version</th>
-								<th>Status</th>
-								<th>Vulns</th>
-								<th v-if="canManagePlugins" class="text-right">
-									Actions
-								</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-for="job in jobsStore.activeInstalls(site.id)"
-								:key="`install-${job.id}`"
-							>
-								<td
-									:colspan="canManagePlugins ? 5 : 4"
-									class="text-muted"
-								>
-									<span class="plugin-actions-pending">
-										<span
-											class="spinner spinner-small"
-										></span>
-										{{
-											job.status === "queued"
-												? "Queued install of"
-												: "Installing"
-										}}
-										{{ job.payload.source }}…
-									</span>
-								</td>
-							</tr>
-							<tr v-if="sitePlugins.length === 0">
-								<td
-									:colspan="canManagePlugins ? 5 : 4"
-									class="empty-state"
-								>
-									No plugins found.
-								</td>
-							</tr>
-							<template
-								v-for="plugin in sitePlugins"
-								:key="plugin.name"
-							>
+					<div class="table-container">
+						<table class="data-table">
+							<thead>
+								<tr>
+									<th>Type</th>
+									<th>Status</th>
+									<th>Details</th>
+									<th>User</th>
+									<th>Timestamp</th>
+								</tr>
+							</thead>
+							<tbody>
 								<tr
-									class="clickable-row"
-									@click="goToPlugin(plugin.name)"
+									v-if="
+										!ledgerEntries ||
+										ledgerEntries.length === 0
+									"
 								>
-									<td class="font-medium">
-										{{ plugin.name }}
-										<span
-											v-if="
-												dataStore.isPluginLocked(
-													site.id,
-													plugin.name,
-												)
-											"
-											class="status-badge badge-sm warning"
-											:title="
-												siteLocks.plugins.get(
-													plugin.name,
-												)?.comment ||
-												siteLocks.site?.comment ||
-												'Update-locked: fix releases only'
-											"
-										>
-											<AppIcon name="lock" size="11" />
-											Locked
-										</span>
+									<td colspan="5" class="empty-state">
+										No update ledger entries recorded.
 									</td>
-									<td class="text-muted">
-										{{ plugin.version }}
+								</tr>
+								<tr
+									v-for="entry in ledgerEntries || []"
+									:key="entry.id"
+								>
+									<td>
 										<span
-											v-if="availablePluginUpdate(plugin)"
-											class="plugin-update-available"
-											:title="`Update available: ${availablePluginUpdate(plugin)}`"
+											class="status-badge badge-sm info"
 										>
-											→
-											{{ availablePluginUpdate(plugin) }}
+											{{
+												entry.update_type.toUpperCase()
+											}}
 										</span>
 									</td>
 									<td>
@@ -1508,210 +1763,79 @@ const unlinkOrganization = async () => {
 											:class="[
 												'status-badge',
 												'badge-sm',
-												plugin.status.toLowerCase(),
+												ledgerBadgeClass(entry.status),
 											]"
+											:title="ledgerTitle(entry)"
 										>
-											{{ plugin.status }}
+											{{ entry.status }}
 										</span>
 									</td>
 									<td
-										:class="{
-											'vuln-toggle-cell':
-												plugin.vulnerabilities.length >
-												0,
-										}"
-										@click="onVulnCellClick($event, plugin)"
+										class="font-xs text-muted"
+										style="max-width: 350px"
 									>
-										<button
-											v-if="
-												plugin.vulnerabilities.length >
-												0
+										<div
+											style="
+												display: flex;
+												flex-direction: column;
 											"
-											class="vuln-toggle"
-											:class="{
-												open: openVulnRows.has(
-													plugin.name,
-												),
-											}"
-											:aria-expanded="
-												openVulnRows.has(plugin.name)
-											"
-											:title="`${plugin.vulnerabilities.length} vulnerabilities${plugin.suppressed ? ' (suppressed)' : ''}: show them here`"
 										>
-											<span
-												class="status-badge badge-sm"
-												:class="
-													plugin.suppressed
-														? 'warning'
-														: 'error'
+											<div
+												:style="
+													isLedgerEntryExpanded(
+														entry.id,
+													)
+														? 'white-space: pre-wrap; word-break: break-word;'
+														: 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;'
 												"
 											>
 												{{
-													plugin.vulnerabilities
-														.length
+													isLedgerEntryExpanded(
+														entry.id,
+													)
+														? formatLedgerDetails(
+																entry,
+															)
+														: getFirstLine(entry)
 												}}
-											</span>
-											<AppIcon
-												name="chevron-right"
-												size="12"
-												class="chevron"
-											/>
-										</button>
-										<span v-else class="text-muted">—</span>
-									</td>
-									<td v-if="canManagePlugins">
-										<PluginRowActions
-											:site-id="site.id"
-											:site-name="site.domain"
-											:plugin="plugin"
-										/>
-									</td>
-								</tr>
-								<tr
-									v-if="openVulnRows.has(plugin.name)"
-									class="vuln-detail-row"
-								>
-									<td :colspan="canManagePlugins ? 5 : 4">
-										<div class="vuln-detail">
-											<p class="vuln-detail-note">
-												{{ pluginFixNote(plugin) }}
-											</p>
-											<VulnerabilityList
-												:items="plugin.vulnItems"
-												:can-mark-patched="
-													authStore.canEdit
+											</div>
+											<button
+												v-if="hasMultipleLines(entry)"
+												class="btn btn-text btn-sm mt-1 p-0 text-left"
+												style="
+													font-size: 11px;
+													height: auto;
+													min-height: 0;
+													align-self: flex-start;
 												"
-												@mark-patched="
-													(item: VulnListItem) =>
-														openBackport(
-															'plugin',
-															plugin.name,
-															item,
-															plugin.version,
-														)
+												@click.stop="
+													toggleExpandLedgerEntry(
+														entry.id,
+													)
 												"
-											/>
+											>
+												{{
+													isLedgerEntryExpanded(
+														entry.id,
+													)
+														? "Show Less"
+														: "Show More"
+												}}
+											</button>
 										</div>
 									</td>
+									<td class="font-medium">
+										{{ entry.updated_by }}
+									</td>
+									<td class="text-muted">
+										{{ formatDate(entry.updated_at) }}
+									</td>
 								</tr>
-							</template>
-						</tbody>
-					</table>
-				</div>
-			</section>
-
-			<SiteUsersCard v-if="site.is_wordpress" :site="site" />
-
-			<section class="card mt-4">
-				<div class="card-header">
-					<h2>Update Ledger</h2>
-					<button
-						v-if="authStore.canEdit"
-						class="btn btn-primary btn-sm"
-						@click="showAddLedgerModal = true"
-					>
-						Log Manual Update
-					</button>
-				</div>
-				<div class="table-container">
-					<table class="data-table">
-						<thead>
-							<tr>
-								<th>Type</th>
-								<th>Status</th>
-								<th>Details</th>
-								<th>User</th>
-								<th>Timestamp</th>
-							</tr>
-						</thead>
-						<tbody>
-							<tr
-								v-if="
-									!ledgerEntries || ledgerEntries.length === 0
-								"
-							>
-								<td colspan="5" class="empty-state">
-									No update ledger entries recorded.
-								</td>
-							</tr>
-							<tr
-								v-for="entry in ledgerEntries || []"
-								:key="entry.id"
-							>
-								<td>
-									<span class="status-badge badge-sm info">
-										{{ entry.update_type.toUpperCase() }}
-									</span>
-								</td>
-								<td>
-									<span
-										:class="[
-											'status-badge',
-											'badge-sm',
-											ledgerBadgeClass(entry.status),
-										]"
-										:title="ledgerTitle(entry)"
-									>
-										{{ entry.status }}
-									</span>
-								</td>
-								<td
-									class="font-xs text-muted"
-									style="max-width: 350px"
-								>
-									<div
-										style="
-											display: flex;
-											flex-direction: column;
-										"
-									>
-										<div
-											:style="
-												isLedgerEntryExpanded(entry.id)
-													? 'white-space: pre-wrap; word-break: break-word;'
-													: 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;'
-											"
-										>
-											{{
-												isLedgerEntryExpanded(entry.id)
-													? formatLedgerDetails(entry)
-													: getFirstLine(entry)
-											}}
-										</div>
-										<button
-											v-if="hasMultipleLines(entry)"
-											class="btn btn-text btn-sm mt-1 p-0 text-left"
-											style="
-												font-size: 11px;
-												height: auto;
-												min-height: 0;
-												align-self: flex-start;
-											"
-											@click.stop="
-												toggleExpandLedgerEntry(
-													entry.id,
-												)
-											"
-										>
-											{{
-												isLedgerEntryExpanded(entry.id)
-													? "Show Less"
-													: "Show More"
-											}}
-										</button>
-									</div>
-								</td>
-								<td class="font-medium">
-									{{ entry.updated_by }}
-								</td>
-								<td class="text-muted">
-									{{ formatDate(entry.updated_at) }}
-								</td>
-							</tr>
-						</tbody>
-					</table>
-				</div>
-			</section>
+							</tbody>
+						</table>
+					</div>
+				</section>
+			</template>
 		</main>
 		<main v-else class="content mt-4">
 			<div class="card">
@@ -1721,9 +1845,9 @@ const unlinkOrganization = async () => {
 				/>
 				<div v-else class="empty-state">
 					<p>Site not found.</p>
-					<button class="back-btn mt-4" @click="goBack">
+					<RouterLink :to="{ name: 'sites' }" class="back-btn mt-4">
 						Go back to sites
-					</button>
+					</RouterLink>
 				</div>
 			</div>
 		</main>

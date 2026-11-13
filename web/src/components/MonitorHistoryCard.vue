@@ -164,12 +164,9 @@ const startTimeLabel = computed(() => {
 				<RouterLink
 					v-if="effectiveSiteId"
 					:to="{
-						path: '/monitoring',
-						query: {
-							tab: 'uptime',
-							section: 'checks',
-							site: effectiveSiteId,
-						},
+						name: 'monitoring',
+						params: { area: 'uptime', section: 'checks' },
+						query: { site: effectiveSiteId },
 					}"
 					class="btn btn-text font-sm"
 					title="Manage this site's monitor checks"

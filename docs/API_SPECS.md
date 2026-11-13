@@ -592,7 +592,7 @@ report ID.
 ### Asset Templates (billing)
 
 The billing endpoints live under `/api/billing/*` (the web UI's billing
-pages under `/billing/*`); the asset inventory described below owns
+pages under `/assets/*`); the asset inventory described below owns
 `/api/inventory/*` and `/inventory`.
 
 `GET /api/billing/assets` (Protected: `basic`)
