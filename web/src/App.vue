@@ -16,6 +16,7 @@ import { useSidebar } from "./composables/useSidebar";
 import ToastContainer from "./components/ToastContainer.vue";
 import TaskCenter from "./components/TaskCenter.vue";
 import ConfirmModal from "./components/ConfirmModal.vue";
+import CommandPalette from "./components/CommandPalette.vue";
 import TaskModalHost from "./components/TaskModalHost.vue";
 
 const dataStore = useDataStore();
@@ -140,4 +141,5 @@ const handleLogout = () => {
 	<TaskCenter v-if="authStore.isAuthenticated" />
 	<TaskModalHost v-if="authStore.isAuthenticated" />
 	<ConfirmModal />
+	<CommandPalette v-if="authStore.isAuthenticated" />
 </template>

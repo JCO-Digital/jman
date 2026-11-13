@@ -583,76 +583,60 @@
 
 /* Status badges for contact types */
 .status-badge.main {
-	background-color: rgba(59, 130, 246, 0.1);
-	color: #3b82f6;
+	background-color: light-dark(
+		rgba(59, 130, 246, 0.1),
+		rgba(59, 130, 246, 0.2)
+	);
+	color: light-dark(#3b82f6, #60a5fa);
 }
 
 .status-badge.technical {
-	background-color: rgba(16, 185, 129, 0.1);
-	color: #10b981;
+	background-color: light-dark(
+		rgba(16, 185, 129, 0.1),
+		rgba(16, 185, 129, 0.2)
+	);
+	color: light-dark(#10b981, #34d399);
 }
 
 .status-badge.billing {
-	background-color: rgba(245, 158, 11, 0.1);
-	color: #f59e0b;
+	background-color: light-dark(
+		rgba(245, 158, 11, 0.1),
+		rgba(245, 158, 11, 0.2)
+	);
+	color: light-dark(#f59e0b, #fbbf24);
 }
 
 /* Status badges for site environment classification */
 .status-badge.production {
-	background-color: rgba(16, 185, 129, 0.1);
-	color: #10b981;
+	background-color: light-dark(
+		rgba(16, 185, 129, 0.1),
+		rgba(16, 185, 129, 0.2)
+	);
+	color: light-dark(#10b981, #34d399);
 }
 
 .status-badge.staging {
-	background-color: rgba(245, 158, 11, 0.1);
-	color: #f59e0b;
+	background-color: light-dark(
+		rgba(245, 158, 11, 0.1),
+		rgba(245, 158, 11, 0.2)
+	);
+	color: light-dark(#f59e0b, #fbbf24);
 }
 
 .status-badge.development {
-	background-color: rgba(107, 114, 128, 0.1);
-	color: #6b7280;
+	background-color: light-dark(
+		rgba(107, 114, 128, 0.1),
+		rgba(107, 114, 128, 0.2)
+	);
+	color: light-dark(#6b7280, #9ca3af);
 }
 
 .status-badge.archived {
-	background-color: rgba(100, 116, 139, 0.1);
-	color: #64748b;
-}
-
-@media (prefers-color-scheme: dark) {
-	.status-badge.main {
-		background-color: rgba(59, 130, 246, 0.2);
-		color: #60a5fa;
-	}
-
-	.status-badge.technical {
-		background-color: rgba(16, 185, 129, 0.2);
-		color: #34d399;
-	}
-
-	.status-badge.billing {
-		background-color: rgba(245, 158, 11, 0.2);
-		color: #fbbf24;
-	}
-
-	.status-badge.production {
-		background-color: rgba(16, 185, 129, 0.2);
-		color: #34d399;
-	}
-
-	.status-badge.staging {
-		background-color: rgba(245, 158, 11, 0.2);
-		color: #fbbf24;
-	}
-
-	.status-badge.development {
-		background-color: rgba(107, 114, 128, 0.2);
-		color: #9ca3af;
-	}
-
-	.status-badge.archived {
-		background-color: rgba(100, 116, 139, 0.2);
-		color: #94a3b8;
-	}
+	background-color: light-dark(
+		rgba(100, 116, 139, 0.1),
+		rgba(100, 116, 139, 0.2)
+	);
+	color: light-dark(#64748b, #94a3b8);
 }
 
 /* Audit & Meta Info */

@@ -8,6 +8,8 @@ import { useVulnStore } from "../stores/vulns";
 import { useSidebar } from "../composables/useSidebar";
 import { findNavItem } from "../navigation";
 import { pageTitle } from "../composables/usePageTitle";
+import { useTheme, type ThemeChoice } from "../composables/useTheme";
+import { useCommandPalette } from "../composables/useCommandPalette";
 import AppIcon from "./AppIcon.vue";
 import LoadingSpinner from "./LoadingSpinner.vue";
 
@@ -67,6 +69,18 @@ const initials = computed(() => {
 	const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? "") : "";
 	return (first + last).toUpperCase();
 });
+
+const { choice: themeChoice } = useTheme();
+const { show: showPalette } = useCommandPalette();
+
+// The shortcut as this platform writes it.
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform);
+const shortcut = isMac ? "⌘K" : "Ctrl K";
+const themeOptions: { value: ThemeChoice; label: string }[] = [
+	{ value: "auto", label: "Auto" },
+	{ value: "light", label: "Light" },
+	{ value: "dark", label: "Dark" },
+];
 
 const menuOpen = ref(false);
 const menuRoot = ref<HTMLElement | null>(null);
@@ -135,6 +149,17 @@ const handleLogout = () => {
 
 		<div class="topbar-actions">
 			<button
+				type="button"
+				class="topbar-search"
+				title="Go to… (Ctrl+K)"
+				@click="showPalette"
+			>
+				<AppIcon name="search" size="16" />
+				<span class="topbar-search-text">Go to…</span>
+				<kbd>{{ shortcut }}</kbd>
+			</button>
+
+			<button
 				class="icon-btn"
 				:disabled="dataStore.isLoading"
 				title="Refresh data"
@@ -182,6 +207,25 @@ const handleLogout = () => {
 						<AppIcon name="alert" size="16" />
 						<span>{{ restrictedNotice }}</span>
 					</RouterLink>
+					<div class="user-menu-theme">
+						<span id="theme-label">Theme</span>
+						<div
+							class="segmented-control"
+							role="radiogroup"
+							aria-labelledby="theme-label"
+						>
+							<button
+								v-for="opt in themeOptions"
+								:key="opt.value"
+								type="button"
+								role="radio"
+								:aria-checked="themeChoice === opt.value"
+								@click="themeChoice = opt.value"
+							>
+								{{ opt.label }}
+							</button>
+						</div>
+					</div>
 					<RouterLink
 						to="/settings"
 						class="user-menu-item"

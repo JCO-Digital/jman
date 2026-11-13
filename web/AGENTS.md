@@ -30,7 +30,7 @@ Styles are modularized into specific files within `src/styles/`. Avoid a monolit
 
 - **Colors**: Use `var(--primary)`, `var(--text-main)`, `var(--bg-card)`, etc.
 - **State**: Use status variables like `var(--error-text)`, `var(--badge-active-bg)`.
-- **Dark Mode**: Support is handled automatically through these variables via `@media (prefers-color-scheme: dark)`.
+- **Dark Mode**: Color variables are `light-dark(<light>, <dark>)` pairs in `variables.css`. They follow the system, or the theme chosen in the user menu (`html[data-theme]`, `composables/useTheme.ts`). Give new colors both values there; don't add `prefers-color-scheme` media queries. Code that draws colors itself (charts on a canvas) reads them with `cssColor()` and redraws when `useTheme().isDark` changes.
 
 ## 3. Location of Styles
 
@@ -56,6 +56,7 @@ Use existing class structures to ensure UI consistency:
 - A page's tabs and sections are routes, not `?tab=` queries or local state: path params (`/site/:id/:tab?`, `/monitoring/:area?/:section?`, `/settings/:tab?`) with the default left out. Render them with `RouteTabs` in `ViewHeader`'s `#tabs` slot. A detail page's tabs use `replace`, so its back link still finds the list it came from. When renaming a route, add a redirect for the old URL (Slack messages and bookmarks link to them).
 - Detail pages pass `back` to `ViewHeader` (`{ label, to }`). It goes back in history when the previous entry is that list, so the list returns with its search, sort and page; otherwise it opens `to`. Use `useBackLink` for other ways back (e.g. after a delete).
 - Detail pages lay out their content with `.detail-layout`: `.detail-main` for tables and activity, `.detail-aside` for info cards, notes and links. The aside sits beside the main column when the page area (the `page` size container) is at least 1200px wide, and below it otherwise; add `.detail-aside-first` and put the aside first in the markup when it should lead on narrow screens. Use `@container page (...)` rather than viewport media queries for layout inside a page, since the sidebar takes a varying share of the window.
+- The quick-jump (`CommandPalette`, Ctrl+K / ⌘K) lists sites, plugins, organizations and pages. When adding a section or sub-page worth jumping to, add it to its page list.
 - Detail pages name themselves with `usePageTitle(() => item.value?.name)`, which the breadcrumbs and the browser tab use.
 
 ## 6. Lists

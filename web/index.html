@@ -4,7 +4,16 @@
 		<meta charset="UTF-8" />
 		<link rel="icon" type="image/png" href="/jman.png" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>jman-ui</title>
+		<title>jman</title>
+		<script>
+			// The chosen color theme, applied before the app loads so the
+			// page doesn't flash the other one (see src/composables/useTheme.ts).
+			try {
+				var t = localStorage.getItem("jman.theme");
+				if (t === "light" || t === "dark")
+					document.documentElement.dataset.theme = t;
+			} catch (e) {}
+		</script>
 	</head>
 	<body>
 		<div id="app"></div>

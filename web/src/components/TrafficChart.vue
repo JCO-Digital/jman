@@ -13,6 +13,7 @@ import {
 } from "chart.js";
 import type { SiteTrafficPeriod } from "../types";
 import type { TrafficPeriod } from "../stores/trafficAnalytics";
+import { cssColor, useTheme, withAlpha } from "../composables/useTheme";
 
 Chart.register(
 	LineController,
@@ -58,14 +59,12 @@ function formatCompact(n: number): string {
 // way the old inline-SVG chart did — pull the current theme's resolved
 // colors once per (re)build instead.
 function themeColors() {
-	const styles = getComputedStyle(document.documentElement);
-	const get = (name: string) => styles.getPropertyValue(name).trim();
 	return {
-		primary: get("--primary"),
-		muted: get("--text-muted"),
-		border: get("--border-color"),
-		card: get("--bg-card"),
-		text: get("--text-main"),
+		primary: cssColor("--primary"),
+		muted: cssColor("--text-muted"),
+		border: cssColor("--border-color"),
+		card: cssColor("--bg-card"),
+		text: cssColor("--text-main"),
 	};
 }
 
@@ -82,7 +81,7 @@ function buildConfig(): ChartConfiguration<"line"> {
 					label: "Human",
 					data: props.periods.map((p) => p.requests_human),
 					borderColor: colors.primary,
-					backgroundColor: colors.primary + "1a",
+					backgroundColor: withAlpha(colors.primary, 0.1),
 					fill: "origin",
 					stack: "requests",
 					pointRadius: 0,
@@ -94,7 +93,7 @@ function buildConfig(): ChartConfiguration<"line"> {
 					label: "Bot",
 					data: props.periods.map((p) => p.requests_bot),
 					borderColor: colors.muted,
-					backgroundColor: colors.muted + "1a",
+					backgroundColor: withAlpha(colors.muted, 0.1),
 					fill: "-1",
 					stack: "requests",
 					pointRadius: 0,
@@ -164,20 +163,16 @@ function render() {
 	chart = new Chart(canvasRef.value, buildConfig());
 }
 
-let mediaQuery: MediaQueryList | null = null;
+const { isDark } = useTheme();
 
-onMounted(() => {
-	render();
-	mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
-	mediaQuery.addEventListener("change", render);
-});
+onMounted(render);
 
 onUnmounted(() => {
 	chart?.destroy();
-	mediaQuery?.removeEventListener("change", render);
 });
 
-watch([() => props.periods, () => props.period], render);
+// Redraw with the other theme's colors when it changes.
+watch([() => props.periods, () => props.period, isDark], render);
 </script>
 
 <template>
