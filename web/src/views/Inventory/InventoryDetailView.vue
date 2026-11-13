@@ -16,6 +16,7 @@ import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import NotesWidget from "../../components/NotesWidget.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { expiryBadge } from "../../utils/inventory";
 import { displayDomain, formatBytes, providerName } from "../../utils/format";
 
 const route = useRoute();
@@ -160,22 +161,7 @@ const handleLookup = async () => {
 	}
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-// Days until the domain expires (negative once it has), or null.
-const expiresInDays = computed(() => {
-	const at = lookup.value?.expires_at;
-	if (!at) return null;
-	return Math.floor((new Date(at).getTime() - Date.now()) / DAY_MS);
-});
-
-const expiryBadge = computed(() => {
-	const days = expiresInDays.value;
-	if (days === null) return null;
-	if (days < 0) return { cls: "error", text: "expired" };
-	if (days <= 30) return { cls: "warning", text: `in ${days} days` };
-	return { cls: "active", text: `in ${days} days` };
-});
+const lookupExpiryBadge = computed(() => expiryBadge(lookup.value?.expires_at));
 
 const sourceLabel = (source: string) =>
 	({ rdap: "RDAP", whois: "WHOIS", "rdap+whois": "RDAP and WHOIS" })[
@@ -477,14 +463,14 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 													formatDay(lookup.expires_at)
 												}}
 												<span
-													v-if="expiryBadge"
+													v-if="lookupExpiryBadge"
 													:class="[
 														'status-badge',
 														'badge-sm',
-														expiryBadge.cls,
+														lookupExpiryBadge.cls,
 													]"
 												>
-													{{ expiryBadge.text }}
+													{{ lookupExpiryBadge.text }}
 												</span>
 											</template>
 											<template v-else>

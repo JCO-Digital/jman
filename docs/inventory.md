@@ -251,7 +251,7 @@ UTF-8, else as Windows-1252.
 | Method & path | Auth | Purpose |
 |---|---|---|
 | `GET /api/inventory/types` | basic | item types + their `details` template (key/kind/hint per field; the UI renders it as a form, empty fields are not saved, with an add-field button and a raw-JSON editor toggle) |
-| `GET /api/inventory/items?type=&status=&search=` | basic | list, joined with links |
+| `GET /api/inventory/items?type=&status=&search=` | basic | list, joined with links and, for domain items, `domain_lookup` |
 | `POST /api/inventory/items` | edit | create manual item; domain names normalized to apex; `409` + `existing_item_id` on type+name match |
 | `GET /api/inventory/items/{id}` | basic | item + links + match suggestions (undismissed) + `domain_lookup` for domain items |
 | `PATCH /api/inventory/items/{id}` | edit | edit manual fields; provider-owned fields rejected on linked items |
@@ -267,11 +267,22 @@ UTF-8, else as Windows-1252.
 
 - Billing moved to `/billing*` routes and `/api/billing/*` endpoints; the nav
   label stays "Assets".
-- New "Inventory" nav section at `/inventory`: list with type filter, search,
-  provider badge and a sync button; detail/edit view with a type-specific form
-  writing `details`, the links list, and the link/dismiss prompt when a manual
-  item matches a synced item of the same type+name. Domain items have a
-  Registration card with the registry lookup and a "Look up now" button.
+- The **list** (`/inventory`) looks like the site list: search, a type
+  dropdown and an expiry dropdown, a sortable table and pagination. Its state
+  is in the URL, `/inventory[/<type|all>[/<page>[/<rowsPerPage>]]]` with
+  `?search=` and `?expiring=soon|expired`, so browser back and the detail
+  view's back button return to the list as it was left. Starting or clearing a
+  search adds a history entry; refining it replaces the URL.
+- The list's **Info** column shows, for a domain, its expiry date (from the
+  registry lookup, else a manual `expiry` detail in YYYY-MM-DD form) with a
+  badge when it has expired or expires within 90 days, and the registrar; for
+  a server, its IP address, size and place from Hetzner, SpinupWP or the
+  manual details. "Expiring within 90 days" (expired ones included) and
+  "Expired" filter on that date and sort soonest first.
+- The detail/edit view has a type-specific form writing `details`, the links
+  list, the link/dismiss prompt when a manual item matches a synced item of
+  the same type+name, and for domain items a Registration card with the
+  registry lookup and a "Look up now" button.
 
 ## Files
 

@@ -429,3 +429,42 @@ func TestImportInventoryDomainsHandler(t *testing.T) {
 		t.Fatalf("empty csv: %d", w.Code)
 	}
 }
+
+func TestListInventoryItemsCarriesDomainLookup(t *testing.T) {
+	ctx := setupInventoryHandlerTest(t)
+	current := models.InventoryItem{Type: models.InventoryItemTypeDomain, Name: "example.com"}
+	renamed := models.InventoryItem{Type: models.InventoryItemTypeDomain, Name: "example.org"}
+	for _, it := range []*models.InventoryItem{&current, &renamed} {
+		if err := db.InsertInventoryItem(it, "tester"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	now := time.Now().UTC()
+	expires := now.AddDate(0, 1, 0)
+	for _, l := range []*models.InventoryDomainLookup{
+		{ItemID: current.ID, Domain: "example.com", Registrar: "Example Registrar", ExpiresAt: &expires, CheckedAt: now, LastSuccessAt: &now},
+		// Looked up under its old name: not shown.
+		{ItemID: renamed.ID, Domain: "old.example", Registrar: "Stale", CheckedAt: now},
+	} {
+		if err := db.SaveInventoryDomainLookup(l); err != nil {
+			t.Fatal(err)
+		}
+	}
+	w := doInventoryRequest(t, ctx, "GET", "/api/inventory/items", "", ListInventoryItemsHandler, nil)
+	var items []InventoryListItem
+	if err := json.Unmarshal(w.Body.Bytes(), &items); err != nil || len(items) != 2 {
+		t.Fatalf("list: %d %s", w.Code, w.Body.String())
+	}
+	for _, it := range items {
+		switch it.Name {
+		case "example.com":
+			if it.DomainLookup == nil || it.DomainLookup.Registrar != "Example Registrar" || it.DomainLookup.ExpiresAt == nil {
+				t.Errorf("example.com lookup: %+v", it.DomainLookup)
+			}
+		case "example.org":
+			if it.DomainLookup != nil {
+				t.Errorf("stale lookup shown: %+v", it.DomainLookup)
+			}
+		}
+	}
+}

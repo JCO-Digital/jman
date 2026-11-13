@@ -17,6 +17,14 @@ import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import InventoryImportModal from "../../components/InventoryImportModal.vue";
 import { useConfirm } from "../../composables/useConfirm";
 import { displayDomain, providerName } from "../../utils/format";
+import {
+	EXPIRY_WARN_DAYS,
+	type ExpiryFilter,
+	expiryBadge,
+	itemExpiry,
+	matchesExpiryFilter,
+	serverSummary,
+} from "../../utils/inventory";
 
 // The list's state lives in the URL, so browser back and the detail view's
 // back button return to the same type, page and search:
@@ -45,6 +53,11 @@ const routeSearch = computed(() =>
 	typeof route.query.search === "string" ? route.query.search : "",
 );
 
+const routeExpiry = computed<ExpiryFilter>(() => {
+	const e = route.query.expiring;
+	return e === "soon" || e === "expired" ? e : "";
+});
+
 const searchQuery = ref(routeSearch.value);
 const showModal = ref(false);
 const editingItem = ref<InventoryItem | null>(null);
@@ -62,17 +75,20 @@ const typeOptions = computed(() => [
 ]);
 
 // listLocation is the URL of one state of the list. The defaults are left
-// out, so the first page of all items is plain /inventory.
+// out, so the first page of all items is plain /inventory; the search and
+// the expiry filter are query parameters (?search=, ?expiring=soon|expired).
 const listLocation = (opts: {
 	type?: string;
 	page?: number;
 	rowsPerPage?: number;
 	search?: string;
+	expiring?: ExpiryFilter;
 }): RouteLocationRaw => {
 	const type = opts.type ?? typeFilter.value;
 	const page = opts.page ?? 1;
 	const rpp = opts.rowsPerPage ?? rowsPerPage.value;
 	const search = opts.search ?? searchQuery.value;
+	const expiring = opts.expiring ?? routeExpiry.value;
 	const params: Record<string, string> = {};
 	if (page !== 1 || rpp !== DEFAULT_ROWS) {
 		params.type = type || "all";
@@ -84,7 +100,10 @@ const listLocation = (opts: {
 	return {
 		name: "inventory",
 		params,
-		query: search ? { search } : {},
+		query: {
+			...(search ? { search } : {}),
+			...(expiring ? { expiring } : {}),
+		},
 	};
 };
 
@@ -92,6 +111,16 @@ const setType = (event: Event) => {
 	router.push(
 		listLocation({ type: (event.target as HTMLSelectElement).value }),
 	);
+};
+
+const setExpiry = (event: Event) => {
+	const expiring = (event.target as HTMLSelectElement).value as ExpiryFilter;
+	// The expiring domains are most useful soonest first.
+	if (expiring) {
+		sortKey.value = "info";
+		sortOrder.value = "asc";
+	}
+	router.push(listLocation({ expiring }));
 };
 
 const load = async () => {
@@ -130,8 +159,10 @@ onMounted(async () => {
 	]);
 });
 
-type SortKey = "name" | "type" | "status" | "provider";
-const sortKey = ref<SortKey>("name");
+type SortKey = "name" | "type" | "status" | "info" | "provider";
+// With the expiry filter on, the list is soonest-expiring first, however
+// it was reached (the dropdown, a link, back).
+const sortKey = ref<SortKey>(routeExpiry.value ? "info" : "name");
 const sortOrder = ref<"asc" | "desc">("asc");
 
 const handleSort = (key: SortKey) => {
@@ -163,6 +194,15 @@ const sortValue = (item: InventoryItem, key: SortKey): string => {
 			return displayName(item).toLowerCase();
 		case "provider":
 			return providerLabel(item).toLowerCase();
+		case "info": {
+			// Domains by expiry date (unknown ones after them), then servers
+			// by their summary.
+			if (item.type === "domain") {
+				const expiry = itemExpiry(item);
+				return expiry ? "0" + expiry : "1";
+			}
+			return "2" + serverSummary(item).toLowerCase();
+		}
 		default:
 			return String(item[key]);
 	}
@@ -170,12 +210,14 @@ const sortValue = (item: InventoryItem, key: SortKey): string => {
 
 const sortedItems = computed(() => {
 	const dir = sortOrder.value === "asc" ? 1 : -1;
-	return [...inventoryStore.items].sort((a, b) => {
-		const va = sortValue(a, sortKey.value);
-		const vb = sortValue(b, sortKey.value);
-		if (va !== vb) return va < vb ? -dir : dir;
-		return a.name < b.name ? -1 : 1;
-	});
+	return inventoryStore.items
+		.filter((item) => matchesExpiryFilter(item, routeExpiry.value))
+		.sort((a, b) => {
+			const va = sortValue(a, sortKey.value);
+			const vb = sortValue(b, sortKey.value);
+			if (va !== vb) return va < vb ? -dir : dir;
+			return a.name < b.name ? -1 : 1;
+		});
 });
 
 const totalPages = computed(
@@ -201,6 +243,9 @@ const nextPage = () => {
 const handleRowsPerPageUpdate = (rpp: number) => {
 	router.push(listLocation({ rowsPerPage: rpp }));
 };
+
+const formatDay = (date: string) =>
+	new Date(date).toLocaleDateString("de-DE", { dateStyle: "short" });
 
 const goToItem = (id: string) => {
 	router.push({ name: "inventory-detail", params: { id } });
@@ -356,6 +401,17 @@ const syncAll = async () => {
 					{{ t.label }}
 				</option>
 			</select>
+			<select
+				:value="routeExpiry"
+				aria-label="Expiry"
+				@change="setExpiry"
+			>
+				<option value="">Any expiry</option>
+				<option value="soon">
+					Expiring within {{ EXPIRY_WARN_DAYS }} days
+				</option>
+				<option value="expired">Expired</option>
+			</select>
 		</div>
 
 		<main class="table-container">
@@ -371,6 +427,9 @@ const syncAll = async () => {
 						<th class="col-narrow" @click="handleSort('status')">
 							Status {{ sortIndicator("status") }}
 						</th>
+						<th class="col-wide" @click="handleSort('info')">
+							Info {{ sortIndicator("info") }}
+						</th>
 						<th class="col-medium" @click="handleSort('provider')">
 							Provider {{ sortIndicator("provider") }}
 						</th>
@@ -385,19 +444,26 @@ const syncAll = async () => {
 							inventoryStore.items.length === 0
 						"
 					>
-						<td :colspan="authStore.canEdit ? 6 : 5">
+						<td :colspan="authStore.canEdit ? 7 : 6">
 							<LoadingSpinner message="Loading inventory..." />
 						</td>
 					</tr>
 					<tr v-else-if="pageItems.length === 0">
 						<td
-							:colspan="authStore.canEdit ? 6 : 5"
+							:colspan="authStore.canEdit ? 7 : 6"
 							class="empty-state"
 						>
 							<span v-if="routeSearch"
 								>No inventory items found matching "{{
 									routeSearch
 								}}".</span
+							>
+							<span v-else-if="routeExpiry === 'expired'"
+								>No expired domains.</span
+							>
+							<span v-else-if="routeExpiry"
+								>No domains expire within
+								{{ EXPIRY_WARN_DAYS }} days.</span
 							>
 							<span v-else>No inventory items found.</span>
 						</td>
@@ -435,6 +501,39 @@ const syncAll = async () => {
 							>
 								{{ item.status }}
 							</span>
+						</td>
+						<td class="col-wide truncate">
+							<template v-if="item.type === 'domain'">
+								<template v-if="itemExpiry(item)">
+									Expires
+									{{ formatDay(itemExpiry(item)!) }}
+									<span
+										v-if="expiryBadge(itemExpiry(item))"
+										:class="[
+											'status-badge',
+											'badge-sm',
+											expiryBadge(itemExpiry(item))!.cls,
+										]"
+									>
+										{{
+											expiryBadge(itemExpiry(item))!.text
+										}}
+									</span>
+								</template>
+								<span v-else class="text-muted"
+									>Expiry unknown</span
+								>
+								<div
+									v-if="item.domain_lookup?.registrar"
+									class="text-muted font-xs truncate"
+									:title="item.domain_lookup.registrar"
+								>
+									{{ item.domain_lookup.registrar }}
+								</div>
+							</template>
+							<template v-else>{{
+								serverSummary(item)
+							}}</template>
 						</td>
 						<td class="col-medium truncate">
 							{{ providerLabel(item) }}

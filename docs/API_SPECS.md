@@ -616,7 +616,7 @@ UUID strings.
 
 `GET /api/inventory/types` (Protected: `basic`): known item types with their `details` template — `detail_fields` is a list of `{"key", "kind": "text"|"list", "hint"}` the UI renders as a form; fields left empty are not saved.
 `GET /api/inventory/providers` (Protected: `basic`): registered provider names.
-`GET /api/inventory/items?type=&status=&search=` (Protected: `basic`): items with their links.
+`GET /api/inventory/items?type=&status=&search=` (Protected: `basic`): items with their links; a domain item also has `domain_lookup` (as in `GET /api/inventory/items/{id}`) when it has been looked up under its current name.
 `POST /api/inventory/items` (Protected: `edit`): create a manual item; domain names are reduced to the apex domain; answers `409` with `{"existing_item_id": "..."}` when an item with the same type+name exists.
 `GET /api/inventory/items/{id}` (Protected: `basic`): one item plus undismissed `matches` (other items with the same type+name that have provider links — the link/dismiss prompt).
 `PATCH /api/inventory/items/{id}` (Protected: `edit`): update manual fields; absent fields are kept, and `site_id`/`server_id` are cleared with `null`. `type`/`name` are read-only on provider-linked items (`409`). Renaming to the type+name of another item answers `409` with `existing_item_id`, like a create.

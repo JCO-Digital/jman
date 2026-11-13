@@ -104,6 +104,14 @@ func ListInventoryProvidersHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"providers": inventory.Names()})
 }
 
+// InventoryListItem is one item of the list: a domain item carries its
+// registry lookup (expiry, registrar, nameservers) for the list's info
+// column, when it was made for the item's current name.
+type InventoryListItem struct {
+	models.InventoryItem
+	DomainLookup *models.InventoryDomainLookup `json:"domain_lookup,omitempty"`
+}
+
 // ListInventoryItemsHandler lists items, optionally filtered by type, status
 // and a search term over name/description.
 func ListInventoryItemsHandler(w http.ResponseWriter, r *http.Request) {
@@ -113,12 +121,22 @@ func ListInventoryItemsHandler(w http.ResponseWriter, r *http.Request) {
 		Status: q.Get("status"),
 		Search: q.Get("search"),
 	})
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "ListInventoryItemsHandler: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
+	if err == nil {
+		var lookups map[string]*models.InventoryDomainLookup
+		if lookups, err = db.ListInventoryDomainLookups(); err == nil {
+			list := make([]InventoryListItem, len(items))
+			for i, it := range items {
+				list[i] = InventoryListItem{InventoryItem: it}
+				if l := lookups[it.ID]; l != nil && it.Type == models.InventoryItemTypeDomain && l.Domain == it.Name {
+					list[i].DomainLookup = l
+				}
+			}
+			WriteJSON(w, http.StatusOK, list)
+			return
+		}
 	}
-	WriteJSON(w, http.StatusOK, items)
+	verb.LogPrintf(verb.Normal, "ListInventoryItemsHandler: %v", err)
+	WriteError(w, http.StatusInternalServerError, "Internal server error")
 }
 
 // inventoryConflict is returned with 409 when a create collides with an
