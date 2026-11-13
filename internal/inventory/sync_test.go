@@ -78,12 +78,6 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 	p := &fakeProvider{}
 	registerFake(t, p)
 
-	// A manual item sharing a name with a provider entity stays separate.
-	manual := models.InventoryItem{Type: models.InventoryItemTypeDomain, Name: "example.com"}
-	if err := db.InsertInventoryItem(&manual, "tester"); err != nil {
-		t.Fatal(err)
-	}
-
 	p.items = []ExternalItem{
 		serverItem("web1.examplehost.com"),
 		domainItem("site-12:example.com", "example.com"),     // primary domain of site 12
@@ -99,7 +93,7 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 
 	// The two domain entities share one item named by the apex domain.
 	matches, err := db.FindInventoryItemsByTypeName(models.InventoryItemTypeDomain, "example.com")
-	if err != nil || len(matches) != 2 {
+	if err != nil || len(matches) != 1 {
 		t.Fatalf("domain items: %d, %v", len(matches), err)
 	}
 	var synced *models.InventoryItem
@@ -115,7 +109,7 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 		t.Errorf("item ID = %s", synced.ID)
 	}
 
-	// Second sync refreshes provider_data, creates nothing, keeps the manual item.
+	// Second sync refreshes provider_data and creates nothing.
 	p.items[0].Data["ip_address"] = "203.0.113.99"
 	res, err = Sync(context.Background(), p.name)
 	if err != nil {
@@ -129,13 +123,9 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 	if err != nil || srv == nil || srv.ProviderDataFor(p.name)["ip_address"] != "203.0.113.99" {
 		t.Fatalf("provider_data not refreshed: %+v %v", srv, err)
 	}
-	gotManual, _ := db.GetInventoryItem(manual.ID)
-	if len(gotManual.Links) != 0 || gotManual.Status != models.InventoryItemStatusActive {
-		t.Fatalf("manual item touched by sync: %+v", gotManual)
-	}
 
 	// When the provider stops listing the domains, their links go and the
-	// provider-origin item is marked removed; the manual item stays.
+	// provider-origin item is marked removed.
 	// (Another domain is still listed: a fetch with no domains at all
 	// would be taken for a partial fetch and remove nothing.)
 	p.items = []ExternalItem{serverItem("web1.examplehost.com"), domainItem("site-13:example.org", "example.org")}
@@ -151,9 +141,51 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 	if gotSynced.Status != models.InventoryItemStatusRemoved || len(gotSynced.Links) != 0 {
 		t.Fatalf("removed item: %+v", gotSynced)
 	}
-	gotManual, _ = db.GetInventoryItem(manual.ID)
-	if gotManual.Status != models.InventoryItemStatusActive {
-		t.Fatalf("manual item after removal sync: %+v", gotManual)
+}
+
+// A synced domain joins the domain item already there (imported or entered
+// by hand) instead of making a second one; a server, whose name is not its
+// identity, doesn't.
+func TestSyncJoinsExistingDomainItem(t *testing.T) {
+	setupInventoryTest(t)
+	p := &fakeProvider{}
+	registerFake(t, p)
+
+	imported := models.InventoryItem{Type: models.InventoryItemTypeDomain, Name: "example.com", Details: map[string]any{"customer": "Example Oy"}}
+	manualServer := models.InventoryItem{Type: models.InventoryItemTypeServer, Name: "web1.examplehost.com"}
+	for _, it := range []*models.InventoryItem{&imported, &manualServer} {
+		if err := db.InsertInventoryItem(it, "tester"); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	p.items = []ExternalItem{
+		serverItem("web1.examplehost.com"),
+		domainItem("site-12:example.com", "example.com"),
+		domainItem("site-12:www.example.com", "example.com"),
+		domainItem("site-13:example.org", "example.org"),
+	}
+	res := mustSync(t, p.name)
+	if res.Matched != 1 || res.Created != 2 || res.LinksAdded != 4 {
+		t.Fatalf("sync: %+v", res)
+	}
+	got, _ := db.GetInventoryItem(imported.ID)
+	if len(got.Links) != 2 || got.Details["customer"] != "Example Oy" || got.ProviderDataFor(p.name) == nil || got.Origin != models.InventoryItemOriginManual {
+		t.Fatalf("imported item after sync: %+v", got)
+	}
+	if items, _ := db.FindInventoryItemsByTypeName(models.InventoryItemTypeServer, "web1.examplehost.com"); len(items) != 2 {
+		t.Fatalf("server joined by name: %d items", len(items))
+	}
+
+	// When the provider drops it, the manual item stays active without its
+	// provider snapshot.
+	p.items = []ExternalItem{serverItem("web1.examplehost.com"), domainItem("site-13:example.org", "example.org")}
+	if res := mustSync(t, p.name); res.LinksRemoved != 2 || res.Removed != 0 {
+		t.Fatalf("removal sync: %+v", res)
+	}
+	got, _ = db.GetInventoryItem(imported.ID)
+	if got.Status != models.InventoryItemStatusActive || len(got.Links) != 0 || got.ProviderDataFor(p.name) != nil {
+		t.Fatalf("imported item after removal: %+v", got)
 	}
 }
 

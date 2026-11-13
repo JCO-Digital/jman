@@ -2,6 +2,8 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 import type {
 	InventoryDomainLookup,
+	InventoryImportOptions,
+	InventoryImportResult,
 	InventoryItem,
 	InventoryItemPayload,
 	InventoryItemResponse,
@@ -208,6 +210,24 @@ export const useInventoryStore = defineStore("inventory", () => {
 		return await res.json();
 	}
 
+	/**
+	 * Imports domains from CSV text; with dryRun only plans the import.
+	 * Throws with the API's message on failure.
+	 */
+	async function importDomains(
+		csv: string,
+		options: InventoryImportOptions,
+		dryRun: boolean,
+	): Promise<InventoryImportResult> {
+		const res = await apiFetch(`${BASE_URL}/inventory/import`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ csv, ...options, dry_run: dryRun }),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		return await res.json();
+	}
+
 	async function syncProvider(
 		provider: string,
 	): Promise<InventorySyncResult | null> {
@@ -243,6 +263,7 @@ export const useInventoryStore = defineStore("inventory", () => {
 		unlinkItem,
 		dismissMatch,
 		lookupDomain,
+		importDomains,
 		syncProvider,
 	};
 });

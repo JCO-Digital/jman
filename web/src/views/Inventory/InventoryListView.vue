@@ -4,11 +4,16 @@ import { useRouter } from "vue-router";
 import { useInventoryStore } from "../../stores/inventory";
 import { useAuthStore } from "../../stores/auth";
 import { useToastStore } from "../../stores/toast";
-import type { InventoryItem, InventoryItemPayload } from "../../types";
+import type {
+	InventoryImportResult,
+	InventoryItem,
+	InventoryItemPayload,
+} from "../../types";
 import ViewHeader from "../../components/ViewHeader.vue";
 import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
+import InventoryImportModal from "../../components/InventoryImportModal.vue";
 import { useConfirm } from "../../composables/useConfirm";
 import { displayDomain, providerName } from "../../utils/format";
 
@@ -54,6 +59,17 @@ onMounted(async () => {
 		load(),
 	]);
 });
+
+const showImport = ref(false);
+
+const handleImported = async (res: InventoryImportResult) => {
+	showImport.value = false;
+	toast.addToast(
+		`Imported domains: ${res.created} new, ${res.updated} updated`,
+		"success",
+	);
+	await load();
+};
 
 const openAddModal = () => {
 	editingItem.value = null;
@@ -166,6 +182,14 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 					>
 						<AppIcon name="refresh" size="18" />
 						Sync providers
+					</button>
+					<button
+						v-if="authStore.canEdit"
+						class="btn btn-outline"
+						@click="showImport = true"
+					>
+						<AppIcon name="upload" size="18" />
+						Import domains
 					</button>
 					<button
 						v-if="authStore.canEdit"
@@ -293,6 +317,11 @@ const formatDate = (dateStr: string) => new Date(dateStr).toLocaleString();
 			</div>
 		</main>
 
+		<InventoryImportModal
+			v-if="showImport"
+			@imported="handleImported"
+			@close="showImport = false"
+		/>
 		<InventoryItemModal
 			v-if="showModal"
 			:item="editingItem"

@@ -397,3 +397,35 @@ func TestInventoryDomainLookupHandlers(t *testing.T) {
 		t.Fatalf("item response: %s", w.Body.String())
 	}
 }
+
+func TestImportInventoryDomainsHandler(t *testing.T) {
+	ctx := setupInventoryHandlerTest(t)
+	body := `{"csv": "Domain,Customer\nexample.fi (ei laskutusta),Example Oy\nnot a domain,x\n", "columns": {"Customer": "customer"}, "dry_run": true}`
+	w := doInventoryRequest(t, ctx, "POST", "/api/inventory/import", body, ImportInventoryDomainsHandler, nil)
+	var resp inventoryImportResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil || w.Code != http.StatusOK {
+		t.Fatalf("dry run: %d %s", w.Code, w.Body.String())
+	}
+	if !resp.DryRun || resp.Summary.Create != 1 || resp.Summary.Skip != 1 || resp.Created != 0 {
+		t.Fatalf("dry run: %s", w.Body.String())
+	}
+	if items, _ := db.ListInventoryItems(db.InventoryItemFilter{}); len(items) != 0 {
+		t.Fatalf("dry run wrote %d items", len(items))
+	}
+
+	w = doInventoryRequest(t, ctx, "POST", "/api/inventory/import", strings.Replace(body, `"dry_run": true`, `"dry_run": false`, 1), ImportInventoryDomainsHandler, nil)
+	resp = inventoryImportResponse{}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if w.Code != http.StatusOK || resp.Created != 1 {
+		t.Fatalf("import: %d %s", w.Code, w.Body.String())
+	}
+	items, _ := db.FindInventoryItemsByTypeName(models.InventoryItemTypeDomain, "example.fi")
+	if len(items) != 1 || items[0].Details["customer"] != "Example Oy" || items[0].CreatedBy != "tester" {
+		t.Fatalf("imported item: %+v", items)
+	}
+
+	w = doInventoryRequest(t, ctx, "POST", "/api/inventory/import", `{"csv": "", "dry_run": true}`, ImportInventoryDomainsHandler, nil)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("empty csv: %d", w.Code)
+	}
+}
