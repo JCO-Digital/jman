@@ -1,6 +1,21 @@
 # Changelog
 
-## 7.36.0 (2026-11-13)
+## 7.37.0 (2026-11-13)
+
+#### Features
+
+- web: quick-jump and a theme choice (5fef028)
+- web: wide layouts for detail pages and the dashboard (816a7d8)
+- web: routed tabs, back links and page titles (2d4e696)
+- web: organizations, tasks, templates and payment methods use the shared lists (4cc5607)
+- web: shared URL-backed list state for the paged lists (e23ce38)
+- web: sidebar app shell with grouped navigation and route-driven page widths (0704ae9)
+
+#### Documentation
+
+- web: document the shared list conventions (484ed4a)
+
+## v7.36.0 (2026-11-13)
 
 #### Features
 
