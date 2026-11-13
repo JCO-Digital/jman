@@ -1,6 +1,13 @@
 # Changelog
 
-## 7.32.0 (2026-11-12)
+## 7.33.0 (2026-11-13)
+
+#### Features
+
+- inventory: look domain items up at their registry (c18be7d)
+- inventory: show Punycode domain names decoded in the name field (55f17ae)
+
+## v7.32.0 (2026-11-12)
 
 #### Features
 
