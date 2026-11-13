@@ -10,7 +10,7 @@ import LoadingSpinner from "../../components/LoadingSpinner.vue";
 import AppIcon from "../../components/AppIcon.vue";
 import InventoryItemModal from "../../components/InventoryItemModal.vue";
 import { useConfirm } from "../../composables/useConfirm";
-import { displayDomain } from "../../utils/format";
+import { displayDomain, providerName } from "../../utils/format";
 
 const inventoryStore = useInventoryStore();
 const authStore = useAuthStore();
@@ -142,7 +142,7 @@ const syncAll = async () => {
 const providerLabel = (item: InventoryItem) => {
 	const links = item.links ?? [];
 	if (links.length === 0) return "manual";
-	return [...new Set(links.map((l) => l.provider))].join(", ");
+	return [...new Set(links.map((l) => providerName(l.provider)))].join(", ");
 };
 
 // Domain names are shown in Unicode; the stored (Punycode) name is the

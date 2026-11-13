@@ -10,6 +10,13 @@ const (
 	InventoryItemTypeDomain InventoryItemType = "domain"
 )
 
+// ProviderDataFor returns one provider's snapshot from the item's
+// provider_data, or nil.
+func (it *InventoryItem) ProviderDataFor(provider string) map[string]any {
+	data, _ := it.ProviderData[provider].(map[string]any)
+	return data
+}
+
 // IsValidInventoryItemType reports whether t is a known item type.
 func IsValidInventoryItemType(t InventoryItemType) bool {
 	switch t {
@@ -40,7 +47,8 @@ const (
 // It is a CMDB-style record, separate from the functional servers/sites in
 // inventory.db; SiteID/ServerID are optional soft references to those.
 // Details holds the free-form manual fields (no secrets, at most usernames);
-// ProviderData holds the latest snapshot from a linked API and is only
+// ProviderData holds the latest snapshot from each linked API, keyed by
+// provider name ({"spinupwp": {...}, "hetzner": {...}}), and is only
 // written by syncs. See docs/inventory.md.
 type InventoryItem struct {
 	ID           string              `json:"id"`

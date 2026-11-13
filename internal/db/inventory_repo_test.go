@@ -61,8 +61,10 @@ func TestInventoryItemSaveGetList(t *testing.T) {
 		t.Fatalf("manual update wrote provider_data: %+v", again)
 	}
 	// The provider fields are written separately and keep the audit fields.
-	got.ProviderData = map[string]any{"ip": "203.0.113.10"}
-	if err := UpdateInventoryItemProviderFields(got); err != nil {
+	if err := UpdateInventoryItemProviderFields(got, "spinupwp", map[string]any{"ip": "203.0.113.10"}); err != nil {
+		t.Fatalf("update provider fields: %v", err)
+	}
+	if err := UpdateInventoryItemProviderFields(got, "hetzner", map[string]any{"cores": 4}); err != nil {
 		t.Fatalf("update provider fields: %v", err)
 	}
 	again, err := GetInventoryItem(item.ID)
@@ -72,7 +74,17 @@ func TestInventoryItemSaveGetList(t *testing.T) {
 	if again.Description != "Updated" || again.Origin != models.InventoryItemOriginManual {
 		t.Errorf("after update: description=%q origin=%q", again.Description, again.Origin)
 	}
-	if again.ProviderData["ip"] != "203.0.113.10" {
+	if again.ProviderDataFor("hetzner")["cores"] != 4.0 {
+		t.Errorf("hetzner provider_data = %v", again.ProviderData)
+	}
+	// Without a hetzner link, its entry goes.
+	if err := DropInventoryItemProviderData(item.ID, "hetzner"); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := GetInventoryItem(item.ID); after.ProviderDataFor("hetzner") != nil || after.ProviderDataFor("spinupwp") == nil {
+		t.Errorf("after drop: %v", after.ProviderData)
+	}
+	if again.ProviderDataFor("spinupwp")["ip"] != "203.0.113.10" {
 		t.Errorf("provider_data = %v", again.ProviderData)
 	}
 	if again.UpdatedBy != "editor" {
@@ -249,5 +261,33 @@ func TestInventoryItemNilJSONFieldsRoundTrip(t *testing.T) {
 	}
 	if got.ProviderData == nil || len(got.ProviderData) != 0 {
 		t.Errorf("provider_data = %#v, want empty non-nil map", got.ProviderData)
+	}
+}
+
+func TestKeyInventoryProviderData(t *testing.T) {
+	setupTestAPIDB(t)
+	dbConn := GetAPIDB().DB
+	flat := models.InventoryItem{Type: models.InventoryItemTypeServer, Name: "web1"}
+	empty := models.InventoryItem{Type: models.InventoryItemTypeServer, Name: "web2"}
+	for _, it := range []*models.InventoryItem{&flat, &empty} {
+		if err := InsertInventoryItem(it, "tester"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := dbConn.Exec(`UPDATE inventory_items SET provider_data = '{"ip_address":"203.0.113.10"}' WHERE id = ?`, flat.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := dbConn.Exec(`DELETE FROM schema_migrations WHERE name = ?`, inventoryProviderDataMigrationName); err != nil {
+		t.Fatal(err)
+	}
+	if err := KeyInventoryProviderData(dbConn); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := GetInventoryItem(flat.ID)
+	if got.ProviderDataFor("spinupwp")["ip_address"] != "203.0.113.10" || len(got.ProviderData) != 1 {
+		t.Errorf("flat snapshot: %v", got.ProviderData)
+	}
+	if got, _ := GetInventoryItem(empty.ID); len(got.ProviderData) != 0 {
+		t.Errorf("empty snapshot: %v", got.ProviderData)
 	}
 }

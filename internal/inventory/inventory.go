@@ -8,7 +8,9 @@ package inventory
 import (
 	"context"
 	"errors"
+	"net/netip"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -77,4 +79,17 @@ func Names() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// IPv4MatchKeys returns the match key ("ipv4:<address>") of a snapshot's
+// IPv4 address value, or nothing when it isn't a public, unicast IPv4
+// address: private and other shared addresses don't identify a machine.
+func IPv4MatchKeys(value any) []string {
+	s, _ := value.(string)
+	ip, err := netip.ParseAddr(strings.TrimSpace(s))
+	if err != nil || !ip.Is4() || ip.IsPrivate() || ip.IsLoopback() || ip.IsUnspecified() ||
+		ip.IsLinkLocalUnicast() || ip.IsMulticast() {
+		return nil
+	}
+	return []string{"ipv4:" + ip.String()}
 }

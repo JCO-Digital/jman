@@ -13,6 +13,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/inventory"
 	"github.com/JCO-Digital/jman/internal/inventory/domainlookup"
+	_ "github.com/JCO-Digital/jman/internal/inventory/hetzner"  // register the Hetzner Cloud provider
 	_ "github.com/JCO-Digital/jman/internal/inventory/spinupwp" // register the SpinupWP provider
 	"github.com/JCO-Digital/jman/internal/slack"
 	"github.com/JCO-Digital/jman/internal/vuln"

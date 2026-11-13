@@ -142,27 +142,54 @@ func UpdateInventoryItem(item *models.InventoryItem, username string) error {
 	return nil
 }
 
-// UpdateInventoryItemProviderFields saves what a provider sync owns: name,
-// status, provider_data and the site link. It leaves updated_at/updated_by
-// alone, so they keep showing the last manual edit.
-func UpdateInventoryItemProviderFields(item *models.InventoryItem) error {
+// UpdateInventoryItemProviderFields saves what one provider's sync owns:
+// the item's name, status and site link, and the provider's own entry in
+// provider_data (keyed by provider name; other providers' entries are left
+// as they are). It leaves updated_at/updated_by alone, so they keep showing
+// the last manual edit.
+func UpdateInventoryItemProviderFields(item *models.InventoryItem, provider string, data map[string]any) error {
 	db := GetAPIDB()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
-	providerData, err := marshalJSON(item.ProviderData, "{}")
+	encoded, err := marshalJSON(data, "{}")
 	if err != nil {
 		return fmt.Errorf("failed to encode provider_data: %w", err)
 	}
 	res, err := db.Exec(
-		`UPDATE inventory_items SET name = ?, status = ?, provider_data = ?, site_id = ? WHERE id = ?`,
-		item.Name, item.Status, providerData, item.SiteID, item.ID,
+		`UPDATE inventory_items SET name = ?, status = ?, site_id = ?,
+			provider_data = json_set(provider_data, '$.' || json_quote(?), json(?))
+		WHERE id = ?`,
+		item.Name, item.Status, item.SiteID, provider, encoded, item.ID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update inventory item provider fields: %w", err)
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return fmt.Errorf("inventory item %s not found", item.ID)
+	}
+	if item.ProviderData == nil {
+		item.ProviderData = map[string]any{}
+	}
+	item.ProviderData[provider] = data
+	return nil
+}
+
+// DropInventoryItemProviderData removes provider's entry from the item's
+// provider_data when the item has no link of that provider left.
+func DropInventoryItemProviderData(itemID, provider string) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_, err := db.Exec(
+		`UPDATE inventory_items SET provider_data = json_remove(provider_data, '$.' || json_quote(?))
+		WHERE id = ? AND NOT EXISTS (
+			SELECT 1 FROM inventory_item_links WHERE item_id = ? AND provider = ?)`,
+		provider, itemID, itemID, provider,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to drop provider data: %w", err)
 	}
 	return nil
 }

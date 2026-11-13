@@ -126,7 +126,7 @@ func TestSyncCreatesUpdatesRemoves(t *testing.T) {
 		t.Fatalf("second sync: %+v", res)
 	}
 	srv, err := db.GetInventoryItemByLink(p.name, "server", "srv-web1.examplehost.com")
-	if err != nil || srv == nil || srv.ProviderData["ip_address"] != "203.0.113.99" {
+	if err != nil || srv == nil || srv.ProviderDataFor(p.name)["ip_address"] != "203.0.113.99" {
 		t.Fatalf("provider_data not refreshed: %+v %v", srv, err)
 	}
 	gotManual, _ := db.GetInventoryItem(manual.ID)
@@ -299,7 +299,7 @@ func TestSyncSharedItemIsOrderIndependent(t *testing.T) {
 	if len(items) != 1 || len(items[0].Links) != 2 {
 		t.Fatalf("items: %+v", items)
 	}
-	if items[0].ProviderData["domain"] != "example.com" || *items[0].SiteID != "site-1" {
+	if items[0].ProviderDataFor(p.name)["domain"] != "example.com" || *items[0].SiteID != "site-1" {
 		t.Fatalf("shared item took the wrong entity's data: %+v", items[0])
 	}
 	p.items = []ExternalItem{first, second}
@@ -336,7 +336,111 @@ func TestSyncKeepsManualEdits(t *testing.T) {
 	if *got.SiteID != manualSite || got.Description != "edited" || got.UpdatedBy != "editor" {
 		t.Fatalf("manual edit lost: site=%s description=%q updated_by=%q", *got.SiteID, got.Description, got.UpdatedBy)
 	}
-	if got.ProviderData["status"] != "changed" {
+	if got.ProviderDataFor(p.name)["status"] != "changed" {
 		t.Fatalf("provider_data not refreshed: %+v", got.ProviderData)
+	}
+}
+
+// matchingFake is a fakeProvider with IPv4 match keys under data["ip"].
+type matchingFake struct{ fakeProvider }
+
+func (m *matchingFake) MatchKeys(itemType models.InventoryItemType, data map[string]any) []string {
+	if itemType != models.InventoryItemTypeServer {
+		return nil
+	}
+	return IPv4MatchKeys(data["ip"])
+}
+
+func registerMatching(t *testing.T, suffix string) *matchingFake {
+	t.Helper()
+	m := &matchingFake{}
+	m.name = "fake-" + strings.ReplaceAll(t.Name(), "/", "-") + "-" + suffix
+	Register(m)
+	t.Cleanup(func() {
+		registryMu.Lock()
+		delete(registry, m.name)
+		registryMu.Unlock()
+	})
+	return m
+}
+
+func matchServer(id, name, ip string, extra map[string]any) ExternalItem {
+	data := map[string]any{"ip": ip}
+	for k, v := range extra {
+		data[k] = v
+	}
+	return ExternalItem{Type: models.InventoryItemTypeServer, ProviderType: "server", ProviderID: id, Name: name, Data: data}
+}
+
+// A server another provider already has (same public IPv4) joins its item;
+// each provider keeps its own snapshot, and the creator keeps the name.
+func TestSyncMatchesAcrossProviders(t *testing.T) {
+	setupInventoryTest(t)
+	panel := registerMatching(t, "panel")
+	cloud := registerMatching(t, "cloud")
+
+	panel.items = []ExternalItem{
+		matchServer("1", "web1.example.com", "203.0.113.10", map[string]any{"php": "8.3"}),
+		matchServer("2", "web2.example.com", "203.0.113.20", nil),
+		matchServer("3", "lan.example.com", "10.0.0.5", nil), // private: never matched
+	}
+	mustSync(t, panel.name)
+
+	cloud.items = []ExternalItem{
+		matchServer("101", "hz-web1", "203.0.113.10", map[string]any{"cores": 4.0}),
+		matchServer("103", "hz-lan", "10.0.0.5", nil),
+		matchServer("104", "hz-new", "203.0.113.40", nil),
+	}
+	res := mustSync(t, cloud.name)
+	if res.Matched != 1 || res.Created != 2 || res.LinksAdded != 3 {
+		t.Fatalf("cloud sync: %+v", res)
+	}
+
+	web1, _ := db.GetInventoryItemByLink(panel.name, "server", "1")
+	viaCloud, _ := db.GetInventoryItemByLink(cloud.name, "server", "101")
+	if web1 == nil || viaCloud == nil || web1.ID != viaCloud.ID {
+		t.Fatalf("matched server not joined: %+v %+v", web1, viaCloud)
+	}
+	if web1.Name != "web1.example.com" {
+		t.Errorf("name = %q, want the creating provider's", web1.Name)
+	}
+	if web1.ProviderDataFor(panel.name)["php"] != "8.3" || web1.ProviderDataFor(cloud.name)["cores"] != 4.0 {
+		t.Errorf("snapshots: %+v", web1.ProviderData)
+	}
+	if lan, _ := db.GetInventoryItemByLink(cloud.name, "server", "103"); lan == nil || lan.Name != "hz-lan" || len(lan.ProviderData) != 1 {
+		t.Errorf("private address matched: %+v", lan)
+	}
+
+	// Both syncs again: nothing flips back and forth.
+	if res := mustSync(t, panel.name); res.Updated != 0 {
+		t.Errorf("panel resync: %+v", res)
+	}
+	if res := mustSync(t, cloud.name); res.Updated != 0 {
+		t.Errorf("cloud resync: %+v", res)
+	}
+
+	// When the cloud stops listing the server, only its snapshot goes; the
+	// item stays active through the panel's link.
+	cloud.items = cloud.items[1:]
+	mustSync(t, cloud.name)
+	web1, _ = db.GetInventoryItem(web1.ID)
+	if web1.Status != models.InventoryItemStatusActive || len(web1.Links) != 1 || web1.ProviderDataFor(cloud.name) != nil || web1.ProviderDataFor(panel.name) == nil {
+		t.Fatalf("after cloud removal: %+v", web1)
+	}
+}
+
+// Two items with the same IPv4 are ambiguous: no automatic join.
+func TestSyncAmbiguousMatchCreatesItem(t *testing.T) {
+	setupInventoryTest(t)
+	panel := registerMatching(t, "panel")
+	cloud := registerMatching(t, "cloud")
+	panel.items = []ExternalItem{
+		matchServer("1", "a.example.com", "203.0.113.10", nil),
+		matchServer("2", "b.example.com", "203.0.113.10", nil),
+	}
+	mustSync(t, panel.name)
+	cloud.items = []ExternalItem{matchServer("101", "hz", "203.0.113.10", nil)}
+	if res := mustSync(t, cloud.name); res.Matched != 0 || res.Created != 1 {
+		t.Fatalf("ambiguous match: %+v", res)
 	}
 }

@@ -625,7 +625,7 @@ UUID strings.
 `DELETE /api/inventory/items/{id}/links/{provider}/{providerType}/{providerId}` (Protected: `edit`): unlink.
 `POST /api/inventory/items/{id}/dismiss` (Protected: `edit`): body like the link payload; dismisses the match prompt.
 `POST /api/inventory/items/{id}/lookup` (Protected: `edit`): looks a domain item up at its registry (RDAP, WHOIS for what RDAP leaves out) and answers with the stored lookup: `domain`, `nameservers`, `registrar`, `expires_at`, `source` (`rdap`, `whois`, `rdap+whois`), `error` (the last lookup failed; the data is then from `last_success_at`), `checked_at`. A lookup less than a minute old is returned without asking the registry again. `400` for other item types. `GET /api/inventory/items/{id}` includes the same object as `domain_lookup`.
-`POST /api/inventory/sync/{provider}` (Protected: `edit`): run a provider sync now; answers with a `SyncResult` (`fetched`, `created`, `updated`, `links_added`, `links_removed`, `removed`, `skipped`). `updated` counts the items that changed. For SpinupWP the servers/sites refresh before the sync is skipped when the last one is less than 60 seconds old.
+`POST /api/inventory/sync/{provider}` (Protected: `edit`): run a provider sync now; answers with a `SyncResult` (`fetched`, `created`, `updated`, `links_added`, `links_removed`, `matched`, `removed`, `skipped`); `matched` counts new entities that joined another provider's item, e.g. a Hetzner server joining the SpinupWP server with the same IPv4 address. Providers are `spinupwp` and `hetzner` (`GET /api/inventory/providers`). `updated` counts the items that changed. For SpinupWP the servers/sites refresh before the sync is skipped when the last one is less than 60 seconds old.
 
 **Inventory Item Object**
 
@@ -639,7 +639,10 @@ UUID strings.
 	"description": "MariaDB host",
 	"tags": ["infra"],
 	"details": {"ip_addresses": ["10.0.0.5"], "access": "user: admin"},
-	"provider_data": {"ip_address": "203.0.113.10"},
+	"provider_data": {
+		"spinupwp": {"ip_address": "203.0.113.10"},
+		"hetzner": {"ipv4": "203.0.113.10", "server_type": "cx32"}
+	},
 	"site_id": null,
 	"server_id": null,
 	"links": [
@@ -660,7 +663,7 @@ UUID strings.
 ```
 
 `details` is free-form per type and holds no secrets (at most usernames). Notes are not kept in `details`: attach them via the generic notes endpoints (`/api/notes`) with `parent_type: "InventoryItem"`;
-`provider_data` is written only by provider syncs. Domain-type items are
+`provider_data` is written only by provider syncs, one entry per linked provider (keyed by provider name). Domain-type items are
 named by their apex (registrable) domain.
 
 ### Unified Ignore List

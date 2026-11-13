@@ -301,7 +301,7 @@ func TestSyncInventoryProviderHandler(t *testing.T) {
 	if err != nil || item == nil || item.Origin != models.InventoryItemOriginProvider {
 		t.Fatalf("synced item: %+v %v", item, err)
 	}
-	if item.ProviderData["ip_address"] != "203.0.113.10" {
+	if item.ProviderDataFor("fake-api-test")["ip_address"] != "203.0.113.10" {
 		t.Fatalf("provider_data: %+v", item.ProviderData)
 	}
 }
