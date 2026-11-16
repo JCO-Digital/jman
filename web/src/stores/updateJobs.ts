@@ -710,6 +710,14 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return (await res.json()) as StagedPluginZip;
 	}
 
+	/** The URL prefixes jman-api may download plugin ZIPs from. */
+	async function fetchZipUrlPrefixes(): Promise<string[]> {
+		const res = await apiFetch(`${BASE_URL}/plugin-zips/sources`);
+		if (!res.ok) await handleErrorResponse(res);
+		const body = (await res.json()) as { url_prefixes: string[] };
+		return body.url_prefixes;
+	}
+
 	/** Queues updating a plugin from a staged ZIP, one job per site. */
 	async function enqueueZipUpdate(
 		slug: string,
@@ -800,6 +808,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		enqueueAction,
 		enqueueInstall,
 		stagePluginZip,
+		fetchZipUrlPrefixes,
 		enqueueZipUpdate,
 		enqueueCore,
 		enqueueUserCreate,

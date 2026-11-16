@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/cache"
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/updatejobs"
@@ -28,14 +29,92 @@ const zipDownloadTimeout = 2 * time.Minute
 // maxZipUpdateSites bounds the sites one ZIP update request may queue.
 const maxZipUpdateSites = 500
 
-// Seam for tests.
-var zipHTTPClient = utils.NewHTTPClient(zipDownloadTimeout)
+// maxZipRedirects bounds the redirects followed when downloading a ZIP.
+const maxZipRedirects = 5
+
+// zipHTTPClient downloads plugin ZIPs. It follows redirects from an allowed
+// URL (GitHub serves release assets from another host), but only over
+// HTTPS.
+var zipHTTPClient = func() *http.Client {
+	c := utils.NewHTTPClient(zipDownloadTimeout)
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxZipRedirects {
+			return errors.New("too many redirects")
+		}
+		if req.URL.Scheme != "https" {
+			return errors.New("redirect to a non-HTTPS URL")
+		}
+		return nil
+	}
+	return c
+}()
+
+// zipURLPrefixes returns the configured URL prefixes plugin ZIPs may be
+// downloaded from. A seam for tests.
+var zipURLPrefixes = func() []string { return config.Cfg.PluginZipURLPrefixes }
+
+// PluginZipSourcesHandler returns the URL prefixes plugin ZIPs may be
+// downloaded from, for the ZIP update form.
+//
+//	GET /api/plugin-zips/sources
+func PluginZipSourcesHandler(w http.ResponseWriter, r *http.Request) {
+	prefixes := []string{}
+	for _, p := range zipURLPrefixes() {
+		if _, ok := parseZipURLPrefix(p); ok {
+			prefixes = append(prefixes, strings.TrimSpace(p))
+		}
+	}
+	WriteJSON(w, http.StatusOK, map[string][]string{"url_prefixes": prefixes})
+}
+
+// parseZipURLPrefix parses a configured URL prefix; ok is false if it
+// isn't an http(s) URL with a host and no query, fragment or user info.
+func parseZipURLPrefix(raw string) (u *url.URL, ok bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" ||
+		u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.RawPath != "" || hasDotSegment(u.Path) {
+		return nil, false
+	}
+	return u, true
+}
+
+// zipURLAllowed reports whether u is under one of the URL prefixes. A
+// prefix's path matches whole path segments: "/JCO-Digital" and
+// "/JCO-Digital/" match "/JCO-Digital/x" but not "/JCO-Digital-x". URLs
+// with user info, dot segments or escaped path characters (such as %2F),
+// which could reach another path than they appear to, never match.
+func zipURLAllowed(u *url.URL, prefixes []string) bool {
+	if u.User != nil || u.RawPath != "" || hasDotSegment(u.Path) {
+		return false
+	}
+	for _, raw := range prefixes {
+		p, ok := parseZipURLPrefix(raw)
+		if !ok || !strings.EqualFold(p.Scheme, u.Scheme) || !strings.EqualFold(p.Host, u.Host) {
+			continue
+		}
+		dir := strings.TrimSuffix(p.Path, "/")
+		if dir == "" || u.Path == dir || strings.HasPrefix(u.Path, dir+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasDotSegment(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return true
+		}
+	}
+	return false
+}
 
 // StagePluginZipHandler stores a plugin ZIP for a ZIP update and reports
 // the plugin it holds (slug, name and version). The ZIP is an uploaded
 // file (multipart/form-data, field "file") or a URL that jman-api
 // downloads itself, so sites don't need access to it and every site gets
-// the same, checked file. A staged ZIP expires after an hour.
+// the same, checked file. URLs must be under one of the configured
+// pluginZipUrlPrefixes. A staged ZIP expires after an hour.
 //
 //	POST /api/plugin-zips
 //	{"url": "https://example.com/download?key=..."}
@@ -110,6 +189,13 @@ func downloadPluginZip(r *http.Request, rawURL string) (name, zipPath string, si
 	u, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 		return "", "", 0, http.StatusBadRequest, fmt.Errorf("The URL must be an http(s) URL")
+	}
+	prefixes := zipURLPrefixes()
+	if len(prefixes) == 0 {
+		return "", "", 0, http.StatusForbidden, fmt.Errorf("Downloading ZIPs from URLs is off: no URLs are allowed (pluginZipUrlPrefixes in jman-api's config). Upload the ZIP instead")
+	}
+	if !zipURLAllowed(u, prefixes) {
+		return "", "", 0, http.StatusForbidden, fmt.Errorf("ZIPs can only be downloaded from URLs under %s", strings.Join(prefixes, ", "))
 	}
 
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, u.String(), nil)

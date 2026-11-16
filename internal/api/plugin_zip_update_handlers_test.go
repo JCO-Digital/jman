@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -29,6 +30,14 @@ func pluginZip(t *testing.T, slug, version string) []byte {
 		t.Fatal(err)
 	}
 	return buf.Bytes()
+}
+
+// allowZipURLs sets the allowed ZIP URL prefixes for a test.
+func allowZipURLs(t *testing.T, prefixes ...string) {
+	t.Helper()
+	old := zipURLPrefixes
+	zipURLPrefixes = func() []string { return prefixes }
+	t.Cleanup(func() { zipURLPrefixes = old })
 }
 
 func setupZipTest(t *testing.T) {
@@ -69,6 +78,7 @@ func TestStagePluginZipFromURL(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
+	allowZipURLs(t, srv.URL)
 
 	rec := stageFromURL(t, srv.URL+"/download?key=x")
 	if rec.Code != http.StatusCreated {
@@ -129,6 +139,7 @@ func TestStagePluginZipRejectsNonPlugin(t *testing.T) {
 	_ = w.Close()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write(buf.Bytes()) }))
 	defer srv.Close()
+	allowZipURLs(t, srv.URL)
 
 	if rec := stageFromURL(t, srv.URL+"/x.zip"); rec.Code != http.StatusBadRequest {
 		t.Errorf("status %d, want 400 (%s)", rec.Code, rec.Body.String())
@@ -136,5 +147,70 @@ func TestStagePluginZipRejectsNonPlugin(t *testing.T) {
 	entries, _ := os.ReadDir(updatejobs.UploadDir())
 	if len(entries) != 0 {
 		t.Errorf("rejected ZIP left on disk: %v", entries)
+	}
+}
+
+func TestZipURLAllowed(t *testing.T) {
+	prefixes := []string{"https://github.com/JCO-Digital", "https://downloads.wordpress.org/plugin/", "https://zips.example.com", "not a url", "https://evil.example.com/?x=1"}
+	tests := []struct {
+		url  string
+		want bool
+	}{
+		{"https://github.com/JCO-Digital/jcore-turva/releases/download/v1.2.0/jcore-turva.zip", true},
+		{"https://GitHub.com/JCO-Digital/x.zip", true},
+		{"https://github.com/JCO-Digital", true},
+		{"https://github.com/jco-digital/x.zip", false},
+		{"https://github.com/JCO-Digital-evil/x.zip", false},
+		{"https://github.com/other/x.zip", false},
+		{"https://github.com/JCO-Digital/../other/x.zip", false},
+		{"https://github.com/JCO-Digital/%2E%2E/other/x.zip", false},
+		{"https://github.com/JCO-Digital%2F..%2Fother/x.zip", false},
+		{"https://github.com/JCO-Digital%2Fx.zip", false},
+		{"http://github.com/JCO-Digital/x.zip", false},
+		{"https://user@github.com/JCO-Digital/x.zip", false},
+		{"https://github.com:8443/JCO-Digital/x.zip", false},
+		{"https://github.com.evil.com/JCO-Digital/x.zip", false},
+		{"https://downloads.wordpress.org/plugin/akismet.5.3.zip", true},
+		{"https://downloads.wordpress.org/plugins/akismet.zip", false},
+		{"https://zips.example.com/any/thing.zip?token=1", true},
+		{"https://evil.example.com/?x=1", false},
+	}
+	for _, tt := range tests {
+		u, err := url.Parse(tt.url)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.url, err)
+		}
+		if got := zipURLAllowed(u, prefixes); got != tt.want {
+			t.Errorf("zipURLAllowed(%s) = %v, want %v", tt.url, got, tt.want)
+		}
+	}
+}
+
+func TestStagePluginZipURLAllowlist(t *testing.T) {
+	setupZipTest(t)
+	fetched := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fetched = true }))
+	defer srv.Close()
+
+	allowZipURLs(t)
+	if rec := stageFromURL(t, srv.URL+"/x.zip"); rec.Code != http.StatusForbidden {
+		t.Errorf("no prefixes: status %d, want 403 (%s)", rec.Code, rec.Body.String())
+	}
+	allowZipURLs(t, srv.URL+"/allowed/")
+	if rec := stageFromURL(t, srv.URL+"/other/x.zip"); rec.Code != http.StatusForbidden {
+		t.Errorf("outside the prefix: status %d, want 403 (%s)", rec.Code, rec.Body.String())
+	}
+	if fetched {
+		t.Error("a URL that isn't allowed was fetched")
+	}
+}
+
+func TestZipDownloadRedirects(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "https://github.com/JCO-Digital/x.zip", nil)
+	if err := zipHTTPClient.CheckRedirect(httptest.NewRequest(http.MethodGet, "https://release-assets.githubusercontent.com/x", nil), []*http.Request{req}); err != nil {
+		t.Errorf("HTTPS redirect refused: %v", err)
+	}
+	if err := zipHTTPClient.CheckRedirect(httptest.NewRequest(http.MethodGet, "http://10.0.0.1/x", nil), []*http.Request{req}); err == nil {
+		t.Error("redirect to plain HTTP allowed")
 	}
 }

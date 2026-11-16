@@ -228,6 +228,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/sites/{id}/plugin-actions", execute(SitePluginActionHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-install", execute(SitePluginInstallHandler))
 	// Updating a plugin from a ZIP on many sites: stage the ZIP, then queue.
+	mux.Handle("GET /api/plugin-zips/sources", execute(PluginZipSourcesHandler))
 	mux.Handle("POST /api/plugin-zips", execute(StagePluginZipHandler))
 	mux.Handle("POST /api/plugins/{slug}/zip-update", execute(PluginZipUpdateHandler))
 

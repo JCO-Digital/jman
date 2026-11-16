@@ -50,6 +50,8 @@ const checking = ref(false);
 const submitting = ref(false);
 const error = ref("");
 const staged = ref<StagedPluginZip | null>(null);
+/** Where ZIPs may be downloaded from; null while loading. */
+const urlPrefixes = ref<string[] | null>(null);
 
 const filter = ref<Filter>("vulnerable");
 /** Sites on a version older than this are picked by the "older" filter. */
@@ -227,8 +229,19 @@ watch(
 		filter.value = "vulnerable";
 		olderThan.value = "";
 		selected.value = new Set();
+		if (urlPrefixes.value === null) loadUrlPrefixes();
 	},
 );
+
+async function loadUrlPrefixes() {
+	try {
+		urlPrefixes.value = await jobsStore.fetchZipUrlPrefixes();
+	} catch {
+		// The URL tab says the allowed URLs couldn't be loaded; jman-api
+		// checks the URL anyway.
+		urlPrefixes.value = null;
+	}
+}
 
 function formatSize(bytes: number) {
 	return bytes >= 1024 * 1024
@@ -299,13 +312,38 @@ function formatSize(bytes: number) {
 							id="zip-url"
 							v-model="url"
 							type="url"
-							placeholder="https://example.com/download/my-plugin.zip"
+							:placeholder="
+								urlPrefixes?.length
+									? `${urlPrefixes[0]}…`
+									: 'https://example.com/download/my-plugin.zip'
+							"
+							:disabled="urlPrefixes?.length === 0"
 							autocomplete="off"
 							spellcheck="false"
 						/>
-						<small class="text-muted">
+						<small
+							v-if="urlPrefixes?.length === 0"
+							class="form-error"
+						>
+							Downloading from URLs is off: no URLs are allowed
+							(<code>pluginZipUrlPrefixes</code> in jman-api's
+							config). Upload the ZIP instead.
+						</small>
+						<small v-else class="text-muted">
 							jman-api downloads the ZIP once and sends it to each
 							site, so a short-lived download link works.
+							<template v-if="urlPrefixes">
+								Allowed:
+								<template
+									v-for="(p, i) in urlPrefixes"
+									:key="p"
+								>
+									<code>{{ p }}</code
+									>{{
+										i < urlPrefixes.length - 1 ? ", " : ""
+									}}
+								</template>
+							</template>
 						</small>
 					</div>
 

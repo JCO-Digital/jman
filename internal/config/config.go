@@ -135,6 +135,15 @@ type AppConfig struct {
 	// JMAN_HETZNERAPITOKENS takes them comma-separated.
 	HetznerAPITokens []string `toml:"hetznerApiTokens" mapstructure:"hetznerApiTokens"`
 
+	// PluginZipURLPrefixes are the URLs jman-api may download plugin ZIPs
+	// from for ZIP updates (POST /api/plugin-zips), as URL prefixes, e.g.
+	// "https://github.com/JCO-Digital/". A prefix ending in a path matches
+	// that path and everything under it, never a longer name ("…/JCO" doesn't
+	// match "…/JCO-Digital"); one without a path matches the whole host.
+	// Empty means ZIPs can only be uploaded. In the environment,
+	// JMAN_PLUGINZIPURLPREFIXES takes them comma-separated.
+	PluginZipURLPrefixes []string `toml:"pluginZipUrlPrefixes" mapstructure:"pluginZipUrlPrefixes"`
+
 	// AnthropicAPIKey is the Claude API key jman-api's AI gateway uses (see
 	// docs/ai-gateway.md). The key's Anthropic organization must have zero
 	// data retention (ZDR) enabled; AIZDRConfirmed says it has.
@@ -324,6 +333,7 @@ func loadConfig() error {
 		"apiUrl":                     "APIURL",
 		"anthropicApiKey":            "ANTHROPICAPIKEY",
 		"hetznerApiTokens":           "HETZNERAPITOKENS",
+		"pluginZipUrlPrefixes":       "PLUGINZIPURLPREFIXES",
 		"aiEnabled":                  "AIENABLED",
 		"aiZdrConfirmed":             "AIZDRCONFIRMED",
 		"aiFake":                     "AIFAKE",

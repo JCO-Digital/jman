@@ -400,11 +400,15 @@ For plugins that don't update through WordPress (some paid plugins), a plugin ZI
 
 `POST /plugin-zips` (Protected: `execute`)
 
-Either a `multipart/form-data` upload (field `file`, a `.zip` up to 64 MB) or JSON with a URL that jman-api downloads itself (any http(s) URL that returns a ZIP, e.g. a signed download link):
+Either a `multipart/form-data` upload (field `file`, a `.zip` up to 64 MB) or JSON with a URL that jman-api downloads itself, e.g. a signed download link:
 
 ```json
-{ "url": "https://example.com/download?key=abc" }
+{ "url": "https://github.com/JCO-Digital/jcore-turva/releases/download/v1.2.0/jcore-turva.zip" }
 ```
+
+The URL must be under one of the URL prefixes in jman-api's `pluginZipUrlPrefixes` config, e.g. `["https://github.com/JCO-Digital/"]`. A prefix matches its path and everything under it, by whole path segments (`https://github.com/JCO-Digital` doesn't match `https://github.com/JCO-Digital-x/…`), and a prefix without a path matches the whole host. Scheme and host must match exactly (the host's case aside); URLs with user info, `.`/`..` segments or escaped slashes are refused. Redirects from an allowed URL are followed, as long as they stay on HTTPS (GitHub serves release assets from another host). With no prefixes configured, only uploads work.
+
+`GET /plugin-zips/sources` (Protected: `execute`) returns the configured prefixes: `{"url_prefixes": ["https://github.com/JCO-Digital/"]}`.
 
 jman-api reads the plugin's main file (the PHP file with a `Plugin Name` header) and returns `201 Created`:
 
@@ -422,6 +426,7 @@ jman-api reads the plugin's main file (the PHP file with a `Plugin Name` header)
 `slug` is the directory WordPress installs the ZIP as. A staged ZIP is kept for an hour and can be used once, by the user who staged it.
 
 - `400`: the file or URL isn't a ZIP, or the ZIP holds no plugin.
+- `403`: the URL isn't under an allowed prefix, or none are configured.
 - `413`: the ZIP is larger than 64 MB.
 - `502`: the URL couldn't be downloaded.
 
