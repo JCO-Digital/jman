@@ -783,6 +783,34 @@ export interface InstallJobPayload {
 	from_site?: string;
 }
 
+/** One change of a plugin on one site, from the site update ledger. */
+export interface PluginHistoryEvent {
+	ledger_id: number;
+	site_id: string;
+	/** Empty for sites jman no longer knows. */
+	site_name: string;
+	at: string;
+	/** The user, "cron", or "detected (agent|ssh)" for outside changes. */
+	by: string;
+	action:
+		| "update"
+		| "install"
+		| "activate"
+		| "deactivate"
+		| "delete"
+		| "uninstall"
+		| string;
+	/** Changed outside jman, found by jman-agent or a refresh. */
+	detected?: boolean;
+	outcome: "success" | "failed" | "skipped" | "unchanged";
+	old_version?: string;
+	new_version?: string;
+	/** The ZIP or slug an install job installed. */
+	source?: string;
+	note?: string;
+	error?: string;
+}
+
 /** A plugin ZIP jman-api has checked and holds for a ZIP update. */
 export interface StagedPluginZip {
 	id: string;

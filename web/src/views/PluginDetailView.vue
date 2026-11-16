@@ -16,6 +16,7 @@ import PluginInfoCard from "../components/PluginInfoCard.vue";
 import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
 import PluginRowActions from "../components/PluginRowActions.vue";
 import PluginZipUpdateModal from "../components/PluginZipUpdateModal.vue";
+import PluginHistoryCard from "../components/PluginHistoryCard.vue";
 import AppIcon from "../components/AppIcon.vue";
 import NotesWidget from "../components/NotesWidget.vue";
 import { usePageTitle } from "../composables/usePageTitle";
@@ -385,6 +386,8 @@ const manageAssetTemplate = () => {
 							</table>
 						</div>
 					</section>
+
+					<PluginHistoryCard :slug="name" />
 				</div>
 			</div>
 		</main>
