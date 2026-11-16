@@ -39,12 +39,13 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 }
 
 // isPluginUpload reports whether r is a multipart plugin ZIP upload to
-// POST /api/sites/{id}/plugin-install.
+// POST /api/sites/{id}/plugin-install or POST /api/plugin-zips.
 func isPluginUpload(r *http.Request) bool {
-	return r.Method == http.MethodPost &&
-		strings.HasPrefix(r.URL.Path, "/api/sites/") &&
-		strings.HasSuffix(r.URL.Path, "/plugin-install") &&
-		strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data")
+	if r.Method != http.MethodPost || !strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		return false
+	}
+	return r.URL.Path == "/api/plugin-zips" ||
+		(strings.HasPrefix(r.URL.Path, "/api/sites/") && strings.HasSuffix(r.URL.Path, "/plugin-install"))
 }
 
 // SecurityHeadersMiddleware adds standard security headers to all responses.
