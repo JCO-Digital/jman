@@ -18,13 +18,28 @@ const stagedZipTTL = time.Hour
 // the update jobs that will install it on a set of sites.
 type StagedZip struct {
 	ID string `json:"id"`
-	// Filename is the uploaded file's name, or the URL it was fetched from.
+	// Filename is the uploaded or downloaded file's name, or for a ZIP
+	// copied from a site "<slug>.zip".
 	Filename  string              `json:"filename"`
 	Size      int64               `json:"size"`
 	Plugin    wpcli.PluginZipInfo `json:"plugin"`
 	CreatedBy string              `json:"created_by"`
 	ExpiresAt time.Time           `json:"expires_at"`
-	Path      string              `json:"-"`
+	// SourceSite is the site the plugin's files were copied from, if they
+	// weren't uploaded or downloaded.
+	SourceSite *ZipSourceSite `json:"source_site,omitempty"`
+	Path       string         `json:"-"`
+}
+
+// ZipSourceSite is the site a staged ZIP's files were copied from.
+type ZipSourceSite struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// ScannedAt is the site's latest malware scan, which found nothing.
+	ScannedAt time.Time `json:"scanned_at"`
+	// Skipped lists files that weren't copied: symlinks and other files
+	// that aren't regular files (at most maxSkippedListed).
+	Skipped []string `json:"skipped,omitempty"`
 }
 
 var staged = struct {

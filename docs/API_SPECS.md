@@ -430,6 +430,30 @@ jman-api reads the plugin's main file (the PHP file with a `Plugin Name` header)
 - `413`: the ZIP is larger than 64 MB.
 - `502`: the URL couldn't be downloaded.
 
+##### Copy the plugin from a site
+
+Instead of a file or URL, the JSON can name a site that already has the new version installed:
+
+```json
+{ "site_id": "<site uuid>", "plugin": "paid-plugin" }
+```
+
+jman-api finds the plugin's directory with `wp plugin path --dir`, streams it off the site with `tar` over SSH and zips it as `<slug>.zip`. Version control directories, `*.log` files, symlinks and other special files are left out; a symlink could point outside the plugin, e.g. at `wp-config.php`. Single-file plugins can't be copied.
+
+The copied files are installed on every site the update picks, so the source site must be clean:
+
+- its latest jman-agent malware scan succeeded and is recent (within twice `agentScanInterval`, at least 2 hours),
+- it has no open scan findings (allowlisted and acknowledged ones are fine),
+- and no copied file changed after that scan, so the version being copied has been scanned.
+
+The response adds `source_site` (`id`, `name`, `scanned_at`, and `skipped`: up to 20 files that weren't copied). Update jobs from such a ZIP have `from_site` in their payload, and their ledger entry the note "Copied from <site>".
+
+- `400`: invalid site or slug, the site doesn't have the plugin, or the plugin has more than 20,000 files or 512 MB.
+- `404`: the site isn't reachable over WP-CLI.
+- `409`: the site fails the scan checks above, or scanning is off.
+- `413`: the zipped plugin is larger than 64 MB.
+- `502`: the files couldn't be copied (WP-CLI or SSH failed).
+
 #### Queue the Update
 
 `POST /plugins/{slug}/zip-update` (Protected: `execute`)

@@ -315,3 +315,33 @@ func RedactExpiredScanFindings(before time.Time, by string) (int, error) {
 	n, _ := res.RowsAffected()
 	return int(n), nil
 }
+
+// GetSiteScan returns a site's latest scan: when it ran and its error, if
+// it failed. ok is false if the site was never scanned.
+func GetSiteScan(siteID string) (scannedAt time.Time, scanErr string, ok bool, err error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return time.Time{}, "", false, fmt.Errorf("database not initialized")
+	}
+	err = dbConn.QueryRow(`SELECT scanned_at, error FROM site_scans WHERE site_id = ?`, siteID).Scan(&scannedAt, &scanErr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return time.Time{}, "", false, nil
+	}
+	if err != nil {
+		return time.Time{}, "", false, fmt.Errorf("failed to read the scan of site %s: %w", siteID, err)
+	}
+	return scannedAt, scanErr, true, nil
+}
+
+// CountOpenSiteScanFindings returns how many open findings a site has.
+func CountOpenSiteScanFindings(siteID string) (int, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	var n int
+	if err := dbConn.QueryRow(`SELECT COUNT(*) FROM scan_findings WHERE site_id = ? AND status = 'open'`, siteID).Scan(&n); err != nil {
+		return 0, fmt.Errorf("failed to count open scan findings of site %s: %w", siteID, err)
+	}
+	return n, nil
+}

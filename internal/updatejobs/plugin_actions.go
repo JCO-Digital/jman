@@ -193,6 +193,9 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 	r := models.UpdateResult{Name: install.Source, Status: models.UpdateDone}
 	if install.Plugin != "" {
 		r = models.UpdateResult{Name: install.Plugin, OldVersion: install.OldVersion, NewVersion: install.OldVersion, Status: models.UpdateUpdated}
+		if install.FromSite != "" {
+			r.Note = "Copied from " + install.FromSite
+		}
 	}
 	if cacheErr == nil {
 		if p := installedPlugin(job, before); p != nil {
