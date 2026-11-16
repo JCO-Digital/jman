@@ -392,6 +392,41 @@ The site's user list is refreshed after the job.
 
 ---
 
+### Plugin History
+
+`GET /plugins/{slug}/history` (Protected: `basic`)
+
+A plugin's changes on every site, newest first, taken from the site update ledgers: updates (including ZIP updates), installs, activations, deactivations, deletions and uninstalls made through jman, and changes jman-agent or a refresh found that jman didn't make.
+
+`?limit=` caps how many ledger entries are read (default 100, at most 500); one entry can hold several events, e.g. a detected downgrade and activation. `?before=<ledger id>` continues from `next_before`, which is `null` at the end.
+
+```json
+{
+  "events": [
+    {
+      "ledger_id": 15,
+      "site_id": "<site uuid>",
+      "site_name": "example.com",
+      "at": "2026-11-16T12:09:53Z",
+      "by": "alice",
+      "action": "update",
+      "outcome": "success",
+      "old_version": "6.0",
+      "new_version": "6.0.2",
+      "note": "Copied from other.example.com"
+    }
+  ],
+  "next_before": null
+}
+```
+
+- `action`: `update`, `install`, `activate`, `deactivate`, `delete` or `uninstall`.
+- `outcome`: `success`, `failed` (with `error`), `skipped` (held back by an update lock) or `unchanged` (an update that left the version as it was).
+- `detected: true` marks changes made outside jman; `by` is then `detected (agent)` or `detected (ssh)`.
+- `source` is the ZIP or slug an install installed. `site_name` is empty for sites jman no longer knows.
+
+---
+
 ### Plugin Updates from a ZIP
 
 For plugins that don't update through WordPress (some paid plugins), a plugin ZIP can be installed over the plugin on many sites. It takes two calls: stage the ZIP, then queue the update.

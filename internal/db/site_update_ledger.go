@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -157,4 +158,41 @@ func GetLatestSiteUpdateLedgerEntries() (map[string]models.SiteUpdateLedgerEntry
 	}
 
 	return entries, nil
+}
+
+// ListPluginLedgerEntries returns plugin ledger entries that mention the
+// plugin slug (as a JSON string anywhere in their data), newest first:
+// at most limit of them, with IDs below beforeID if it isn't 0. Callers
+// check the data for the plugin, since the match is textual.
+func ListPluginLedgerEntries(slug string, limit, beforeID int) ([]models.SiteUpdateLedgerEntry, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	quoted, err := json.Marshal(slug)
+	if err != nil {
+		return nil, err
+	}
+	query := `
+	SELECT id, site_id, update_type, status, data_json, updated_by, updated_at
+	FROM site_update_ledger
+	WHERE update_type = 'plugin' AND instr(data_json, ?) > 0 AND (? = 0 OR id < ?)
+	ORDER BY id DESC
+	LIMIT ?
+	`
+	rows, err := db.Query(query, string(quoted), beforeID, beforeID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query the update ledger for plugin %s: %w", slug, err)
+	}
+	defer rows.Close()
+
+	entries := []models.SiteUpdateLedgerEntry{}
+	for rows.Next() {
+		e, err := scanUpdateLedgerRow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan site update ledger entry: %w", err)
+		}
+		entries = append(entries, *e)
+	}
+	return entries, rows.Err()
 }

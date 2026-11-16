@@ -230,6 +230,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// Updating a plugin from a ZIP on many sites: stage the ZIP, then queue.
 	mux.Handle("GET /api/plugin-zips/sources", execute(PluginZipSourcesHandler))
 	mux.Handle("POST /api/plugin-zips", execute(StagePluginZipHandler))
+	mux.Handle("GET /api/plugins/{slug}/history", basic(PluginHistoryHandler))
 	mux.Handle("POST /api/plugins/{slug}/zip-update", execute(PluginZipUpdateHandler))
 
 	// --- Update locks (fix-release-only updates) ---
