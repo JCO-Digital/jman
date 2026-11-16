@@ -779,6 +779,8 @@ export interface InstallJobPayload {
 	plugin?: string;
 	/** The plugin's version when a ZIP update was queued. */
 	old_version?: string;
+	/** The site a ZIP update's files were copied from. */
+	from_site?: string;
 }
 
 /** A plugin ZIP jman-api has checked and holds for a ZIP update. */
@@ -791,6 +793,15 @@ export interface StagedPluginZip {
 	plugin: { slug: string; name: string; version: string };
 	created_by: string;
 	expires_at: string;
+	/** Set when the plugin's files were copied from a site. */
+	source_site?: {
+		id: string;
+		name: string;
+		/** The site's latest malware scan, which found nothing. */
+		scanned_at: string;
+		/** Symlinks and other special files that weren't copied. */
+		skipped?: string[];
+	};
 }
 
 /** Payload of user create jobs; the password is never part of it. */
