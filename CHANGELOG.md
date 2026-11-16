@@ -1,6 +1,15 @@
 # Changelog
 
-## 7.37.0 (2026-11-13)
+## 7.38.0 (2026-11-16)
+
+#### Features
+
+- api: allowlist the URLs plugin ZIPs are downloaded from (69e3126)
+- web: update a plugin from a ZIP on selected sites (717f79c)
+- web: link vulnerability groups to their plugin page (9f01e81)
+- api: update a plugin from a ZIP on many sites (6008700)
+
+## v7.37.0 (2026-11-13)
 
 #### Features
 
