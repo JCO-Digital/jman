@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -371,12 +372,12 @@ func TestRunZipUpdateSharesUploadAndRecordsUpdate(t *testing.T) {
 		return nil
 	}
 
-	newJob := func() models.UpdateJob {
-		job := models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "paid-2.0.zip", Plugin: "paid", OldVersion: "1.0"})
+	newJob := func(fromSite string) models.UpdateJob {
+		job := models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "paid-2.0.zip", Plugin: "paid", OldVersion: "1.0", FromSite: fromSite})
 		job.UploadPath = upload
 		return createJob(t, job)
 	}
-	first, second := newJob(), newJob()
+	first, second := newJob(""), newJob("alpha.test")
 
 	run(first)
 	if _, err := os.Stat(upload); err != nil {
@@ -390,6 +391,14 @@ func TestRunZipUpdateSharesUploadAndRecordsUpdate(t *testing.T) {
 	}
 
 	run(second)
+	ledger, err := db.GetSiteUpdateLedger(testSite)
+	if err != nil || len(ledger) != 2 {
+		t.Fatalf("ledger = %v, %v", ledger, err)
+	}
+	notes := ledger[0].DataJSON + ledger[1].DataJSON
+	if strings.Count(notes, `"note":"Copied from alpha.test"`) != 1 {
+		t.Errorf("ledger = %s, want the second update's source site as its note", notes)
+	}
 	if _, err := os.Stat(upload); !os.IsNotExist(err) {
 		t.Errorf("upload still exists after the last job (err %v)", err)
 	}

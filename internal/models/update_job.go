@@ -160,6 +160,9 @@ type InstallPayload struct {
 	// its version when the job was created.
 	Plugin     string `json:"plugin,omitempty"`
 	OldVersion string `json:"old_version,omitempty"`
+	// FromSite names the site the ZIP's files were copied from, if they
+	// were.
+	FromSite string `json:"from_site,omitempty"`
 }
 
 // UserCreatePayload is the payload of user create jobs. The password is

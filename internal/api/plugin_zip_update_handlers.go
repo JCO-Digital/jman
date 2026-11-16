@@ -111,16 +111,19 @@ func hasDotSegment(p string) bool {
 
 // StagePluginZipHandler stores a plugin ZIP for a ZIP update and reports
 // the plugin it holds (slug, name and version). The ZIP is an uploaded
-// file (multipart/form-data, field "file") or a URL that jman-api
+// file (multipart/form-data, field "file"), a URL that jman-api
 // downloads itself, so sites don't need access to it and every site gets
-// the same, checked file. URLs must be under one of the configured
+// the same, checked file, or a plugin's installed files on a site (see
+// copyPluginFromSite). URLs must be under one of the configured
 // pluginZipUrlPrefixes. A staged ZIP expires after an hour.
 //
 //	POST /api/plugin-zips
 //	{"url": "https://example.com/download?key=..."}
+//	{"site_id": "<uuid>", "plugin": "<slug>"}
 func StagePluginZipHandler(w http.ResponseWriter, r *http.Request) {
 	var filename, zipPath string
 	var size int64
+	var source *updatejobs.ZipSourceSite
 
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
 		name, p, _, status, err := savePluginUpload(w, r)
@@ -139,23 +142,39 @@ func StagePluginZipHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		var body struct {
-			URL string `json:"url"`
+			URL    string `json:"url"`
+			SiteID string `json:"site_id"`
+			Plugin string `json:"plugin"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			WriteError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
-		name, p, n, status, err := downloadPluginZip(r, body.URL)
-		if err != nil {
-			if status == http.StatusInternalServerError {
-				verb.LogPrintf(verb.Normal, "StagePluginZipHandler: %v", err)
-				WriteError(w, status, "Failed to store the downloaded file")
-			} else {
-				WriteError(w, status, err.Error())
+		if body.SiteID != "" {
+			c, status, err := copyPluginFromSite(body.SiteID, body.Plugin)
+			if err != nil {
+				if status == http.StatusInternalServerError {
+					verb.LogPrintf(verb.Normal, "StagePluginZipHandler: %v", err)
+					WriteError(w, status, "Failed to copy the plugin")
+				} else {
+					WriteError(w, status, err.Error())
+				}
+				return
 			}
-			return
+			filename, zipPath, size, source = c.filename, c.path, c.size, &c.source
+		} else {
+			name, p, n, status, err := downloadPluginZip(r, body.URL)
+			if err != nil {
+				if status == http.StatusInternalServerError {
+					verb.LogPrintf(verb.Normal, "StagePluginZipHandler: %v", err)
+					WriteError(w, status, "Failed to store the downloaded file")
+				} else {
+					WriteError(w, status, err.Error())
+				}
+				return
+			}
+			filename, zipPath, size = name, p, n
 		}
-		filename, zipPath, size = name, p, n
 	}
 
 	info := wpcli.InspectPluginZip(zipPath, filename)
@@ -166,11 +185,12 @@ func StagePluginZipHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	z, err := updatejobs.StageZip(updatejobs.StagedZip{
-		Filename:  filename,
-		Size:      size,
-		Plugin:    info,
-		CreatedBy: getUsername(r),
-		Path:      zipPath,
+		Filename:   filename,
+		Size:       size,
+		Plugin:     info,
+		CreatedBy:  getUsername(r),
+		SourceSite: source,
+		Path:       zipPath,
 	})
 	if err != nil {
 		_ = os.Remove(zipPath)
@@ -321,12 +341,17 @@ func PluginZipUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	fromSite := ""
+	if z.SourceSite != nil {
+		fromSite = z.SourceSite.Name
+	}
 	jobs := make([]models.UpdateJob, len(targets))
 	for i, t := range targets {
 		jobs[i] = models.NewUpdateJob(models.UpdateJobKindInstall, t.siteID, models.InstallPayload{
 			Source:     z.Filename,
 			Plugin:     slug,
 			OldVersion: t.version,
+			FromSite:   fromSite,
 		})
 		jobs[i].UploadPath = z.Path
 		jobs[i].CreatedBy = getUsername(r)

@@ -301,15 +301,7 @@ func storePluginZip(src io.Reader) (path string, size int64, err error) {
 	if _, err := io.ReadFull(src, magic); err != nil || !bytes.Equal(magic, zipMagic) {
 		return "", 0, errNotZip
 	}
-	if err := os.MkdirAll(updatejobs.UploadDir(), 0o700); err != nil {
-		return "", 0, err
-	}
-	id := make([]byte, 16)
-	if _, err := rand.Read(id); err != nil {
-		return "", 0, err
-	}
-	path = filepath.Join(updatejobs.UploadDir(), hex.EncodeToString(id)+".zip")
-	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	out, path, err := newPluginZipFile()
 	if err != nil {
 		return "", 0, err
 	}
@@ -322,4 +314,22 @@ func storePluginZip(src io.Reader) (path string, size int64, err error) {
 		return "", 0, err
 	}
 	return path, size, nil
+}
+
+// newPluginZipFile creates an empty file with a random name in the upload
+// directory.
+func newPluginZipFile() (f *os.File, path string, err error) {
+	if err := os.MkdirAll(updatejobs.UploadDir(), 0o700); err != nil {
+		return nil, "", err
+	}
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return nil, "", err
+	}
+	path = filepath.Join(updatejobs.UploadDir(), hex.EncodeToString(id)+".zip")
+	f, err = os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return nil, "", err
+	}
+	return f, path, nil
 }

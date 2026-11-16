@@ -35,16 +35,19 @@ const toast = useToastStore();
 /** Matches jman-api's limit for plugin ZIPs. */
 const MAX_UPLOAD_MB = 64;
 
-type Mode = "upload" | "url";
+type Mode = "upload" | "url" | "site";
 const modes: { id: Mode; label: string }[] = [
 	{ id: "upload", label: "Upload ZIP" },
 	{ id: "url", label: "ZIP URL" },
+	{ id: "site", label: "Copy from a site" },
 ];
 
 type Filter = "vulnerable" | "older" | "all" | "none";
 
 const mode = ref<Mode>("upload");
 const url = ref("");
+/** The site to copy the plugin's files from. */
+const sourceSiteId = ref("");
 const file = ref<File | null>(null);
 const checking = ref(false);
 const submitting = ref(false);
@@ -72,19 +75,40 @@ const fileError = computed(() => {
 const canCheck = computed(() => {
 	if (checking.value) return false;
 	if (mode.value === "upload") return !!file.value && !fileError.value;
+	if (mode.value === "site") return !!sourceSiteId.value;
 	return /^https?:\/\/\S+$/i.test(url.value.trim());
 });
+
+/** Sites to copy from, newest version first. */
+const sourceSites = computed(() =>
+	[...props.sites].sort(
+		(a, b) =>
+			compareVersions(b.version || "0", a.version || "0") ||
+			a.site_domain.localeCompare(b.site_domain),
+	),
+);
 
 const zipVersion = computed(() => staged.value?.plugin.version ?? "");
 const wrongPlugin = computed(
 	() => !!staged.value && staged.value.plugin.slug !== props.slug,
 );
 
+/** The site the staged ZIP was copied from, which isn't a target. */
+const copiedFrom = computed(() => staged.value?.source_site?.id ?? "");
+
 /** Sites with no change already queued or running on the plugin. */
 const available = computed(() =>
-	props.sites.filter((s) => !jobsStore.pendingAction(s.site_id, props.slug)),
+	props.sites.filter(
+		(s) =>
+			s.site_id !== copiedFrom.value &&
+			!jobsStore.pendingAction(s.site_id, props.slug),
+	),
 );
-const busyCount = computed(() => props.sites.length - available.value.length);
+const busyCount = computed(
+	() =>
+		props.sites.filter((s) => s.site_id !== copiedFrom.value).length -
+		available.value.length,
+);
 
 function isOlder(s: ZipUpdateSite, than: string) {
 	return !!than && !!s.version && compareVersions(s.version, than) < 0;
@@ -174,7 +198,9 @@ async function checkZip() {
 		staged.value = await jobsStore.stagePluginZip(
 			mode.value === "upload"
 				? { file: file.value! }
-				: { url: url.value.trim() },
+				: mode.value === "site"
+					? { site_id: sourceSiteId.value, plugin: props.slug }
+					: { url: url.value.trim() },
 		);
 		olderThan.value = staged.value.plugin.version;
 		filter.value = available.value.some((s) => matches(s, "vulnerable"))
@@ -204,8 +230,9 @@ async function submit() {
 			staged.value.id,
 			selectedSites.value.map((s) => s.site_id),
 		);
+		const from = staged.value.source_site?.name ?? staged.value.filename;
 		toast.addToast(
-			`Queued updating ${props.pluginName} from ${staged.value.filename} on ${jobs.length} site${jobs.length === 1 ? "" : "s"}.`,
+			`Queued updating ${props.pluginName} from ${from} on ${jobs.length} site${jobs.length === 1 ? "" : "s"}.`,
 			"info",
 		);
 		// Progress and the outcome show in the task center.
@@ -223,6 +250,7 @@ watch(
 		if (!visible) return;
 		mode.value = "upload";
 		url.value = "";
+		sourceSiteId.value = sourceSites.value[0]?.site_id ?? "";
 		file.value = null;
 		staged.value = null;
 		error.value = "";
@@ -241,6 +269,13 @@ async function loadUrlPrefixes() {
 		// checks the URL anyway.
 		urlPrefixes.value = null;
 	}
+}
+
+function formatTime(iso: string) {
+	return new Date(iso).toLocaleString(undefined, {
+		dateStyle: "short",
+		timeStyle: "short",
+	});
 }
 
 function formatSize(bytes: number) {
@@ -306,6 +341,27 @@ function formatSize(bytes: number) {
 						</small>
 					</div>
 
+					<div v-else-if="mode === 'site'" class="form-group">
+						<label for="zip-source">Site</label>
+						<select id="zip-source" v-model="sourceSiteId">
+							<option
+								v-for="s in sourceSites"
+								:key="s.site_id"
+								:value="s.site_id"
+							>
+								{{ s.site_domain }} — {{ s.version }}
+							</option>
+						</select>
+						<small class="text-muted">
+							jman copies the plugin's installed files from this
+							site into a ZIP. To keep malware from spreading, the
+							site's latest malware scan must be recent, have no
+							open findings and have run after the plugin's files
+							last changed. Symlinks, <code>*.log</code> files and
+							version control folders aren't copied.
+						</small>
+					</div>
+
 					<div v-else class="form-group">
 						<label for="zip-url">ZIP URL</label>
 						<input
@@ -362,7 +418,15 @@ function formatSize(bytes: number) {
 							class="btn btn-primary"
 							:disabled="!canCheck"
 						>
-							{{ checking ? "Checking…" : "Check ZIP" }}
+							{{
+								checking
+									? mode === "site"
+										? "Copying…"
+										: "Checking…"
+									: mode === "site"
+										? "Copy plugin"
+										: "Check ZIP"
+							}}
 						</button>
 					</div>
 				</template>
@@ -375,7 +439,13 @@ function formatSize(bytes: number) {
 								{{ staged.plugin.name }}
 								{{ staged.plugin.version || "(no version)" }}
 							</div>
-							<div class="sub-text">
+							<div v-if="staged.source_site" class="sub-text">
+								Copied from {{ staged.source_site.name }}
+								(malware scan clean at
+								{{ formatTime(staged.source_site.scanned_at) }})
+								· {{ formatSize(staged.size) }} zipped
+							</div>
+							<div v-else class="sub-text">
 								{{ staged.filename }} ·
 								{{ formatSize(staged.size) }} · installs as
 								<code>{{ staged.plugin.slug }}</code>
@@ -389,6 +459,15 @@ function formatSize(bytes: number) {
 							Change
 						</button>
 					</div>
+
+					<p
+						v-if="staged.source_site?.skipped?.length"
+						class="confirm-option-warning"
+					>
+						Not copied (symlinks or special files):
+						<code>{{ staged.source_site.skipped.join(", ") }}</code
+						>. If the plugin needs them, upload its ZIP instead.
+					</p>
 
 					<p v-if="wrongPlugin" class="form-error">
 						This ZIP holds the plugin

@@ -694,9 +694,12 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	 * which checks it and holds it for enqueueZipUpdate.
 	 */
 	async function stagePluginZip(
-		zip: { file: File } | { url: string },
+		zip:
+			| { file: File }
+			| { url: string }
+			| { site_id: string; plugin: string },
 	): Promise<StagedPluginZip> {
-		if ("url" in zip) {
+		if (!("file" in zip)) {
 			return postJobs<StagedPluginZip>("/plugin-zips", zip);
 		}
 		const form = new FormData();
