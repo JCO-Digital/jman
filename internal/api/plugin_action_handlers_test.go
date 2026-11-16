@@ -1,6 +1,7 @@
 package api
 
 import (
+	"archive/zip"
 	"bytes"
 	"mime/multipart"
 	"net/http"
@@ -92,6 +93,11 @@ func TestIsPluginUpload(t *testing.T) {
 	if isPluginUpload(req) {
 		t.Error("JSON plugin-install treated as an upload")
 	}
+	staged := httptest.NewRequest(http.MethodPost, "/api/plugin-zips", nil)
+	staged.Header.Set("Content-Type", "multipart/form-data; boundary=x")
+	if !isPluginUpload(staged) {
+		t.Error("multipart plugin-zips POST not recognized")
+	}
 	other := httptest.NewRequest(http.MethodPost, "/api/sites/abc/notes", nil)
 	other.Header.Set("Content-Type", "multipart/form-data; boundary=x")
 	if isPluginUpload(other) {
@@ -170,5 +176,29 @@ func TestSitePluginInstallRejectsInstalledSlug(t *testing.T) {
 	SitePluginInstallHandler(rec, req)
 	if rec.Code != http.StatusConflict {
 		t.Errorf("status %d, want 409 (body %s)", rec.Code, rec.Body.String())
+	}
+}
+
+// A ZIP over the general 1 MB body limit reaches the staging handler.
+func TestStagePluginZipAcceptsLargeUpload(t *testing.T) {
+	setupZipTest(t)
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("file", "paid.zip")
+	// Stored, not compressed, so the archive stays over 1 MB.
+	zw := zip.NewWriter(fw)
+	main, _ := zw.CreateHeader(&zip.FileHeader{Name: "paid/paid.php", Method: zip.Store})
+	_, _ = main.Write([]byte("<?php\n/**\n * Plugin Name: Paid\n * Version: 2.0\n */\n"))
+	big, _ := zw.CreateHeader(&zip.FileHeader{Name: "paid/assets/big.bin", Method: zip.Store})
+	_, _ = big.Write(bytes.Repeat([]byte("x"), 3<<20))
+	_ = zw.Close()
+	_ = mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/plugin-zips", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	rec := httptest.NewRecorder()
+	MaxBodyMiddleware(http.HandlerFunc(StagePluginZipHandler)).ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Errorf("status %d, want 201 (body %s)", rec.Code, rec.Body.String())
 	}
 }
