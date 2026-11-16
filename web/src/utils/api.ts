@@ -45,7 +45,11 @@ export async function handleErrorResponse(res: Response): Promise<never> {
 		const data = await res.json();
 		message = data.error || `Request failed (${res.status})`;
 	} catch {
-		message = `Request failed (${res.status})`;
+		// Not jman-api's JSON: an error page from a proxy in front of it.
+		message =
+			res.status === 413
+				? "The upload is larger than the web server in front of jman-api accepts (nginx client_max_body_size)"
+				: `Request failed (${res.status})`;
 	}
 	throw new Error(message);
 }
