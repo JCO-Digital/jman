@@ -1,6 +1,13 @@
 # Changelog
 
-## 7.38.0 (2026-11-16)
+### 7.38.1 (2026-11-16)
+
+#### Bug Fixes
+
+- web: run the theme script under the CSP and explain proxy 413s (e9dd7b7)
+- api: let plugin ZIP uploads for ZIP updates past the 1 MB body limit (62d7d8f)
+
+## v7.38.0 (2026-11-16)
 
 #### Features
 
