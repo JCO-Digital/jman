@@ -1,6 +1,13 @@
 # Changelog
 
-## 7.39.0 (2026-11-16)
+## 7.40.0 (2026-11-16)
+
+#### Features
+
+- web: show an update history card on the plugin page (fac61bb)
+- api: list a plugin's changes on every site from the update ledgers (79b8254)
+
+## v7.39.0 (2026-11-16)
 
 #### Features
 
