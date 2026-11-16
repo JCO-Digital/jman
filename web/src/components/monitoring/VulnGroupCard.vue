@@ -86,6 +86,15 @@ function siteCount(n: number) {
 					group.slug
 				}}</span>
 			</button>
+			<RouterLink
+				v-if="group.kind === 'plugin'"
+				:to="{ name: 'plugin-detail', params: { name: group.slug } }"
+				class="plugin-link"
+				:title="`Open ${group.name}`"
+			>
+				<AppIcon name="plugin" size="14" />
+				Plugin page
+			</RouterLink>
 			<span v-if="!resolved" class="label" :class="fixLabel.cls">{{
 				fixLabel.text
 			}}</span>
@@ -325,6 +334,13 @@ function siteCount(n: number) {
 
 .spacer {
 	flex: 1;
+}
+
+.plugin-link {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-1);
+	font-size: 12px;
 }
 
 .label {

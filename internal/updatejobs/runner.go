@@ -232,6 +232,7 @@ func Start(ctx context.Context) error {
 			if err := db.PruneFinishedUpdateJobs(time.Now().Add(-jobRetention)); err != nil {
 				log.Printf("Failed to prune update jobs: %v", err)
 			}
+			SweepStagedZips()
 			select {
 			case <-ctx.Done():
 				qu.close()
@@ -252,6 +253,22 @@ func Enqueue(job *models.UpdateJob) error {
 	}
 	q.push(*job)
 	return nil
+}
+
+// EnqueueAll stores jobs and then queues them, so no job runs (and, for
+// jobs sharing an uploaded ZIP, removes it) before all of them are stored.
+// On error, the jobs stored before it are still queued; n is how many.
+func EnqueueAll(jobs []models.UpdateJob) (n int, err error) {
+	for i := range jobs {
+		if err = db.CreateUpdateJob(&jobs[i]); err != nil {
+			break
+		}
+		n++
+	}
+	for _, job := range jobs[:n] {
+		q.push(job)
+	}
+	return n, err
 }
 
 // run executes one job and records its outcome.

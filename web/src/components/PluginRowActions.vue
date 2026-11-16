@@ -29,6 +29,8 @@ const { confirm, confirmWithOption } = useConfirm();
 
 const PENDING_LABELS: Partial<Record<UpdateJobKind, string>> = {
 	plugins: "Updating…",
+	// Only ZIP updates of an installed plugin are pending on a plugin.
+	install: "Updating…",
 	activate: "Activating…",
 	deactivate: "Deactivating…",
 	delete: "Deleting…",

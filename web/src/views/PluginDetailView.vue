@@ -15,6 +15,7 @@ import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
 import PluginVulnerabilityList from "../components/PluginVulnerabilityList.vue";
 import PluginRowActions from "../components/PluginRowActions.vue";
+import PluginZipUpdateModal from "../components/PluginZipUpdateModal.vue";
 import AppIcon from "../components/AppIcon.vue";
 import NotesWidget from "../components/NotesWidget.vue";
 import { usePageTitle } from "../composables/usePageTitle";
@@ -111,6 +112,8 @@ const updatableSites = computed(() =>
 const vulnerableUpdatable = computed(() =>
 	updatableSites.value.filter((s) => s.isVulnerable && !s.suppressed),
 );
+
+const showZipUpdate = ref(false);
 
 // "done/total" while a check across sites runs.
 const checkProgress = ref<string | null>(null);
@@ -260,6 +263,14 @@ const manageAssetTemplate = () => {
 									}}
 								</button>
 								<button
+									class="btn btn-outline btn-sm"
+									title="Install a plugin ZIP over this plugin on selected sites"
+									@click="showZipUpdate = true"
+								>
+									<AppIcon name="upload" size="14" />
+									Update from ZIP
+								</button>
+								<button
 									v-if="vulnerableUpdatable.length"
 									class="btn btn-outline btn-sm"
 									@click="
@@ -395,6 +406,14 @@ const manageAssetTemplate = () => {
 				</div>
 			</div>
 		</main>
+
+		<PluginZipUpdateModal
+			:visible="showZipUpdate"
+			:slug="name"
+			:plugin-name="info?.name || name"
+			:sites="manageableSites"
+			@close="showZipUpdate = false"
+		/>
 	</div>
 </template>
 

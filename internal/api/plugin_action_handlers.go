@@ -278,36 +278,48 @@ func savePluginUpload(w http.ResponseWriter, r *http.Request) (name, path string
 	if header.Size > maxPluginUploadBytes {
 		return "", "", false, http.StatusRequestEntityTooLarge, fmt.Errorf("The file is larger than %d MB", maxPluginUploadBytes>>20)
 	}
-	magic := make([]byte, len(zipMagic))
-	if _, err := io.ReadFull(file, magic); err != nil || !bytes.Equal(magic, zipMagic) {
-		return "", "", false, http.StatusBadRequest, fmt.Errorf("The file is not a valid ZIP archive")
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return "", "", false, http.StatusInternalServerError, err
-	}
-
-	if err := os.MkdirAll(updatejobs.UploadDir(), 0o700); err != nil {
-		return "", "", false, http.StatusInternalServerError, err
-	}
-	id := make([]byte, 16)
-	if _, err := rand.Read(id); err != nil {
-		return "", "", false, http.StatusInternalServerError, err
-	}
-	path = filepath.Join(updatejobs.UploadDir(), hex.EncodeToString(id)+".zip")
-	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	path, _, err = storePluginZip(file)
 	if err != nil {
-		return "", "", false, http.StatusInternalServerError, err
-	}
-	if _, err := io.Copy(out, file); err != nil {
-		out.Close()
-		_ = os.Remove(path)
-		return "", "", false, http.StatusInternalServerError, err
-	}
-	if err := out.Close(); err != nil {
-		_ = os.Remove(path)
+		if errors.Is(err, errNotZip) {
+			return "", "", false, http.StatusBadRequest, fmt.Errorf("The file is not a valid ZIP archive")
+		}
 		return "", "", false, http.StatusInternalServerError, err
 	}
 
 	activate = r.FormValue("activate") == "true" || r.FormValue("activate") == "1"
 	return name, path, activate, http.StatusOK, nil
+}
+
+// errNotZip means the data doesn't start like a ZIP archive.
+var errNotZip = errors.New("not a ZIP archive")
+
+// storePluginZip writes a ZIP to a new file in the upload directory and
+// returns its path and size. It returns errNotZip, storing nothing, if the
+// data doesn't start with a ZIP header.
+func storePluginZip(src io.Reader) (path string, size int64, err error) {
+	magic := make([]byte, len(zipMagic))
+	if _, err := io.ReadFull(src, magic); err != nil || !bytes.Equal(magic, zipMagic) {
+		return "", 0, errNotZip
+	}
+	if err := os.MkdirAll(updatejobs.UploadDir(), 0o700); err != nil {
+		return "", 0, err
+	}
+	id := make([]byte, 16)
+	if _, err := rand.Read(id); err != nil {
+		return "", 0, err
+	}
+	path = filepath.Join(updatejobs.UploadDir(), hex.EncodeToString(id)+".zip")
+	out, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", 0, err
+	}
+	size, err = io.Copy(out, io.MultiReader(bytes.NewReader(magic), src))
+	if cerr := out.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		_ = os.Remove(path)
+		return "", 0, err
+	}
+	return path, size, nil
 }

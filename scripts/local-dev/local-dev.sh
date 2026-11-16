@@ -173,6 +173,9 @@ write_api_config() {
 		agentWpDataInterval = 1
 		agentScanInterval = 1
 		slackChannel = ""
+		# ZIP updates may download plugin ZIPs from wordpress.org (the local
+		# sites run wordpress.org plugins) and the JCO-Digital releases.
+		pluginZipUrlPrefixes = ["https://downloads.wordpress.org/plugin/", "https://github.com/JCO-Digital/"]
 		aiEnabled = true
 		$(if [[ -n "${LOCAL_DEV_ANTHROPIC_API_KEY:-}" ]]; then
 			printf '%s\n' "# The Claude API, with the key from LOCAL_DEV_ANTHROPIC_API_KEY. Local runs" \

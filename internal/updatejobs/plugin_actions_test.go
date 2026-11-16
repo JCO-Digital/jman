@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
@@ -347,5 +348,83 @@ func TestLatestLedgerEntrySkipsManagementActions(t *testing.T) {
 	one, err := db.GetLatestSiteUpdateLedgerEntry(testSite)
 	if err != nil || one == nil || one.Status != models.LedgerVuln {
 		t.Errorf("GetLatestSiteUpdateLedgerEntry = %+v, %v", one, err)
+	}
+}
+
+func TestRunZipUpdateSharesUploadAndRecordsUpdate(t *testing.T) {
+	setupRunnerTest(t)
+	if err := os.MkdirAll(UploadDir(), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	upload := filepath.Join(UploadDir(), "shared.zip")
+	if err := os.WriteFile(upload, []byte("PK\x03\x04"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	setSitePlugins(t, models.WPPlugin{Name: "paid", Status: "active", Version: "1.0"})
+	var activated []bool
+	installPlugin = func(_ models.CliSite, _ string, activate bool) (bool, error) {
+		activated = append(activated, activate)
+		return true, nil
+	}
+	refreshPluginCache = func(models.CliSite) error {
+		setSitePlugins(t, models.WPPlugin{Name: "paid", Status: "active", Version: "2.0"})
+		return nil
+	}
+
+	newJob := func() models.UpdateJob {
+		job := models.NewUpdateJob(models.UpdateJobKindInstall, "", models.InstallPayload{Source: "paid-2.0.zip", Plugin: "paid", OldVersion: "1.0"})
+		job.UploadPath = upload
+		return createJob(t, job)
+	}
+	first, second := newJob(), newJob()
+
+	run(first)
+	if _, err := os.Stat(upload); err != nil {
+		t.Fatalf("upload removed while another job still needs it: %v", err)
+	}
+	want := []models.UpdateResult{{Name: "paid", OldVersion: "1.0", NewVersion: "2.0", Status: models.UpdateUpdated}}
+	assertResults(t, storedJob(t, first.ID).Results, want)
+	entry, data := actionLedger(t)
+	if entry.Status == "installed" || data["old_version"] != "1.0" || data["new_version"] != "2.0" {
+		t.Errorf("ledger entry = %+v data %v, want a plugin update entry", entry, data)
+	}
+
+	run(second)
+	if _, err := os.Stat(upload); !os.IsNotExist(err) {
+		t.Errorf("upload still exists after the last job (err %v)", err)
+	}
+	if len(activated) != 2 || activated[0] || activated[1] {
+		t.Errorf("activate = %v, want false (the plugin keeps its state)", activated)
+	}
+}
+
+func TestStagedZips(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "a.zip")
+	if err := os.WriteFile(path, []byte("PK"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	z, err := StageZip(StagedZip{Path: path, CreatedBy: "alice"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := TakeStagedZip(z.ID, "bob"); ok {
+		t.Error("another user took the ZIP")
+	}
+	if got, ok := TakeStagedZip(z.ID, "alice"); !ok || got.Path != path {
+		t.Errorf("TakeStagedZip = %+v, %v", got, ok)
+	}
+	if _, ok := TakeStagedZip(z.ID, "alice"); ok {
+		t.Error("the ZIP was taken twice")
+	}
+
+	RestageZip(z)
+	staged.Lock()
+	sweepStagedLocked(z.ExpiresAt.Add(time.Second))
+	staged.Unlock()
+	if _, ok := TakeStagedZip(z.ID, "alice"); ok {
+		t.Error("an expired ZIP was taken")
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("expired ZIP still on disk (err %v)", err)
 	}
 }

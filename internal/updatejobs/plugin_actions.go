@@ -35,10 +35,14 @@ func isPluginManagementJob(job models.UpdateJob) bool {
 }
 
 // actionTargets is what a plugin management job reports results for: its
-// plugins, or for an install job its source.
+// plugins, or for an install job its source (or the plugin it updates).
 func actionTargets(job models.UpdateJob) []models.PluginUpdateRequest {
 	if job.Kind == models.UpdateJobKindInstall {
-		return []models.PluginUpdateRequest{{Name: jobInstall(job).Source}}
+		install := jobInstall(job)
+		if install.Plugin != "" {
+			return []models.PluginUpdateRequest{{Name: install.Plugin, OldVersion: install.OldVersion}}
+		}
+		return []models.PluginUpdateRequest{{Name: install.Source}}
 	}
 	return jobPlugins(job)
 }
@@ -172,6 +176,9 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 			before[p.Name] = true
 		}
 	}
+	// Checked against the pre-update version, for the ledger status.
+	updatedVulnerable := install.Plugin != "" && install.OldVersion != "" &&
+		pluginVulnerable(job.SiteID, install.Plugin, install.OldVersion)
 
 	ok, installErr := installPlugin(site, source, install.Activate)
 	if installErr == nil && !ok {
@@ -184,6 +191,9 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 	}
 
 	r := models.UpdateResult{Name: install.Source, Status: models.UpdateDone}
+	if install.Plugin != "" {
+		r = models.UpdateResult{Name: install.Plugin, OldVersion: install.OldVersion, NewVersion: install.OldVersion, Status: models.UpdateUpdated}
+	}
 	if cacheErr == nil {
 		if p := installedPlugin(job, before); p != nil {
 			r.Name = p.Name
@@ -196,10 +206,17 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 		r.Status = models.UpdateFailed
 		r.Error = jobErr
 		log.Printf("Plugin install job %d on %s: %v", job.ID, site.Name, installErr)
+	} else if install.Plugin != "" && cacheErr == nil && r.NewVersion == r.OldVersion {
+		r.Status = models.UpdateUpToDate
 	}
 
 	results := []models.UpdateResult{r}
 	finishAction(job, models.UpdateJobDone, results, jobErr)
+	if install.Plugin != "" {
+		// An update from a ZIP is recorded like any other plugin update.
+		writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable), jobErr)
+		return
+	}
 	writeActionLedger(job, results, jobErr)
 }
 
@@ -210,10 +227,14 @@ func installedPlugin(job models.UpdateJob, before map[string]bool) *models.WPPlu
 	if err != nil {
 		return nil
 	}
+	install := jobInstall(job)
 	for i, p := range plugins {
-		if p.Name == jobInstall(job).Source {
+		if p.Name == install.Source || (install.Plugin != "" && p.Name == install.Plugin) {
 			return &plugins[i]
 		}
+	}
+	if install.Plugin != "" {
+		return nil
 	}
 	for i, p := range plugins {
 		if !before[p.Name] && p.Status != "must-use" && p.Status != "dropin" {
@@ -250,6 +271,11 @@ var actionLedgerStatus = map[string]string{
 // ended up in the expected state, "failed" if none did, otherwise
 // "partial".
 func writeActionLedger(job models.UpdateJob, results []models.UpdateResult, jobErr string) {
+	if job.Kind == models.UpdateJobKindInstall && jobInstall(job).Plugin != "" {
+		// A ZIP update that failed or was interrupted; see runInstall.
+		writeLedger(job, results, ledgerStatus(job.SiteID, results, false, false), jobErr)
+		return
+	}
 	succeeded := 0
 	entries := make([]map[string]any, len(results))
 	for i, r := range results {
@@ -298,7 +324,18 @@ func writeActionLedger(job models.UpdateJob, results []models.UpdateResult, jobE
 	}
 }
 
+// removeUpload removes a finished job's uploaded ZIP, unless other jobs
+// that haven't run yet share it (a ZIP update across several sites).
 func removeUpload(job models.UpdateJob) {
+	keep, err := db.ListUpdateJobUploadPaths()
+	if err != nil {
+		// Left for cleanupUploads at the next start.
+		log.Printf("Plugin install job %d: failed to check whether upload %s is still needed: %v", job.ID, job.UploadPath, err)
+		return
+	}
+	if keep[job.UploadPath] {
+		return
+	}
 	if err := os.Remove(job.UploadPath); err != nil && !os.IsNotExist(err) {
 		log.Printf("Plugin install job %d: failed to remove upload %s: %v", job.ID, job.UploadPath, err)
 	}
