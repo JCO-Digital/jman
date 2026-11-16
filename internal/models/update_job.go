@@ -155,6 +155,11 @@ type InstallPayload struct {
 	Source string `json:"source"`
 	// Activate makes the job activate the plugin after installing.
 	Activate bool `json:"activate,omitempty"`
+	// Plugin is set when the job updates an installed plugin from a ZIP:
+	// the plugin's slug, which the ZIP was checked to hold. OldVersion is
+	// its version when the job was created.
+	Plugin     string `json:"plugin,omitempty"`
+	OldVersion string `json:"old_version,omitempty"`
 }
 
 // UserCreatePayload is the payload of user create jobs. The password is

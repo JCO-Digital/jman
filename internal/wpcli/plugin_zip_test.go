@@ -89,3 +89,23 @@ func TestStagePluginZip(t *testing.T) {
 		t.Errorf("source removed: %v", err)
 	}
 }
+
+func TestInspectPluginZip(t *testing.T) {
+	main := "<?php\n/**\n * Plugin Name: Paid Thing Pro\n * Description: x\n * Version:     4.2.1\n */\n"
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  PluginZipInfo
+	}{
+		{"nested", map[string]string{"paid-thing/readme.txt": "Version: 9", "paid-thing/paid-thing.php": main, "paid-thing/inc/other.php": "<?php\n// Plugin Name: Not me\n// Version: 0.1\n"},
+			PluginZipInfo{Slug: "paid-thing", Name: "Paid Thing Pro", Version: "4.2.1"}},
+		{"root", map[string]string{"paid-thing.php": main}, PluginZipInfo{Slug: "paid-thing", Name: "Paid Thing Pro", Version: "4.2.1"}},
+		{"no header", map[string]string{"paid-thing/a.php": "<?php"}, PluginZipInfo{Slug: "paid-thing"}},
+		{"single-line header", map[string]string{"p/p.php": "<?php\n/* Plugin Name: P */\n/* Version: 1.0 */"}, PluginZipInfo{Slug: "p", Name: "P", Version: "1.0"}},
+	}
+	for _, tt := range tests {
+		if got := InspectPluginZip(writeZip(t, tt.files), "upload.zip"); got != tt.want {
+			t.Errorf("%s: got %+v, want %+v", tt.name, got, tt.want)
+		}
+	}
+}

@@ -75,9 +75,35 @@ func copyFile(src, dst string) error {
 }
 
 func slugFromZip(path string) string {
+	return inspectZip(path).Slug
+}
+
+// PluginZipInfo describes the plugin in a ZIP.
+type PluginZipInfo struct {
+	// Slug is the directory the plugin is installed as (see PluginZipSlug).
+	Slug string `json:"slug"`
+	// Name and Version are the main plugin file's headers; empty if the
+	// ZIP has no file with a Plugin Name header where WordPress looks.
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// InspectPluginZip reads the slug, name and version of the plugin in the
+// ZIP at path, uploaded as filename.
+func InspectPluginZip(path, filename string) PluginZipInfo {
+	info := inspectZip(path)
+	info.Slug = PluginZipSlug(path, filename)
+	return info
+}
+
+// inspectZip finds the plugin's directory (the ZIP's single top-level
+// directory, if it has one) and its main file, the PHP file directly in
+// that directory (or at the ZIP's root) with a Plugin Name header, as
+// WordPress does. Slug is the directory, else the main file's name.
+func inspectZip(path string) PluginZipInfo {
 	r, err := zip.OpenReader(path)
 	if err != nil {
-		return ""
+		return PluginZipInfo{}
 	}
 	defer r.Close()
 
@@ -97,35 +123,67 @@ func slugFromZip(path string) string {
 			nested = nested || rest != "" || f.FileInfo().IsDir()
 		}
 	}
+	dir := ""
 	if len(tops) == 1 && nested {
 		for top := range tops {
-			return sanitizeSlug(top)
+			dir = top
 		}
 	}
 
+	var info PluginZipInfo
+	if dir != "" {
+		info.Slug = sanitizeSlug(dir)
+	}
 	for _, f := range files {
-		name := f.Name
+		name := strings.TrimPrefix(filepath.ToSlash(f.Name), "/")
+		if dir != "" {
+			var ok bool
+			if name, ok = strings.CutPrefix(name, dir+"/"); !ok {
+				continue
+			}
+		}
 		if strings.Contains(name, "/") || !strings.EqualFold(filepath.Ext(name), ".php") {
 			continue
 		}
-		if hasPluginHeader(f) {
-			return sanitizeSlug(strings.TrimSuffix(name, filepath.Ext(name)))
+		head := pluginHeader(f)
+		if head == nil {
+			continue
 		}
+		if info.Slug == "" {
+			info.Slug = sanitizeSlug(strings.TrimSuffix(name, filepath.Ext(name)))
+		}
+		info.Name = headerField(head, "Plugin Name")
+		info.Version = headerField(head, "Version")
+		break
 	}
-	return ""
+	return info
 }
 
-func hasPluginHeader(f *zip.File) bool {
+// pluginHeader returns the start of f if it has a Plugin Name header.
+func pluginHeader(f *zip.File) []byte {
 	rc, err := f.Open()
 	if err != nil {
-		return false
+		return nil
 	}
 	defer rc.Close()
 	head, err := io.ReadAll(io.LimitReader(rc, pluginHeaderBytes))
-	if err != nil {
-		return false
+	if err != nil || !pluginHeaderRegex.Match(head) {
+		return nil
 	}
-	return pluginHeaderRegex.Match(head)
+	return head
+}
+
+// headerField reads a plugin header field the way WordPress's
+// get_file_data does.
+func headerField(head []byte, field string) string {
+	re := regexp.MustCompile(`(?mi)^[ \t/*#@]*` + regexp.QuoteMeta(field) + `:(.*)$`)
+	m := re.FindSubmatch(head)
+	if m == nil {
+		return ""
+	}
+	v := strings.TrimSpace(string(m[1]))
+	v = strings.TrimSpace(strings.TrimSuffix(v, "*/"))
+	return strings.TrimSpace(strings.TrimSuffix(v, "?>"))
 }
 
 func sanitizeSlug(s string) string {

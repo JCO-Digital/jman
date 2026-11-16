@@ -392,6 +392,54 @@ The site's user list is refreshed after the job.
 
 ---
 
+### Plugin Updates from a ZIP
+
+For plugins that don't update through WordPress (some paid plugins), a plugin ZIP can be installed over the plugin on many sites. It takes two calls: stage the ZIP, then queue the update.
+
+#### Stage a ZIP
+
+`POST /plugin-zips` (Protected: `execute`)
+
+Either a `multipart/form-data` upload (field `file`, a `.zip` up to 64 MB) or JSON with a URL that jman-api downloads itself (any http(s) URL that returns a ZIP, e.g. a signed download link):
+
+```json
+{ "url": "https://example.com/download?key=abc" }
+```
+
+jman-api reads the plugin's main file (the PHP file with a `Plugin Name` header) and returns `201 Created`:
+
+```json
+{
+  "id": "9f2c…",
+  "filename": "paid-plugin-2.1.0.zip",
+  "size": 1048576,
+  "plugin": { "slug": "paid-plugin", "name": "Paid Plugin", "version": "2.1.0" },
+  "created_by": "alice",
+  "expires_at": "2026-11-16T13:00:00Z"
+}
+```
+
+`slug` is the directory WordPress installs the ZIP as. A staged ZIP is kept for an hour and can be used once, by the user who staged it.
+
+- `400`: the file or URL isn't a ZIP, or the ZIP holds no plugin.
+- `413`: the ZIP is larger than 64 MB.
+- `502`: the URL couldn't be downloaded.
+
+#### Queue the Update
+
+`POST /plugins/{slug}/zip-update` (Protected: `execute`)
+
+```json
+{ "zip_id": "9f2c…", "site_ids": ["<site uuid>", "…"] }
+```
+
+Queues one `install` job per site (see Plugin Update Operations), all installing the same ZIP with WP-CLI's `--force`, and returns them with `201 Created`. Their payload has `plugin` (the slug) and `old_version`. The plugin stays active or inactive as it was. Update locks don't apply: the ZIP's version is installed, even if it's older than the site's. Each job's result is `Updated`, `Up to date` (the version didn't change) or `failed`, and it's recorded in the update ledger like a plugin update.
+
+- `400`: no sites, more than 500, the ZIP holds another plugin, or a site doesn't have the plugin (in its cached plugin list) or has it as a must-use plugin or drop-in.
+- `404`: a site isn't reachable over WP-CLI, or the ZIP has expired or was already used.
+
+---
+
 ### File Scans
 
 jman-agent scans each site's files about once an hour (see README_AGENT.md) and reports what it flags. Basic level.
