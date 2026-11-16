@@ -1,6 +1,13 @@
 # Changelog
 
-### 7.38.1 (2026-11-16)
+## 7.39.0 (2026-11-16)
+
+#### Features
+
+- web: copy a plugin from a site in the ZIP update modal (b4e7290)
+- api: stage plugin ZIPs copied from a site with a clean malware scan (6130036)
+
+### v7.38.1 (2026-11-16)
 
 #### Bug Fixes
 
