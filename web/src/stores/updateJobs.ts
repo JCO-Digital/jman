@@ -5,6 +5,7 @@ import { useNotificationStore, type NotificationType } from "./notifications";
 import { useSiteUsersStore } from "./siteUsers";
 import type {
 	PluginActionKind,
+	StagedPluginZip,
 	UpdateJob,
 	UpdateJobKind,
 	UserCreateJobPayload,
@@ -78,11 +79,17 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	const pendingBySite = computed(() => {
 		const map = new Map<string, Map<string, UpdateJobKind>>();
 		for (const job of activeJobs.value) {
-			if (!("plugins" in job.payload)) continue;
+			const plugins =
+				job.kind === "install"
+					? job.payload.plugin
+						? [job.payload.plugin]
+						: []
+					: jobPlugins(job).map((p) => p.name);
+			if (plugins.length === 0) continue;
 			const names =
 				map.get(job.site_id) ?? new Map<string, UpdateJobKind>();
-			for (const p of jobPlugins(job)) {
-				if (!names.has(p.name)) names.set(p.name, job.kind);
+			for (const name of plugins) {
+				if (!names.has(name)) names.set(name, job.kind);
 			}
 			map.set(job.site_id, names);
 		}
@@ -97,11 +104,16 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return pendingBySite.value.get(siteId)?.get(pluginName);
 	}
 
-	/** Queued or running plugin installs on a site. */
+	/**
+	 * Queued or running plugin installs on a site; ZIP updates of installed
+	 * plugins show as pending on the plugin instead (pendingAction).
+	 */
 	function activeInstalls(siteId: string): JobOfKind<"install">[] {
 		return activeJobs.value.filter(
 			(j): j is JobOfKind<"install"> =>
-				j.kind === "install" && j.site_id === siteId,
+				j.kind === "install" &&
+				j.site_id === siteId &&
+				!j.payload.plugin,
 		);
 	}
 
@@ -136,7 +148,10 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			// Which plugin vulnerabilities apply depends on the versions now
 			// installed, which the job refreshed in jman-api.
 			scheduleVulnRefresh();
-			if (job.kind === "plugins") {
+			if (
+				job.kind === "plugins" ||
+				(job.kind === "install" && job.payload.plugin)
+			) {
 				// Show new versions right away; the reload below confirms them.
 				for (const r of job.results) {
 					if (r.status === "Updated") {
@@ -177,6 +192,12 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			return {
 				title: `WordPress core · ${site}`,
 				...describeCore(job, site),
+			};
+		}
+		if (job.kind === "install" && job.payload.plugin) {
+			return {
+				title: `${job.payload.plugin} from ZIP · ${site}`,
+				...describeZipUpdate(job.payload, job, site),
 			};
 		}
 		if (job.kind === "install") {
@@ -370,6 +391,54 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const activated = install?.activate ? " and activated" : "";
 		return {
 			message: `Installed${activated} ${name}${version} on ${siteName}.`,
+			type: "success",
+		};
+	}
+
+	function describeZipUpdate(
+		install: { plugin?: string; source: string; old_version?: string },
+		job: UpdateJob,
+		siteName: string,
+	): { message: string; type: NotificationType } {
+		const plugin = install.plugin ?? install.source;
+		switch (job.status) {
+			case "queued":
+				return {
+					message: `Queued update of ${plugin} from ${install.source} on ${siteName}.`,
+					type: "running",
+				};
+			case "running":
+				return {
+					message: `Updating ${plugin} from ${install.source} on ${siteName}…`,
+					type: "running",
+				};
+			case "interrupted":
+				return {
+					message: `Update of ${plugin} on ${siteName} was interrupted by a jman-api restart. Check the site's plugins.`,
+					type: "error",
+				};
+		}
+		const r = job.results[0];
+		if (job.status === "failed" || r?.status === "failed") {
+			return {
+				message: `Failed to update ${plugin} on ${siteName}: ${truncate(job.error || r?.error || "Unknown error")}`,
+				type: "error",
+			};
+		}
+		if (r?.status === "Up to date") {
+			return {
+				message: `${plugin} on ${siteName} is still ${r.new_version || "the same version"} after installing ${install.source}.`,
+				type: "success",
+			};
+		}
+		const from = r?.old_version || install.old_version;
+		const versions = r?.new_version
+			? from
+				? ` ${from} → ${r.new_version}`
+				: ` to ${r.new_version}`
+			: "";
+		return {
+			message: `Updated ${plugin}${versions} on ${siteName}.`,
 			type: "success",
 		};
 	}
@@ -621,6 +690,42 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	}
 
 	/**
+	 * Sends a plugin ZIP (a file, or a URL jman-api downloads) to jman-api,
+	 * which checks it and holds it for enqueueZipUpdate.
+	 */
+	async function stagePluginZip(
+		zip: { file: File } | { url: string },
+	): Promise<StagedPluginZip> {
+		if ("url" in zip) {
+			return postJobs<StagedPluginZip>("/plugin-zips", zip);
+		}
+		const form = new FormData();
+		form.append("file", zip.file);
+		const res = await apiFetch(`${BASE_URL}/plugin-zips`, {
+			method: "POST",
+			// No Content-Type: the browser sets the multipart boundary.
+			body: form,
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		return (await res.json()) as StagedPluginZip;
+	}
+
+	/** Queues updating a plugin from a staged ZIP, one job per site. */
+	async function enqueueZipUpdate(
+		slug: string,
+		zipId: string,
+		siteIds: string[],
+	): Promise<UpdateJob[]> {
+		const created = await postJobs<UpdateJob[]>(
+			`/plugins/${encodeURIComponent(slug)}/zip-update`,
+			{ zip_id: zipId, site_ids: siteIds },
+		);
+		merge(created);
+		schedulePoll();
+		return created;
+	}
+
+	/**
 	 * Queues a WordPress core update on a site. A major update on an
 	 * update-locked site needs allowMajor (after the user confirmed).
 	 */
@@ -694,6 +799,8 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		enqueue,
 		enqueueAction,
 		enqueueInstall,
+		stagePluginZip,
+		enqueueZipUpdate,
 		enqueueCore,
 		enqueueUserCreate,
 		enqueueUserDelete,

@@ -775,6 +775,22 @@ export interface InstallJobPayload {
 	source: string;
 	/** Activate after installing. */
 	activate?: boolean;
+	/** Set when the job updates this installed plugin from a ZIP. */
+	plugin?: string;
+	/** The plugin's version when a ZIP update was queued. */
+	old_version?: string;
+}
+
+/** A plugin ZIP jman-api has checked and holds for a ZIP update. */
+export interface StagedPluginZip {
+	id: string;
+	/** The uploaded file's name, or a name from the URL it came from. */
+	filename: string;
+	size: number;
+	/** The plugin in the ZIP, from its main file's headers. */
+	plugin: { slug: string; name: string; version: string };
+	created_by: string;
+	expires_at: string;
 }
 
 /** Payload of user create jobs; the password is never part of it. */
