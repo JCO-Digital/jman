@@ -106,13 +106,42 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListUpdateJobsHandler returns every queued or running update job (plugin
-// and core), plus jobs that finished in the last few minutes.
+// and core), plus jobs that finished in the last few minutes. Jobs carry
+// only their text diff's summary; GetUpdateJobHandler returns the diff.
 func ListUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	jobs, err := db.ListUpdateJobs(time.Now().Add(-recentJobWindow))
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "ListUpdateJobsHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+	for i := range jobs {
+		jobs[i].TextDiff = nil
+	}
+	WriteJSON(w, http.StatusOK, jobs)
+}
+
+// ListTextDiffJobsHandler returns the jobs of the last ?days= days
+// (default and maximum 7, the job retention) that have a text diff, newest
+// first, with only the diff's summary.
+func ListTextDiffJobsHandler(w http.ResponseWriter, r *http.Request) {
+	days := 7
+	if v := r.URL.Query().Get("days"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 7 {
+			WriteError(w, http.StatusBadRequest, "days must be between 1 and 7")
+			return
+		}
+		days = n
+	}
+	jobs, err := db.ListTextDiffJobs(time.Now().AddDate(0, 0, -days))
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "ListTextDiffJobsHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	for i := range jobs {
+		jobs[i].TextDiff = nil
 	}
 	WriteJSON(w, http.StatusOK, jobs)
 }

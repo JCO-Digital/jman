@@ -218,7 +218,16 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	// --- Background update jobs (plugins and core) ---
 	mux.Handle("GET /api/update-jobs", basic(ListUpdateJobsHandler))
+	mux.Handle("GET /api/update-jobs/text-diffs", basic(ListTextDiffJobsHandler))
 	mux.Handle("GET /api/update-jobs/{id}", basic(GetUpdateJobHandler))
+
+	// Update text diff: extra pages per site and mutes (docs/update-text-diff.md).
+	mux.Handle("GET /api/sites/{id}/text-diff-pages", basic(ListSiteDiffPagesHandler))
+	mux.Handle("POST /api/sites/{id}/text-diff-pages", execute(CreateSiteDiffPageHandler))
+	mux.Handle("DELETE /api/sites/{id}/text-diff-pages/{pageId}", execute(DeleteSiteDiffPageHandler))
+	mux.Handle("GET /api/sites/{id}/text-diff-mutes", basic(ListTextDiffMutesHandler))
+	mux.Handle("POST /api/sites/{id}/text-diff-mutes", execute(CreateTextDiffMuteHandler))
+	mux.Handle("DELETE /api/text-diff-mutes/{id}", execute(DeleteTextDiffMuteHandler))
 
 	// --- Plugin management routes (background jobs) ---
 	mux.Handle("GET /api/sites/{id}/plugins", basic(SitePluginsHandler))

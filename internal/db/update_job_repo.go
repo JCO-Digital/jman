@@ -9,7 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, error, created_by, created_at, started_at, finished_at`
+const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff, error, created_by, created_at, started_at, finished_at`
 
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
@@ -97,6 +97,25 @@ func ListUpdateJobs(finishedSince time.Time) ([]models.UpdateJob, error) {
 	return scanUpdateJobs(rows)
 }
 
+// ListTextDiffJobs returns the jobs created at or after since that have a
+// text diff, newest first.
+func ListTextDiffJobs(since time.Time) ([]models.UpdateJob, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := db.Query(
+		`SELECT `+updateJobColumns+` FROM plugin_update_jobs
+		 WHERE text_diff IS NOT NULL AND created_at >= ?
+		 ORDER BY id DESC`,
+		since,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list text diff jobs: %w", err)
+	}
+	return scanUpdateJobs(rows)
+}
+
 // ListQueuedUpdateJobs returns the jobs still waiting to run, oldest first.
 func ListQueuedUpdateJobs() ([]models.UpdateJob, error) {
 	db := GetAPIDB()
@@ -150,6 +169,39 @@ func FinishUpdateJob(id int64, status string, results []models.UpdateResult, cor
 	_, err = db.Exec(
 		`UPDATE plugin_update_jobs SET status = ?, results = ?, core = ?, error = ?, finished_at = ? WHERE id = ?`,
 		status, string(encoded), coreJSON, errMsg, time.Now(), id,
+	)
+	return err
+}
+
+// SetUpdateJobTextDiff stores a job's text diff.
+func SetUpdateJobTextDiff(id int64, diff models.TextDiff) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	b, err := json.Marshal(diff)
+	if err != nil {
+		return fmt.Errorf("failed to encode text diff: %w", err)
+	}
+	_, err = db.Exec(`UPDATE plugin_update_jobs SET text_diff = ? WHERE id = ?`, string(b), id)
+	if err != nil {
+		return fmt.Errorf("failed to save text diff of job %d: %w", id, err)
+	}
+	return nil
+}
+
+// InterruptRunningTextDiffs marks text diffs left running by a previous
+// jman-api process as interrupted. Their jobs may already be finished: the
+// after fetch runs once the update is done.
+func InterruptRunningTextDiffs() error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	_, err := db.Exec(
+		`UPDATE plugin_update_jobs SET text_diff = json_set(text_diff, '$.status', ?)
+		 WHERE text_diff IS NOT NULL AND json_extract(text_diff, '$.status') = ?`,
+		models.TextDiffInterrupted, models.TextDiffRunning,
 	)
 	return err
 }
@@ -219,10 +271,10 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 	for rows.Next() {
 		var job models.UpdateJob
 		var payload string
-		var uploadPath, results, core, errMsg, createdBy sql.NullString
+		var uploadPath, results, core, textDiff, errMsg, createdBy sql.NullString
 		var startedAt, finishedAt sql.NullTime
 		if err := rows.Scan(
-			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &errMsg, &createdBy,
+			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &textDiff, &errMsg, &createdBy,
 			&job.CreatedAt, &startedAt, &finishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan update job: %w", err)
@@ -239,6 +291,14 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 			if err := json.Unmarshal([]byte(core.String), job.Core); err != nil {
 				return nil, fmt.Errorf("invalid core state in job %d: %w", job.ID, err)
 			}
+		}
+		if textDiff.Valid && textDiff.String != "" {
+			job.TextDiff = &models.TextDiff{}
+			if err := json.Unmarshal([]byte(textDiff.String), job.TextDiff); err != nil {
+				return nil, fmt.Errorf("invalid text diff in job %d: %w", job.ID, err)
+			}
+			summary := job.TextDiff.Summary()
+			job.TextDiffSummary = &summary
 		}
 		job.UploadPath = uploadPath.String
 		job.Error = errMsg.String

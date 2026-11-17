@@ -105,11 +105,7 @@ func ProbeOnce(p HTTPProbe) ProbeResult {
 func (e *Engine) probeHTTP(p HTTPProbe) ProbeResult {
 	url := p.URL
 	if p.CacheBypass {
-		sep := "?"
-		if strings.Contains(url, "?") {
-			sep = "&"
-		}
-		url += fmt.Sprintf("%sjman_cache_bypass=%d", sep, time.Now().UnixNano())
+		url = utils.CacheBypassURL(url)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -122,7 +118,7 @@ func (e *Engine) probeHTTP(p HTTPProbe) ProbeResult {
 		for name, value := range p.Headers {
 			req.Header.Set(name, value)
 		}
-		client = withoutHeadersOnRedirect(e.client, p.Headers)
+		client = utils.WithoutHeadersOnRedirect(e.client, p.Headers)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -153,25 +149,6 @@ func (e *Engine) probeHTTP(p HTTPProbe) ProbeResult {
 		result.Up = true
 	}
 	return result
-}
-
-// withoutHeadersOnRedirect returns a copy of client that drops the given
-// headers when a redirect leaves the original host. Go only strips its own
-// sensitive headers (Authorization, Cookie) on such redirects.
-func withoutHeadersOnRedirect(client *http.Client, headers map[string]string) *http.Client {
-	c := *client
-	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return errors.New("stopped after 10 redirects")
-		}
-		if req.URL.Host != via[0].URL.Host {
-			for name := range headers {
-				req.Header.Del(name)
-			}
-		}
-		return nil
-	}
-	return &c
 }
 
 // checkJSONBody returns why body fails the probe's JSON expectation, or ""

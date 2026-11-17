@@ -1133,6 +1133,41 @@ func initAPISchema() error {
 				"created_at":  "DATETIME NOT NULL",
 				"started_at":  "DATETIME",
 				"finished_at": "DATETIME",
+				// text_diff is the visible-text check around the job
+				// (models.TextDiff, JSON), NULL for jobs it doesn't run on.
+				"text_diff": "TEXT",
+			},
+		},
+		{
+			// site_diff_pages are the extra pages of a site, besides the
+			// frontpage, that update jobs compare (see
+			// docs/update-text-diff.md).
+			Name: "site_diff_pages",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":    "TEXT NOT NULL",
+				"path":       "TEXT NOT NULL",
+				"created_at": "DATETIME NOT NULL",
+				"created_by": "TEXT NOT NULL DEFAULT ''",
+			},
+		},
+		{
+			// text_diff_mutes hide a changed line from a site's later text
+			// diffs until expires_at; see models.TextDiffMute. Expired and
+			// removed mutes are kept for the record.
+			Name: "text_diff_mutes",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"site_id":    "TEXT NOT NULL",
+				"path":       "TEXT NOT NULL",
+				"direction":  "TEXT NOT NULL",
+				"line":       "TEXT NOT NULL",
+				"reason":     "TEXT NOT NULL DEFAULT ''",
+				"expires_at": "DATETIME NOT NULL",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT NOT NULL DEFAULT ''",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT NOT NULL DEFAULT ''",
 			},
 		},
 		{
@@ -1399,6 +1434,14 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_plugin_update_jobs_status ON plugin_update_jobs(status);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_site_diff_pages_site_path ON site_diff_pages(site_id, path);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_text_diff_mutes_site_id ON text_diff_mutes(site_id);")
 	if err != nil {
 		return err
 	}

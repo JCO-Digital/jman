@@ -118,3 +118,13 @@ a {
 	margin-top: 4px;
 	margin-bottom: 0;
 }
+
+/* Read by screen readers, not shown. */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+}

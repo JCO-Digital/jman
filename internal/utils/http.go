@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -76,4 +79,37 @@ func SetStandardHeaders(req *http.Request) {
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", UserAgent)
 	}
+}
+
+// CacheBypassParam is the query parameter jman adds to bypass a site's page
+// cache. Its value is unique per request; jman-agent's log parser counts
+// requests carrying it as jman's own traffic.
+const CacheBypassParam = "jman_cache_bypass"
+
+// CacheBypassURL returns url with a unique CacheBypassParam added.
+func CacheBypassURL(url string) string {
+	sep := "?"
+	if strings.Contains(url, "?") {
+		sep = "&"
+	}
+	return fmt.Sprintf("%s%s%s=%d", url, sep, CacheBypassParam, time.Now().UnixNano())
+}
+
+// WithoutHeadersOnRedirect returns a copy of client that drops the given
+// headers when a redirect leaves the original host. Go only strips its own
+// sensitive headers (Authorization, Cookie) on such redirects.
+func WithoutHeadersOnRedirect(client *http.Client, headers map[string]string) *http.Client {
+	c := *client
+	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		if req.URL.Host != via[0].URL.Host {
+			for name := range headers {
+				req.Header.Del(name)
+			}
+		}
+		return nil
+	}
+	return &c
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/textdiff"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
@@ -44,6 +45,12 @@ func setupRunnerTest(t *testing.T) {
 	refreshPluginCache = func(models.CliSite) error { return nil }
 	oldSync := syncSiteExposures
 	syncSiteExposures = func(string) error { return nil }
+	// No network in tests: every page fetch fails unless a test sets one.
+	oldFetch, oldPaths, oldHeaders, oldMutes := fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes
+	fetchPage = func(string, map[string]string) textdiff.Page { return textdiff.Page{Error: "not fetched in tests"} }
+	textDiffPaths = func(string) ([]string, error) { return []string{"/"}, nil }
+	textDiffHeaders = func(string, string) map[string]string { return nil }
+	textDiffMutes = func(string) ([]models.TextDiffMute, error) { return nil, nil }
 	t.Cleanup(func() {
 		// Stop any runner a test started (its context is already cancelled)
 		// and wait for it before restoring the package state it reads.
@@ -51,6 +58,7 @@ func setupRunnerTest(t *testing.T) {
 		running.Wait()
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
 		syncSiteExposures = oldSync
+		fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes = oldFetch, oldPaths, oldHeaders, oldMutes
 		updateCore, refreshCore, cachedCoreVersion = oldUpdateCore, oldRefreshCore, oldCachedCore
 		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
 		pluginVulnerable, pluginFixedIn = oldVulnerable, oldFixedIn

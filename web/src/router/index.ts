@@ -243,6 +243,15 @@ const router = createRouter({
 			redirect: (to) => ({ path: "/monitoring", query: to.query }),
 		},
 		{
+			// /updates[/<job id>]: the update text diffs of the last week;
+			// a job ID opens that job's diff.
+			path: "/updates/:jobId(\\d+)?",
+			name: "update-review",
+			meta: { nav: "updates" },
+			component: () => import("../views/UpdateReviewView.vue"),
+			props: true,
+		},
+		{
 			path: "/tasks",
 			name: "tasks",
 			meta: { nav: "tasks", width: "wide" },

@@ -29,6 +29,8 @@ export interface Notification {
 		status: string;
 		/** The user hid this task's sticky toast while it runs. */
 		hidden: boolean;
+		/** Its update text diff found something to review. */
+		review?: boolean;
 	};
 }
 
@@ -39,6 +41,8 @@ export interface TaskUpdate {
 	createdBy: string;
 	status: string;
 	active: boolean;
+	/** Its update text diff found something to review. */
+	review?: boolean;
 	type: NotificationType;
 	title: string;
 	message: string;
@@ -281,6 +285,7 @@ export const useNotificationStore = defineStore("notifications", () => {
 		if (existing && existing.task?.status === u.status) {
 			existing.title = u.title;
 			existing.message = u.message;
+			existing.task.review = u.review;
 			return;
 		}
 		if (!existing && !u.active && !notify) {
@@ -299,6 +304,7 @@ export const useNotificationStore = defineStore("notifications", () => {
 					createdBy: u.createdBy,
 					status: u.status,
 					hidden,
+					review: u.review,
 				},
 			});
 			prune();
@@ -328,6 +334,7 @@ export const useNotificationStore = defineStore("notifications", () => {
 			createdBy: u.createdBy,
 			status: u.status,
 			hidden,
+			review: u.review,
 		};
 		if (!existing) entries.value.push(entry);
 

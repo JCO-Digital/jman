@@ -341,8 +341,8 @@ func (c *Client) PostFile(ctx context.Context, path, filePath string, fields map
 // jobPollInterval is how often WaitForJobs checks on queued jobs.
 var jobPollInterval = 2 * time.Second
 
-// WaitForJobs polls the given update jobs until each has finished, calling
-// done once per job, in the order they finish.
+// WaitForJobs polls the given update jobs until each has finished, along
+// with its text diff, calling done once per job, in the order they finish.
 func (c *Client) WaitForJobs(ctx context.Context, jobs []models.UpdateJob, done func(models.UpdateJob)) error {
 	pending := make(map[int64]bool, len(jobs))
 	for _, j := range jobs {
@@ -354,7 +354,7 @@ func (c *Client) WaitForJobs(ctx context.Context, jobs []models.UpdateJob, done 
 			if err := c.Get(ctx, fmt.Sprintf("/update-jobs/%d", id), &job); err != nil {
 				return err
 			}
-			if !job.Active() {
+			if !job.Active() && !job.TextDiffPending() {
 				delete(pending, id)
 				done(job)
 			}

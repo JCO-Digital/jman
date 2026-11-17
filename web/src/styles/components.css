@@ -1494,3 +1494,82 @@ details[open] .expand-icon {
 	font-size: 0.85rem;
 	color: var(--text-muted);
 }
+
+/* Update review (views/UpdateReviewView.vue) */
+.review-intro {
+	margin: 0 0 var(--space-4);
+}
+
+.review-run {
+	margin-bottom: var(--space-4);
+}
+
+.review-run-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--space-2) var(--space-3);
+	margin-bottom: var(--space-2);
+}
+
+.review-run-header h2 {
+	margin: 0;
+	font-size: 16px;
+}
+
+.review-jobs {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.review-job + .review-job {
+	border-top: 1px solid var(--border-color);
+}
+
+.review-job-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-2);
+	width: 100%;
+	padding: var(--space-2) 0;
+	background: none;
+	border: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.review-job-site {
+	font-weight: 600;
+}
+
+.review-job-what {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.review-job-badges {
+	display: flex;
+	gap: var(--space-1);
+	margin-left: auto;
+}
+
+.review-job-body {
+	padding: 0 0 var(--space-4) var(--space-5);
+}
+
+.review-site-link {
+	display: inline-block;
+	margin-top: var(--space-3);
+	font-size: 13px;
+}
+
+@container page (max-width: 640px) {
+	.review-job-body {
+		padding-left: 0;
+	}
+}

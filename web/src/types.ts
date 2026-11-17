@@ -862,6 +862,75 @@ export type UpdateJobPayload =
  * deleting or uninstalling plugins, installing one plugin, or creating or
  * deleting a WordPress user.
  */
+/** A text diff's state: the check runs on after the job has finished. */
+export type TextDiffStatus = "running" | "done" | "interrupted";
+
+/** How one page compared before and after an update. */
+export type TextDiffOutcome = "unchanged" | "changed" | "error" | "no_baseline";
+
+export type TextDiffDirection = "added" | "removed";
+
+export interface TextDiffLine {
+	kind: "context" | TextDiffDirection;
+	text: string;
+}
+
+export interface TextDiffHunk {
+	lines: TextDiffLine[];
+}
+
+export interface TextDiffPage {
+	/** The page's path on the site, "/" for the frontpage. */
+	path: string;
+	/** Empty while the check is running. */
+	outcome?: TextDiffOutcome;
+	error?: string;
+	final_url_before?: string;
+	final_url_after?: string;
+	hunks?: TextDiffHunk[];
+	/** Changed lines left out as noise or by a mute. */
+	hidden?: number;
+}
+
+/** The visible-text comparison around a plugin, ZIP or core update. */
+export interface TextDiff {
+	status: TextDiffStatus;
+	pages: TextDiffPage[];
+}
+
+export interface TextDiffSummary {
+	status: TextDiffStatus;
+	pages: number;
+	changed: number;
+	errors: number;
+	no_baseline: number;
+}
+
+/** An extra page of a site that update jobs compare. */
+export interface SiteDiffPage {
+	id: number;
+	site_id: string;
+	path: string;
+	created_at: string;
+	created_by: string;
+}
+
+/** Hides a changed line from a site's later text diffs until it expires. */
+export interface TextDiffMute {
+	id: number;
+	site_id: string;
+	path: string;
+	direction: TextDiffDirection;
+	/** Normalized: digits are "#", month and weekday names "<d>". */
+	line: string;
+	reason?: string;
+	expires_at: string;
+	created_at: string;
+	created_by: string;
+	updated_at: string;
+	updated_by: string;
+}
+
 export type UpdateJob = UpdateJobPayload & {
 	id: number;
 	site_id: string;
@@ -873,6 +942,10 @@ export type UpdateJob = UpdateJobPayload & {
 	results: UpdateResult[];
 	/** Core jobs: the refreshed core state once finished. */
 	core?: SiteCore;
+	/** Only from the single-job endpoint. */
+	text_diff?: TextDiff;
+	/** Plugin, install and core jobs. */
+	text_diff_summary?: TextDiffSummary;
 	error?: string;
 	created_by: string;
 	created_at: string;

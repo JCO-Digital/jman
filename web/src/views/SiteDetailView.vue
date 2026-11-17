@@ -27,6 +27,7 @@ import NotesWidget from "../components/NotesWidget.vue";
 import SiteUsersCard from "../components/SiteUsersCard.vue";
 import VulnerabilityList from "../components/VulnerabilityList.vue";
 import BackportRuleModal from "../components/BackportRuleModal.vue";
+import SiteTextDiffCard from "../components/SiteTextDiffCard.vue";
 import {
 	type VulnListItem,
 	compareVersions,
@@ -1708,6 +1709,11 @@ const unlinkOrganization = async () => {
 						</table>
 					</div>
 				</section>
+				<SiteTextDiffCard
+					v-if="site.is_wordpress"
+					:site-id="site.id"
+					:domain="site.domain"
+				/>
 			</template>
 			<template v-if="activeTab === 'users'">
 				<SiteUsersCard v-if="site.is_wordpress" :site="site" />

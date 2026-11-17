@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/JCO-Digital/jman/internal/client"
@@ -551,12 +552,14 @@ func waitForJobs(ctx context.Context, c *client.Client, jobs []models.UpdateJob,
 	for _, s := range sites {
 		byID[s.ID] = s
 	}
+	webURL := sync.OnceValue(func() string { return reviewBaseURL(ctx, c) })
 	err := c.WaitForJobs(ctx, jobs, func(job models.UpdateJob) {
 		site, ok := byID[job.SiteID]
 		if !ok {
 			site = models.CliSite{ID: job.SiteID, Name: job.SiteID}
 		}
 		done(site, job)
+		printTextDiff(job, webURL)
 	})
 	if errors.Is(err, context.Canceled) {
 		return errors.New("stopped waiting; the queued jobs keep running in jman-api, see the web UI for their results")

@@ -25,6 +25,24 @@ const jobPlugins = (job: UpdateJob) =>
 const isActive = (job: UpdateJob) =>
 	job.status === "queued" || job.status === "running";
 
+/**
+ * The text diff (docs/update-text-diff.md) runs on for a while after its
+ * job has finished: the pages are fetched again once the update is done.
+ */
+const textDiffRunning = (job: UpdateJob) =>
+	job.text_diff_summary?.status === "running";
+
+/** The job or its text diff is still going, so it is polled. */
+const isBusy = (job: UpdateJob) => isActive(job) || textDiffRunning(job);
+
+/** Whether a job's text diff found something worth reviewing. */
+export const hasTextDiffFindings = (job: UpdateJob) => {
+	const s = job.text_diff_summary;
+	return s?.status === "done" && s.changed + s.errors + s.no_baseline > 0;
+};
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
 const truncate = (msg: string) =>
 	msg.length > 150 ? msg.substring(0, 147) + "..." : msg;
 
@@ -68,9 +86,12 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	// Jobs seen while active, so a completion is handled exactly once and
 	// jobs that had already finished before this tab loaded aren't toasted.
 	const watched = new Set<number>();
+	// The same for jobs seen while their text diff was still running.
+	const busyWatched = new Set<number>();
 	let pollTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const activeJobs = computed(() => jobs.value.filter(isActive));
+	const busyJobs = computed(() => jobs.value.filter(isBusy));
 
 	/**
 	 * Site ID → plugin name → the kind of the oldest queued or running job
@@ -176,6 +197,50 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 
 	/** What the task center shows for a job in its current state. */
 	function describeJob(job: UpdateJob): {
+		title: string;
+		message: string;
+		type: NotificationType;
+	} {
+		return withTextDiff(job, describeJobOnly(job));
+	}
+
+	/** Adds the text diff's state to a finished job's description. */
+	function withTextDiff(
+		job: UpdateJob,
+		d: { title: string; message: string; type: NotificationType },
+	): { title: string; message: string; type: NotificationType } {
+		const s = job.text_diff_summary;
+		if (!s || isActive(job)) return d;
+		if (s.status === "running") {
+			return {
+				...d,
+				type: "running",
+				message: `${d.message} Checking the site's pages for changes…`,
+			};
+		}
+		if (s.status === "interrupted") {
+			return {
+				...d,
+				message: `${d.message} The page check was interrupted by a jman-api restart.`,
+			};
+		}
+		const parts: string[] = [];
+		if (s.errors) parts.push(`${plural(s.errors, "page")} broke`);
+		if (s.changed)
+			parts.push(`text changed on ${plural(s.changed, "page")}`);
+		if (s.no_baseline) {
+			parts.push(`${plural(s.no_baseline, "page")} couldn't be checked`);
+		}
+		if (parts.length === 0) return d;
+		const found = parts.join(", ");
+		return {
+			...d,
+			message: `${d.message} ${found.charAt(0).toUpperCase()}${found.slice(1)}.`,
+			type: s.errors ? "error" : d.type === "success" ? "info" : d.type,
+		};
+	}
+
+	function describeJobOnly(job: UpdateJob): {
 		title: string;
 		message: string;
 		type: NotificationType;
@@ -534,8 +599,13 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				jobId: job.id,
 				siteId: job.site_id,
 				createdBy: job.created_by,
-				status: job.status,
-				active: isActive(job),
+				// A status of its own while the text diff runs, so its
+				// result pops up like a job finishing.
+				status: textDiffRunning(job)
+					? `${job.status}:checking`
+					: job.status,
+				active: isBusy(job),
+				review: hasTextDiffFindings(job),
 				createdAt: Date.parse(job.created_at) || Date.now(),
 				...describeJob(job),
 			},
@@ -549,9 +619,13 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 			byId.set(job.id, job);
 			if (isActive(job)) {
 				watched.add(job.id);
-				syncNotification(job, true);
 			} else if (watched.delete(job.id)) {
 				handleFinished(job);
+			}
+			if (isBusy(job)) {
+				busyWatched.add(job.id);
+				syncNotification(job, true);
+			} else if (busyWatched.delete(job.id)) {
 				syncNotification(job, true);
 			} else {
 				syncNotification(job, false);
@@ -568,12 +642,15 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		// A watched job missing from the list finished longer ago than the
 		// API's recent window (e.g. the tab was asleep); fetch it directly.
 		const listedIds = new Set(listed.map((j) => j.id));
-		const missing = [...watched].filter((id) => !listedIds.has(id));
+		const missing = [...new Set([...watched, ...busyWatched])].filter(
+			(id) => !listedIds.has(id),
+		);
 		const fetched = await Promise.all(
 			missing.map(async (id) => {
 				const r = await apiFetch(`${BASE_URL}/update-jobs/${id}`);
 				if (r.status === 404) {
 					watched.delete(id);
+					busyWatched.delete(id);
 					return null;
 				}
 				return r.ok ? ((await r.json()) as UpdateJob) : null;
@@ -586,7 +663,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	}
 
 	function schedulePoll() {
-		if (pollTimer || activeJobs.value.length === 0) return;
+		if (pollTimer || busyJobs.value.length === 0) return;
 		pollTimer = setTimeout(async () => {
 			pollTimer = null;
 			try {
@@ -791,10 +868,25 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return job;
 	}
 
+	/** One job with its full text diff. */
+	async function fetchJob(id: number): Promise<UpdateJob> {
+		const res = await apiFetch(`${BASE_URL}/update-jobs/${id}`);
+		if (!res.ok) await handleErrorResponse(res);
+		return (await res.json()) as UpdateJob;
+	}
+
+	/** Jobs of the last week with a text diff (summary only), newest first. */
+	async function fetchTextDiffJobs(): Promise<UpdateJob[]> {
+		const res = await apiFetch(`${BASE_URL}/update-jobs/text-diffs`);
+		if (!res.ok) await handleErrorResponse(res);
+		return (await res.json()) as UpdateJob[];
+	}
+
 	function reset() {
 		if (pollTimer) clearTimeout(pollTimer);
 		pollTimer = null;
 		watched.clear();
+		busyWatched.clear();
 		jobs.value = [];
 		lastFinishedBySite.value = {};
 	}
@@ -802,6 +894,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	return {
 		jobs,
 		activeJobs,
+		busyJobs,
 		lastFinishedBySite,
 		pendingAction,
 		activeInstalls,
@@ -817,6 +910,8 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		enqueueUserCreate,
 		enqueueUserDelete,
 		fetchJobs,
+		fetchJob,
+		fetchTextDiffJobs,
 		reset,
 	};
 });

@@ -45,6 +45,9 @@ type AppConfig struct {
 	MonitorThreshold   int  `toml:"monitorThreshold" mapstructure:"monitorThreshold"`
 	MonitorTimeout     int  `toml:"monitorTimeout" mapstructure:"monitorTimeout"`
 	MonitorCacheBypass bool `toml:"monitorCacheBypass" mapstructure:"monitorCacheBypass"`
+	// TextDiffMuteDays is how long a new update text diff mute lasts unless
+	// its creator picks another time (see docs/update-text-diff.md).
+	TextDiffMuteDays int `toml:"textDiffMuteDays" mapstructure:"textDiffMuteDays"`
 	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
 	MonitorDisabled bool `toml:"monitorDisabled" mapstructure:"monitorDisabled"`
 	// RefreshDisabled turns off jman-api's in-process data-refresh scheduler
@@ -252,6 +255,7 @@ func loadConfig() error {
 	viper.SetDefault("monitorThreshold", 3)
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("monitorCacheBypass", false)
+	viper.SetDefault("textDiffMuteDays", 30)
 	viper.SetDefault("monitorDisabled", false)
 	viper.SetDefault("refreshDisabled", false)
 	viper.SetDefault("refreshFastInterval", 5)
@@ -312,6 +316,7 @@ func loadConfig() error {
 		"monitorThreshold":           "MONITORTHRESHOLD",
 		"monitorTimeout":             "MONITORTIMEOUT",
 		"monitorCacheBypass":         "MONITORCACHEBYPASS",
+		"textDiffMuteDays":           "TEXTDIFFMUTEDAYS",
 		"monitorDisabled":            "MONITORDISABLED",
 		"refreshDisabled":            "REFRESHDISABLED",
 		"refreshFastInterval":        "REFRESHFASTINTERVAL",

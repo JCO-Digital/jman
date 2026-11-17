@@ -6,6 +6,7 @@ export type NavKey =
 	| "dashboard"
 	| "sites"
 	| "plugins"
+	| "updates"
 	| "users"
 	| "monitoring"
 	| "tasks"
@@ -50,6 +51,12 @@ export const navGroups: NavGroup[] = [
 				label: "Plugins",
 				to: "/plugins",
 				icon: "plugin",
+			},
+			{
+				key: "updates",
+				label: "Update review",
+				to: "/updates",
+				icon: "check",
 			},
 			{ key: "users", label: "Users", to: "/users", icon: "users" },
 			{

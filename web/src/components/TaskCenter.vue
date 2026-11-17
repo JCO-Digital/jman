@@ -198,6 +198,16 @@ onUnmounted(() => {
 									>
 										Open site
 									</RouterLink>
+									<RouterLink
+										v-if="e.task?.review"
+										:to="{
+											name: 'update-review',
+											params: { jobId: e.task.jobId },
+										}"
+										@click="store.setPanelOpen(false)"
+									>
+										Review changes
+									</RouterLink>
 								</div>
 							</div>
 						</li>
