@@ -4,7 +4,9 @@ Proposed 2026-11-17. A check around every update that jman runs: compare
 the site's visible text before and after, and report what changed so the
 person who ran the update can spot breakage.
 
-Status: design, not built. See [Open questions](#open-questions).
+Status: backend built (`internal/textdiff`, `internal/updatejobs/text_diff.go`,
+API in `docs/API_SPECS.md`). Web UI and CLI reporting are next. See
+[Open questions](#open-questions).
 
 ## Why
 
@@ -57,6 +59,11 @@ itself:
 4. **After:** fetch every page once.
 5. Diff, apply noise and mutes, store the result on the job.
 
+The job is marked finished before the after fetch, so its text diff has
+its own status: `running` from the baseline until the after fetch is
+stored, then `done`. A jman-api restart in between leaves it
+`interrupted`.
+
 The check's own failures (fetch errors, parse errors) never fail the job.
 They are recorded in the diff result.
 
@@ -66,15 +73,18 @@ measuring (see Open questions).
 
 ### Fetching
 
-- `GET https://<site domain><path>?jman_cache_bypass=<nanotime>`, reusing
-  the probe code and `utils.SetStandardHeaders`.
-- If the site has an HTTP monitor check for the frontpage with secret
+- `GET https://<site domain><path>?jman_cache_bypass=<nanotime>`, with the
+  monitor's cache bypass and redirect helpers (now in `internal/utils`).
+- If the site's default uptime check has secret
   headers (basic auth on staging sites, for example), those headers are
   sent, and dropped on cross-host redirects as the monitor already does.
 - Redirects are followed. The final URL is recorded, and if it differs
   between before and after (for example `/en/` now redirects to `/`), that
   is reported as a change.
-- Timeout per fetch matches the monitor's.
+- Timeout per fetch is 30 seconds.
+- A page is an error, whatever its status, if it is WordPress's `wp_die()`
+  page (`id="error-page"`: critical error, database connection error) or
+  has a PHP fatal or parse error printed into it.
 
 ### Text extraction
 
@@ -114,18 +124,19 @@ removes most of it.
 
 Lines are normalized before diffing and for mute matching:
 
-- Unicode NFC, collapsed whitespace, trimmed.
+- Collapsed whitespace, trimmed.
 - Runs of digits become `#` (so dates, counts, prices and times match).
-- Month and weekday names in English and Finnish are replaced with a
-  placeholder.
+- Month and weekday names in English, Finnish (any inflection) and Swedish
+  become `<d>`.
 
 The report shows the original lines; normalization only decides whether
 two lines are "the same".
 
 ### Diff
 
-A line-level diff (Myers) between the normalized before and after lines,
-per page. For each changed hunk the report shows:
+A line-level LCS diff between the normalized before and after lines, per
+page (common prefix and suffix trimmed first; a huge differing middle is
+reported as removed and re-added). For each changed hunk the report shows:
 
 - removed and added lines, with a few lines of context;
 - highlighting of the changed characters inside a line, so that a small
@@ -137,10 +148,12 @@ Page-level outcomes besides a text diff:
 | Outcome | Meaning |
 | --- | --- |
 | `unchanged` | No differences after noise and mutes. |
-| `changed` | Text differences remain. |
-| `error_after` | The after fetch failed: non-2xx, timeout, or a known fatal error string ("There has been a critical error on this website"). Shown prominently. |
-| `redirect_changed` | The final URL changed. |
-| `no_baseline` | A baseline fetch failed, so there is nothing to compare. The update still ran. |
+| `changed` | Text differences remain, or the final URL after redirects changed. |
+| `error` | The page worked before the update and doesn't after it: non-2xx, timeout, error page. Shown prominently. |
+| `no_baseline` | Both baseline fetches failed, so there is nothing to compare. The update still ran. |
+
+Each page also counts the changed lines it hid as noise or by a mute
+(`hidden`).
 
 ### Mutes
 
@@ -150,37 +163,38 @@ A mute hides a line from future diffs on one site.
   normalized line. Direction is part of the key, so muting a line that keeps
   getting added doesn't hide it disappearing.
 - **Expiry:** each mute has `expires_at`, set when it's created. The default
-  comes from config (`updateDiffMuteDays`, 30), and the UI lets the user
+  comes from config (`textDiffMuteDays`, 30), and the UI lets the user
   pick another value.
 - **Creating:** from a changed line in the report, with one click. The UI
   shows which lines a mute hides in later reports.
-- Expired mutes are kept for audit (like `VulnMute` with `LiftedAt`) but no
-  longer match.
+- Removing a mute sets `expires_at` to now. Expired mutes are kept for
+  audit but no longer match.
 
 ### Per-site pages
 
-A new per-site setting: a list of paths (each starting with `/`). The
-frontpage is always included and can't be removed. Edited on the site page
+A new per-site setting: a list of up to 20 paths (each starting with `/`,
+no host or fragment). The frontpage is always included and can't be
+removed. Edited on the site page
 in the web UI and through the API; the CLI can list them.
 
 ### Storage
 
-New tables in api.db:
+In api.db:
 
-- `site_diff_pages`: `site_id`, `path`, audit fields.
-- `update_diff_mutes`: `id`, `site_id`, `path`, `direction`,
-  `normalized_line`, `reason`, `expires_at`, audit fields.
-- `update_job_diffs`: `job_id`, `path`, `outcome`, `final_url_before`,
-  `final_url_after`, `hunks` (JSON), `error`. Rows are removed together with
-  their job (`jobRetention`, 7 days). The diff for older jobs is gone; the
-  ledger entry stays.
+- `site_diff_pages`: `site_id`, `path`, `created_at`, `created_by`.
+- `text_diff_mutes`: `id`, `site_id`, `path`, `direction`, `line`
+  (normalized), `reason`, `expires_at`, audit fields.
+- `plugin_update_jobs.text_diff`: the job's `models.TextDiff` as JSON. It is
+  removed with its job (`jobRetention`, 7 days); the ledger entry stays.
+  Job lists carry only its summary.
 
 Baseline snapshots are only kept in memory for the duration of the job.
 
 ### Reporting
 
-- **Job:** the job JSON gets a `diff` summary (pages checked, pages changed,
-  errors), and `GET /api/update-jobs/{id}` returns the hunks. The web UI's
+- **Job:** job lists carry `text_diff_summary` (pages checked, changed,
+  errors, no baseline), and `GET /api/update-jobs/{id}` returns the full
+  `text_diff`. The web UI's
   job view shows them.
 - **Bulk runs:** the update view groups the jobs it started and shows a
   summary: sites with changes or errors first, unchanged sites collapsed.
@@ -189,8 +203,9 @@ Baseline snapshots are only kept in memory for the duration of the job.
   for the hunks.
 - **Nightly core:** `nightlySummary` adds the count of sites with changes
   and links to them.
-- **Ledger:** the site update ledger entry notes "frontend text changed on
-  N pages" so the plugin page's update history shows it.
+- **Ledger (not built yet):** the ledger entry is written when the job
+  finishes, before the after fetch, so noting "frontend text changed on N
+  pages" there needs the entry updated afterwards.
 
 No Slack alert for diffs: the person who ran the update reviews them.
 

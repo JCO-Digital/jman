@@ -1,10 +1,12 @@
 package textdiff
 
+import "github.com/JCO-Digital/jman/internal/models"
+
 // Line kinds in a Hunk.
 const (
-	KindContext = "context"
-	KindRemoved = "removed"
-	KindAdded   = "added"
+	KindContext = models.TextDiffContext
+	KindRemoved = models.TextDiffRemoved
+	KindAdded   = models.TextDiffAdded
 )
 
 // ContextLines is how many unchanged lines a hunk shows around changes.
@@ -16,26 +18,10 @@ const ContextLines = 2
 const maxCells = 4_000_000
 
 // Line is one line of a hunk. Text is the line as it appeared on the page.
-type Line struct {
-	Kind string `json:"kind"`
-	Text string `json:"text"`
-}
+type Line = models.TextDiffLine
 
 // Hunk is a run of changed lines with context around them.
-type Hunk struct {
-	Lines []Line `json:"lines"`
-}
-
-// Changes counts a hunk's removed and added lines.
-func (h Hunk) Changes() int {
-	n := 0
-	for _, l := range h.Lines {
-		if l.Kind != KindContext {
-			n++
-		}
-	}
-	return n
-}
+type Hunk = models.TextDiffHunk
 
 // Hide reports whether a changed line should be left out of a diff. kind
 // is KindRemoved or KindAdded, norm the line's normalized form.
@@ -61,18 +47,16 @@ func Noise(a, b []string) map[string]bool {
 // Diff compares two fetches of a page line by line, in normalized form,
 // and returns the changes as hunks with ContextLines of context. Changed
 // lines for which hide returns true are left out, and so are hunks left
-// with no changes. hide may be nil.
-func Diff(before, after []string, hide Hide) []Hunk {
+// with no changes; hidden counts them. hide may be nil.
+func Diff(before, after []string, hide Hide) (hunks []Hunk, hidden int) {
 	nb, na := normalizeAll(before), normalizeAll(after)
 	all := diffOps(nb, na)
 
 	ops := all[:0:0]
 	for _, o := range all {
 		if hide != nil {
-			if o.kind == '-' && hide(KindRemoved, nb[o.a]) {
-				continue
-			}
-			if o.kind == '+' && hide(KindAdded, na[o.b]) {
+			if (o.kind == '-' && hide(KindRemoved, nb[o.a])) || (o.kind == '+' && hide(KindAdded, na[o.b])) {
+				hidden++
 				continue
 			}
 		}
@@ -89,7 +73,6 @@ func Diff(before, after []string, hide Hide) []Hunk {
 		return Line{Kind: KindContext, Text: after[o.b]}
 	}
 
-	var hunks []Hunk
 	hunkEnd := 0 // where the previous hunk ended in ops
 	for i := 0; i < len(ops); {
 		if ops[i].kind == '=' {
@@ -125,7 +108,7 @@ func Diff(before, after []string, hide Hide) []Hunk {
 		hunkEnd = end
 		i = end
 	}
-	return hunks
+	return hunks, hidden
 }
 
 type op struct {

@@ -52,7 +52,7 @@ func TestExtractShowsBrokenAttribute(t *testing.T) {
 	after := `<ul><li><a href="/en/" lang="en"">EN" ></a>EN</li></ul>`
 	b, _ := Extract(strings.NewReader(before))
 	a, _ := Extract(strings.NewReader(after))
-	hunks := Diff(b, a, nil)
+	hunks, _ := Diff(b, a, nil)
 	if len(hunks) != 1 || hunks[0].Changes() == 0 {
 		t.Fatalf("expected one hunk with changes, got %+v", hunks)
 	}
@@ -60,7 +60,7 @@ func TestExtractShowsBrokenAttribute(t *testing.T) {
 
 func TestNormalize(t *testing.T) {
 	cases := map[string]string{
-		"Posted  12 minutes ago":       "Posted # minutes ago",
+		"Posted  12 minutes ago":        "Posted # minutes ago",
 		"17. marraskuuta 2026":          "#. <d> #",
 		"Tuesday, November 17, 2026":    "<d>, <d> #, #",
 		"lauantaina klo 10.00":          "<d> klo #.#",
@@ -101,7 +101,7 @@ func TestDiffContextAndMerging(t *testing.T) {
 	after[6] = "changed g" // 2 lines after the first change: same hunk
 	after[15] = "changed p"
 
-	hunks := Diff(before, after, nil)
+	hunks, _ := Diff(before, after, nil)
 	if len(hunks) != 2 {
 		t.Fatalf("got %d hunks, want 2: %+v", len(hunks), hunks)
 	}
@@ -120,14 +120,14 @@ func TestDiffContextAndMerging(t *testing.T) {
 func TestDiffShowsOriginalTextButComparesNormalized(t *testing.T) {
 	before := []string{"Posted 3 minutes ago", "EN"}
 	after := []string{"Posted 9 minutes ago", `EN" >`}
-	hunks := Diff(before, after, nil)
+	hunks, _ := Diff(before, after, nil)
 	if len(hunks) != 1 {
 		t.Fatalf("got %d hunks", len(hunks))
 	}
 	want := []Line{
-		{KindContext, "Posted 9 minutes ago"},
-		{KindRemoved, "EN"},
-		{KindAdded, `EN" >`},
+		{Kind: KindContext, Text: "Posted 9 minutes ago"},
+		{Kind: KindRemoved, Text: "EN"},
+		{Kind: KindAdded, Text: `EN" >`},
 	}
 	if !reflect.DeepEqual(hunks[0].Lines, want) {
 		t.Errorf("lines = %+v, want %+v", hunks[0].Lines, want)
@@ -140,17 +140,20 @@ func TestDiffHide(t *testing.T) {
 	noise := map[string]bool{"Quote one": true, "Quote two": true}
 	hide := func(kind, norm string) bool { return noise[norm] }
 
-	hunks := Diff(before, after, hide)
+	hunks, hidden := Diff(before, after, hide)
+	if hidden != 2 {
+		t.Errorf("hidden = %d, want 2", hidden)
+	}
 	if len(hunks) != 1 || hunks[0].Changes() != 1 || !hasLine(hunks[0], KindRemoved, "Menu item") {
 		t.Fatalf("hunks = %+v, want only the removed menu item", hunks)
 	}
 
 	// Muting a line only in one direction.
 	hide = func(kind, norm string) bool { return kind == KindAdded && norm == "Menu item" }
-	if hunks := Diff(before[:4], before[:3], hide); len(hunks) != 1 {
+	if hunks, _ := Diff(before[:4], before[:3], hide); len(hunks) != 1 {
 		t.Errorf("a mute on added lines hid a removal: %+v", hunks)
 	}
-	if hunks := Diff(before[:3], before[:4], hide); len(hunks) != 0 {
+	if hunks, _ := Diff(before[:3], before[:4], hide); len(hunks) != 0 {
 		t.Errorf("a mute on added lines didn't hide the addition: %+v", hunks)
 	}
 }
@@ -165,13 +168,13 @@ func hasLine(h Hunk, kind, text string) bool {
 }
 
 func TestDiffIdenticalAndEmpty(t *testing.T) {
-	if h := Diff(nil, nil, nil); len(h) != 0 {
+	if h, _ := Diff(nil, nil, nil); len(h) != 0 {
 		t.Errorf("Diff(nil, nil) = %+v", h)
 	}
-	if h := Diff([]string{"a", "b"}, []string{"a", "b"}, nil); len(h) != 0 {
+	if h, _ := Diff([]string{"a", "b"}, []string{"a", "b"}, nil); len(h) != 0 {
 		t.Errorf("identical pages gave %+v", h)
 	}
-	h := Diff(nil, []string{"a"}, nil)
+	h, _ := Diff(nil, []string{"a"}, nil)
 	if len(h) != 1 || !hasLine(h[0], KindAdded, "a") {
 		t.Errorf("Diff(nil, [a]) = %+v", h)
 	}

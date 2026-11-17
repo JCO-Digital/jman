@@ -89,6 +89,11 @@ type UpdateJob struct {
 	Results []UpdateResult `json:"results"`
 	// Core is the site's core version state refreshed after a core job.
 	Core *SiteCore `json:"core,omitempty"`
+	// TextDiff compares the site's visible text before and after a plugin,
+	// ZIP or core update (see docs/update-text-diff.md). Job lists leave it
+	// out and only carry TextDiffSummary.
+	TextDiff        *TextDiff        `json:"text_diff,omitempty"`
+	TextDiffSummary *TextDiffSummary `json:"text_diff_summary,omitempty"`
 	// Error describes a job-level failure or warning (e.g. the site was
 	// left in maintenance mode).
 	Error      string     `json:"error,omitempty"`

@@ -1386,6 +1386,65 @@ Locking something already locked replaces the lock's comment and author. Returns
 
 Returns `204 No Content`, or `404` if the lock doesn't exist. Removing a site lock leaves the site's plugin locks in place.
 
+### Update Text Diff
+
+Plugin update, plugin install (including ZIP update) and core update jobs compare the site's visible text before and after the change: the frontpage plus the site's extra pages, each fetched twice before the job (lines that differ between those two are noise) and once after, past the page cache. See `docs/update-text-diff.md`. The check only reports; it never fails or blocks a job.
+
+`GET /update-jobs/{id}` returns the full diff as `text_diff`; `GET /update-jobs` leaves it out and gives `text_diff_summary` (`status`, `pages`, `changed`, `errors`, `no_baseline`). Other kinds of job have neither.
+
+```json
+"text_diff": {
+	"status": "done",
+	"pages": [
+		{
+			"path": "/",
+			"outcome": "changed",
+			"hunks": [
+				{"lines": [
+					{"kind": "context", "text": "Yhteystiedot"},
+					{"kind": "removed", "text": "EN"},
+					{"kind": "added", "text": "EN\" >"}
+				]}
+			],
+			"hidden": 2
+		},
+		{"path": "/en/", "outcome": "error", "error": "WordPress error page (HTTP 500)"}
+	]
+}
+```
+
+- `status`: `running` (baseline taken; the job or the after fetch is still going), `done`, or `interrupted` (jman-api restarted first).
+- `outcome`: `unchanged`, `changed` (text changed, or the URL after redirects did: `final_url_before`/`final_url_after`), `error` (worked before the update, not after) or `no_baseline` (couldn't be fetched before the update; `error` says why).
+- `hidden`: changed lines left out as noise or by a mute.
+
+#### Extra Pages
+
+`GET /sites/{id}/text-diff-pages` (Protected: `basic`) lists them (`id`, `site_id`, `path`, `created_at`, `created_by`).
+
+`POST /sites/{id}/text-diff-pages` (Protected: `execute`) adds one: `{"path": "/en/"}`. The path must start with `/` and stay on the site; the frontpage is always compared and can't be added. Up to 20 per site. Returns `201`, `409` if the site already has it, or `404` if the site isn't reachable over WP-CLI.
+
+`DELETE /sites/{id}/text-diff-pages/{pageId}` (Protected: `execute`) returns `204`.
+
+#### Mutes
+
+A mute hides a changed line from a site's later diffs of one page, in one direction, until it expires.
+
+`GET /sites/{id}/text-diff-mutes` (Protected: `basic`) lists the site's mutes, expired ones included; a mute is active while `expires_at` is in the future.
+
+`POST /sites/{id}/text-diff-mutes` (Protected: `execute`)
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `path` | string | Yes | The page, e.g. `/` |
+| `direction` | string | Yes | `added` or `removed` |
+| `text` | string | Yes | The line as shown in the diff. Stored normalized (`line`): digits become `#` and month and weekday names `<d>`, so the mute still matches when only those change |
+| `reason` | string | No | Up to 500 characters |
+| `days` | integer | No | 1–365; defaults to the `textDiffMuteDays` setting (30) |
+
+Returns the mute (`201 Created`).
+
+`DELETE /text-diff-mutes/{id}` (Protected: `execute`) ends a mute now and keeps it for the record. Returns `204`.
+
 ---
 
 ## Error Handling

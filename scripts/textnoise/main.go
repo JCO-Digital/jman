@@ -181,7 +181,8 @@ func (m measurer) measure(url string, idx int) report {
 		if p.FinalURL != pages[0].FinalURL {
 			r.Redirect = true
 		}
-		for _, h := range textdiff.Diff(base, p.Lines, nil) {
+		hunks, _ := textdiff.Diff(base, p.Lines, nil)
+		for _, h := range hunks {
 			addChanges(changed, h)
 		}
 	}
@@ -191,7 +192,8 @@ func (m measurer) measure(url string, idx int) report {
 	hide := func(_, norm string) bool { return noise[norm] }
 	residual := map[string]bool{}
 	for _, p := range pages[2:] {
-		for _, h := range textdiff.Diff(base, p.Lines, hide) {
+		hunks, _ := textdiff.Diff(base, p.Lines, hide)
+		for _, h := range hunks {
 			addChanges(residual, h)
 		}
 	}

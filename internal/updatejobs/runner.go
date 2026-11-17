@@ -196,6 +196,9 @@ func Start(ctx context.Context) error {
 			writeLedger(job, nil, "failed", interruptedReason)
 		}
 	}
+	if err := db.InterruptRunningTextDiffs(); err != nil {
+		log.Printf("Failed to recover update text diffs: %v", err)
+	}
 	// Uploads of interrupted jobs (now finished) are no longer needed.
 	cleanupUploads()
 
@@ -305,6 +308,11 @@ func run(job models.UpdateJob) {
 		return
 	}
 
+	var baseline *textBaseline
+	if runsTextDiff(job) {
+		baseline = takeTextBaseline(job, *site)
+	}
+
 	switch {
 	case job.Kind == models.UpdateJobKindCore:
 		runCore(job, *site)
@@ -320,6 +328,10 @@ func run(job models.UpdateJob) {
 		return
 	default:
 		runPlugins(job, *site)
+	}
+
+	if baseline != nil {
+		compareText(job, baseline)
 	}
 
 	// The job refreshed the site's plugin (or core) cache: bring its

@@ -106,13 +106,17 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListUpdateJobsHandler returns every queued or running update job (plugin
-// and core), plus jobs that finished in the last few minutes.
+// and core), plus jobs that finished in the last few minutes. Jobs carry
+// only their text diff's summary; GetUpdateJobHandler returns the diff.
 func ListUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	jobs, err := db.ListUpdateJobs(time.Now().Add(-recentJobWindow))
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "ListUpdateJobsHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+	for i := range jobs {
+		jobs[i].TextDiff = nil
 	}
 	WriteJSON(w, http.StatusOK, jobs)
 }
