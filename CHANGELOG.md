@@ -1,6 +1,14 @@
 # Changelog
 
-## 7.40.0 (2026-11-16)
+## 7.41.0 (2026-11-17)
+
+#### Features
+
+- web,cli: review update text diffs (f73a7e2)
+- api: compare visible text around plugin, ZIP and core update jobs (5f07cdc)
+- textdiff: compare a page's visible text before and after an update (32a4308)
+
+## v7.40.0 (2026-11-16)
 
 #### Features
 
