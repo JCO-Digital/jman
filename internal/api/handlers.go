@@ -218,6 +218,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 
 	// --- Background update jobs (plugins and core) ---
 	mux.Handle("GET /api/update-jobs", basic(ListUpdateJobsHandler))
+	mux.Handle("GET /api/update-jobs/text-diffs", basic(ListTextDiffJobsHandler))
 	mux.Handle("GET /api/update-jobs/{id}", basic(GetUpdateJobHandler))
 
 	// Update text diff: extra pages per site and mutes (docs/update-text-diff.md).

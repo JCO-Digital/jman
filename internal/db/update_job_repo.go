@@ -97,6 +97,25 @@ func ListUpdateJobs(finishedSince time.Time) ([]models.UpdateJob, error) {
 	return scanUpdateJobs(rows)
 }
 
+// ListTextDiffJobs returns the jobs created at or after since that have a
+// text diff, newest first.
+func ListTextDiffJobs(since time.Time) ([]models.UpdateJob, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := db.Query(
+		`SELECT `+updateJobColumns+` FROM plugin_update_jobs
+		 WHERE text_diff IS NOT NULL AND created_at >= ?
+		 ORDER BY id DESC`,
+		since,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list text diff jobs: %w", err)
+	}
+	return scanUpdateJobs(rows)
+}
+
 // ListQueuedUpdateJobs returns the jobs still waiting to run, oldest first.
 func ListQueuedUpdateJobs() ([]models.UpdateJob, error) {
 	db := GetAPIDB()

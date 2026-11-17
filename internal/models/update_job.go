@@ -108,6 +108,12 @@ func (j UpdateJob) Active() bool {
 	return j.Status == UpdateJobQueued || j.Status == UpdateJobRunning
 }
 
+// TextDiffPending reports whether the job's text diff is still running,
+// which it does for a while after the job has finished.
+func (j UpdateJob) TextDiffPending() bool {
+	return j.TextDiffSummary != nil && j.TextDiffSummary.Status == TextDiffRunning
+}
+
 // NewUpdateJob returns a job of the given kind with payload, one of the
 // *Payload types, encoded.
 func NewUpdateJob(kind, siteID string, payload any) UpdateJob {

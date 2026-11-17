@@ -1413,6 +1413,8 @@ Plugin update, plugin install (including ZIP update) and core update jobs compar
 }
 ```
 
+`GET /update-jobs/text-diffs` (Protected: `basic`) lists the jobs with a text diff created in the last `?days=` days (1–7, default 7), newest first, with only `text_diff_summary`. The web UI's update review uses it.
+
 - `status`: `running` (baseline taken; the job or the after fetch is still going), `done`, or `interrupted` (jman-api restarted first).
 - `outcome`: `unchanged`, `changed` (text changed, or the URL after redirects did: `final_url_before`/`final_url_after`), `error` (worked before the update, not after) or `no_baseline` (couldn't be fetched before the update; `error` says why).
 - `hidden`: changed lines left out as noise or by a mute.

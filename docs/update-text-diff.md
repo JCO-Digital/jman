@@ -4,9 +4,10 @@ Proposed 2026-11-17. A check around every update that jman runs: compare
 the site's visible text before and after, and report what changed so the
 person who ran the update can spot breakage.
 
-Status: backend built (`internal/textdiff`, `internal/updatejobs/text_diff.go`,
-API in `docs/API_SPECS.md`). Web UI and CLI reporting are next. See
-[Open questions](#open-questions).
+Status: built (`internal/textdiff`, `internal/updatejobs/text_diff.go`, API
+in `docs/API_SPECS.md`, web UI under Update review, CLI summary lines).
+Not built yet: the nightly core summary and the ledger note (see
+[Reporting](#reporting)). See [Open questions](#open-questions).
 
 ## Why
 
@@ -194,15 +195,21 @@ Baseline snapshots are only kept in memory for the duration of the job.
 
 - **Job:** job lists carry `text_diff_summary` (pages checked, changed,
   errors, no baseline), and `GET /api/update-jobs/{id}` returns the full
-  `text_diff`. The web UI's
-  job view shows them.
-- **Bulk runs:** the update view groups the jobs it started and shows a
-  summary: sites with changes or errors first, unchanged sites collapsed.
-- **CLI:** `jman plugin update` and `jman core update` print a one-line
-  diff summary per site after the job finishes, with a link to the web UI
-  for the hunks.
-- **Nightly core:** `nightlySummary` adds the count of sites with changes
-  and links to them.
+  `text_diff`.
+- **Task center:** a job stays "running" until its check is done, then its
+  message says what the check found, with a "Review changes" link.
+- **Update review** (`/updates`, `GET /api/update-jobs/text-diffs`): the
+  last week's checks, grouped into runs (jobs one person queued within 15
+  minutes of each other, so no batch ID is needed). Broken and changed sites
+  come first, unchanged sites are hidden unless asked for. Each site expands
+  to its diff, where any changed line can be muted.
+- **Site page:** the Plugins & core tab has an Update Checks card for the
+  extra pages and the active mutes.
+- **CLI:** the CLI waits for the check too, then prints one line per site
+  with findings and a link to `/updates/<job id>` (unchanged pages only with
+  `-v`).
+- **Nightly core (not built yet):** `nightlySummary` should add the count of
+  sites with changes; it waits for jobs, not their checks.
 - **Ledger (not built yet):** the ledger entry is written when the job
   finishes, before the after fetch, so noting "frontend text changed on N
   pages" there needs the entry updated afterwards.
@@ -248,9 +255,9 @@ the baseline fetches as noise, rather than only the changed lines.
 - **Plugin management jobs.** Activate, deactivate, delete and uninstall
   change the site too. They're not updates, so they're out of scope for now,
   but deactivation can break a page just as badly.
-- **Bulk grouping.** Jobs are one site each and have no shared batch ID. The
-  bulk summary needs one (a `batch_id` on jobs created together) or has to
-  group on the client.
+- **Local dev.** The local-dev sites' web servers aren't published (they run
+  vulnerable plugins) and their `.test` domains don't resolve, so every
+  local check ends as `no_baseline`.
 - **Which "fatal error" strings** to recognize beyond WordPress core's
   critical error page (PHP warnings printed into the page, white screen with
   an empty body).
