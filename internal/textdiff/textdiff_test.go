@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"strings"
 	"testing"
@@ -262,6 +263,31 @@ func TestFetch(t *testing.T) {
 	for path, want := range errs {
 		if p := Fetch(ctx, srv.Client(), srv.URL+path, nil); p.Error != want {
 			t.Errorf("Fetch %s error = %q, want %q", path, p.Error, want)
+		}
+	}
+}
+
+func TestWithoutCacheBypass(t *testing.T) {
+	cases := map[string]string{
+		"https://a.fi/?jman_cache_bypass=1":         "https://a.fi/",
+		"https://a.fi/?lang=en&jman_cache_bypass=1": "https://a.fi/?lang=en",
+		"https://a.fi/?jman_cache_bypass=1&lang=en": "https://a.fi/?lang=en",
+		"https://a.fi/?a=1&jman_cache_bypass=1&b=2": "https://a.fi/?a=1&b=2",
+		"https://a.fi/en/":                          "https://a.fi/en/",
+		"https://a.fi/?not_jman_cache_bypass_x=1":   "https://a.fi/?not_jman_cache_bypass_x=1",
+		// A login redirect carries the bypass inside redirect_to.
+		"https://a.fi/wp-login.php?redirect_to=https%3A%2F%2Fa.fi%2F%3Fjman_cache_bypass%3D1794919857992812490":         "https://a.fi/wp-login.php?redirect_to=https%3A%2F%2Fa.fi%2F",
+		"https://a.fi/wp-login.php?redirect_to=https%3A%2F%2Fa.fi%2F%3Fp%3D2%26jman_cache_bypass%3D17%26x%3D1&reauth=1": "https://a.fi/wp-login.php?redirect_to=https%3A%2F%2Fa.fi%2F%3Fp%3D2%26x%3D1&reauth=1",
+		// Encoded twice, by a redirect through another redirect.
+		"https://sso.fi/?next=https%3A%2F%2Fa.fi%2Flogin%3Fr%3Dhttps%253A%252F%252Fa.fi%252F%253Fjman_cache_bypass%253D5": "https://sso.fi/?next=https%3A%2F%2Fa.fi%2Flogin%3Fr%3Dhttps%253A%252F%252Fa.fi%252F",
+	}
+	for in, want := range cases {
+		u, err := url.Parse(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := withoutCacheBypass(u); got != want {
+			t.Errorf("withoutCacheBypass(%s)\n got %s\nwant %s", in, got, want)
 		}
 	}
 }
