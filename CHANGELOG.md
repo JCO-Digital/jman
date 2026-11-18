@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.41.0 (2026-11-17)
+### 7.41.1 (2026-11-18)
+
+#### Bug Fixes
+
+- textdiff: ignore the cache bypass inside redirect URLs (8b6e608)
+
+## v7.41.0 (2026-11-17)
 
 #### Features
 
