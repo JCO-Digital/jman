@@ -82,6 +82,13 @@ measuring (see Open questions).
 - Redirects are followed. The final URL is recorded, and if it differs
   between before and after (for example `/en/` now redirects to `/`), that
   is reported as a change.
+- The `textDiffQuery` setting (e.g. `bojaco_staging_bypass=1`) is added to
+  every fetch. Development sites redirect visitors to the login page so
+  crawlers and people don't mistake them for the real site; the bypass
+  parameter lets the check see the page itself. Sites that don't know the
+  parameter ignore it. The cache bypass parameter, which differs on every
+  fetch, is removed from final URLs wherever it appears, including encoded
+  inside a login redirect's `redirect_to`.
 - Timeout per fetch is 30 seconds.
 - A page is an error, whatever its status, if it is WordPress's `wp_die()`
   page (`id="error-page"`: critical error, database connection error) or

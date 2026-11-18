@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/textdiff"
@@ -35,6 +36,7 @@ var (
 	textDiffMutes   = func(siteID string) ([]models.TextDiffMute, error) {
 		return db.ListActiveTextDiffMutes(siteID, time.Now())
 	}
+	textDiffQuery = func() string { return config.Cfg.TextDiffQuery }
 )
 
 // runsTextDiff reports whether a job changes the site's code, so its
@@ -52,7 +54,9 @@ func runsTextDiff(job models.UpdateJob) bool {
 type textBaseline struct {
 	domain  string
 	headers map[string]string
-	pages   []basePage
+	// query is textDiffQuery, added to every fetch.
+	query string
+	pages []basePage
 }
 
 type basePage struct {
@@ -71,7 +75,7 @@ func takeTextBaseline(job models.UpdateJob, site models.CliSite) *textBaseline {
 		log.Printf("Update job %d: failed to load text diff pages, comparing the frontpage only: %v", job.ID, err)
 		paths = []string{"/"}
 	}
-	b := &textBaseline{domain: site.Name, headers: textDiffHeaders(job.SiteID, site.Name)}
+	b := &textBaseline{domain: site.Name, headers: textDiffHeaders(job.SiteID, site.Name), query: extraQuery(job.ID)}
 	diff := models.TextDiff{Status: models.TextDiffRunning}
 	for _, path := range paths {
 		bp := basePage{path: path}
@@ -98,7 +102,28 @@ func takeTextBaseline(job models.UpdateJob, site models.CliSite) *textBaseline {
 }
 
 func (b *textBaseline) url(path string) string {
-	return "https://" + b.domain + path
+	u := "https://" + b.domain + path
+	if b.query == "" {
+		return u
+	}
+	if strings.Contains(path, "?") {
+		return u + "&" + b.query
+	}
+	return u + "?" + b.query
+}
+
+// extraQuery returns the textDiffQuery setting, without a leading "?" or
+// "&", or "" if it isn't a valid query string.
+func extraQuery(jobID int64) string {
+	q := strings.TrimLeft(strings.TrimSpace(textDiffQuery()), "?&")
+	if q == "" {
+		return ""
+	}
+	if _, err := url.ParseQuery(q); err != nil || strings.ContainsAny(q, " #") {
+		log.Printf("Update job %d: ignoring textDiffQuery %q: not a valid query string", jobID, q)
+		return ""
+	}
+	return q
 }
 
 // compareText fetches each page again after the job and stores the
