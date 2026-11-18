@@ -1,6 +1,12 @@
 # Changelog
 
-### 7.41.1 (2026-11-18)
+## 7.42.0 (2026-11-18)
+
+#### Features
+
+- api: add textDiffQuery to update text diff fetches (74aa4b3)
+
+### v7.41.1 (2026-11-18)
 
 #### Bug Fixes
 
