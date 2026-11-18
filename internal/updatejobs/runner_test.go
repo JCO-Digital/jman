@@ -46,7 +46,8 @@ func setupRunnerTest(t *testing.T) {
 	oldSync := syncSiteExposures
 	syncSiteExposures = func(string) error { return nil }
 	// No network in tests: every page fetch fails unless a test sets one.
-	oldFetch, oldPaths, oldHeaders, oldMutes := fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes
+	oldFetch, oldPaths, oldHeaders, oldMutes, oldQuery := fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes, textDiffQuery
+	textDiffQuery = func() string { return "" }
 	fetchPage = func(string, map[string]string) textdiff.Page { return textdiff.Page{Error: "not fetched in tests"} }
 	textDiffPaths = func(string) ([]string, error) { return []string{"/"}, nil }
 	textDiffHeaders = func(string, string) map[string]string { return nil }
@@ -58,7 +59,7 @@ func setupRunnerTest(t *testing.T) {
 		running.Wait()
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
 		syncSiteExposures = oldSync
-		fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes = oldFetch, oldPaths, oldHeaders, oldMutes
+		fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes, textDiffQuery = oldFetch, oldPaths, oldHeaders, oldMutes, oldQuery
 		updateCore, refreshCore, cachedCoreVersion = oldUpdateCore, oldRefreshCore, oldCachedCore
 		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
 		pluginVulnerable, pluginFixedIn = oldVulnerable, oldFixedIn

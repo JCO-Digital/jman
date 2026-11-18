@@ -48,6 +48,10 @@ type AppConfig struct {
 	// TextDiffMuteDays is how long a new update text diff mute lasts unless
 	// its creator picks another time (see docs/update-text-diff.md).
 	TextDiffMuteDays int `toml:"textDiffMuteDays" mapstructure:"textDiffMuteDays"`
+	// TextDiffQuery is a query string added to every update text diff fetch,
+	// e.g. "bojaco_staging_bypass=1" to get past a login redirect that keeps
+	// development sites out of search engines.
+	TextDiffQuery string `toml:"textDiffQuery" mapstructure:"textDiffQuery"`
 	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
 	MonitorDisabled bool `toml:"monitorDisabled" mapstructure:"monitorDisabled"`
 	// RefreshDisabled turns off jman-api's in-process data-refresh scheduler
@@ -256,6 +260,7 @@ func loadConfig() error {
 	viper.SetDefault("monitorTimeout", 10)
 	viper.SetDefault("monitorCacheBypass", false)
 	viper.SetDefault("textDiffMuteDays", 30)
+	viper.SetDefault("textDiffQuery", "")
 	viper.SetDefault("monitorDisabled", false)
 	viper.SetDefault("refreshDisabled", false)
 	viper.SetDefault("refreshFastInterval", 5)
@@ -317,6 +322,7 @@ func loadConfig() error {
 		"monitorTimeout":             "MONITORTIMEOUT",
 		"monitorCacheBypass":         "MONITORCACHEBYPASS",
 		"textDiffMuteDays":           "TEXTDIFFMUTEDAYS",
+		"textDiffQuery":              "TEXTDIFFQUERY",
 		"monitorDisabled":            "MONITORDISABLED",
 		"refreshDisabled":            "REFRESHDISABLED",
 		"refreshFastInterval":        "REFRESHFASTINTERVAL",

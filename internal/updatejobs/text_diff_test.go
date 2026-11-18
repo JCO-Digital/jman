@@ -206,3 +206,43 @@ func TestTextDiffMuteExpiry(t *testing.T) {
 		t.Errorf("mutes = %+v, want the removed one kept", all)
 	}
 }
+
+func TestTextDiffQuery(t *testing.T) {
+	setupRunnerTest(t)
+	cases := []struct {
+		setting string
+		path    string
+		want    string
+	}{
+		{"", "/", "https://example.com/"},
+		{"bojaco_staging_bypass=1", "/", "https://example.com/?bojaco_staging_bypass=1"},
+		{"?bojaco_staging_bypass=1", "/en/", "https://example.com/en/?bojaco_staging_bypass=1"},
+		{"a=1&b=2", "/shop/?orderby=price", "https://example.com/shop/?orderby=price&a=1&b=2"},
+		{"bad value#x", "/", "https://example.com/"},
+		{"%zz", "/", "https://example.com/"},
+	}
+	for _, c := range cases {
+		textDiffQuery = func() string { return c.setting }
+		b := &textBaseline{domain: "example.com", query: extraQuery(1)}
+		if got := b.url(c.path); got != c.want {
+			t.Errorf("setting %q, path %q: url = %q, want %q", c.setting, c.path, got, c.want)
+		}
+	}
+
+	// The fetches of a job use it.
+	textDiffQuery = func() string { return "bojaco_staging_bypass=1" }
+	site := &fakeSite{fetches: map[string]int{}, pages: map[string][]textdiff.Page{
+		"https://example.com/?bojaco_staging_bypass=1": {page("Hello")},
+	}}
+	fetchPage = site.fetch
+	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) { return nil, nil }
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a"})
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+	stored, _ := db.GetUpdateJob(job.ID)
+	if len(site.urls) != 3 || stored.TextDiff == nil || stored.TextDiff.Pages[0].Outcome != models.TextDiffUnchanged {
+		t.Errorf("fetched %v, diff %+v; want three fetches with the query and an unchanged page", site.urls, stored.TextDiff)
+	}
+}
