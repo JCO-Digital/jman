@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 
 	"github.com/JCO-Digital/jman/internal/utils"
 )
@@ -90,13 +91,25 @@ func Fetch(ctx context.Context, client *http.Client, pageURL string, headers map
 	return p
 }
 
+// bypassParam matches the cache bypass parameter anywhere in a URL: in its
+// own query, or URL-encoded (once or twice) inside another parameter, as
+// in a redirect to wp-login.php?redirect_to=<the page with its bypass>.
+// The separator before it is captured, and so is one after it, so the URL
+// stays well formed without it.
+var bypassParam = regexp.MustCompile(`(?i)(\?|&|%3F|%26|%253F|%2526)` + utils.CacheBypassParam +
+	`(?:=|%3D|%253D)\d+(&|%26|%2526)?`)
+
+// withoutCacheBypass returns u without the cache bypass parameter, which
+// differs on every fetch, so final URLs of two fetches compare equal.
 func withoutCacheBypass(u *url.URL) string {
-	c := *u
-	q := c.Query()
-	if !q.Has(utils.CacheBypassParam) {
-		return c.String()
-	}
-	q.Del(utils.CacheBypassParam)
-	c.RawQuery = q.Encode()
-	return c.String()
+	return bypassParam.ReplaceAllStringFunc(u.String(), func(m string) string {
+		sub := bypassParam.FindStringSubmatch(m)
+		if sub[2] == "" {
+			// The last parameter: drop it with the separator before it.
+			return ""
+		}
+		// Followed by another parameter: keep the separator before it
+		// ("?" or "&") and drop the one after it.
+		return sub[1]
+	})
 }
