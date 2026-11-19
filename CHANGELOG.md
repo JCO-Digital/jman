@@ -1,6 +1,12 @@
 # Changelog
 
-## 7.42.0 (2026-11-18)
+### 7.42.1 (2026-11-19)
+
+#### Bug Fixes
+
+- wpcli: quote commands twice for WP Engine's SSH gateway (b1e2b96)
+
+## v7.42.0 (2026-11-18)
 
 #### Features
 
