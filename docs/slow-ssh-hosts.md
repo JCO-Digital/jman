@@ -60,3 +60,7 @@ After a failed plugin update, jman checks the site:
 The job result and the site update ledger record what the check found. A plugin whose version changed counts as updated even if the batch as a whole failed or timed out.
 
 A site left in maintenance mode shows its maintenance page until WordPress ignores the `.maintenance` file, 10 minutes after the update started. Once you're sure the update has stopped, `wp maintenance-mode deactivate` clears it immediately.
+
+## Command quoting
+
+WP Engine's gateway parses the remote command twice: it splits it into words, joins them back with spaces and runs the result with `bash -c`. jman detects `*.ssh.wpengine.net` hosts and quotes every WP-CLI and SSH argument once more for them (`reparsesCommand` in `internal/wpcli/wpcli.go`), so arguments with spaces or shell characters, such as the `--exec` PHP used for premium plugin updates, reach `wp` intact. A WP Engine site reached through an `~/.ssh/config` alias instead of its `*.ssh.wpengine.net` hostname isn't detected.

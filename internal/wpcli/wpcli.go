@@ -85,6 +85,15 @@ func RunWP(opts CliOptions, args ...string) (RunResult, error) {
 
 	fullArgs = append(fullArgs, args...)
 
+	// WP-CLI quotes each argument once for the remote shell; a gateway
+	// that parses the command a second time needs another layer. --ssh
+	// itself is for the local wp and stays as is.
+	if opts.SSH != "" && reparsesCommand(opts.SSH) {
+		for i := 1; i < len(fullArgs); i++ {
+			fullArgs[i] = shellQuoteArg(fullArgs[i])
+		}
+	}
+
 	timeout := effectiveTimeout(opts)
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -198,6 +207,33 @@ func shellQuoteArg(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
+// reparsesCommand reports whether an SSH host parses the remote command
+// twice. WP Engine's SSH gateway (*.ssh.wpengine.net) splits the command
+// into words, joins them back with spaces and runs the result with
+// `bash -c`, so one layer of quoting is gone before bash sees it: an
+// argument holding spaces, parentheses or quotes (such as the --exec PHP
+// of PremiumUpdatesArg) becomes a bash syntax error. Commands sent to such
+// a host need every argument quoted once more.
+func reparsesCommand(spec string) bool {
+	host := strings.ToLower(parseSSHSpec(spec).host)
+	return host == "ssh.wpengine.net" || strings.HasSuffix(host, ".ssh.wpengine.net")
+}
+
+// remoteCommand shell-quotes args and joins them into the command string
+// ssh hands to the remote shell, quoting twice for hosts that parse it
+// twice (reparsesCommand).
+func remoteCommand(spec string, args []string) string {
+	twice := reparsesCommand(spec)
+	quoted := make([]string, len(args))
+	for i, arg := range args {
+		quoted[i] = shellQuoteArg(arg)
+		if twice {
+			quoted[i] = shellQuoteArg(quoted[i])
+		}
+	}
+	return strings.Join(quoted, " ")
+}
+
 // RunSSH executes an arbitrary command via SSH on the target server. Each
 // argument is shell-quoted and joined into a single remote command string so
 // that ssh (which otherwise concatenates trailing args with spaces before
@@ -213,18 +249,12 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 		return RunResult{}, err
 	}
 
-	quotedArgs := make([]string, len(args))
-	for i, arg := range args {
-		quotedArgs[i] = shellQuoteArg(arg)
-	}
-	remoteCommand := strings.Join(quotedArgs, " ")
-
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
 	// ssh doesn't accept WP-CLI's "host:port" form, so pass the port as -p.
 	target := parseSSHSpec(ssh)
-	sshArgs := append(target.sshPortArgs("-p"), target.dest, remoteCommand)
+	sshArgs := append(target.sshPortArgs("-p"), target.dest, remoteCommand(ssh, args))
 	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
 
 	var outBuf, errBuf bytes.Buffer
