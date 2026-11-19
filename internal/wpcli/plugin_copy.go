@@ -58,12 +58,8 @@ func streamCommand(ssh string, args []string, timeout time.Duration, consume fun
 		if err := EnsureHostKey(ssh); err != nil {
 			return err
 		}
-		quoted := make([]string, len(args))
-		for i, a := range args {
-			quoted[i] = shellQuoteArg(a)
-		}
 		target := parseSSHSpec(ssh)
-		cmd = exec.CommandContext(ctx, "ssh", append(target.sshPortArgs("-p"), target.dest, strings.Join(quoted, " "))...)
+		cmd = exec.CommandContext(ctx, "ssh", append(target.sshPortArgs("-p"), target.dest, remoteCommand(ssh, args))...)
 	}
 	cmd.WaitDelay = pipeWaitDelay
 	var errBuf bytes.Buffer
