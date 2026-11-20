@@ -236,6 +236,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("DELETE /api/sites/{id}/users/{userId}", execute(SiteUserDeleteHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-actions", execute(SitePluginActionHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-install", execute(SitePluginInstallHandler))
+	// The bojaco mu-plugin or a bojaco-compat plugin on many sites.
+	mux.Handle("POST /api/mu-plugins", execute(InstallMuPluginHandler))
 	// Updating a plugin from a ZIP on many sites: stage the ZIP, then queue.
 	mux.Handle("GET /api/plugin-zips/sources", execute(PluginZipSourcesHandler))
 	mux.Handle("POST /api/plugin-zips", execute(StagePluginZipHandler))

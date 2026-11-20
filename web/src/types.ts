@@ -750,7 +750,8 @@ export type UpdateJobKind =
 	| "core"
 	| PluginActionKind
 	| "install"
-	| UserJobKind;
+	| UserJobKind
+	| "mu_install";
 
 /** Job kinds that create or delete a WordPress user. */
 export type UserJobKind = "user_create" | "user_delete";
@@ -832,6 +833,15 @@ export interface StagedPluginZip {
 	};
 }
 
+/** Payload of jobs that write a file into wp-content/mu-plugins. */
+export interface MuInstallJobPayload {
+	/** "bojaco.php" or "compat-<slug>.php". */
+	file: string;
+	/** The URL jman-api downloaded it from, or "upload <name>". */
+	source: string;
+	sha256: string;
+}
+
 /** Payload of user create jobs; the password is never part of it. */
 export interface UserCreateJobPayload {
 	login: string;
@@ -854,13 +864,14 @@ export type UpdateJobPayload =
 	| { kind: "core"; payload: CoreJobPayload }
 	| { kind: "install"; payload: InstallJobPayload }
 	| { kind: "user_create"; payload: UserCreateJobPayload }
-	| { kind: "user_delete"; payload: UserDeleteJobPayload };
+	| { kind: "user_delete"; payload: UserDeleteJobPayload }
+	| { kind: "mu_install"; payload: MuInstallJobPayload };
 
 /**
  * A background change on one site: `wp plugin update` for one or more
  * plugins (kind "plugins"), `wp core update`, activating, deactivating,
- * deleting or uninstalling plugins, installing one plugin, or creating or
- * deleting a WordPress user.
+ * deleting or uninstalling plugins, installing one plugin, creating or
+ * deleting a WordPress user, or writing a file into mu-plugins.
  */
 /** A text diff's state: the check runs on after the job has finished. */
 export type TextDiffStatus = "running" | "done" | "interrupted";

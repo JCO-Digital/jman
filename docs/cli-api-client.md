@@ -14,7 +14,8 @@ Status: **in progress** (design agreed 2026-10-15). Phases 1–4 and the code pa
 - **Local cache:** the CLI keeps a JSON mirror of a single API endpoint. It reads this mirror first and also uses it as the offline fallback. There is no local SQLite.
 - **Actions:**
   - All plugin changes (update, install, remove) and WordPress core updates go through the API. Update jobs already check locks server-side, and the API's view of each site's plugins and core version stays correct immediately.
-  - The other SSH-based commands (`wp`, `admin`, `mods`, `setup`, `alias`) keep running from the laptop, using the SSH details from the mirror. `setup mu` and `setup compat` write mu-plugin files rather than managing regular plugins, so they stay on SSH by choice.
+  - `setup mu` and `setup compat` also run as jman-api jobs (`POST /mu-plugins`): jman-api downloads the file, adds its hash to the scan allowlist so the file scan doesn't raise an incident for it, and writes it over its own SSH, which handles port knocking.
+  - The other SSH-based commands (`wp`, `admin`, `mods`, `alias`) keep running from the laptop, using the SSH details from the mirror.
 - **Online-only:** vuln reporting and other heavy queries come from the API and don't work offline.
 - **Distribution:** the AUR package is dropped, and GitHub self-update is the only update path.
 - **Out of scope:** the Postgres migration itself. It starts after this work is finished.

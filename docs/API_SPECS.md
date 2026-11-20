@@ -427,6 +427,37 @@ A plugin's changes on every site, newest first, taken from the site update ledge
 
 ---
 
+### Mu-plugin Installs
+
+`POST /mu-plugins` (Protected: `execute`)
+
+Writes the bojaco mu-plugin (`bojaco.php`) or a bojaco-compat plugin (`compat-<slug>.php`) into `wp-content/mu-plugins` on a set of sites, as one `mu_install` job per site. jman-api gets the file itself and adds its SHA-256 to the scan allowlist before queueing, so the file scan doesn't raise a security incident for the change; open findings with the hash are marked allowlisted.
+
+```json
+{ "sites": ["<site uuid>", "…"], "plugin": "bojaco" }
+{ "sites": ["<site uuid>"], "plugin": "bojaco", "source": "https://github.com/JCO-Digital/bojaco-mu-plugin/releases/download/v2.0.0/bojaco.php" }
+{ "sites": ["<site uuid>"], "plugin": "compat", "slug": "woocommerce" }
+```
+
+- `bojaco` without `source` installs the latest release's `.php` asset; a `source` must be a release asset of JCO-Digital/bojaco-mu-plugin. It can also be uploaded as `multipart/form-data` with `sites` (comma-separated), `plugin=bojaco` and the file in `file`.
+- `compat` downloads `compat-<slug>.php` from the bojaco-compat repository's `main` branch, or `master`.
+- The file must start with `<?php` and be at most 1 MB; at most 1000 sites per request.
+
+Returns `202 Accepted`:
+
+```json
+{ "file": "bojaco.php", "source": "https://github.com/…/bojaco.php", "sha256": "9f2c…", "jobs": [ { "id": 12, "kind": "mu_install", "…": "…" } ] }
+```
+
+The job writes the file under a temporary name next to it and renames it, then refreshes the site's plugin list and compares the site's pages like other update jobs. The ledger entry has `update_type` `mu-plugin`.
+
+- `400`: invalid sites, plugin, slug or source.
+- `404`: the compat file doesn't exist.
+- `422`: the file doesn't start with `<?php`.
+- `502`: the file couldn't be downloaded.
+
+---
+
 ### Plugin Updates from a ZIP
 
 For plugins that don't update through WordPress (some paid plugins), a plugin ZIP can be installed over the plugin on many sites. It takes two calls: stage the ZIP, then queue the update.

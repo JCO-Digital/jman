@@ -201,6 +201,9 @@ function ledgerTitle(entry: SiteUpdateLedgerEntry): string {
 	if (entry.update_type === "user" && entry.status === "deleted") {
 		return "User deleted";
 	}
+	if (entry.update_type === "mu-plugin" && entry.status === "installed") {
+		return "Mu-plugin installed";
+	}
 	return ledgerStatusTitle[entry.status];
 }
 
@@ -211,6 +214,15 @@ function formatUserChange(data: any): string {
 	if (data.role) txt += ` (${data.role})`;
 	if (data.reassign) txt += `\nPosts reassigned to ${data.reassign}`;
 	if (data.note) txt += `\n${data.note}`;
+	if (data.error) txt += `\n[Error: ${data.error}]`;
+	return txt;
+}
+
+/** Describes a mu-plugin install job's ledger entry. */
+function formatMuInstall(data: any): string {
+	let txt = `Installed mu-plugin ${data.file}`;
+	if (data.source) txt += `\nSource: ${data.source}`;
+	if (data.sha256) txt += `\nSHA-256: ${data.sha256}`;
 	if (data.error) txt += `\n[Error: ${data.error}]`;
 	return txt;
 }
@@ -252,6 +264,9 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 		}
 		if (entry.update_type === "user") {
 			return formatUserChange(data);
+		}
+		if (entry.update_type === "mu-plugin") {
+			return formatMuInstall(data);
 		}
 		if (data.action) {
 			const verbs: Record<string, string> = {
