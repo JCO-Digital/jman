@@ -465,7 +465,7 @@ export type LedgerStatus =
 export interface SiteUpdateLedgerEntry {
 	id: number;
 	site_id: string;
-	update_type: "core" | "plugin" | "theme" | "user";
+	update_type: "core" | "plugin" | "theme" | "user" | "mu-plugin";
 	status: LedgerStatus;
 	data_json?: string;
 	updated_by: string;
