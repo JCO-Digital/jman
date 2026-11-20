@@ -1,6 +1,10 @@
 package updatejobs
 
-import "github.com/JCO-Digital/jman/internal/models"
+import (
+	"fmt"
+
+	"github.com/JCO-Digital/jman/internal/models"
+)
 
 // checkPayload reports whether a job's payload decodes for its kind. run
 // checks it before running the job, so the accessors below can ignore
@@ -16,6 +20,11 @@ func checkPayload(job models.UpdateJob) error {
 		_, err = models.DecodePayload[models.UserCreatePayload](job)
 	case job.Kind == models.UpdateJobKindUserDelete:
 		_, err = models.DecodePayload[models.UserDeletePayload](job)
+	case job.Kind == models.UpdateJobKindMuInstall:
+		var p models.MuInstallPayload
+		if p, err = models.DecodePayload[models.MuInstallPayload](job); err == nil && !models.ValidMuPluginFile(p.File) {
+			err = fmt.Errorf("invalid mu-plugin file name %q", p.File)
+		}
 	default:
 		_, err = models.DecodePayload[models.PluginsPayload](job)
 	}

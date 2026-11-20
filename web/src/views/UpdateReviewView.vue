@@ -192,6 +192,9 @@ function what(job: UpdateJob): string {
 			? `${job.payload.plugin} from ZIP`
 			: `Install ${job.payload.source}`;
 	}
+	if (job.kind === "mu_install") {
+		return `Mu-plugin ${job.payload.file}`;
+	}
 	if ("plugins" in job.payload) {
 		const updated = job.results.filter((r) => r.status === "Updated");
 		const list = updated.length

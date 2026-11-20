@@ -39,7 +39,7 @@ const (
 type SiteUpdateLedgerEntry struct {
 	ID         int       `json:"id"`
 	SiteID     string    `json:"site_id"`     // site UUID
-	UpdateType string    `json:"update_type"` // "core", "plugin", "theme", "user"
+	UpdateType string    `json:"update_type"` // "core", "plugin", "theme", "user", "mu-plugin"
 	Status     string    `json:"status"`      // one of the Ledger* statuses
 	DataJSON   string    `json:"data_json,omitempty"`
 	UpdatedBy  string    `json:"updated_by"`

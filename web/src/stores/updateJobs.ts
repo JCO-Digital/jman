@@ -253,6 +253,12 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				...describeUser(job, site),
 			};
 		}
+		if (job.kind === "mu_install") {
+			return {
+				title: `Mu-plugin ${job.payload.file} · ${site}`,
+				...describeMuInstall(job, site),
+			};
+		}
 		if (job.kind === "core") {
 			return {
 				title: `WordPress core · ${site}`,
@@ -416,6 +422,41 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const note = r?.note ? ` ${r.note}.` : "";
 		return {
 			message: `${done} user ${login} on ${siteName}.${note}`,
+			type: "success",
+		};
+	}
+
+	function describeMuInstall(
+		job: JobOfKind<"mu_install">,
+		siteName: string,
+	): { message: string; type: NotificationType } {
+		const file = job.payload.file;
+		switch (job.status) {
+			case "queued":
+				return {
+					message: `Queued: installing ${file} on ${siteName}.`,
+					type: "running",
+				};
+			case "running":
+				return {
+					message: `Installing ${file} on ${siteName}…`,
+					type: "running",
+				};
+			case "interrupted":
+				return {
+					message: `Installing ${file} on ${siteName} was interrupted by a jman-api restart. Check the site's mu-plugins.`,
+					type: "error",
+				};
+		}
+		const r = job.results[0];
+		if (job.status === "failed" || r?.status === "failed") {
+			return {
+				message: `Failed to install ${file} on ${siteName}: ${truncate(r?.error || job.error || "Unknown error")}`,
+				type: "error",
+			};
+		}
+		return {
+			message: `Installed ${file} on ${siteName}.`,
 			type: "success",
 		};
 	}

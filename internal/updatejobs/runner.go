@@ -187,6 +187,12 @@ func Start(ctx context.Context) error {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
 			}
 			writeUserLedger(job, r, interruptedUserReason)
+		case job.Kind == models.UpdateJobKindMuInstall:
+			r := models.UpdateResult{Name: jobMuInstall(job).File, Status: models.UpdateFailed, Error: interruptedMuReason}
+			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, []models.UpdateResult{r}, nil, interruptedMuReason); err != nil {
+				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
+			}
+			writeMuLedger(job, r, interruptedMuReason)
 		case isPluginManagementJob(job):
 			if err := db.FinishUpdateJob(job.ID, models.UpdateJobInterrupted, nil, nil, interruptedActionReason); err != nil {
 				log.Printf("Update job %d: failed to record interruption: %v", job.ID, err)
@@ -298,6 +304,8 @@ func run(job models.UpdateJob) {
 			writeCoreLedger(job, "", err.Error(), "failed", "")
 		case models.IsUserKind(job.Kind):
 			failUserJob(job, err.Error())
+		case job.Kind == models.UpdateJobKindMuInstall:
+			failMuInstall(job, err.Error())
 		case isPluginManagementJob(job):
 			results := failAll(actionTargets(job), err.Error())
 			finishAction(job, models.UpdateJobFailed, results, err.Error())
@@ -320,6 +328,8 @@ func run(job models.UpdateJob) {
 		runPluginAction(job, *site)
 	case job.Kind == models.UpdateJobKindInstall:
 		runInstall(job, *site)
+	case job.Kind == models.UpdateJobKindMuInstall:
+		runMuInstall(job, *site)
 	case job.Kind == models.UpdateJobKindUserCreate:
 		runUserCreate(job, *site)
 		return
