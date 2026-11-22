@@ -43,6 +43,7 @@ func TestScanPageCode(t *testing.T) {
 	writeSiteFile(t, root, "index.php", "<?php")
 	stubScan(t, map[string]string{"a.example": root})
 	manifest := scanManifest("a.example")
+	manifest.Sites[0].IsWordpress = true
 	at := time.Now()
 	run := func() *models.AgentScan {
 		t.Helper()
@@ -94,6 +95,7 @@ func TestScanPageCodeAfterUpgrade(t *testing.T) {
 	writeSiteFile(t, root, "index.php", "<?php")
 	stubScan(t, map[string]string{"a.example": root})
 	manifest := scanManifest("a.example")
+	manifest.Sites[0].IsWordpress = true
 	at := time.Now()
 
 	// The older agent read no page code.
@@ -112,5 +114,20 @@ func TestScanPageCodeAfterUpgrade(t *testing.T) {
 	scans, _ = collectScansForSites(context.Background(), stateDir, manifest, at)
 	if got := strings.Join(rules(scans["id-a"].Findings), ", "); got != "page-code-suspicious high" {
 		t.Fatalf("findings after upgrade = %s", got)
+	}
+}
+
+// A site that isn't WordPress has no page code to read.
+func TestScanPageCodeSkipsOtherSites(t *testing.T) {
+	root, stateDir := t.TempDir(), t.TempDir()
+	writeSiteFile(t, root, "index.html", "<html></html>")
+	stubScan(t, map[string]string{"a.example": root})
+	readPageCode = func(context.Context, siteIdentity, string) (string, error) {
+		t.Fatal("read the page code of a site that isn't WordPress")
+		return "", nil
+	}
+	scans, _ := collectScansForSites(context.Background(), stateDir, scanManifest("a.example"), time.Now())
+	if s := scans["id-a"]; s == nil || s.Error != "" {
+		t.Fatalf("scan = %+v", s)
 	}
 }

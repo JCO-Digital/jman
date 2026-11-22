@@ -136,7 +136,9 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	scan.CarryChecksums(prev, walk)
 	addUserEntries(walk, id)
 	scan.SeedUserEntries(prev, walk.Entries)
-	if addPageCodeEntries(ctx, walk, prev, id, sitePath, site.Domain) {
+	if !site.IsWordpress {
+		fmt.Fprintln(out, "  page code: none, not a WordPress site")
+	} else if addPageCodeEntries(ctx, walk, prev, id, sitePath, site) {
 		fields := 0
 		for _, e := range walk.Entries {
 			if scan.IsPageCodePath(e.Path) {
