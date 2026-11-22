@@ -136,6 +136,18 @@ func checkScanSite(ctx context.Context, stateDir string, site models.AgentManife
 	scan.CarryChecksums(prev, walk)
 	addUserEntries(walk, id)
 	scan.SeedUserEntries(prev, walk.Entries)
+	if addPageCodeEntries(ctx, walk, prev, id, sitePath, site.Domain) {
+		fields := 0
+		for _, e := range walk.Entries {
+			if scan.IsPageCodePath(e.Path) {
+				fields++
+			}
+		}
+		fmt.Fprintf(out, "  page code: %d field(s) read from the database\n", fields)
+	} else {
+		fmt.Fprintln(out, "  page code: couldn't be read from the database (see the log); the baseline's is kept")
+	}
+	scan.SeedPageCodeEntries(prev, walk.Entries)
 	fmt.Fprintf(out, "  scanned: %d file(s) recorded", len(walk.Entries))
 	if walk.Omitted > 0 {
 		fmt.Fprintf(out, ", %d omitted", walk.Omitted)
