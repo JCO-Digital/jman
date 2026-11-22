@@ -107,6 +107,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	api.TriagePendingScanFindings()
 	// Remove snippets of findings triaged long ago, now and daily.
 	api.StartScanRetention(cmd.Context())
+	// Check every site's plugins for ones of unknown origin, now and daily.
+	api.StartUnknownPluginSweep(cmd.Context())
 
 	log.Printf("Starting jman-api (version: %s) on :%s", config.AppVersion, port)
 	return http.ListenAndServe(":"+port, handler)

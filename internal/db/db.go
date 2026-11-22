@@ -1020,6 +1020,16 @@ func initAPISchema() error {
 			},
 		},
 		{
+			// plugin_origins caches whether wordpress.org has a plugin
+			// slug, for the unknown-plugin finding.
+			Name: "plugin_origins",
+			Columns: map[string]string{
+				"slug":       "TEXT PRIMARY KEY",
+				"on_wporg":   "BOOLEAN NOT NULL",
+				"checked_at": "DATETIME NOT NULL",
+			},
+		},
+		{
 			Name: "site_traffic_hourly",
 			Columns: map[string]string{
 				"site_id":         "TEXT NOT NULL",

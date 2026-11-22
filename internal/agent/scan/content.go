@@ -120,6 +120,14 @@ var contentPatterns = []contentPattern{
 		name: "split-strings", severity: "high", hints: []string{"'.'", "' . '", `"."`, `" . "`},
 		re: regexp.MustCompile(`(?:'[^'\\\n]{1,4}'\s*\.\s*){8,}'[^'\\\n]{1,4}'|(?:"[^"\\\n$]{1,4}"\s*\.\s*){8,}"[^"\\\n$]{1,4}"`),
 	},
+	{
+		// Logs a visitor in as an account the code picks, on request
+		// input alone: a client site's backdoor plugin logged anyone with
+		// ?dev=devupdate in as the first administrator. Login plugins
+		// check a nonce, a password, a token or a capability first.
+		name: "login-bypass", severity: "high", hints: []string{"wp_set_auth_cookie"},
+		find: findLoginBypass,
+	},
 }
 
 var (
@@ -143,7 +151,33 @@ var (
 	hashEqualsRe    = regexp.MustCompile(`(?i)\bhash_equals\s*\(`)
 	hashedInputRe   = regexp.MustCompile(`(?i)\b(?:sha1|md5)\s*\(\s*\$_(?:GET|POST|COOKIE|REQUEST)\b|\bhash\s*\(\s*['"]\w+['"]\s*,\s*\$_(?:GET|POST|COOKIE|REQUEST)\b`)
 	requestInputRe  = regexp.MustCompile(`\$_(?:GET|POST|COOKIE|REQUEST)\b`)
+
+	// authCookieRe matches setting the login cookie.
+	authCookieRe = regexp.MustCompile(`(?i)(?:^|[^\w>:$\\])wp_set_auth_cookie\s*\(`)
+	// pickedAccountRe matches code choosing whom to log in as: a user ID
+	// written into a login call, the administrator role, or an account
+	// looked up by a login, email or ID written into the file.
+	pickedAccountRe = regexp.MustCompile(`(?i)\bwp_set_(?:auth_cookie|current_user)\s*\(\s*[1-9]\d*\s*[,)]|['"%]administrator['"%]|\bget_user_by\s*\(\s*['"](?:login|email|id|slug)['"]\s*,\s*(?:['"][^'"$\n]+['"]|\d+)\s*\)`)
+	// authCheckRe matches what checks who the visitor is before a login:
+	// a nonce, a password, a token (checked in place or by asking an
+	// identity provider), a capability, or WordPress's own authentication.
+	authCheckRe = regexp.MustCompile(`(?i)\b(?:wp_verify_nonce|check_admin_referer|check_ajax_referer|wp_check_password|password_verify|hash_equals|hash_hmac|wp_authenticate\w*|wp_signon|current_user_can|user_can|openssl_verify|wp_validate_auth_cookie|validate_\w*token\w*|verify_\w*token\w*|wp_remote_(?:get|post|request)|wp_safe_remote_(?:get|post|request))\s*\(`)
 )
+
+// findLoginBypass returns where the login cookie is set, when the file
+// takes request input, picks the account itself and checks nothing about
+// the visitor first.
+func findLoginBypass(b []byte) []int {
+	if !requestInputRe.Match(b) || !pickedAccountRe.Match(b) || authCheckRe.Match(b) {
+		return nil
+	}
+	for _, loc := range authCookieRe.FindAllIndex(b, -1) {
+		if !onCommentLine(b, skipSpace(b, loc)) {
+			return loc
+		}
+	}
+	return nil
+}
 
 // maxFetchDistance is how far before an eval() or include eval-remote and
 // include-remote look for the fetch of what it runs.

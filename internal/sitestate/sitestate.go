@@ -97,6 +97,7 @@ func ApplyPlugins(siteID string, plugins []models.WPPlugin, src Source, observed
 		return false, err
 	}
 
+	var installed []string
 	if hasKnown && src != SourceJob && db.GetAPIDB() != nil {
 		if changes := diffPlugins(known, plugins); len(changes) > 0 {
 			writeLedger(siteID, "plugin", src, map[string]any{
@@ -106,10 +107,24 @@ func ApplyPlugins(siteID string, plugins []models.WPPlugin, src Source, observed
 				"observed_at": observedAt.UTC().Format(time.RFC3339),
 				"since":       knownAt.UTC().Format(time.RFC3339),
 			})
+			for _, c := range changes {
+				if c.Change == "installed" {
+					installed = append(installed, c.Plugin)
+				}
+			}
 		}
+	}
+	if PluginsHook != nil && db.GetAPIDB() != nil {
+		PluginsHook(siteID, plugins, installed)
 	}
 	return true, nil
 }
+
+// PluginsHook, when set, is called with every plugin list ApplyPlugins
+// stores, and the regular plugins that appeared in it since the previous
+// list without jman installing them. On a site's first list, and after
+// one of jman's own jobs, installed is empty.
+var PluginsHook func(siteID string, plugins []models.WPPlugin, installed []string)
 
 // ApplyCore stores a site's observed core state and returns whether it did
 // (it skips a state observed before the stored one). Unless src is

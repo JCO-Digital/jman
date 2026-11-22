@@ -28,6 +28,9 @@ type State struct {
 	// UserChecked is set once the baseline holds the site user's crontab,
 	// startup files, programs and processes (see SeedUserEntries).
 	UserChecked bool `json:"user_checked,omitempty"`
+	// PageCodeChecked is set once the baseline holds the site's page code
+	// (see SeedPageCodeEntries).
+	PageCodeChecked bool `json:"page_code_checked,omitempty"`
 	// Plugins are the plugin versions at the last scan, by slug, which the
 	// next scan checks against their checksums.
 	Plugins map[string]string `json:"plugins,omitempty"`

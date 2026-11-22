@@ -290,8 +290,11 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 	scan.CarryChecksums(prev, walk)
 	addUserEntries(walk, id)
 	scan.SeedUserEntries(prev, walk.Entries)
+	pageCodeRead := addPageCodeEntries(ctx, walk, prev, id, sitePath, site.Domain)
+	scan.SeedPageCodeEntries(prev, walk.Entries)
 	state := scan.NewState(walk.Entries)
 	state.UserChecked = true
+	state.PageCodeChecked = pageCodeRead || (prev != nil && prev.PageCodeChecked)
 	state.CoreVersion, state.CoreLocale, state.Plugins = walk.CoreVersion, walk.CoreLocale, walk.Plugins
 	switch {
 	case walk.ContentChecked:
@@ -330,6 +333,10 @@ func clearedSince(prev *scan.State, walk *scan.Result, id siteIdentity, sitePath
 			ok, err := scan.UserPathExists(p, homeOf(id), id.Username)
 			return err == nil && ok
 		}
+		if scan.IsPageCodePath(p) {
+			// The page code was read, and this is no longer in it.
+			return false
+		}
 		_, err := os.Lstat(filepath.Join(sitePath, filepath.FromSlash(p)))
 		return err == nil
 	}
@@ -347,6 +354,34 @@ func homeOf(id siteIdentity) string {
 		return ""
 	}
 	return id.Home
+}
+
+// readPageCode runs scan.PageCodeEval on a site as its owner; a seam for
+// tests.
+var readPageCode = func(ctx context.Context, id siteIdentity, sitePath string) (string, error) {
+	runner, err := newRunner()
+	if err != nil {
+		return "", err
+	}
+	return runner.run(ctx, id, sitePath, "eval", scan.PageCodeEval)
+}
+
+// addPageCodeEntries adds the site's page code, read from its database, to
+// a walk, and reports whether it could be read. If not, the previous
+// baseline's page code is carried over, so it isn't reported as removed.
+func addPageCodeEntries(ctx context.Context, walk *scan.Result, prev *scan.State, id siteIdentity, sitePath, domain string) bool {
+	out, err := readPageCode(ctx, id, sitePath)
+	var entries []scan.Entry
+	if err == nil {
+		entries, err = scan.PageCodeEntries(out, id.UID)
+	}
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to read the page code of %s: %v", domain, err)
+		walk.Entries = scan.CarryPageCode(prev, walk.Entries)
+		return false
+	}
+	walk.Entries = append(walk.Entries, entries...)
+	return true
 }
 
 // addUserEntries adds what the agent reads as root about the site user to a

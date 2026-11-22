@@ -25,7 +25,7 @@ var scanIncidentMinRank = config.ScanSeverityRank("medium")
 // change to it, which a path acknowledgement can cover; for new-admin and
 // new-app-password, the path names the account or password
 // ("users/<login>", "users/<login>/app-passwords/<uuid>").
-var scanStateRules = map[string]bool{"stray-file": true, "foreign-owner": true, "unreadable": true, ruleNewAdmin: true, ruleNewAppPassword: true}
+var scanStateRules = map[string]bool{"stray-file": true, "foreign-owner": true, "unreadable": true, ruleNewAdmin: true, ruleNewAppPassword: true, ruleUnknownPlugin: true}
 
 // scanTriageBy is who status changes jman-api makes on its own are
 // recorded as.

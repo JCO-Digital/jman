@@ -7,6 +7,7 @@ const stateRules = new Set([
 	"unreadable",
 	"new-admin",
 	"new-app-password",
+	"unknown-plugin",
 ]);
 
 export function isStateRule(rule: string): boolean {
