@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.43.0 (2026-11-23)
+
+#### Features
+
+- install mu-plugins through jman-api jobs (61542e7)
+
+#### Bug Fixes
+
+- web: add mu-plugin to the ledger update types (341937b)
+
 ### 7.42.1 (2026-11-19)
 
 #### Bug Fixes
@@ -2423,4 +2433,3 @@
 - Add GitHub Actions build workflow and clean up files (341d946)
 - Add alias generation and command parsing utilities (082a493)
 - Basic server fetch (9f29cd8)
-
