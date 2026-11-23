@@ -41,10 +41,10 @@ var (
 
 // runsTextDiff reports whether a job changes the site's code, so its
 // pages are compared: plugin updates, plugin installs (which include ZIP
-// updates) and core updates.
+// updates), core updates and mu-plugin installs.
 func runsTextDiff(job models.UpdateJob) bool {
 	switch job.Kind {
-	case models.UpdateJobKindPlugins, models.UpdateJobKindInstall, models.UpdateJobKindCore:
+	case models.UpdateJobKindPlugins, models.UpdateJobKindInstall, models.UpdateJobKindCore, models.UpdateJobKindMuInstall:
 		return true
 	}
 	return false

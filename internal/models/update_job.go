@@ -3,6 +3,7 @@ package models
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -24,6 +25,9 @@ const (
 	// User management kinds create or delete one WordPress user.
 	UpdateJobKindUserCreate = "user_create"
 	UpdateJobKindUserDelete = "user_delete"
+	// UpdateJobKindMuInstall writes one file into wp-content/mu-plugins:
+	// the bojaco mu-plugin or a bojaco-compat plugin.
+	UpdateJobKindMuInstall = "mu_install"
 )
 
 // IsPluginActionKind reports whether kind is one of the plugin management
@@ -71,8 +75,8 @@ const (
 // UpdateJob is one background change on a single site: `wp plugin update`
 // for a set of plugins (Kind "plugins"), `wp core update` (Kind "core"),
 // activating, deactivating, deleting or uninstalling a set of plugins,
-// installing one plugin (Kind "install"), or creating or deleting a
-// WordPress user. What to change is in Payload, whose type depends on Kind
+// installing one plugin (Kind "install"), creating or deleting a
+// WordPress user, or writing a file into mu-plugins (Kind "mu_install"). What to change is in Payload, whose type depends on Kind
 // (see the *Payload types).
 type UpdateJob struct {
 	ID      int64           `json:"id"`
@@ -80,8 +84,9 @@ type UpdateJob struct {
 	SiteID  string          `json:"site_id"` // site UUID
 	Status  string          `json:"status"`
 	Payload json.RawMessage `json:"payload"`
-	// UploadPath is the local path of an uploaded ZIP for an install job.
-	// It's removed once the job has finished.
+	// UploadPath is the local path of an uploaded ZIP for an install job,
+	// or of the file a mu-plugin install job writes. It's removed once the
+	// last job that uses it has finished.
 	UploadPath string `json:"-"`
 	// Results has one entry per requested plugin (or a single "WordPress"
 	// entry for core jobs, or the user's login for user jobs) once the job
@@ -174,6 +179,33 @@ type InstallPayload struct {
 	// FromSite names the site the ZIP's files were copied from, if they
 	// were.
 	FromSite string `json:"from_site,omitempty"`
+}
+
+// MuInstallPayload is the payload of mu-plugin install jobs. The file's
+// contents are in the job's upload, which jman-api fetched or was sent
+// and whose hash it added to the scan allowlist.
+type MuInstallPayload struct {
+	// File is the file's name in wp-content/mu-plugins, e.g. "bojaco.php"
+	// or "compat-woocommerce.php".
+	File string `json:"file"`
+	// Source is the URL jman-api downloaded the file from, or the name of
+	// the uploaded file.
+	Source string `json:"source"`
+	SHA256 string `json:"sha256"`
+}
+
+// MuPluginBojaco is the bojaco mu-plugin's file name in mu-plugins.
+const MuPluginBojaco = "bojaco.php"
+
+var compatFileRegex = regexp.MustCompile(`^compat-[a-z0-9][a-z0-9-]*\.php$`)
+
+// CompatFile is the file name of the bojaco-compat plugin for a plugin.
+func CompatFile(slug string) string { return "compat-" + slug + ".php" }
+
+// ValidMuPluginFile reports whether name is a file mu-plugin install jobs
+// may write: the bojaco mu-plugin or a bojaco-compat plugin.
+func ValidMuPluginFile(name string) bool {
+	return name == MuPluginBojaco || compatFileRegex.MatchString(name)
 }
 
 // UserCreatePayload is the payload of user create jobs. The password is
