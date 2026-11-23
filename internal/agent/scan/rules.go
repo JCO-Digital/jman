@@ -16,7 +16,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "12"
+const RuleSetVersion = "13"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -41,22 +41,28 @@ const (
 	RuleStartupChange  = "startup-change"
 	RuleHomeBinary     = "home-binary"
 	RuleDisguised      = "disguised-process"
+	// RulePageCodeChange and RulePageCodeSuspicious are about page code
+	// read from the database (see PageCodeEval).
+	RulePageCodeChange     = "page-code-change"
+	RulePageCodeSuspicious = "page-code-suspicious"
 )
 
 var severities = map[string]string{
-	RuleUploadsPHP:     "high",
-	RuleMuPlugin:       "medium",
-	RuleDropin:         "medium",
-	RuleConfig:         "medium",
-	RuleAutoPrepend:    "high",
-	RuleForeignOwner:   "medium",
-	RuleStrayFile:      "low",
-	RuleUnreadable:     "low",
-	RuleCoreModified:   "high",
-	RuleCoreUnknown:    "high",
-	RuleCoreTruncated:  "low", // a broken install, not a compromise: the file is core's own
-	RulePluginModified: "high",
-	RulePluginUnknown:  "high",
+	RuleUploadsPHP:         "high",
+	RulePageCodeChange:     "medium",
+	RulePageCodeSuspicious: "high",
+	RuleMuPlugin:           "medium",
+	RuleDropin:             "medium",
+	RuleConfig:             "medium",
+	RuleAutoPrepend:        "high",
+	RuleForeignOwner:       "medium",
+	RuleStrayFile:          "low",
+	RuleUnreadable:         "low",
+	RuleCoreModified:       "high",
+	RuleCoreUnknown:        "high",
+	RuleCoreTruncated:      "low", // a broken install, not a compromise: the file is core's own
+	RulePluginModified:     "high",
+	RulePluginUnknown:      "high",
 	// RuleSuspicious's severity is that of the worst content rule matched.
 	RuleSuspicious: "low",
 	// Outside the site's files: the site user's crontab, shell startup
@@ -110,6 +116,16 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 		change := "new"
 		if existed {
 			change = "changed"
+		}
+
+		if IsPageCodePath(e.Path) {
+			if changed {
+				flag(RulePageCodeChange, change+" page code in the database: "+strings.TrimPrefix(e.Path, PageCodePrefix))
+			}
+			if len(e.Content) > 0 && (changed || !slices.Equal(old.Content, e.Content)) {
+				flag(RulePageCodeSuspicious, e.ContentDetail)
+			}
+			continue
 		}
 
 		if !e.Dir {
@@ -207,7 +223,7 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 // reporting on a first scan too, when there's nothing to compare against.
 // (The service's first scan has no checksums for core files yet.)
 var stateRules = map[string]bool{RuleForeignOwner: true, RuleStrayFile: true, RuleUnreadable: true, RuleCoreModified: true, RuleCoreUnknown: true, RuleCoreTruncated: true, RulePluginModified: true, RulePluginUnknown: true, RuleSuspicious: true,
-	RulePersistence: true, RuleHomeBinary: true, RuleDisguised: true}
+	RulePersistence: true, RuleHomeBinary: true, RuleDisguised: true, RulePageCodeSuspicious: true}
 
 // EvaluateFirst returns what the rules flag on a scan without a baseline:
 // only the state rules. The change rules stay quiet until there is a
@@ -311,6 +327,12 @@ func changeRules(e Entry) []string {
 		rules = append(rules, RuleDropin)
 	case isConfig(e.Path):
 		rules = append(rules, RuleConfig)
+	case IsPageCodePath(e.Path):
+		rules = append(rules, RulePageCodeChange)
+		if len(e.Content) > 0 {
+			rules = append(rules, RulePageCodeSuspicious)
+		}
+		return rules
 	}
 	if len(e.Directives) > 0 {
 		rules = append(rules, RuleAutoPrepend)

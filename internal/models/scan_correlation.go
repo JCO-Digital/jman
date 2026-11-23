@@ -20,8 +20,8 @@ var (
 	scanSignalKinds = map[string]string{
 		"uploads-php": "code", "core-unknown-file": "code", "core-modified": "code",
 		"plugin-modified": "code", "plugin-unknown-file": "code", "mu-plugin-change": "code",
-		"dropin-change": "code", "auto-prepend": "code", "suspicious-code": "code",
-		"new-admin": "accounts", "new-app-password": "accounts",
+		"dropin-change": "code", "auto-prepend": "code", "suspicious-code": "code", "page-code-suspicious": "code",
+		"new-admin": "accounts", "new-app-password": "accounts", "unknown-plugin": "code",
 		"persistence": "server", "home-binary": "server", "disguised-process": "server",
 	}
 )

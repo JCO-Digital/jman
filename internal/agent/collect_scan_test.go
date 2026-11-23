@@ -38,6 +38,9 @@ func stubScan(t *testing.T, roots map[string]string) {
 	oldUser := readUserEntries
 	readUserEntries = func(siteIdentity) []scan.Entry { return nil }
 	t.Cleanup(func() { readUserEntries = oldUser })
+	oldPageCode := readPageCode
+	readPageCode = func(context.Context, siteIdentity, string) (string, error) { return "{}", nil }
+	t.Cleanup(func() { readPageCode = oldPageCode })
 	lastScanMu.Lock()
 	lastScan = map[string]time.Time{}
 	lastScanMu.Unlock()

