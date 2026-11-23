@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.44.0 (2026-11-23)
+
+#### Features
+
+- agent: read page code in --check-scan (5ff96d8)
+- catch backdoor plugins, login bypasses and skimmers in page code (4b9557f)
+
+#### Bug Fixes
+
+- agent: read page code only on WordPress sites (dbaefea)
+
 ## 7.43.0 (2026-11-23)
 
 #### Features
