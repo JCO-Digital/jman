@@ -433,17 +433,39 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 		}
 	}
 	jobErr := strings.Join(errs, "; ")
+	runFailed := false
+	for _, r := range byName {
+		runFailed = runFailed || r.Status == models.UpdateFailed
+	}
 	for i, job := range jobs {
 		requested := jobPlugins(job)
 		results := make([]models.UpdateResult, len(requested))
 		for k, p := range requested {
 			results[k] = byName[p.Name]
 		}
+		// When plugins failed, the error belongs to the jobs that have
+		// them: a job of a combined run whose plugins all updated isn't
+		// failed by another job's plugin. Without failed plugins it's a
+		// warning about the site (e.g. maintenance mode) for every job.
+		errMsg := jobErr
+		if runFailed && !anyFailed(results) {
+			errMsg = ""
+		}
 		storeAttemptCalls(job, attempts)
-		finish(job, models.UpdateJobDone, results, jobErr)
+		finish(job, models.UpdateJobDone, results, errMsg)
 		writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable[i]), "")
 	}
 	logJobAttempts(jobs, site, wpVersion, attempts)
+}
+
+// anyFailed reports whether any result failed.
+func anyFailed(results []models.UpdateResult) bool {
+	for _, r := range results {
+		if r.Status == models.UpdateFailed {
+			return true
+		}
+	}
+	return false
 }
 
 // mergePlugins returns the plugins of jobs, each once, in the order they

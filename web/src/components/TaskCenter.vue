@@ -197,7 +197,7 @@ onUnmounted(() => {
 										<button
 											v-if="canPrioritize(e)"
 											type="button"
-											class="task-link-btn"
+											class="task-link"
 											title="Move to high priority: runs before normal and low priority jobs"
 											:disabled="
 												prioritizing.has(e.task!.jobId)

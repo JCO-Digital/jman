@@ -41,7 +41,9 @@ a set of workers take them from it. The scheduling is in
    runs as one `wp plugin update` call with one text diff and one exposure
    sync; each job still gets its own results and its own ledger entry
    (with its own user), and they all get the same text diff and the wp-cli
-   output of the shared call when it failed. The update log
+   output of the shared call when it failed. Only the jobs that have a
+   failed plugin get the call's error; a job whose plugins all updated
+   stays successful. The update log
    (`docs/update-log.md`) has each call once, with every job in
    `job_ids`. The jobs record the first job's ID as `batch_id`.
 

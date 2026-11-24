@@ -186,6 +186,13 @@ func TestUpdateLogRecordsCombinedRunOnce(t *testing.T) {
 			t.Errorf("job %d calls = %+v, want the shared failed call", j.ID, stored.Calls)
 		}
 	}
+	// Only the job with the failed plugin is failed by the shared call.
+	if stored := storedJob(t, first.ID); stored.Error == "" {
+		t.Error("job with the failed plugin has no error")
+	}
+	if stored := storedJob(t, second.ID); stored.Error != "" {
+		t.Errorf("job whose plugin updated has error %q, want none", stored.Error)
+	}
 	lines := readUpdateLog(t)
 	if len(lines) != 1 {
 		t.Fatalf("got %d log lines, want the one shared call", len(lines))

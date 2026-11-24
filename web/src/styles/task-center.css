@@ -213,8 +213,13 @@
 		color: var(--primary);
 		cursor: pointer;
 
-		&:hover {
+		&:hover:not(:disabled) {
 			text-decoration: underline;
+		}
+
+		&:disabled {
+			color: var(--text-muted);
+			cursor: default;
 		}
 	}
 }
@@ -256,23 +261,4 @@
 .task-priority--urgent {
 	background: var(--warning-bg);
 	color: var(--warning-text);
-}
-
-/* An action in a task's meta line that looks like its links. */
-.task-link-btn {
-	padding: 0;
-	border: 0;
-	background: none;
-	font: inherit;
-	color: var(--primary);
-	cursor: pointer;
-
-	&:hover:not(:disabled) {
-		text-decoration: underline;
-	}
-
-	&:disabled {
-		color: var(--text-muted);
-		cursor: default;
-	}
 }
