@@ -40,8 +40,10 @@ a set of workers take them from it. The scheduling is in
    `allow_major`. The first job of another kind ends the group. The group
    runs as one `wp plugin update` call with one text diff and one exposure
    sync; each job still gets its own results and its own ledger entry
-   (with its own user), and they all get the same text diff. The jobs
-   record the first job's ID as `batch_id`.
+   (with its own user), and they all get the same text diff and the wp-cli
+   output of the shared call when it failed. The update log
+   (`docs/update-log.md`) has each call once, with every job in
+   `job_ids`. The jobs record the first job's ID as `batch_id`.
 
 ## Default priorities
 
