@@ -135,8 +135,8 @@ func applyScanCleared(siteID string, cleared []models.ScanCleared, at time.Time)
 }
 
 // ListScanFindingsHandler handles GET /api/scan/findings: the findings of
-// file scans, most recently seen first. ?site_id=, ?incident_id=, ?status=
-// and ?sha256= filter them, ?unassigned=1 keeps the ones without an
+// file scans, most recently seen first. ?site_id=, ?incident_id=, ?status=,
+// ?sha256=, ?rule= and ?path= (exact) filter them, ?unassigned=1 keeps the ones without an
 // incident, and ?limit= (default 200, at most 1000) caps how many are
 // returned.
 func ListScanFindingsHandler(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +145,8 @@ func ListScanFindingsHandler(w http.ResponseWriter, r *http.Request) {
 		SiteID:     q.Get("site_id"),
 		Status:     q.Get("status"),
 		SHA256:     q.Get("sha256"),
+		Rule:       q.Get("rule"),
+		Path:       q.Get("path"),
 		Unassigned: q.Get("unassigned") == "1" || q.Get("unassigned") == "true",
 		Limit:      200,
 	}

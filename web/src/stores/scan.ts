@@ -14,6 +14,9 @@ export interface ScanFindingQuery {
 	incident_id?: number;
 	status?: string;
 	sha256?: string;
+	rule?: string;
+	/** An exact path. */
+	path?: string;
 	unassigned?: boolean;
 	limit?: number;
 }

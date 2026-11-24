@@ -1,14 +1,14 @@
 name: Release version
 
+# Releases are manual: Actions → Release version → Run workflow, or
+# `gh workflow run release.yml`. foonver bumps the version from every commit
+# since the last tag, so the merges since the last release ship together.
 on:
-  push:
-    branches:
-      - main
-      - "push-action/**"
   workflow_dispatch:
 
 jobs:
   release:
+    if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
     runs-on: ubuntu-latest

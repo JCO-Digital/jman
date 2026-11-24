@@ -175,6 +175,19 @@ func TestSecurityIncidentLifecycle(t *testing.T) {
 	// on that site, whatever the file holds.
 	report(two, foreign)
 	f := findingByPath(t, listScanFindings(t, "?site_id="+two), "wp-content/x")
+	// The UI finds the same path on other sites by rule and path.
+	same := listScanFindings(t, "?status=open&rule=foreign-owner&path=wp-content/x")
+	if len(same) == 0 || !slices.ContainsFunc(same, func(s models.StoredScanFinding) bool { return s.ID == f.ID }) {
+		t.Fatalf("findings by rule and path = %+v", same)
+	}
+	for _, s := range same {
+		if s.Rule != "foreign-owner" || s.Path != "wp-content/x" {
+			t.Fatalf("finding outside the rule and path filter = %+v", s)
+		}
+	}
+	if other := listScanFindings(t, "?rule=stray-file&path=wp-content/x"); len(other) != 0 {
+		t.Fatalf("findings of another rule = %+v", other)
+	}
 	w = postJSON(t, AddScanPathAcksHandler, "POST", "/api/scan/acks", map[string]any{"finding_ids": []int64{f.ID}, "reason": "deploy user"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("ack: %d %s", w.Code, w.Body.String())

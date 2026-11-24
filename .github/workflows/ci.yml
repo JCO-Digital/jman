@@ -4,6 +4,10 @@ on:
   pull_request:
     branches:
       - main
+  # main is no longer built by the release workflow on every merge.
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -33,7 +37,7 @@ jobs:
           payload: |
             {
               "channel": "C0ANZD53XAS",
-              "text": ${{ toJSON(format('❌ jman CI {0} failed on PR.', github.sha)) }}
+              "text": ${{ toJSON(format('❌ jman CI {0} failed on {1}.', github.sha, github.event_name == 'push' && 'main' || 'PR')) }}
             }
 
   test-ui:
@@ -66,5 +70,5 @@ jobs:
           payload: |
             {
               "channel": "C0ANZD53XAS",
-              "text": ${{ toJSON(format('❌ jman UI CI {0} failed on PR.', github.sha)) }}
+              "text": ${{ toJSON(format('❌ jman UI CI {0} failed on {1}.', github.sha, github.event_name == 'push' && 'main' || 'PR')) }}
             }

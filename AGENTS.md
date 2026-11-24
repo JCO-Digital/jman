@@ -56,7 +56,7 @@
 
 ### Build System
 
-- **Makefile**: Provides targets for building all binaries (`build`), testing (`test`), and generating shell completions. Releases are distributed only through GitHub, and `jman update` installs them.
+- **Makefile**: Provides targets for building all binaries (`build`), testing (`test`), and generating shell completions. Releases are distributed only through GitHub, and `jman update` installs them. Merging to `main` doesn't release: the release workflow (`.github/workflows/release.yml`, which also deploys jman-api and the UI) is run by hand from `main` (`gh workflow run release.yml`).
 - **LDFlags**: Used during build to inject the application version into `internal/config.AppVersion`.
 
 ### Local Development

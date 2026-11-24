@@ -576,7 +576,7 @@ Each finding also has a `status`: `open`, `closed` (dismissed, or its incident w
 
 `cleared_at` and `cleared_detail` are set when the agent reports that the finding no longer holds: the file was `removed`, `replaced`, is `no longer flagged` (still on disk, such as a foreign-owned file given back to the site's owner), `now owned by the site's owner` or `now readable`. Clearing doesn't change the status or close anything; finding the file again unsets it. An incident's summary counts its cleared findings, such as "2 open findings: 2 uploads-php (1 cleared)".
 
-`GET /api/scan/findings` takes these filters as well: `?incident_id=`, `?status=`, `?sha256=` and `?unassigned=1` (findings without an incident).
+`GET /api/scan/findings` takes these filters as well: `?incident_id=`, `?status=`, `?sha256=`, `?rule=`, `?path=` (exact) and `?unassigned=1` (findings without an incident).
 
 `GET /api/scan/sites` returns the latest scan of every scanned site: `site_id`, `scanned_at`, `rule_set_version`, `entries` (files in the baseline), `omitted`, `duration_ms`, `error` (set when the last scan failed) and `rebaselined_at`.
 
@@ -590,7 +590,7 @@ New findings alert by severity: `scanSlackSeverity` (default `high`) and above i
 
 `POST /api/scan/allowlist` with `{"finding_id": 12, "reason": "…", "close_matching": false}` trusts the finding's file hash on every site, and marks the finding allowlisted. With `close_matching`, every open finding with that hash is marked too. Findings of an allowlisted hash are marked when they're reported, and don't open incidents. Each entry records the reason, who added it and when, and the site, rule, path and snippet of the finding it came from. `GET /api/scan/allowlist` (basic level; `?include_removed=1` for removed entries) lists them; `DELETE /api/scan/allowlist/{id}` removes one, keeping it for the record with who removed it and when.
 
-`POST /api/scan/acks` with `{"finding_ids": [12, 13], "reason": "…"}` acknowledges the paths of `stray-file`, `foreign-owner` and `unreadable` findings on their sites: those rules don't flag the path there again, whatever the file holds. `GET /api/scan/acks` (basic level; `?site_id=`, `?include_removed=1`) and `DELETE /api/scan/acks/{id}` work as for the allowlist.
+`POST /api/scan/acks` with `{"finding_ids": [12, 13], "reason": "…"}` acknowledges the paths of `stray-file`, `foreign-owner`, `unreadable`, `new-admin`, `new-app-password` and `unknown-plugin` findings on their sites: those rules don't flag the path there again, whatever the file holds. `GET /api/scan/acks` (basic level; `?site_id=`, `?include_removed=1`) and `DELETE /api/scan/acks/{id}` work as for the allowlist.
 
 `POST /api/scan/findings/close` with `{"finding_ids": [12]}` dismisses findings.
 

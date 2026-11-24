@@ -100,6 +100,8 @@ type ScanFindingFilter struct {
 	IncidentID int64
 	Status     string
 	SHA256     string
+	Rule       string
+	Path       string
 	// Unassigned keeps only findings without an incident.
 	Unassigned bool
 	Limit      int
@@ -153,6 +155,14 @@ func ListScanFindings(filter ScanFindingFilter) ([]models.StoredScanFinding, err
 	if filter.SHA256 != "" {
 		where = append(where, "sha256 = ?")
 		args = append(args, filter.SHA256)
+	}
+	if filter.Rule != "" {
+		where = append(where, "rule = ?")
+		args = append(args, filter.Rule)
+	}
+	if filter.Path != "" {
+		where = append(where, "path = ?")
+		args = append(args, filter.Path)
 	}
 	if filter.Unassigned {
 		where = append(where, "incident_id IS NULL")
