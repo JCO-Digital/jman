@@ -69,7 +69,8 @@ type CoreUpdateResult struct {
 }
 
 // UpdateCore updates WordPress core. If major is true, it updates to the latest version (major/minor), otherwise it only updates to the latest minor version. It returns the new version and language if an update was performed.
-func UpdateCore(site models.CliSite, major bool) (CoreUpdateResult, error) {
+// rec, if not nil, gets the update and database update calls recorded.
+func UpdateCore(site models.CliSite, major bool, rec *[]models.WPCLICall) (CoreUpdateResult, error) {
 	result := CoreUpdateResult{
 		Success:  false,
 		Version:  "unknown",
@@ -85,9 +86,9 @@ func UpdateCore(site models.CliSite, major bool) (CoreUpdateResult, error) {
 		args = append(args, "--minor")
 	}
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, Timeout: WriteTimeout}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, Timeout: WriteTimeout, Record: rec}, args...)
 	if err != nil {
-		return result, fmt.Errorf("failed to update core: %w (stderr: %s)", err, res.Error)
+		return result, fmt.Errorf("failed to update core: %s", shortError(res.Error, err))
 	}
 
 	// return early if already up to date to avoid printing unnecessary output
@@ -104,13 +105,16 @@ func UpdateCore(site models.CliSite, major bool) (CoreUpdateResult, error) {
 	}
 
 	if !strings.Contains(res.Output, "Success: WordPress updated successfully.") {
-		return result, fmt.Errorf("core update did not complete successfully (stderr: %s)", res.Error)
+		if msg := Messages(res.Error); msg != "" {
+			return result, fmt.Errorf("core update did not complete successfully: %s", msg)
+		}
+		return result, fmt.Errorf("core update did not complete successfully")
 	}
 	result.Success = true
 
-	res, err = RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, Timeout: WriteTimeout}, "core", "update-db")
+	res, err = RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, Timeout: WriteTimeout, Record: rec}, "core", "update-db")
 	if err != nil {
-		return result, fmt.Errorf("failed to update core database: %w (stderr: %s)", err, res.Error)
+		return result, fmt.Errorf("failed to update core database: %s", shortError(res.Error, err))
 	}
 	verb.Print(verb.Verbose, res.Output)
 
@@ -124,4 +128,29 @@ func CoreVersion(site models.CliSite) (string, error) {
 		return "", fmt.Errorf("failed to show core version: %w (stderr: %s)", err, res.Error)
 	}
 	return strings.TrimSpace(res.Output), nil
+}
+
+// CLIPHPVersion returns the version of the PHP that runs wp-cli for the
+// site, which updates run on. It can differ from the site's own PHP-FPM
+// version: wp-cli uses whatever `php` the site user's shell finds.
+func CLIPHPVersion(site models.CliSite) (string, error) {
+	res, err := RunWP(CliOptions{SSH: site.SSH, Path: site.Path}, "cli", "info", "--format=json")
+	if err != nil {
+		return "", fmt.Errorf("failed to get wp-cli info: %s", shortError(res.Error, err))
+	}
+	return parseCLIInfoPHPVersion(res.Output)
+}
+
+func parseCLIInfoPHPVersion(output string) (string, error) {
+	idx := strings.Index(output, "{")
+	if idx == -1 {
+		return "", fmt.Errorf("no JSON object in wp-cli info output")
+	}
+	var info struct {
+		PHPVersion string `json:"php_version"`
+	}
+	if err := json.NewDecoder(strings.NewReader(output[idx:])).Decode(&info); err != nil {
+		return "", fmt.Errorf("failed to parse wp-cli info: %w", err)
+	}
+	return info.PHPVersion, nil
 }

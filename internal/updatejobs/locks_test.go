@@ -48,11 +48,11 @@ func TestRunLockedPlugins(t *testing.T) {
 	setupRunnerTest(t)
 
 	var normal, patch []string
-	updatePlugins = func(_ models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		normal = plugins
 		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0.0", NewVersion: "2.0.0", Status: "Updated"}}, nil
 	}
-	updatePluginsPatch = func(_ models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+	updatePluginsPatch = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		patch = plugins
 		return []wpcli.UpdateResult{{Name: "b", OldVersion: "1.0.0", NewVersion: "1.0.3", Status: "Updated"}}, nil
 	}
@@ -122,11 +122,11 @@ func TestRunLockedPlugins(t *testing.T) {
 func TestRunLockedPluginWithoutFixRelease(t *testing.T) {
 	setupRunnerTest(t)
 	lock(t, "")
-	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		t.Error("locked plugins must not get a normal update")
 		return nil, nil
 	}
-	updatePluginsPatch = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) { return nil, nil }
+	updatePluginsPatch = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) { return nil, nil }
 	updatePackages = func(models.CliSite) (map[string]string, error) {
 		return map[string]string{"b": wporgPackage}, nil
 	}
@@ -144,11 +144,11 @@ func TestRunLockedPluginAllowMajor(t *testing.T) {
 	setupRunnerTest(t)
 	lock(t, "b")
 	var normal []string
-	updatePlugins = func(_ models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		normal = plugins
 		return []wpcli.UpdateResult{{Name: "b", OldVersion: "1.0.0", NewVersion: "2.0.0", Status: "Updated"}}, nil
 	}
-	updatePluginsPatch = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePluginsPatch = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		t.Error("a confirmed major update must not be limited to fix releases")
 		return nil, nil
 	}
@@ -168,10 +168,10 @@ func TestRunLockedPluginAllowMajor(t *testing.T) {
 func TestRunLockedPluginsSourceCheckFails(t *testing.T) {
 	setupRunnerTest(t)
 	lock(t, "b")
-	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0.0", NewVersion: "2.0.0", Status: "Updated"}}, nil
 	}
-	updatePluginsPatch = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePluginsPatch = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		t.Error("no patch update without a source check")
 		return nil, nil
 	}
@@ -192,7 +192,7 @@ func TestRunCoreJobOnLockedSite(t *testing.T) {
 			setupRunnerTest(t)
 			lock(t, "")
 			var gotMajor bool
-			updateCore = func(_ models.CliSite, major bool) (wpcli.CoreUpdateResult, error) {
+			updateCore = func(_ models.CliSite, major bool, _ *[]models.WPCLICall) (wpcli.CoreUpdateResult, error) {
 				gotMajor = major
 				return wpcli.CoreUpdateResult{Success: true, Version: "6.4.3"}, nil
 			}
@@ -223,7 +223,7 @@ func TestRunCoreJobWithOnlyPluginLocks(t *testing.T) {
 	setupRunnerTest(t)
 	lock(t, "b")
 	var gotMajor bool
-	updateCore = func(_ models.CliSite, major bool) (wpcli.CoreUpdateResult, error) {
+	updateCore = func(_ models.CliSite, major bool, _ *[]models.WPCLICall) (wpcli.CoreUpdateResult, error) {
 		gotMajor = major
 		return wpcli.CoreUpdateResult{Success: true, Version: "6.5.0"}, nil
 	}

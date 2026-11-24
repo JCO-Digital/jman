@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -81,8 +82,9 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 	return plugins, nil
 }
 
-// AddPlugin installs and optionally activates a plugin.
-func AddPlugin(site models.CliSite, plugin string, activate bool) (bool, error) {
+// AddPlugin installs and optionally activates a plugin. rec, if not nil,
+// gets the wp-cli call recorded.
+func AddPlugin(site models.CliSite, plugin string, activate bool, rec *[]models.WPCLICall) (bool, error) {
 	args := []string{"plugin", "install", plugin}
 
 	// If the plugin is a ZIP file (local or URL), add --force to allow updating.
@@ -94,14 +96,14 @@ func AddPlugin(site models.CliSite, plugin string, activate bool) (bool, error) 
 	if activate {
 		args = append(args, "--activate")
 	}
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: WriteTimeout}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: WriteTimeout, Record: rec}, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
 		} else if strings.Contains(res.Error, "Destination folder already exists.") {
 			return false, fmt.Errorf("plugin already installed")
 		}
-		return false, fmt.Errorf("failed to install plugin: %w (stderr: %s)", err, res.Error)
+		return false, fmt.Errorf("failed to install plugin: %s", shortError(res.Error, err))
 	}
 	return strings.Contains(res.Output, "Success:"), nil
 }
@@ -137,9 +139,11 @@ const perPluginWriteTimeout = 2 * time.Minute
 
 // UpdatePlugin updates one or more plugins in a single WP-CLI call. On
 // failure the error is an *UpdateFailure, and the returned results still
-// hold whatever per-plugin outcomes WP-CLI reported before failing.
-func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error) {
-	return updatePlugins(site, plugins, false)
+// hold whatever per-plugin outcomes WP-CLI reported before failing. A
+// plugin that failed has wp-cli's errors and warnings as its Error. rec,
+// if not nil, gets the update call recorded.
+func UpdatePlugin(site models.CliSite, plugins []string, rec *[]models.WPCLICall) ([]UpdateResult, error) {
+	return updatePlugins(site, plugins, false, rec)
 }
 
 // UpdatePluginPatch is UpdatePlugin limited to fix releases: each plugin is
@@ -147,11 +151,11 @@ func UpdatePlugin(site models.CliSite, plugins []string) ([]UpdateResult, error)
 // (e.g. 9.3.0 → 9.3.3 even if 9.4.1 is the latest), looked up on
 // WordPress.org. Plugins with no such release, or that aren't on
 // WordPress.org, are left alone and don't appear in the results.
-func UpdatePluginPatch(site models.CliSite, plugins []string) ([]UpdateResult, error) {
-	return updatePlugins(site, plugins, true)
+func UpdatePluginPatch(site models.CliSite, plugins []string, rec *[]models.WPCLICall) ([]UpdateResult, error) {
+	return updatePlugins(site, plugins, true, rec)
 }
 
-func updatePlugins(site models.CliSite, plugins []string, patchOnly bool) ([]UpdateResult, error) {
+func updatePlugins(site models.CliSite, plugins []string, patchOnly bool, rec *[]models.WPCLICall) ([]UpdateResult, error) {
 	if len(plugins) == 0 {
 		return nil, nil
 	}
@@ -163,29 +167,31 @@ func updatePlugins(site models.CliSite, plugins []string, patchOnly bool) ([]Upd
 	if patchOnly {
 		args = append(args, "--patch")
 	}
-	args = append(args, "--format=json")
+	// No --format=json: with it (or csv) wp-cli silences the upgrader, and
+	// a failed plugin says only "Error", never why. Its table, tab
+	// separated when not on a terminal, keeps the upgrader's warnings
+	// ("Download failed. Unauthorized", "some files could not be copied")
+	// on stderr.
 
 	timeout := WriteTimeout + time.Duration(len(plugins)-1)*perPluginWriteTimeout
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, Timeout: timeout}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, Timeout: timeout, Record: rec}, args...)
 	// WP-CLI prints the per-plugin JSON table even when some plugins fail,
 	// so parse it either way.
 	updates, parseErr := parseUpdateOutput(res.Output)
+	// The short message is wp-cli's own errors and warnings; the whole
+	// output, PHP notices and all, is in rec.
+	msgs := Messages(res.Error)
+	for i := range updates {
+		if updates[i].Status != "Updated" && msgs != "" {
+			updates[i].Error = msgs
+		}
+	}
 	if err != nil {
 		var failure error
-		switch {
-		case errors.Is(err, ErrTimeout):
+		if errors.Is(err, ErrTimeout) {
 			failure = fmt.Errorf("failed to update plugin: %w", err)
-		// If the error message from RunWP is a specific WP-CLI error, return it
-		// without the full stderr blob to avoid noise from PHP warnings/notices.
-		case strings.HasPrefix(err.Error(), "Error:") || strings.HasPrefix(err.Error(), "Fatal error:"):
-			// For the specific "No plugins updated" failure, return a clean message.
-			if strings.Contains(err.Error(), "No plugins updated (1 failed)") {
-				failure = fmt.Errorf("failed to update plugin")
-			} else {
-				failure = fmt.Errorf("failed to update plugin: %w", err)
-			}
-		default:
-			failure = fmt.Errorf("failed to update plugin: %w (stderr: %s)", err, res.Error)
+		} else {
+			failure = fmt.Errorf("failed to update plugin: %s", shortError(res.Error, err))
 		}
 		return updates, checkFailedUpdate(site, plugins, failure)
 	}
@@ -247,13 +253,21 @@ func IsWordPressOrgPackage(pkg string) bool {
 	return err == nil && u.Scheme == "https" && strings.EqualFold(u.Hostname(), "downloads.wordpress.org")
 }
 
-// parseUpdateOutput extracts the per-plugin results from `wp plugin update
-// --format=json` output. Output with no updates ("already up to date")
-// yields no results and no error.
+// updateTableHeader is the header of `wp plugin update`'s results table.
+var updateTableHeader = []string{"name", "old_version", "new_version", "status"}
+
+// parseUpdateOutput extracts the per-plugin results from `wp plugin update`
+// output: its results table, which wp-cli prints tab separated when not on
+// a terminal, after the upgrader's progress lines, or a JSON array (from
+// --format=json). Output with no updates ("already up to date") yields no
+// results and no error.
 func parseUpdateOutput(output string) ([]UpdateResult, error) {
 	output = strings.TrimSpace(output)
 	if output == "" || strings.Contains(output, "Success: Plugin already up to date") || strings.Contains(output, "Success: Plugins already up to date") {
 		return nil, nil
+	}
+	if updates, ok := parseUpdateTable(output); ok {
+		return updates, nil
 	}
 
 	// wp-cli might output non-JSON text before the JSON array (e.g. update notices)
@@ -271,6 +285,31 @@ func parseUpdateOutput(output string) ([]UpdateResult, error) {
 		return nil, fmt.Errorf("failed to parse update result: %w", err)
 	}
 	return updates, nil
+}
+
+// parseUpdateTable reads `wp plugin update`'s tab-separated results table,
+// reporting whether output has one.
+func parseUpdateTable(output string) ([]UpdateResult, bool) {
+	lines := strings.Split(output, "\n")
+	start := -1
+	for i, line := range lines {
+		if slices.Equal(strings.Split(strings.TrimRight(line, "\r"), "\t"), updateTableHeader) {
+			start = i + 1
+			break
+		}
+	}
+	if start == -1 {
+		return nil, false
+	}
+	updates := []UpdateResult{}
+	for _, line := range lines[start:] {
+		cols := strings.Split(strings.TrimRight(line, "\r"), "\t")
+		if len(cols) != len(updateTableHeader) {
+			break
+		}
+		updates = append(updates, UpdateResult{Name: cols[0], OldVersion: cols[1], NewVersion: cols[2], Status: cols[3]})
+	}
+	return updates, true
 }
 
 // UpdateFailure is UpdatePlugin's error when the update command failed or

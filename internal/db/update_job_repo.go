@@ -9,7 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff, error, created_by, created_at, started_at, finished_at`
+const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff, calls, error, created_by, created_at, started_at, finished_at`
 
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
@@ -173,6 +173,21 @@ func FinishUpdateJob(id int64, status string, results []models.UpdateResult, cor
 	return err
 }
 
+// SetUpdateJobCalls stores the wp-cli calls of a job's failed update
+// attempts, with their output.
+func SetUpdateJobCalls(id int64, calls []models.WPCLICall) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	b, err := json.Marshal(calls)
+	if err != nil {
+		return fmt.Errorf("failed to encode job calls: %w", err)
+	}
+	_, err = db.Exec(`UPDATE plugin_update_jobs SET calls = ? WHERE id = ?`, string(b), id)
+	return err
+}
+
 // SetUpdateJobTextDiff stores a job's text diff.
 func SetUpdateJobTextDiff(id int64, diff models.TextDiff) error {
 	db := GetAPIDB()
@@ -271,10 +286,10 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 	for rows.Next() {
 		var job models.UpdateJob
 		var payload string
-		var uploadPath, results, core, textDiff, errMsg, createdBy sql.NullString
+		var uploadPath, results, core, textDiff, calls, errMsg, createdBy sql.NullString
 		var startedAt, finishedAt sql.NullTime
 		if err := rows.Scan(
-			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &textDiff, &errMsg, &createdBy,
+			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &textDiff, &calls, &errMsg, &createdBy,
 			&job.CreatedAt, &startedAt, &finishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan update job: %w", err)
@@ -299,6 +314,12 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 			}
 			summary := job.TextDiff.Summary()
 			job.TextDiffSummary = &summary
+		}
+		if calls.Valid && calls.String != "" && calls.String != "null" {
+			if err := json.Unmarshal([]byte(calls.String), &job.Calls); err != nil {
+				return nil, fmt.Errorf("invalid calls in job %d: %w", job.ID, err)
+			}
+			job.HasOutput = len(job.Calls) > 0
 		}
 		job.UploadPath = uploadPath.String
 		job.Error = errMsg.String

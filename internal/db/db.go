@@ -1146,6 +1146,10 @@ func initAPISchema() error {
 				// text_diff is the visible-text check around the job
 				// (models.TextDiff, JSON), NULL for jobs it doesn't run on.
 				"text_diff": "TEXT",
+				// calls are the wp-cli calls of the job's failed update
+				// attempts with their full output ([]models.WPCLICall,
+				// JSON), NULL when nothing failed.
+				"calls": "TEXT",
 			},
 		},
 		{

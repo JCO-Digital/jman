@@ -647,6 +647,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 					: job.status,
 				active: isBusy(job),
 				review: hasTextDiffFindings(job),
+				output: !!job.has_output,
 				createdAt: Date.parse(job.created_at) || Date.now(),
 				...describeJob(job),
 			},
@@ -909,7 +910,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return job;
 	}
 
-	/** One job with its full text diff. */
+	/** One job with its full text diff and wp-cli output. */
 	async function fetchJob(id: number): Promise<UpdateJob> {
 		const res = await apiFetch(`${BASE_URL}/update-jobs/${id}`);
 		if (!res.ok) await handleErrorResponse(res);

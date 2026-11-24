@@ -1342,6 +1342,8 @@ Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `f
 | `user_create` | `{"login": "jco", "email": "jco@example.com", "role": "administrator"}` |
 | `user_delete` | `{"user_id": 7, "login": "mainwp", "email": "mainwp@example.com", "reassign": "admin"}` |
 
+`error` and each result's `error` are short messages: wp-cli's own `Error:` and `Warning:` lines, without the PHP notices and warnings it passes through from the site's code. When a plugin, ZIP or core update fails, or wp-cli reports an update whose version didn't change (the result keeps `Updated`, with the old version as `new_version` and a `note`), the job keeps the full output: `GET /update-jobs/{id}` returns it as `calls`, one entry per wp-cli command with `args` (without jman's global arguments), `stdout`, `stderr`, `error` and `duration_ms`, each stream capped at 256 KiB. `GET /update-jobs` leaves `calls` out and sets `has_output`. Every update attempt also goes in jman-api's update log (`docs/update-log.md`).
+
 ### Get Available Plugin Updates for a Site
 
 `GET /sites/{id}/plugin-updates` (Protected: `execute`)

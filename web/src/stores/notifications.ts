@@ -31,6 +31,8 @@ export interface Notification {
 		hidden: boolean;
 		/** Its update text diff found something to review. */
 		review?: boolean;
+		/** The job kept wp-cli's output of a failed update. */
+		output?: boolean;
 	};
 }
 
@@ -43,6 +45,8 @@ export interface TaskUpdate {
 	active: boolean;
 	/** Its update text diff found something to review. */
 	review?: boolean;
+	/** The job kept wp-cli's output of a failed update. */
+	output?: boolean;
 	type: NotificationType;
 	title: string;
 	message: string;
@@ -286,6 +290,7 @@ export const useNotificationStore = defineStore("notifications", () => {
 			existing.title = u.title;
 			existing.message = u.message;
 			existing.task.review = u.review;
+			existing.task.output = u.output;
 			return;
 		}
 		if (!existing && !u.active && !notify) {
@@ -305,6 +310,7 @@ export const useNotificationStore = defineStore("notifications", () => {
 					status: u.status,
 					hidden,
 					review: u.review,
+					output: u.output,
 				},
 			});
 			prune();
@@ -335,6 +341,7 @@ export const useNotificationStore = defineStore("notifications", () => {
 			status: u.status,
 			hidden,
 			review: u.review,
+			output: u.output,
 		};
 		if (!existing) entries.value.push(entry);
 

@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"os/exec"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/knock"
+	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -45,6 +47,9 @@ type CliOptions struct {
 	PremiumUpdates bool
 	IncludeThemes  bool
 	Timeout        time.Duration
+	// Record, if set, gets the call and everything it printed appended,
+	// for the update attempt log and failed jobs.
+	Record *[]models.WPCLICall
 }
 
 type RunResult struct {
@@ -54,7 +59,40 @@ type RunResult struct {
 
 // RunWP executes a wp-cli command. If ssh is provided, it runs via SSH.
 // It uses variadic arguments to avoid shell injection and quoting issues.
+// With opts.Record set, the call is recorded there.
 func RunWP(opts CliOptions, args ...string) (RunResult, error) {
+	start := time.Now()
+	res, err := runWP(opts, args...)
+	if opts.Record != nil {
+		call := models.WPCLICall{
+			Args:       slices.Clone(args),
+			Stdout:     capOutput(res.Output),
+			Stderr:     capOutput(res.Error),
+			DurationMS: time.Since(start).Milliseconds(),
+		}
+		if err != nil {
+			call.Error = err.Error()
+		}
+		*opts.Record = append(*opts.Record, call)
+	}
+	return res, err
+}
+
+// maxRecordedOutput caps each stream of a recorded call. A plugin that
+// prints a notice for every file can fill megabytes; the error is nearly
+// always at the end, so most of what's kept is the tail.
+const maxRecordedOutput = 256 << 10
+
+func capOutput(s string) string {
+	if len(s) <= maxRecordedOutput {
+		return s
+	}
+	head := maxRecordedOutput / 8
+	tail := maxRecordedOutput - head
+	return s[:head] + fmt.Sprintf("\n[… %d bytes left out …]\n", len(s)-head-tail) + s[len(s)-tail:]
+}
+
+func runWP(opts CliOptions, args ...string) (RunResult, error) {
 	if _, err := exec.LookPath("wp"); err != nil {
 		return RunResult{}, fmt.Errorf("wp-cli executable not found in PATH")
 	}

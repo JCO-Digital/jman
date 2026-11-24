@@ -52,6 +52,11 @@ type AppConfig struct {
 	// e.g. "bojaco_staging_bypass=1" to get past a login redirect that keeps
 	// development sites out of search engines.
 	TextDiffQuery string `toml:"textDiffQuery" mapstructure:"textDiffQuery"`
+	// UpdateLog is the file jman-api appends every plugin, ZIP and core
+	// update attempt to, one JSON object per line (see docs/update-log.md).
+	// Empty means update-attempts.jsonl in the data directory; "off"
+	// turns the log off.
+	UpdateLog string `toml:"updateLog" mapstructure:"updateLog"`
 	// MonitorDisabled turns off jman-api's in-process uptime-monitor scheduler.
 	MonitorDisabled bool `toml:"monitorDisabled" mapstructure:"monitorDisabled"`
 	// RefreshDisabled turns off jman-api's in-process data-refresh scheduler
@@ -261,6 +266,7 @@ func loadConfig() error {
 	viper.SetDefault("monitorCacheBypass", false)
 	viper.SetDefault("textDiffMuteDays", 30)
 	viper.SetDefault("textDiffQuery", "")
+	viper.SetDefault("updateLog", "")
 	viper.SetDefault("monitorDisabled", false)
 	viper.SetDefault("refreshDisabled", false)
 	viper.SetDefault("refreshFastInterval", 5)
@@ -323,6 +329,7 @@ func loadConfig() error {
 		"monitorCacheBypass":         "MONITORCACHEBYPASS",
 		"textDiffMuteDays":           "TEXTDIFFMUTEDAYS",
 		"textDiffQuery":              "TEXTDIFFQUERY",
+		"updateLog":                  "UPDATELOG",
 		"monitorDisabled":            "MONITORDISABLED",
 		"refreshDisabled":            "REFRESHDISABLED",
 		"refreshFastInterval":        "REFRESHFASTINTERVAL",

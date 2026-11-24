@@ -100,12 +100,18 @@ type UpdateJob struct {
 	TextDiff        *TextDiff        `json:"text_diff,omitempty"`
 	TextDiffSummary *TextDiffSummary `json:"text_diff_summary,omitempty"`
 	// Error describes a job-level failure or warning (e.g. the site was
-	// left in maintenance mode).
-	Error      string     `json:"error,omitempty"`
-	CreatedBy  string     `json:"created_by"`
-	CreatedAt  time.Time  `json:"created_at"`
-	StartedAt  *time.Time `json:"started_at,omitempty"`
-	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	// left in maintenance mode). It's a short message; Calls has wp-cli's
+	// full output.
+	Error string `json:"error,omitempty"`
+	// Calls are the wp-cli commands of a plugin, ZIP or core update that
+	// failed or didn't change a version, with everything they printed.
+	// Only GetUpdateJob returns them; HasOutput tells lists they exist.
+	Calls      []WPCLICall `json:"calls,omitempty"`
+	HasOutput  bool        `json:"has_output,omitempty"`
+	CreatedBy  string      `json:"created_by"`
+	CreatedAt  time.Time   `json:"created_at"`
+	StartedAt  *time.Time  `json:"started_at,omitempty"`
+	FinishedAt *time.Time  `json:"finished_at,omitempty"`
 }
 
 // Active reports whether the job is still waiting or running.
@@ -233,6 +239,18 @@ type UserDeletePayload struct {
 type PluginUpdateRequest struct {
 	Name       string `json:"name"`
 	OldVersion string `json:"old_version"`
+}
+
+// WPCLICall is one wp-cli command an update ran and everything it
+// printed, kept with failed jobs and in the update attempt log.
+type WPCLICall struct {
+	// Args are the command's arguments, without jman's global ones
+	// (--ssh, --path, --user, --exec, --skip-*).
+	Args       []string `json:"args"`
+	Stdout     string   `json:"stdout,omitempty"`
+	Stderr     string   `json:"stderr,omitempty"`
+	Error      string   `json:"error,omitempty"`
+	DurationMS int64    `json:"duration_ms"`
 }
 
 // UpdateResult is the outcome of updating one plugin, or WordPress core.

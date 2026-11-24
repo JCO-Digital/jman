@@ -62,7 +62,7 @@ func TestRunComparesTextAroundPluginUpdate(t *testing.T) {
 	}
 
 	var updated bool
-	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		// Both baseline fetches of every page happen before the update.
 		if n := len(site.urls); n != 6 {
 			t.Errorf("%d fetches before the update, want 6", n)
@@ -235,7 +235,7 @@ func TestTextDiffQuery(t *testing.T) {
 		"https://example.com/?bojaco_staging_bypass=1": {page("Hello")},
 	}}
 	fetchPage = site.fetch
-	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) { return nil, nil }
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) { return nil, nil }
 	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a"})
 	if err := db.CreateUpdateJob(&job); err != nil {
 		t.Fatal(err)

@@ -364,6 +364,7 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 	plugins := payload.Plugins
 	// Checked against the pre-update versions, for the ledger status.
 	updatedVulnerable := anyVulnerable(job.SiteID, plugins)
+	wpVersion := cachedCoreVersion(job.SiteID)
 
 	var free, locked []models.PluginUpdateRequest
 	if payload.AllowMajor {
@@ -387,9 +388,16 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 	}
 
 	var errs []string
+	var attempts []*attempt
+	// The plugins each attempt's update command covered.
+	covered := map[*attempt][]string{}
 	byName := map[string]models.UpdateResult{}
 	if len(free) > 0 {
-		updates, err := updatePlugins(site, requestNames(free))
+		a := newAttempt(attemptPlugins)
+		covered[a] = requestNames(free)
+		updates, err := updatePlugins(site, covered[a], &a.calls)
+		a.done()
+		attempts = append(attempts, a)
 		if err != nil {
 			errs = append(errs, err.Error())
 			log.Printf("Plugin update job %d on %s: %v", job.ID, site.Name, err)
@@ -399,8 +407,15 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 		}
 	}
 	if len(locked) > 0 {
-		for _, r := range updateLocked(job, site, locked, &errs) {
+		results, a := updateLocked(job, site, locked, &errs)
+		for _, r := range results {
 			byName[r.Name] = r
+		}
+		if a != nil {
+			attempts = append(attempts, a)
+			for _, r := range a.results {
+				covered[a] = append(covered[a], r.Name)
+			}
 		}
 	}
 
@@ -409,30 +424,72 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 	cacheErr := refreshPluginCache(site)
 	if cacheErr != nil {
 		log.Printf("Plugin update job %d: failed to refresh plugin cache for %s: %v", job.ID, site.Name, cacheErr)
-	} else if len(locked) > 0 {
-		markHeldBack(job.SiteID, locked, byName)
+	} else {
+		if len(locked) > 0 {
+			markHeldBack(job.SiteID, locked, byName)
+		}
+		markUnchanged(job.SiteID, covered, byName)
 	}
 
 	results := make([]models.UpdateResult, len(plugins))
 	for i, p := range plugins {
 		results[i] = byName[p.Name]
 	}
+	for _, a := range attempts {
+		a.results = a.results[:0]
+		for _, name := range covered[a] {
+			a.results = append(a.results, byName[name])
+		}
+	}
 	jobErr := strings.Join(errs, "; ")
+	storeAttemptCalls(job, attempts)
 	finish(job, models.UpdateJobDone, results, jobErr)
 	writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable), "")
+	logAttempts(job, site, wpVersion, attempts)
+}
+
+// markUnchanged finds plugins wp-cli reported as updated whose version in
+// the refreshed plugin cache is still the old one: the update "succeeded"
+// without installing anything new, as some premium updaters do when the
+// download isn't the release they announced. Their result keeps its
+// status, with the version set back and a note, and the attempt that
+// covered them is marked so the update log treats it as failed.
+func markUnchanged(siteID string, covered map[*attempt][]string, byName map[string]models.UpdateResult) {
+	plugins, err := db.GetSitePlugins(siteID)
+	if err != nil {
+		return
+	}
+	installed := make(map[string]string, len(plugins))
+	for _, p := range plugins {
+		installed[p.Name] = p.Version
+	}
+	for a, names := range covered {
+		for _, name := range names {
+			r := byName[name]
+			version, ok := installed[name]
+			if r.Status != models.UpdateUpdated || r.OldVersion == "" || !ok || version != r.OldVersion {
+				continue
+			}
+			r.NewVersion = version
+			r.Note = joinNotes(r.Note, fmt.Sprintf("wp-cli reported an update, but %s is still installed", version))
+			byName[name] = r
+			a.unchanged[name] = true
+		}
+	}
 }
 
 // updateLocked applies fix-release updates to locked plugins whose pending
 // update comes from WordPress.org, and returns a result for every locked
-// plugin. Plugins it doesn't update come back as up to date; markHeldBack
-// then flags those that still have an update.
-func updateLocked(job models.UpdateJob, site models.CliSite, locked []models.PluginUpdateRequest, errs *[]string) []models.UpdateResult {
+// plugin, and the attempt when it ran an update (its results are the
+// plugins it covered). Plugins it doesn't update come back as up to date;
+// markHeldBack then flags those that still have an update.
+func updateLocked(job models.UpdateJob, site models.CliSite, locked []models.PluginUpdateRequest, errs *[]string) ([]models.UpdateResult, *attempt) {
 	packages, err := updatePackages(site)
 	if err != nil {
 		msg := fmt.Sprintf("failed to check update sources of locked plugins: %v", err)
 		*errs = append(*errs, msg)
 		log.Printf("Plugin update job %d on %s: %s", job.ID, site.Name, msg)
-		return failAll(locked, msg)
+		return failAll(locked, msg), nil
 	}
 
 	var patchable, rest []models.PluginUpdateRequest
@@ -452,15 +509,19 @@ func updateLocked(job models.UpdateJob, site models.CliSite, locked []models.Plu
 			results[i].Status = models.UpdateSkippedLocked
 		}
 	}
+	var a *attempt
 	if len(patchable) > 0 {
-		updates, err := updatePluginsPatch(site, requestNames(patchable))
+		a = newAttempt(attemptPatch)
+		updates, err := updatePluginsPatch(site, requestNames(patchable), &a.calls)
+		a.done()
 		if err != nil {
 			*errs = append(*errs, err.Error())
 			log.Printf("Plugin update job %d on %s (fix releases): %v", job.ID, site.Name, err)
 		}
-		results = append(results, buildResults(patchable, updates, err)...)
+		a.results = buildResults(patchable, updates, err)
+		results = append(results, a.results...)
 	}
-	return results
+	return results, a
 }
 
 // markHeldBack marks locked plugins that weren't updated but still have an
@@ -530,7 +591,9 @@ func runCore(job models.UpdateJob, site models.CliSite) {
 		}
 	}
 
-	result, updateErr := updateCore(site, major)
+	a := newAttempt(attemptCore)
+	result, updateErr := updateCore(site, major, &a.calls)
+	a.done()
 
 	var status, errMsg string
 	switch {
@@ -576,10 +639,31 @@ func runCore(job models.UpdateJob, site models.CliSite) {
 		r.Status = models.UpdateUpToDate
 	default:
 		r.Status = models.UpdateUpdated
+		// wp-cli reported the update, but the refreshed version is the
+		// old one.
+		if core != nil && oldVersion != "" && core.Version == oldVersion {
+			a.unchanged[coreResultName] = true
+			r.NewVersion = core.Version
+			r.Note = joinNotes(lockNote, fmt.Sprintf("wp-cli reported an update, but %s is still installed", core.Version))
+		}
 	}
+	a.results = []models.UpdateResult{r}
 
+	storeAttemptCalls(job, []*attempt{a})
 	finishCore(job, models.UpdateJobDone, []models.UpdateResult{r}, core, errMsg)
 	writeCoreLedger(job, newVersion, errMsg, status, lockNote)
+	logAttempts(job, site, oldVersion, []*attempt{a})
+}
+
+// joinNotes joins the non-empty notes of a result.
+func joinNotes(notes ...string) string {
+	var kept []string
+	for _, n := range notes {
+		if n != "" {
+			kept = append(kept, n)
+		}
+	}
+	return strings.Join(kept, "; ")
 }
 
 func failedCoreResult(version, msg string) []models.UpdateResult {
@@ -666,8 +750,12 @@ func buildResults(reqs []models.PluginUpdateRequest, updates []wpcli.UpdateResul
 			r.NewVersion = u.NewVersion
 			r.Status = models.UpdateUpdated
 		case ok:
+			// wp-cli's table only says "Error"; its warnings say why.
 			r.Status = models.UpdateFailed
 			r.Error = u.Status
+			if u.Error != "" {
+				r.Error = u.Error
+			}
 		case err == nil:
 			// Not in WP-CLI's table: it had nothing to update.
 			r.Status = models.UpdateUpToDate

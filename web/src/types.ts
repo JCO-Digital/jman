@@ -942,6 +942,16 @@ export interface TextDiffMute {
 	updated_by: string;
 }
 
+/** One wp-cli command an update ran, with everything it printed. */
+export interface WPCLICall {
+	/** The command's arguments, without jman's global ones. */
+	args: string[];
+	stdout?: string;
+	stderr?: string;
+	error?: string;
+	duration_ms: number;
+}
+
 export type UpdateJob = UpdateJobPayload & {
 	id: number;
 	site_id: string;
@@ -957,7 +967,15 @@ export type UpdateJob = UpdateJobPayload & {
 	text_diff?: TextDiff;
 	/** Plugin, install and core jobs. */
 	text_diff_summary?: TextDiffSummary;
+	/** A short message; `calls` has wp-cli's full output. */
 	error?: string;
+	/**
+	 * The wp-cli calls of an update that failed or didn't change a version,
+	 * with everything they printed. Only from the single-job endpoint.
+	 */
+	calls?: WPCLICall[];
+	/** The job has `calls`, which lists leave out. */
+	has_output?: boolean;
 	created_by: string;
 	created_at: string;
 	started_at?: string;

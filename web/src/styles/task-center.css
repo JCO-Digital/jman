@@ -203,6 +203,20 @@
 	& a {
 		color: var(--primary);
 	}
+
+	/* A button that reads like the links next to it. */
+	& .task-link {
+		padding: 0;
+		border: 0;
+		background: none;
+		font: inherit;
+		color: var(--primary);
+		cursor: pointer;
+
+		&:hover {
+			text-decoration: underline;
+		}
+	}
 }
 
 .task-empty {
