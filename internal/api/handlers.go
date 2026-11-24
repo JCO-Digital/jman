@@ -220,6 +220,7 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("GET /api/update-jobs", basic(ListUpdateJobsHandler))
 	mux.Handle("GET /api/update-jobs/text-diffs", basic(ListTextDiffJobsHandler))
 	mux.Handle("GET /api/update-jobs/{id}", basic(GetUpdateJobHandler))
+	mux.Handle("PATCH /api/update-jobs/{id}", execute(SetUpdateJobPriorityHandler))
 
 	// Update text diff: extra pages per site and mutes (docs/update-text-diff.md).
 	mux.Handle("GET /api/sites/{id}/text-diff-pages", basic(ListSiteDiffPagesHandler))

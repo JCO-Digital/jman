@@ -7,6 +7,7 @@ import {
 } from "../stores/notifications";
 import { useAuthStore } from "../stores/auth";
 import { useDataStore } from "../stores/data";
+import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useNow } from "../composables/useNow";
 import { formatElapsed, formatRelativeTime } from "../utils/format";
 import AppIcon from "./AppIcon.vue";
@@ -15,6 +16,7 @@ import UpdateOutputModal from "./UpdateOutputModal.vue";
 const store = useNotificationStore();
 const authStore = useAuthStore();
 const dataStore = useDataStore();
+const updateJobsStore = useUpdateJobsStore();
 
 const root = ref<HTMLElement | null>(null);
 const open = computed(() => store.panelOpen);
@@ -42,6 +44,53 @@ function showOutput(jobId: number) {
 
 function siteDomain(e: Notification): string | undefined {
 	return e.task ? dataStore.getSiteById(e.task.siteId)?.domain : undefined;
+}
+
+/** "Queued", with the job's place in the queue when known. */
+function queuedLabel(e: Notification): string {
+	const pos = e.task?.position;
+	return pos ? `Queued · #${pos} in line` : "Queued";
+}
+
+/** A label for a priority other than normal. */
+function priorityLabel(e: Notification): string {
+	switch (e.task?.priority) {
+		case "urgent":
+			return "Urgent";
+		case "high":
+			return "High priority";
+		case "low":
+			return "Low priority";
+		default:
+			return "";
+	}
+}
+
+/** Queued normal and low jobs can be moved ahead by execute users. */
+function canPrioritize(e: Notification): boolean {
+	const p = e.task?.priority;
+	return (
+		authStore.canExecute &&
+		e.task?.status === "queued" &&
+		(p === "normal" || p === "low")
+	);
+}
+
+const prioritizing = ref<Set<number>>(new Set());
+
+async function prioritize(e: Notification) {
+	if (!e.task) return;
+	const id = e.task.jobId;
+	prioritizing.value.add(id);
+	try {
+		await updateJobsStore.setPriority(id, "high");
+	} catch (err) {
+		store.notify(
+			`Failed to prioritize the job: ${err instanceof Error ? err.message : String(err)}`,
+		);
+	} finally {
+		prioritizing.value.delete(id);
+	}
 }
 
 const icons: Record<string, string> = {
@@ -119,11 +168,19 @@ onUnmounted(() => {
 									<div class="task-item-meta">
 										<span>{{
 											e.task?.status === "queued"
-												? "Queued"
+												? queuedLabel(e)
 												: formatElapsed(
 														now - e.createdAt,
 													)
 										}}</span>
+										<span
+											v-if="priorityLabel(e)"
+											:class="[
+												'task-priority',
+												`task-priority--${e.task?.priority}`,
+											]"
+											>{{ priorityLabel(e) }}</span
+										>
 										<span v-if="author(e)"
 											>by {{ author(e) }}</span
 										>
@@ -137,6 +194,18 @@ onUnmounted(() => {
 										>
 											Open site
 										</RouterLink>
+										<button
+											v-if="canPrioritize(e)"
+											type="button"
+											class="task-link-btn"
+											title="Move to high priority: runs before normal and low priority jobs"
+											:disabled="
+												prioritizing.has(e.task!.jobId)
+											"
+											@click="prioritize(e)"
+										>
+											Prioritize
+										</button>
 									</div>
 								</div>
 								<button

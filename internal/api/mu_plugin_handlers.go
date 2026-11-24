@@ -177,6 +177,7 @@ func InstallMuPluginHandler(w http.ResponseWriter, r *http.Request) {
 		jobs[i] = models.NewUpdateJob(models.UpdateJobKindMuInstall, siteID, payload)
 		jobs[i].UploadPath = uploadPath
 		jobs[i].CreatedBy = by
+		jobs[i].Priority = defaultJobPriority(len(sites))
 	}
 	n, err := updatejobs.EnqueueAll(jobs)
 	if err != nil {

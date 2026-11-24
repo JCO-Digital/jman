@@ -68,8 +68,10 @@ type basePage struct {
 
 // takeTextBaseline fetches each of the site's pages twice and records the
 // first working fetch and the lines that differ between the two. It
-// stores a running text diff on the job.
-func takeTextBaseline(job models.UpdateJob, site models.CliSite) *textBaseline {
+// stores a running text diff on the jobs, which run on the same site (more
+// than one when jobs run together).
+func takeTextBaseline(jobs []models.UpdateJob, site models.CliSite) *textBaseline {
+	job := jobs[0]
 	paths, err := textDiffPaths(job.SiteID)
 	if err != nil {
 		log.Printf("Update job %d: failed to load text diff pages, comparing the frontpage only: %v", job.ID, err)
@@ -95,10 +97,16 @@ func takeTextBaseline(job models.UpdateJob, site models.CliSite) *textBaseline {
 		b.pages = append(b.pages, bp)
 		diff.Pages = append(diff.Pages, models.TextDiffPage{Path: path})
 	}
-	if err := db.SetUpdateJobTextDiff(job.ID, diff); err != nil {
-		log.Printf("Update job %d: %v", job.ID, err)
-	}
+	saveTextDiff(jobs, diff)
 	return b
+}
+
+func saveTextDiff(jobs []models.UpdateJob, diff models.TextDiff) {
+	for _, job := range jobs {
+		if err := db.SetUpdateJobTextDiff(job.ID, diff); err != nil {
+			log.Printf("Update job %d: %v", job.ID, err)
+		}
+	}
 }
 
 func (b *textBaseline) url(path string) string {
@@ -126,9 +134,10 @@ func extraQuery(jobID int64) string {
 	return q
 }
 
-// compareText fetches each page again after the job and stores the
-// finished text diff on the job.
-func compareText(job models.UpdateJob, b *textBaseline) {
+// compareText fetches each page again after the jobs and stores the
+// finished text diff on each of them.
+func compareText(jobs []models.UpdateJob, b *textBaseline) {
+	job := jobs[0]
 	mutes, err := textDiffMutes(job.SiteID)
 	if err != nil {
 		log.Printf("Update job %d: failed to load text diff mutes: %v", job.ID, err)
@@ -138,9 +147,7 @@ func compareText(job models.UpdateJob, b *textBaseline) {
 		after := fetchPage(b.url(bp.path), b.headers)
 		diff.Pages = append(diff.Pages, comparePage(bp, after, mutes))
 	}
-	if err := db.SetUpdateJobTextDiff(job.ID, diff); err != nil {
-		log.Printf("Update job %d: %v", job.ID, err)
-	}
+	saveTextDiff(jobs, diff)
 }
 
 func comparePage(bp basePage, after textdiff.Page, mutes []models.TextDiffMute) models.TextDiffPage {

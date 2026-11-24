@@ -627,6 +627,7 @@ func SiteCoreUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		AllowMajor: body.Target == "major" && body.AllowMajor,
 	})
 	job.CreatedBy = getUsername(r)
+	job.Priority = defaultJobPriority(1)
 	// EnqueueCore refuses a second core job for the site, also against
 	// the nightly core update.
 	if err := updatejobs.EnqueueCore(&job); errors.Is(err, updatejobs.ErrCoreJobActive) {

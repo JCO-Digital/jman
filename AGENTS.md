@@ -31,7 +31,7 @@
 ### 1. Centralized Management (`jman`)
 
 - Gets server/site/plugin data from `jman-api` (`internal/client`, `internal/mirror`) and keeps a local JSON copy; logs in through the browser (`jman login`). It must not link the database code (`cmd/jman/deps_test.go`).
-- Executes commands across multiple sites (bulk operations); plugin and core changes run as `jman-api` jobs.
+- Executes commands across multiple sites (bulk operations); plugin and core changes run as `jman-api` jobs, queued by priority with a per-server limit, and plugin updates queued back to back on a site run together (`docs/update-queue.md`).
 - Manages plugins, WordPress core updates, and admin users.
 - Generates WP-CLI and SSH alias files.
 

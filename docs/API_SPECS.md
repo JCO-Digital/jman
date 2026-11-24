@@ -1332,7 +1332,7 @@ Cancels a queued or running run and returns it. `409` when it has already finish
 
 Plugin and core updates run as background jobs (`POST /plugin-update-jobs`, `POST /sites/{id}/core-update`; progress via `GET /update-jobs`). Queueing them requires the **`execute`** level.
 
-Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `failed`, `interrupted`), `results`, `error`, `created_by` and the timestamps. What the job changes is in `payload`, whose shape depends on `kind`:
+Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `failed`, `interrupted`), `priority` (`low`, `normal`, `high`, `urgent`), `results`, `error`, `created_by` and the timestamps. Queued jobs from `GET /update-jobs` and `GET /update-jobs/{id}` also have `position`, their approximate place in the queue (1 runs next), and plugin update jobs that ran together in one WP-CLI call have `batch_id`, the first job's ID (see [Queue](#queue)). What the job changes is in `payload`, whose shape depends on `kind`:
 
 | `kind` | `payload` |
 | :--- | :--- |
@@ -1343,6 +1343,14 @@ Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `f
 | `user_delete` | `{"user_id": 7, "login": "mainwp", "email": "mainwp@example.com", "reassign": "admin"}` |
 
 `error` and each result's `error` are short messages: wp-cli's own `Error:` and `Warning:` lines, without the PHP notices and warnings it passes through from the site's code. When a plugin, ZIP or core update fails, or wp-cli reports an update whose version didn't change (the result keeps `Updated`, with the old version as `new_version` and a `note`), the job keeps the full output: `GET /update-jobs/{id}` returns it as `calls`, one entry per wp-cli command with `args` (without jman's global arguments), `stdout`, `stderr`, `error` and `duration_ms`, each stream capped at 256 KiB. `GET /update-jobs` leaves `calls` out and sets `has_output`. Every update attempt also goes in jman-api's update log (`docs/update-log.md`).
+
+### Queue
+
+Jobs run one at a time per site, in the order they were queued, at most two at a time per server. Sites are ranked by the highest priority among their queued jobs; low jobs count as normal after 30 minutes. Plugin update jobs queued back to back on a site run together in one WP-CLI call. See `docs/update-queue.md`.
+
+By default, a request for one site queues `high` jobs and a request for several sites `normal` jobs; the nightly core update is `low`. `POST /plugin-update-jobs` takes an optional `"priority"` for all its jobs (`urgent` needs `admin`, else `403`), and `"bulk": true` for one of many requests in an update of several sites, which gets the several-sites default. Without `"priority"`, a job whose site has an open vulnerability exposure for one of its plugins is `high`.
+
+`PATCH /update-jobs/{id}` (Protected: `execute`) changes a queued job's priority: `{"priority": "high"}`. `urgent` needs `admin` (`403`). Returns the job, or `409` if it isn't queued (any more).
 
 ### Get Available Plugin Updates for a Site
 

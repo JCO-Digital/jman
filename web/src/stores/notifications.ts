@@ -1,6 +1,7 @@
 import { computed, ref, watch } from "vue";
 import { defineStore } from "pinia";
 import { useAuthStore } from "./auth";
+import type { UpdateJobPriority } from "../types";
 
 export type ToastType = "error" | "success" | "info";
 export type NotificationType = ToastType | "running";
@@ -33,6 +34,10 @@ export interface Notification {
 		review?: boolean;
 		/** The job kept wp-cli's output of a failed update. */
 		output?: boolean;
+		/** The job's queue priority. */
+		priority?: UpdateJobPriority;
+		/** Queued jobs: approximate place in the queue. */
+		position?: number;
 	};
 }
 
@@ -47,6 +52,8 @@ export interface TaskUpdate {
 	review?: boolean;
 	/** The job kept wp-cli's output of a failed update. */
 	output?: boolean;
+	priority?: UpdateJobPriority;
+	position?: number;
 	type: NotificationType;
 	title: string;
 	message: string;
@@ -291,6 +298,8 @@ export const useNotificationStore = defineStore("notifications", () => {
 			existing.message = u.message;
 			existing.task.review = u.review;
 			existing.task.output = u.output;
+			existing.task.priority = u.priority;
+			existing.task.position = u.position;
 			return;
 		}
 		if (!existing && !u.active && !notify) {
@@ -311,6 +320,8 @@ export const useNotificationStore = defineStore("notifications", () => {
 					hidden,
 					review: u.review,
 					output: u.output,
+					priority: u.priority,
+					position: u.position,
 				},
 			});
 			prune();
@@ -342,6 +353,8 @@ export const useNotificationStore = defineStore("notifications", () => {
 			hidden,
 			review: u.review,
 			output: u.output,
+			priority: u.priority,
+			position: u.position,
 		};
 		if (!existing) entries.value.push(entry);
 

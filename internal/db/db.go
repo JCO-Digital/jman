@@ -1150,6 +1150,12 @@ func initAPISchema() error {
 				// attempts with their full output ([]models.WPCLICall,
 				// JSON), NULL when nothing failed.
 				"calls": "TEXT",
+				// priority orders the queue (models.UpdateJobPriority,
+				// higher first; 0 is normal).
+				"priority": "INTEGER NOT NULL DEFAULT 0",
+				// batch_id is the first job of a group that ran together,
+				// NULL for a job that ran on its own.
+				"batch_id": "INTEGER",
 			},
 		},
 		{

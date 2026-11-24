@@ -9,7 +9,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff, calls, error, created_by, created_at, started_at, finished_at`
+const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff, calls, error, priority, batch_id, created_by, created_at, started_at, finished_at`
 
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
@@ -30,9 +30,9 @@ func CreateUpdateJob(job *models.UpdateJob) error {
 	job.Results = []models.UpdateResult{}
 
 	err := db.QueryRow(
-		`INSERT INTO plugin_update_jobs (kind, site_id, status, payload, upload_path, created_by, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		job.Kind, job.SiteID, job.Status, string(job.Payload), job.UploadPath, job.CreatedBy, job.CreatedAt,
+		`INSERT INTO plugin_update_jobs (kind, site_id, status, payload, upload_path, priority, created_by, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		job.Kind, job.SiteID, job.Status, string(job.Payload), job.UploadPath, int(job.Priority), job.CreatedBy, job.CreatedAt,
 	).Scan(&job.ID)
 	if err != nil {
 		return fmt.Errorf("failed to create update job: %w", err)
@@ -144,6 +144,54 @@ func StartUpdateJob(id int64) error {
 		models.UpdateJobRunning, time.Now(), id,
 	)
 	return err
+}
+
+// StartUpdateJobBatch marks queued jobs that run together as running and
+// records the batch they ran in (the first job's ID).
+func StartUpdateJobBatch(ids []int64) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	now := time.Now()
+	for _, id := range ids {
+		if _, err := tx.Exec(
+			`UPDATE plugin_update_jobs SET status = ?, started_at = ?, batch_id = ? WHERE id = ?`,
+			models.UpdateJobRunning, now, ids[0], id,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// SetUpdateJobPriority changes a queued job's priority. It reports false
+// if the job doesn't exist or is no longer queued.
+func SetUpdateJobPriority(id int64, priority models.UpdateJobPriority) (bool, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+	res, err := db.Exec(
+		`UPDATE plugin_update_jobs SET priority = ? WHERE id = ? AND status = ?`,
+		int(priority), id, models.UpdateJobQueued,
+	)
+	if err != nil {
+		return false, fmt.Errorf("failed to set priority of job %d: %w", id, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }
 
 // FinishUpdateJob records a job's final status, results, job-level error
@@ -288,13 +336,17 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 		var payload string
 		var uploadPath, results, core, textDiff, calls, errMsg, createdBy sql.NullString
 		var startedAt, finishedAt sql.NullTime
+		var priority int
+		var batchID sql.NullInt64
 		if err := rows.Scan(
-			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &textDiff, &calls, &errMsg, &createdBy,
-			&job.CreatedAt, &startedAt, &finishedAt,
+			&job.ID, &job.Kind, &job.SiteID, &job.Status, &payload, &uploadPath, &results, &core, &textDiff, &calls, &errMsg,
+			&priority, &batchID, &createdBy, &job.CreatedAt, &startedAt, &finishedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan update job: %w", err)
 		}
 		job.Payload = json.RawMessage(payload)
+		job.Priority = models.UpdateJobPriority(priority)
+		job.BatchID = batchID.Int64
 		job.Results = []models.UpdateResult{}
 		if results.Valid && results.String != "" && results.String != "null" {
 			if err := json.Unmarshal([]byte(results.String), &job.Results); err != nil {

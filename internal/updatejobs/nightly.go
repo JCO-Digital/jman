@@ -194,6 +194,8 @@ func runNightlyCore(ctx context.Context) {
 		}
 		job := models.NewUpdateJob(models.UpdateJobKindCore, c.SiteID, models.CorePayload{Target: "minor"})
 		job.CreatedBy = NightlyCreatedBy
+		// Nobody waits for it; it ages to normal if it waits long.
+		job.Priority = models.UpdateJobPriorityLow
 		switch err := enqueueCore(&job); {
 		case errors.Is(err, ErrCoreJobActive):
 			// Someone is already updating it.

@@ -728,6 +728,13 @@ export interface UpdateResult {
 	note?: string;
 }
 
+/**
+ * Queue priority of an update job: higher runs first. One site defaults to
+ * high, several to normal, the nightly core update to low
+ * (docs/update-queue.md).
+ */
+export type UpdateJobPriority = "low" | "normal" | "high" | "urgent";
+
 export type UpdateJobStatus =
 	| "queued"
 	| "running"
@@ -976,6 +983,14 @@ export type UpdateJob = UpdateJobPayload & {
 	calls?: WPCLICall[];
 	/** The job has `calls`, which lists leave out. */
 	has_output?: boolean;
+	priority: UpdateJobPriority;
+	/** Queued jobs: approximate place in the queue, 1 runs next. */
+	position?: number;
+	/**
+	 * Set when plugin update jobs on the site ran together in one WP-CLI
+	 * call: the first job's ID. They share the text diff and wp-cli output.
+	 */
+	batch_id?: number;
 	created_by: string;
 	created_at: string;
 	started_at?: string;

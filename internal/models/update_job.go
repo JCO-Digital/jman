@@ -60,6 +60,61 @@ const (
 	UpdateJobInterrupted = "interrupted"
 )
 
+// UpdateJobPriority orders queued jobs: higher runs first. The zero value
+// is normal. It encodes in JSON as its name ("low", "normal", "high",
+// "urgent").
+type UpdateJobPriority int
+
+// Update job priorities. Defaults are set by the API from the request's
+// shape (docs/update-queue.md): one site is high, several are normal, the
+// nightly core update is low. Urgent is only ever set on request.
+const (
+	UpdateJobPriorityLow    UpdateJobPriority = -10
+	UpdateJobPriorityNormal UpdateJobPriority = 0
+	UpdateJobPriorityHigh   UpdateJobPriority = 10
+	UpdateJobPriorityUrgent UpdateJobPriority = 20
+)
+
+var priorityNames = map[UpdateJobPriority]string{
+	UpdateJobPriorityLow:    "low",
+	UpdateJobPriorityNormal: "normal",
+	UpdateJobPriorityHigh:   "high",
+	UpdateJobPriorityUrgent: "urgent",
+}
+
+// String returns the priority's name, or its number if it has none.
+func (p UpdateJobPriority) String() string {
+	if name, ok := priorityNames[p]; ok {
+		return name
+	}
+	return fmt.Sprintf("%d", int(p))
+}
+
+// ParseUpdateJobPriority parses a priority name.
+func ParseUpdateJobPriority(name string) (UpdateJobPriority, error) {
+	for p, n := range priorityNames {
+		if n == name {
+			return p, nil
+		}
+	}
+	return 0, fmt.Errorf("invalid priority %q: must be low, normal, high or urgent", name)
+}
+
+// MarshalText encodes the priority as its name.
+func (p UpdateJobPriority) MarshalText() ([]byte, error) {
+	return []byte(p.String()), nil
+}
+
+// UnmarshalText decodes a priority name.
+func (p *UpdateJobPriority) UnmarshalText(b []byte) error {
+	v, err := ParseUpdateJobPriority(string(b))
+	if err != nil {
+		return err
+	}
+	*p = v
+	return nil
+}
+
 // Result statuses in UpdateResult.Status.
 const (
 	UpdateUpdated  = "Updated"
@@ -106,12 +161,22 @@ type UpdateJob struct {
 	// Calls are the wp-cli commands of a plugin, ZIP or core update that
 	// failed or didn't change a version, with everything they printed.
 	// Only GetUpdateJob returns them; HasOutput tells lists they exist.
-	Calls      []WPCLICall `json:"calls,omitempty"`
-	HasOutput  bool        `json:"has_output,omitempty"`
-	CreatedBy  string      `json:"created_by"`
-	CreatedAt  time.Time   `json:"created_at"`
-	StartedAt  *time.Time  `json:"started_at,omitempty"`
-	FinishedAt *time.Time  `json:"finished_at,omitempty"`
+	// Jobs that ran together all get the calls of their shared run.
+	Calls     []WPCLICall `json:"calls,omitempty"`
+	HasOutput bool        `json:"has_output,omitempty"`
+	// Priority orders the queue (see UpdateJobPriority).
+	Priority UpdateJobPriority `json:"priority"`
+	// Position is the job's approximate place in the queue (1 runs next),
+	// set only on queued jobs returned by the API. It isn't stored.
+	Position int `json:"position,omitempty"`
+	// BatchID is the ID of the first job of a group of plugin update jobs
+	// on one site that ran together in one WP-CLI call, sharing a text
+	// diff. Zero for a job that ran on its own.
+	BatchID    int64      `json:"batch_id,omitempty"`
+	CreatedBy  string     `json:"created_by"`
+	CreatedAt  time.Time  `json:"created_at"`
+	StartedAt  *time.Time `json:"started_at,omitempty"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
 }
 
 // Active reports whether the job is still waiting or running.

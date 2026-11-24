@@ -8,6 +8,7 @@ import type {
 	StagedPluginZip,
 	UpdateJob,
 	UpdateJobKind,
+	UpdateJobPriority,
 	UserCreateJobPayload,
 } from "../types";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
@@ -648,6 +649,8 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				active: isBusy(job),
 				review: hasTextDiffFindings(job),
 				output: !!job.has_output,
+				priority: job.priority,
+				position: job.status === "queued" ? job.position : undefined,
 				createdAt: Date.parse(job.created_at) || Date.now(),
 				...describeJob(job),
 			},
@@ -910,6 +913,25 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return job;
 	}
 
+	/**
+	 * Changes a queued job's priority, e.g. to high to run it before normal
+	 * and low jobs. Urgent needs the admin level.
+	 */
+	async function setPriority(
+		id: number,
+		priority: UpdateJobPriority,
+	): Promise<UpdateJob> {
+		const res = await apiFetch(`${BASE_URL}/update-jobs/${id}`, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ priority }),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		const job = (await res.json()) as UpdateJob;
+		merge([job]);
+		return job;
+	}
+
 	/** One job with its full text diff and wp-cli output. */
 	async function fetchJob(id: number): Promise<UpdateJob> {
 		const res = await apiFetch(`${BASE_URL}/update-jobs/${id}`);
@@ -951,6 +973,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		enqueueCore,
 		enqueueUserCreate,
 		enqueueUserDelete,
+		setPriority,
 		fetchJobs,
 		fetchJob,
 		fetchTextDiffJobs,
