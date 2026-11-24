@@ -34,6 +34,8 @@ func setupRunnerTest(t *testing.T) {
 	oldVulnerable, oldFixedIn := pluginVulnerable, pluginFixedIn
 	oldPatch, oldPackages := updatePluginsPatch, updatePackages
 	oldCLIPHP, oldSitePHP := cliPHPVersion, sitePHPVersion
+	oldReset := resetRewriteRules
+	resetRewriteRules = func(models.CliSite) error { return nil }
 	cliPHPVersion = func(models.CliSite) (string, error) { return "8.1.2", nil }
 	sitePHPVersion = func(string) string { return "8.3" }
 	oldServers := siteServers
@@ -70,6 +72,7 @@ func setupRunnerTest(t *testing.T) {
 		pluginVulnerable, pluginFixedIn = oldVulnerable, oldFixedIn
 		updatePluginsPatch, updatePackages = oldPatch, oldPackages
 		cliPHPVersion, sitePHPVersion = oldCLIPHP, oldSitePHP
+		resetRewriteRules = oldReset
 		db.Close()
 		config.RunData.DataDir, config.RunData.ConfigDir = oldData, oldConfig
 	})
@@ -473,5 +476,72 @@ func TestRunSyncsSiteExposuresAfterPluginJob(t *testing.T) {
 
 	if len(synced) != 1 || synced[0] != job.SiteID {
 		t.Errorf("synced exposures for %v, want once for %s", synced, job.SiteID)
+	}
+}
+
+// A job that updated something resets the site's rewrite rules, before the
+// text diff's after fetch; one that updated nothing, or only installed a
+// new plugin, doesn't.
+func TestRewriteRulesResetAfterUpdates(t *testing.T) {
+	setupRunnerTest(t)
+	var resets, events []string
+	resetRewriteRules = func(site models.CliSite) error {
+		resets = append(resets, site.ID)
+		events = append(events, "reset")
+		return nil
+	}
+	fetchPage = func(string, map[string]string) textdiff.Page {
+		events = append(events, "fetch")
+		return textdiff.Page{Error: "not fetched in tests"}
+	}
+	version := "1.1"
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
+		if version == "1.0" {
+			return nil, nil
+		}
+		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0", NewVersion: version, Status: "Updated"}}, nil
+	}
+
+	job := createJob(t, pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"}))
+	run(job)
+	if len(resets) != 1 || resets[0] != testSite {
+		t.Fatalf("resets after an update = %v, want one", resets)
+	}
+	if n := len(events); n < 2 || events[n-2] != "reset" || events[n-1] != "fetch" {
+		t.Errorf("events = %v, want the reset right before the after fetch", events)
+	}
+
+	version = "1.0"
+	job = createJob(t, pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"}))
+	run(job)
+	if len(resets) != 1 {
+		t.Errorf("resets after a job that updated nothing = %v", resets)
+	}
+
+	// A failed reset doesn't fail the job.
+	version = "1.2"
+	resetRewriteRules = func(models.CliSite) error { return errors.New("wp-cli broke") }
+	job = createJob(t, pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.1"}))
+	run(job)
+	if stored := storedJob(t, job.ID); stored.Status != models.UpdateJobDone || stored.Error != "" {
+		t.Errorf("job after a failed reset = %+v", stored)
+	}
+
+	// Jobs that run together reset the rules once.
+	version = "1.3"
+	resets = nil
+	resetRewriteRules = func(site models.CliSite) error { resets = append(resets, site.ID); return nil }
+	first := createJob(t, pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.2"}))
+	second := createJob(t, pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.2"}))
+	runBatch([]models.UpdateJob{first, second})
+	if len(resets) != 1 {
+		t.Errorf("resets after a combined run = %v, want one", resets)
+	}
+
+	if updatesSite(models.NewUpdateJob(models.UpdateJobKindInstall, testSite, models.InstallPayload{Source: "akismet"})) {
+		t.Error("installing a new plugin counts as an update")
+	}
+	if !updatesSite(models.NewUpdateJob(models.UpdateJobKindInstall, testSite, models.InstallPayload{Source: "x.zip", Plugin: "x", OldVersion: "1.0"})) {
+		t.Error("a ZIP update doesn't count as an update")
 	}
 }

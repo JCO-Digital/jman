@@ -58,6 +58,7 @@ var (
 	siteLocks          = db.GetSiteLocks
 	refreshPluginCache = cache.UpdateSitePluginCache
 	updateCore         = wpcli.UpdateCore
+	resetRewriteRules  = wpcli.ResetRewriteRules
 	// refreshCore is the refresh after a core job, which records its own
 	// ledger entry (see sitestate.SourceJob).
 	refreshCore = func(site models.CliSite) (*models.SiteCore, error) {
@@ -281,6 +282,12 @@ func run(job models.UpdateJob) {
 		runPlugins(job, *site)
 	}
 
+	// Before the text diff's after fetch, which then rebuilds the rules
+	// and finds the URLs that are still broken.
+	if updatesSite(job) {
+		resetRewriteRulesAfter([]models.UpdateJob{job}, *site)
+	}
+
 	if baseline != nil {
 		compareText([]models.UpdateJob{job}, baseline)
 	}
@@ -326,10 +333,55 @@ func runBatch(jobs []models.UpdateJob) {
 
 	baseline := takeTextBaseline(valid, *site)
 	runPluginJobs(valid, *site)
+	resetRewriteRulesAfter(valid, *site)
 	compareText(valid, baseline)
 	if err := syncSiteExposures(site.ID); err != nil {
 		log.Printf("Update jobs %v: failed to sync vulnerability exposures for site %s: %v", ids, site.ID, err)
 	}
+}
+
+// updatesSite reports whether the job can update plugins or core: a
+// plugins, ZIP update or core job.
+func updatesSite(job models.UpdateJob) bool {
+	switch job.Kind {
+	case models.UpdateJobKindPlugins, models.UpdateJobKindCore:
+		return true
+	case models.UpdateJobKindInstall:
+		return jobInstall(job).Plugin != ""
+	}
+	return false
+}
+
+// resetRewriteRulesAfter deletes the site's cached rewrite rules once when
+// any of the finished jobs updated something, so WordPress rebuilds them
+// with the routes of the new versions (see wpcli.ResetRewriteRules). A
+// failure is logged but doesn't fail the jobs: the update itself went
+// through.
+func resetRewriteRulesAfter(jobs []models.UpdateJob, site models.CliSite) {
+	if !anyUpdated(jobs) {
+		return
+	}
+	if err := resetRewriteRules(site); err != nil {
+		log.Printf("Update job %d on %s: %v", jobs[0].ID, site.Name, err)
+	}
+}
+
+// anyUpdated reports whether a finished job has an updated result, read
+// back from the database.
+func anyUpdated(jobs []models.UpdateJob) bool {
+	for _, job := range jobs {
+		stored, err := db.GetUpdateJob(job.ID)
+		if err != nil || stored == nil {
+			log.Printf("Update job %d: failed to read the job back to reset rewrite rules: %v", job.ID, err)
+			continue
+		}
+		for _, r := range stored.Results {
+			if r.Status == models.UpdateUpdated {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // runPlugins updates one job's plugins.

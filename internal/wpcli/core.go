@@ -154,3 +154,25 @@ func parseCLIInfoPHPVersion(output string) (string, error) {
 	}
 	return info.PHPVersion, nil
 }
+
+// resetRewriteRulesPHP deletes the cached rewrite rules of the site, or of
+// every site of a multisite network.
+const resetRewriteRulesPHP = `if (is_multisite()) { foreach (get_sites(['fields' => 'ids', 'number' => 0]) as $id) { switch_to_blog($id); delete_option('rewrite_rules'); restore_current_blog(); } } else { delete_option('rewrite_rules'); }`
+
+// ResetRewriteRules deletes a site's cached rewrite rules (on every site
+// of a multisite network), which WordPress rebuilds on the next page load,
+// as re-saving Settings → Permalinks does. A plugin update doesn't run the
+// plugin's activation hook, so routes it adds or changes stay missing until
+// the rules are rebuilt: URLs that 404.
+//
+// Deleting rather than `wp rewrite flush` lets the rules be rebuilt in a
+// real web request: a flush from wp-cli would need every plugin and the
+// theme loaded, and some (multilingual plugins especially) register
+// different rules under wp-cli.
+func ResetRewriteRules(site models.CliSite) error {
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}, "eval", resetRewriteRulesPHP)
+	if err != nil {
+		return fmt.Errorf("failed to reset rewrite rules: %s", shortError(res.Error, err))
+	}
+	return nil
+}
