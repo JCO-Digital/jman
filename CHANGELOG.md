@@ -1,5 +1,15 @@
 # Changelog
 
+## 7.45.0 (2026-11-24)
+
+#### Features
+
+- scan: acknowledge the same path on other sites in one go (62976cb)
+
+#### Continuous Integration
+
+- release manually instead of on every push to main (c1b25fb)
+
 ## 7.44.0 (2026-11-23)
 
 #### Features
