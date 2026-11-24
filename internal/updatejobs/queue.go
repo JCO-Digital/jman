@@ -2,8 +2,8 @@ package updatejobs
 
 import (
 	"errors"
+	"maps"
 	"slices"
-	"sort"
 	"sync"
 	"time"
 
@@ -17,8 +17,10 @@ import (
 //   - A site runs one job at a time, and its jobs run in the order they were
 //     queued: a job never overtakes an older job on the same site.
 //   - Sites are ranked by the highest priority among their queued jobs, so a
-//     high priority job pulls its site's older jobs forward with it. Equal
-//     ranks run in queue order.
+//     high priority job pulls its site's older jobs forward with it.
+//   - Equal ranks take turns between servers: the server that started a job
+//     longest ago goes first, so one server's bulk run doesn't hold back
+//     the others. Within a server, equal ranks run in queue order.
 //   - Low priority jobs age: they count as normal once they have waited
 //     agingStep.
 //   - At most PerServer jobs run on one server at a time. Express workers
@@ -92,12 +94,16 @@ type queue struct {
 	pending []entry
 	busy    map[string]bool
 	servers map[string]int
-	closed  bool
-	now     func() time.Time
+	// turns counts started claims; lastTurn is the turn in which each
+	// server (see turnKey) last started one, for the round-robin.
+	turns    uint64
+	lastTurn map[string]uint64
+	closed   bool
+	now      func() time.Time
 }
 
 func newQueue() *queue {
-	qu := &queue{busy: map[string]bool{}, servers: map[string]int{}, now: time.Now}
+	qu := &queue{busy: map[string]bool{}, servers: map[string]int{}, lastTurn: map[string]uint64{}, now: time.Now}
 	qu.cond = sync.NewCond(&qu.mu)
 	return qu
 }
@@ -137,6 +143,26 @@ func (qu *queue) siteRanks(now time.Time) map[string]models.UpdateJobPriority {
 	return ranks
 }
 
+// turnKey is what takes turns in the round-robin: the job's server, or
+// its site when the server is unknown.
+func turnKey(e entry) string {
+	if e.server != "" {
+		return "server:" + e.server
+	}
+	return "site:" + e.job.SiteID
+}
+
+// before reports whether candidate a runs before candidate b, which is
+// earlier in the queue: higher site rank first, then the server whose last
+// turn is older. Otherwise b, the earlier one, stays first.
+func before(a, b entry, ranks map[string]models.UpdateJobPriority, lastTurn map[string]uint64) bool {
+	ra, rb := ranks[a.job.SiteID], ranks[b.job.SiteID]
+	if ra != rb {
+		return ra > rb
+	}
+	return lastTurn[turnKey(a)] < lastTurn[turnKey(b)]
+}
+
 // pick returns the index in pending of the job to run next, or -1 if none
 // can run now. Only the first queued job of each site is a candidate.
 func (qu *queue) pick(express bool) int {
@@ -159,8 +185,7 @@ func (qu *queue) pick(express bool) int {
 		if express && ranks[site] < models.UpdateJobPriorityHigh {
 			continue
 		}
-		// Ties keep queue order: the earlier site wins.
-		if best == -1 || ranks[site] > ranks[qu.pending[best].job.SiteID] {
+		if best == -1 || before(e, qu.pending[best], ranks, qu.lastTurn) {
 			best = i
 		}
 	}
@@ -179,6 +204,8 @@ func (qu *queue) next(express bool) (c claim, ok bool) {
 			return c, false
 		}
 		if i := qu.pick(express); i >= 0 {
+			qu.turns++
+			qu.lastTurn[turnKey(qu.pending[i])] = qu.turns
 			c = qu.takeBatch(i)
 			qu.busy[c.site] = true
 			if c.server != "" {
@@ -284,19 +311,34 @@ func (qu *queue) setPriority(id int64, p models.UpdateJobPriority) error {
 }
 
 // positions returns each queued job's approximate place in the queue (1
-// runs next): sites in rank order, each site's jobs in queue order. It
-// ignores busy sites and servers, which only hold a job back for a while.
+// runs next), by playing the queue out the way pick does: site rank, then
+// the round-robin between servers, each site's jobs in queue order. It
+// ignores busy sites and server limits, which only hold a job back for a
+// while, and that plugin updates on a site run together.
 func (qu *queue) positions() map[int64]int {
 	qu.mu.Lock()
 	defer qu.mu.Unlock()
 	ranks := qu.siteRanks(qu.now())
-	order := slices.Clone(qu.pending)
-	sort.SliceStable(order, func(a, b int) bool {
-		return ranks[order[a].job.SiteID] > ranks[order[b].job.SiteID]
-	})
-	pos := make(map[int64]int, len(order))
-	for i, e := range order {
-		pos[e.job.ID] = i + 1
+	lastTurn := maps.Clone(qu.lastTurn)
+	turns := qu.turns
+	rest := slices.Clone(qu.pending)
+	pos := make(map[int64]int, len(rest))
+	for n := 1; len(rest) > 0; n++ {
+		best := -1
+		seen := map[string]bool{}
+		for i, e := range rest {
+			if seen[e.job.SiteID] {
+				continue
+			}
+			seen[e.job.SiteID] = true
+			if best == -1 || before(e, rest[best], ranks, lastTurn) {
+				best = i
+			}
+		}
+		turns++
+		lastTurn[turnKey(rest[best])] = turns
+		pos[rest[best].job.ID] = n
+		rest = slices.Delete(rest, best, best+1)
 	}
 	return pos
 }

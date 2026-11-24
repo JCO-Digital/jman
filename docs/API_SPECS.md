@@ -1346,7 +1346,7 @@ Every job has `id`, `kind`, `site_id`, `status` (`queued`, `running`, `done`, `f
 
 ### Queue
 
-Jobs run one at a time per site, in the order they were queued, at most two at a time per server. Sites are ranked by the highest priority among their queued jobs; low jobs count as normal after 30 minutes. Plugin update jobs queued back to back on a site run together in one WP-CLI call. See `docs/update-queue.md`.
+Jobs run one at a time per site, in the order they were queued, at most two at a time per server. Sites are ranked by the highest priority among their queued jobs; among equal ranks, servers take turns. Low jobs count as normal after 30 minutes. Plugin update jobs queued back to back on a site run together in one WP-CLI call. See `docs/update-queue.md`.
 
 By default, a request for one site queues `high` jobs and a request for several sites `normal` jobs; the nightly core update is `low`. `POST /plugin-update-jobs` takes an optional `"priority"` for all its jobs (`urgent` needs `admin`, else `403`), and `"bulk": true` for one of many requests in an update of several sites, which gets the several-sites default. Without `"priority"`, a job whose site has an open vulnerability exposure for one of its plugins is `high`.
 

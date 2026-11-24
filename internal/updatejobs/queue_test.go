@@ -206,8 +206,9 @@ func TestQueueLimitsJobsPerServer(t *testing.T) {
 		claims = append(claims, c)
 		ids = append(ids, c.jobs[0].ID)
 	}
-	// srv-a is full after jobs 3 and 1, so job 2 waits for one of them.
-	if want := []int64{3, 1, 4}; !slices.Equal(ids, want) {
+	// After urgent job 3, srv-b's turn is older than srv-a's, so job 4 goes
+	// before job 1. srv-a is then full with jobs 3 and 1, so job 2 waits.
+	if want := []int64{3, 4, 1}; !slices.Equal(ids, want) {
 		t.Fatalf("order = %v, want %v", ids, want)
 	}
 	qu.done(claims[0])
@@ -229,6 +230,43 @@ func TestExpressWorkerGoesOneOverTheServerLimit(t *testing.T) {
 	// Now srv-a runs PerServer+1 jobs: not even the express worker adds one.
 	qu.push(qjob(4, "s4", models.UpdateJobPriorityHigh, ""))
 	assertBlocked(t, qu, true)
+}
+
+func TestQueueTakesTurnsBetweenServers(t *testing.T) {
+	qu := newTestQueue(t, map[string]string{"a1": "srv-a", "a2": "srv-a", "a3": "srv-a", "b1": "srv-b", "b2": "srv-b"})
+	// A bulk run on srv-a was queued before srv-b's jobs.
+	qu.push(qjob(1, "a1", 0, ""), qjob(2, "a2", 0, ""), qjob(3, "a3", 0, ""), qjob(4, "b1", 0, ""), qjob(5, "b2", 0, ""))
+
+	want := []int64{1, 4, 2, 5, 3}
+	if got := qu.positions(); got[1] != 1 || got[4] != 2 || got[2] != 3 || got[5] != 4 || got[3] != 5 {
+		t.Errorf("positions = %v, want the order %v", got, want)
+	}
+	var order []int64
+	for range 5 {
+		// One job at a time, so the server limit plays no part.
+		c := mustNext(t, qu, false)
+		order = append(order, c.jobs[0].ID)
+		qu.done(c)
+	}
+	if !slices.Equal(order, want) {
+		t.Errorf("order = %v, want %v (the servers take turns)", order, want)
+	}
+}
+
+func TestQueuePriorityBeatsServerTurns(t *testing.T) {
+	qu := newTestQueue(t, map[string]string{"a1": "srv-a", "a2": "srv-a", "b1": "srv-b"})
+	qu.push(qjob(1, "a1", 0, ""), qjob(3, "b1", 0, ""))
+	c := mustNext(t, qu, false)
+	if c.jobs[0].ID != 1 {
+		t.Fatalf("first job = %d, want 1", c.jobs[0].ID)
+	}
+	qu.done(c)
+	// srv-a just had its turn, but its high job still goes before srv-b's
+	// normal one.
+	qu.push(qjob(2, "a2", models.UpdateJobPriorityHigh, ""))
+	if id := mustNext(t, qu, false).jobs[0].ID; id != 2 {
+		t.Errorf("next job = %d, want the high job 2", id)
+	}
 }
 
 func TestQueueRunsPluginUpdatesOnASiteTogether(t *testing.T) {
