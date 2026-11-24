@@ -151,7 +151,7 @@ func TestRunInstallFromSlug(t *testing.T) {
 	setupRunnerTest(t)
 	var gotSource string
 	var gotActivate bool
-	installPlugin = func(_ models.CliSite, source string, activate bool) (bool, error) {
+	installPlugin = func(_ models.CliSite, source string, activate bool, _ *[]models.WPCLICall) (bool, error) {
 		gotSource, gotActivate = source, activate
 		return true, nil
 	}
@@ -204,7 +204,7 @@ func TestRunInstallUploadedZip(t *testing.T) {
 		sshCmds = append(sshCmds, args)
 		return wpcli.RunResult{}, nil
 	}
-	installPlugin = func(_ models.CliSite, source string, _ bool) (bool, error) {
+	installPlugin = func(_ models.CliSite, source string, _ bool, _ *[]models.WPCLICall) (bool, error) {
 		installedFrom = source
 		return true, nil
 	}
@@ -239,7 +239,7 @@ func TestRunInstallUploadedZip(t *testing.T) {
 
 func TestRunInstallFailure(t *testing.T) {
 	setupRunnerTest(t)
-	installPlugin = func(models.CliSite, string, bool) (bool, error) {
+	installPlugin = func(models.CliSite, string, bool, *[]models.WPCLICall) (bool, error) {
 		return false, errors.New("plugin not found")
 	}
 
@@ -363,7 +363,7 @@ func TestRunZipUpdateSharesUploadAndRecordsUpdate(t *testing.T) {
 	}
 	setSitePlugins(t, models.WPPlugin{Name: "paid", Status: "active", Version: "1.0"})
 	var activated []bool
-	installPlugin = func(_ models.CliSite, _ string, activate bool) (bool, error) {
+	installPlugin = func(_ models.CliSite, _ string, activate bool, _ *[]models.WPCLICall) (bool, error) {
 		activated = append(activated, activate)
 		return true, nil
 	}
@@ -404,6 +404,11 @@ func TestRunZipUpdateSharesUploadAndRecordsUpdate(t *testing.T) {
 	}
 	if len(activated) != 2 || activated[0] || activated[1] {
 		t.Errorf("activate = %v, want false (the plugin keeps its state)", activated)
+	}
+	// Both are ZIP updates in the update log.
+	lines := readUpdateLog(t)
+	if len(lines) != 2 || lines[0].Type != attemptZip || lines[0].Failed || lines[0].Results[0].NewVersion != "2.0" {
+		t.Errorf("update log = %+v", lines)
 	}
 }
 

@@ -107,7 +107,8 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 
 // ListUpdateJobsHandler returns every queued or running update job (plugin
 // and core), plus jobs that finished in the last few minutes. Jobs carry
-// only their text diff's summary; GetUpdateJobHandler returns the diff.
+// only their text diff's summary and whether they have wp-cli output;
+// GetUpdateJobHandler returns the diff and the output.
 func ListUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	jobs, err := db.ListUpdateJobs(time.Now().Add(-recentJobWindow))
 	if err != nil {
@@ -117,6 +118,7 @@ func ListUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range jobs {
 		jobs[i].TextDiff = nil
+		jobs[i].Calls = nil
 	}
 	WriteJSON(w, http.StatusOK, jobs)
 }
@@ -142,6 +144,7 @@ func ListTextDiffJobsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for i := range jobs {
 		jobs[i].TextDiff = nil
+		jobs[i].Calls = nil
 	}
 	WriteJSON(w, http.StatusOK, jobs)
 }

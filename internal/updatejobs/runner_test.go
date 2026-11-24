@@ -34,6 +34,9 @@ func setupRunnerTest(t *testing.T) {
 	oldAction, oldInstall, oldUpload, oldSSH := pluginAction, installPlugin, uploadFile, runSSH
 	oldVulnerable, oldFixedIn := pluginVulnerable, pluginFixedIn
 	oldPatch, oldPackages := updatePluginsPatch, updatePackages
+	oldCLIPHP, oldSitePHP := cliPHPVersion, sitePHPVersion
+	cliPHPVersion = func(models.CliSite) (string, error) { return "8.1.2", nil }
+	sitePHPVersion = func(string) string { return "8.3" }
 	q = newQueue()
 	pluginVulnerable = func(string, string, string) bool { return false }
 	pluginFixedIn = func(string, string, string) string { return "" }
@@ -64,6 +67,7 @@ func setupRunnerTest(t *testing.T) {
 		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
 		pluginVulnerable, pluginFixedIn = oldVulnerable, oldFixedIn
 		updatePluginsPatch, updatePackages = oldPatch, oldPackages
+		cliPHPVersion, sitePHPVersion = oldCLIPHP, oldSitePHP
 		db.Close()
 		config.RunData.DataDir, config.RunData.ConfigDir = oldData, oldConfig
 	})
@@ -133,7 +137,7 @@ func assertResults(t *testing.T, got, want []models.UpdateResult) {
 func TestRunWritesResultsAndOneLedgerEntry(t *testing.T) {
 	setupRunnerTest(t)
 	var gotPlugins []string
-	updatePlugins = func(_ models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		gotPlugins = plugins
 		return []wpcli.UpdateResult{
 			{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"},
@@ -182,7 +186,7 @@ func TestRunWritesResultsAndOneLedgerEntry(t *testing.T) {
 func TestRunRecordsUnreachableSite(t *testing.T) {
 	setupRunnerTest(t)
 	findSite = func(string) (*models.CliSite, error) { return nil, errors.New("site gone") }
-	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		t.Fatal("update must not run for an unreachable site")
 		return nil, nil
 	}
@@ -219,7 +223,7 @@ func TestStartInterruptsRunningAndResumesQueued(t *testing.T) {
 	}
 
 	ran := make(chan string, 2)
-	updatePlugins = func(site models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(site models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		ran <- site.ID
 		return nil, nil
 	}
@@ -321,7 +325,7 @@ func coreLedger(t *testing.T) (models.SiteUpdateLedgerEntry, map[string]any) {
 func TestRunCoreJobSuccess(t *testing.T) {
 	setupRunnerTest(t)
 	var gotMajor bool
-	updateCore = func(_ models.CliSite, major bool) (wpcli.CoreUpdateResult, error) {
+	updateCore = func(_ models.CliSite, major bool, _ *[]models.WPCLICall) (wpcli.CoreUpdateResult, error) {
 		gotMajor = major
 		return wpcli.CoreUpdateResult{Success: true, Version: "6.5.0"}, nil
 	}
@@ -347,7 +351,7 @@ func TestRunCoreJobSuccess(t *testing.T) {
 
 func TestRunCoreJobAlreadyLatest(t *testing.T) {
 	setupRunnerTest(t)
-	updateCore = func(models.CliSite, bool) (wpcli.CoreUpdateResult, error) {
+	updateCore = func(models.CliSite, bool, *[]models.WPCLICall) (wpcli.CoreUpdateResult, error) {
 		return wpcli.CoreUpdateResult{Version: "unknown"}, nil
 	}
 	refreshCore = func(site models.CliSite) (*models.SiteCore, error) {
@@ -369,7 +373,7 @@ func TestRunCoreJobAlreadyLatest(t *testing.T) {
 
 func TestRunCoreJobFailure(t *testing.T) {
 	setupRunnerTest(t)
-	updateCore = func(models.CliSite, bool) (wpcli.CoreUpdateResult, error) {
+	updateCore = func(models.CliSite, bool, *[]models.WPCLICall) (wpcli.CoreUpdateResult, error) {
 		return wpcli.CoreUpdateResult{Version: "unknown"}, errors.New("download failed")
 	}
 	refreshCore = func(models.CliSite) (*models.SiteCore, error) {
@@ -462,7 +466,7 @@ func TestRunPluginUpdateWritesVulnStatus(t *testing.T) {
 		models.WPPlugin{Name: "b", Version: "2.0", Update: "2.1"},
 	)
 	pluginVulnerable = func(_, plugin, version string) bool { return plugin == "a" && version == "1.0" }
-	updatePlugins = func(models.CliSite, []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"}}, nil
 	}
 	refreshPluginCache = func(models.CliSite) error {
@@ -493,7 +497,7 @@ func TestRunSyncsSiteExposuresAfterPluginJob(t *testing.T) {
 		synced = append(synced, siteID)
 		return nil
 	}
-	updatePlugins = func(_ models.CliSite, plugins []string) ([]wpcli.UpdateResult, error) {
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
 		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"}}, nil
 	}
 

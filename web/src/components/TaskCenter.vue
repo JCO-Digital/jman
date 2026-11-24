@@ -10,6 +10,7 @@ import { useDataStore } from "../stores/data";
 import { useNow } from "../composables/useNow";
 import { formatElapsed, formatRelativeTime } from "../utils/format";
 import AppIcon from "./AppIcon.vue";
+import UpdateOutputModal from "./UpdateOutputModal.vue";
 
 const store = useNotificationStore();
 const authStore = useAuthStore();
@@ -29,6 +30,14 @@ function author(e: Notification): string {
 	const by = e.task?.createdBy;
 	if (!by) return "";
 	return by === authStore.user?.username ? "you" : by;
+}
+
+// The job whose wp-cli output is open, if any.
+const outputJobId = ref<number | null>(null);
+
+function showOutput(jobId: number) {
+	store.setPanelOpen(false);
+	outputJobId.value = jobId;
 }
 
 function siteDomain(e: Notification): string | undefined {
@@ -208,6 +217,15 @@ onUnmounted(() => {
 									>
 										Review changes
 									</RouterLink>
+									<button
+										v-if="e.task?.output"
+										type="button"
+										class="task-link"
+										title="wp-cli's full output of the update"
+										@click="showOutput(e.task.jobId)"
+									>
+										Show output
+									</button>
 								</div>
 							</div>
 						</li>
@@ -240,5 +258,6 @@ onUnmounted(() => {
 				aria-hidden="true"
 			></span>
 		</button>
+		<UpdateOutputModal :job-id="outputJobId" @close="outputJobId = null" />
 	</div>
 </template>

@@ -79,7 +79,7 @@ func TestUpdatePluginChecksSiteAfterFailure(t *testing.T) {
 	})
 	site := models.CliSite{ID: "test-site", Name: "example.com", Path: "/srv/www"}
 
-	_, err := UpdatePlugin(site, []string{"akismet"})
+	_, err := UpdatePlugin(site, []string{"akismet"}, nil)
 	var failure *UpdateFailure
 	if !errors.As(err, &failure) {
 		t.Fatalf("err = %v (%T), want *UpdateFailure", err, err)

@@ -180,7 +180,20 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 	updatedVulnerable := install.Plugin != "" && install.OldVersion != "" &&
 		pluginVulnerable(job.SiteID, install.Plugin, install.OldVersion)
 
-	ok, installErr := installPlugin(site, source, install.Activate)
+	// An install over a plugin (install.Plugin) is a ZIP update, which goes
+	// in the update log; a new plugin isn't an update.
+	var a *attempt
+	var rec *[]models.WPCLICall
+	wpVersion := ""
+	if install.Plugin != "" {
+		a = newAttempt(attemptZip)
+		rec = &a.calls
+		wpVersion = cachedCoreVersion(job.SiteID)
+	}
+	ok, installErr := installPlugin(site, source, install.Activate, rec)
+	if a != nil {
+		a.done()
+	}
 	if installErr == nil && !ok {
 		installErr = fmt.Errorf("WP-CLI did not report a successful install")
 	}
@@ -214,10 +227,22 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 	}
 
 	results := []models.UpdateResult{r}
+	if a != nil {
+		// wp-cli reported a successful install, but the version is the
+		// one that was there: for the update log, a ZIP update that
+		// didn't update. (Reinstalling the same version on purpose shows
+		// up here too.)
+		if r.Status == models.UpdateUpToDate {
+			a.unchanged[r.Name] = true
+		}
+		a.results = results
+		storeAttemptCalls(job, []*attempt{a})
+	}
 	finishAction(job, models.UpdateJobDone, results, jobErr)
 	if install.Plugin != "" {
 		// An update from a ZIP is recorded like any other plugin update.
 		writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable), jobErr)
+		logAttempts(job, site, wpVersion, []*attempt{a})
 		return
 	}
 	writeActionLedger(job, results, jobErr)
