@@ -1,5 +1,13 @@
 # Changelog
 
+## 7.46.0 (2026-11-24)
+
+#### Features
+
+- scan: trust plugins on every site through the allowlist (d88c6f1)
+
+### v7.45.1 (2026-11-24)
+
 ## 7.45.0 (2026-11-24)
 
 #### Features
