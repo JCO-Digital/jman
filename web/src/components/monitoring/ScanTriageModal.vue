@@ -7,7 +7,10 @@ import AppIcon from "../AppIcon.vue";
 import type { ScanFinding } from "../../types";
 
 interface Props {
-	/** allowlist trusts findings[0]'s hash; acknowledge trusts the paths. */
+	/**
+	 * allowlist trusts findings[0]'s hash; acknowledge trusts the paths.
+	 * Both offer to cover the other open findings that match.
+	 */
 	mode: "allowlist" | "acknowledge" | null;
 	findings: ScanFinding[];
 }
@@ -36,17 +39,14 @@ watch(
 		reason.value = "";
 		closeMatching.value = false;
 		matching.value = null;
-		if (mode !== "allowlist" || !finding.value?.sha256) return;
-		const target = finding.value;
+		if (!mode) return;
+		const targets = props.findings;
 		try {
-			const found = await scanStore.fetchFindings({
-				sha256: target.sha256,
-				status: "open",
-				limit: 1000,
-			});
-			if (finding.value === target) {
-				matching.value = found.filter((f) => f.id !== target.id);
-			}
+			const found =
+				mode === "allowlist"
+					? await findSameHash(targets[0])
+					: await findSamePaths(targets);
+			if (props.findings === targets) matching.value = found;
 		} catch (e) {
 			toastStore.addToast(
 				e instanceof Error
@@ -57,6 +57,42 @@ watch(
 		}
 	},
 );
+
+/** The other open findings with the same file content. */
+async function findSameHash(target?: ScanFinding): Promise<ScanFinding[]> {
+	if (!target?.sha256) return [];
+	const found = await scanStore.fetchFindings({
+		sha256: target.sha256,
+		status: "open",
+		limit: 1000,
+	});
+	return found.filter((f) => f.id !== target.id);
+}
+
+/**
+ * The other open findings of the same rule and path, on any site: the same
+ * unknown plugin or stray file elsewhere.
+ */
+async function findSamePaths(targets: ScanFinding[]): Promise<ScanFinding[]> {
+	const selected = new Set(targets.map((f) => f.id));
+	const keys = new Map<string, ScanFinding>();
+	for (const f of targets) keys.set(`${f.rule}\0${f.path}`, f);
+	const lists = await Promise.all(
+		[...keys.values()].map((f) =>
+			scanStore.fetchFindings({
+				rule: f.rule,
+				path: f.path,
+				status: "open",
+				limit: 1000,
+			}),
+		),
+	);
+	const byID = new Map<number, ScanFinding>();
+	for (const f of lists.flat()) {
+		if (!selected.has(f.id)) byID.set(f.id, f);
+	}
+	return [...byID.values()];
+}
 
 const matchingSites = computed(() => {
 	const domains = new Set(
@@ -86,12 +122,21 @@ async function submit() {
 				"success",
 			);
 		} else {
-			const res = await scanStore.acknowledgePaths(
-				props.findings.map((f) => f.id),
-				why,
-			);
+			const ids = props.findings.map((f) => f.id);
+			if (closeMatching.value && matching.value) {
+				ids.push(...matching.value.map((f) => f.id));
+			}
+			let acknowledged = 0;
+			// jman-api takes at most 500 findings per request.
+			for (let i = 0; i < ids.length; i += 500) {
+				const res = await scanStore.acknowledgePaths(
+					ids.slice(i, i + 500),
+					why,
+				);
+				acknowledged += res?.acknowledged ?? 0;
+			}
 			toastStore.addToast(
-				`${res?.acknowledged ?? 0} path(s) acknowledged`,
+				`${acknowledged} path(s) acknowledged`,
 				"success",
 			);
 		}
@@ -198,6 +243,28 @@ async function submit() {
 						</p>
 					</template>
 
+					<template v-if="mode === 'acknowledge'">
+						<p v-if="matching === null" class="hint">
+							Looking for the same path on other sites…
+						</p>
+						<template v-else-if="matching.length">
+							<label class="checkbox-label">
+								<input
+									v-model="closeMatching"
+									type="checkbox"
+								/>
+								Also acknowledge the {{ matching.length }} other
+								open finding(s) with the same path
+							</label>
+							<p class="hint">
+								On {{ matchingSites.join(", ") }}
+							</p>
+						</template>
+						<p v-else class="hint">
+							No other open finding has this path.
+						</p>
+					</template>
+
 					<div class="form-actions">
 						<button
 							type="button"
@@ -214,7 +281,9 @@ async function submit() {
 							{{
 								mode === "allowlist"
 									? "Allowlist"
-									: "Acknowledge"
+									: closeMatching && matching?.length
+										? `Acknowledge ${findings.length + matching.length}`
+										: "Acknowledge"
 							}}
 						</button>
 					</div>
