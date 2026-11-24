@@ -110,77 +110,125 @@ func CloseScanFindingsHandler(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]int{"closed": n})
 }
 
-// addScanAllowlistRequest is the body of POST /api/scan/allowlist.
+// addScanAllowlistRequest is the body of POST /api/scan/allowlist: one
+// finding (finding_id) or several (finding_ids).
 type addScanAllowlistRequest struct {
-	FindingID int64  `json:"finding_id"`
-	Reason    string `json:"reason"`
-	// CloseMatching also marks the open findings with the same hash on
+	FindingID  int64   `json:"finding_id"`
+	FindingIDs []int64 `json:"finding_ids"`
+	Reason     string  `json:"reason"`
+	// CloseMatching also marks the open findings with the same hashes on
 	// other sites allowlisted.
 	CloseMatching bool `json:"close_matching"`
 }
 
+// allowlistRefusal says why a finding's hash can't be allowlisted, or ""
+// when it can: a file's content, or an unknown plugin's slug.
+func allowlistRefusal(f models.StoredScanFinding) string {
+	switch {
+	case f.SHA256 == "" || (f.Engine == "api" && f.Rule != ruleUnknownPlugin):
+		return "This finding has no file hash to allowlist"
+	case !allowlistCovers(f):
+		return "A plugin that poses as WordPress can't be allowlisted; dismiss it once it's checked"
+	}
+	return ""
+}
+
+// allowlistCovers reports whether an allowlist entry for the finding's
+// hash covers it. An allowlisted plugin slug is trusted on every site, so
+// a plugin posing as WordPress isn't covered: a backdoor could take a
+// trusted premium plugin's slug.
+func allowlistCovers(f models.StoredScanFinding) bool {
+	return f.Rule != ruleUnknownPlugin || f.Severity != "high"
+}
+
 // AddScanAllowlistHandler handles POST /api/scan/allowlist: it trusts the
-// file hash of a finding on every site and marks that finding allowlisted
-// (with close_matching, every open finding with the hash). An incident
-// left without open findings is closed.
+// hashes of findings on every site (a file's content, or for
+// unknown-plugin the plugin's slug) and marks those findings allowlisted
+// (with close_matching, every open finding with the hashes). Incidents
+// left without open findings are closed.
 func AddScanAllowlistHandler(w http.ResponseWriter, r *http.Request) {
 	var req addScanAllowlistRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	ids := req.FindingIDs
+	if req.FindingID != 0 {
+		ids = append(ids, req.FindingID)
+	}
 	req.Reason = strings.TrimSpace(req.Reason)
-	if req.Reason == "" {
+	switch {
+	case len(ids) == 0:
+		WriteError(w, http.StatusBadRequest, "finding_ids is required")
+		return
+	case len(ids) > maxScanTriageFindings:
+		WriteError(w, http.StatusBadRequest, "Too many findings")
+		return
+	case req.Reason == "":
 		WriteError(w, http.StatusBadRequest, "A reason is required")
 		return
-	}
-	if len(req.Reason) > maxScanTriageReason {
+	case len(req.Reason) > maxScanTriageReason:
 		WriteError(w, http.StatusBadRequest, "The reason is too long")
 		return
 	}
-	found, err := db.GetScanFindings([]int64{req.FindingID})
+	findings, err := db.GetScanFindings(ids)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "AddScanAllowlistHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	if len(found) == 0 {
+	if len(findings) != len(uniqueIDs(ids)) {
 		WriteError(w, http.StatusNotFound, "Finding not found")
 		return
 	}
-	f := found[0]
-	if f.SHA256 == "" || f.Engine == "api" {
-		WriteError(w, http.StatusUnprocessableEntity, "This finding has no file hash to allowlist")
-		return
+	for _, f := range findings {
+		if why := allowlistRefusal(f); why != "" {
+			WriteError(w, http.StatusUnprocessableEntity, why)
+			return
+		}
 	}
 	by := requestUsername(r)
 
 	scanTriageMu.Lock()
 	defer scanTriageMu.Unlock()
-	entry, err := db.AddScanAllowlistEntry(models.ScanAllowlistEntry{
-		SHA256:      f.SHA256,
-		Reason:      req.Reason,
-		SiteID:      f.SiteID,
-		Rule:        f.Rule,
-		Path:        f.Path,
-		Snippet:     f.Snippet,
-		AuditFields: models.AuditFields{CreatedBy: by},
-	})
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "AddScanAllowlistHandler: %v", err)
-		WriteError(w, http.StatusInternalServerError, "Internal server error")
-		return
-	}
-
-	affected := []models.StoredScanFinding{f}
-	if req.CloseMatching {
+	entries := []models.ScanAllowlistEntry{}
+	seen := map[string]bool{}
+	affected := findings
+	for _, f := range findings {
+		if seen[f.SHA256] {
+			continue
+		}
+		seen[f.SHA256] = true
+		entry, err := db.AddScanAllowlistEntry(models.ScanAllowlistEntry{
+			SHA256:      f.SHA256,
+			Reason:      req.Reason,
+			SiteID:      f.SiteID,
+			Rule:        f.Rule,
+			Path:        f.Path,
+			Snippet:     f.Snippet,
+			AuditFields: models.AuditFields{CreatedBy: by},
+		})
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "AddScanAllowlistHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		entries = append(entries, *entry)
+		verb.LogPrintf(verb.Normal, "%s allowlisted %s (%s on site %s): %s", by, f.SHA256, f.Path, f.SiteID, req.Reason)
+		if !req.CloseMatching {
+			continue
+		}
 		matching, err := db.ListScanFindings(db.ScanFindingFilter{SHA256: f.SHA256, Status: models.ScanFindingOpen})
 		if err != nil {
 			verb.LogPrintf(verb.Normal, "AddScanAllowlistHandler: %v", err)
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
-		affected = append(affected, matching...)
+		for _, m := range matching {
+			if allowlistCovers(m) {
+				affected = append(affected, m)
+			}
+		}
 	}
 	n, err := db.SetScanFindingStatus(findingIDs(affected), models.ScanFindingAllowlisted, by)
 	if err != nil {
@@ -189,8 +237,7 @@ func AddScanAllowlistHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	closeEmptySecurityIncidents(findingIncidents(affected), by)
-	verb.LogPrintf(verb.Normal, "%s allowlisted %s (%s on site %s): %s", by, f.SHA256, f.Path, f.SiteID, req.Reason)
-	WriteJSON(w, http.StatusOK, map[string]any{"entry": entry, "allowlisted": n})
+	WriteJSON(w, http.StatusOK, map[string]any{"entry": entries[0], "entries": entries, "allowlisted": n})
 }
 
 // ListScanAllowlistHandler handles GET /api/scan/allowlist, with removed
@@ -241,7 +288,7 @@ func AddScanPathAcksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, f := range findings {
 		if !scanStateRules[f.Rule] {
-			WriteError(w, http.StatusUnprocessableEntity, "Only stray-file, foreign-owner, unreadable, new-admin, new-app-password and unknown-plugin findings can be acknowledged by path; allowlist the file's hash instead")
+			WriteError(w, http.StatusUnprocessableEntity, "Only stray-file, foreign-owner, unreadable, new-admin and new-app-password findings can be acknowledged by path; allowlist the file's hash, or an unknown plugin, instead")
 			return
 		}
 	}

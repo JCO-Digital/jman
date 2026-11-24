@@ -10,26 +10,36 @@ import { useConfirm } from "../../composables/useConfirm";
 import AppIcon from "../AppIcon.vue";
 import LoadingSpinner from "../LoadingSpinner.vue";
 import Pagination from "../Pagination.vue";
+import ListToolbar from "../ListToolbar.vue";
+import SortableTh from "../SortableTh.vue";
 import { useListState } from "../../composables/useListState";
+import { useClientList } from "../../composables/useClientList";
 import ScanFindingsTable from "./ScanFindingsTable.vue";
 import ScanTriageModal from "./ScanTriageModal.vue";
 import SectionBar from "./SectionBar.vue";
 import EmptyState from "./EmptyState.vue";
-import { severityClass } from "./scan";
+import {
+	pluginName,
+	pluginSlug,
+	severityClass,
+	unknownPluginRule,
+} from "./scan";
 import type { Section } from "./sections";
 import { useRouteSection } from "../../composables/useRouteSection";
-import type { Incident, ScanFinding } from "../../types";
+import type { Incident, ScanAllowlistEntry, ScanFinding } from "../../types";
 
 type SectionKey =
 	| "incidents"
 	| "informational"
 	| "history"
+	| "plugins"
 	| "allowlist"
 	| "acks";
 const sectionKeys: SectionKey[] = [
 	"incidents",
 	"informational",
 	"history",
+	"plugins",
 	"allowlist",
 	"acks",
 ];
@@ -51,7 +61,8 @@ const sections = computed<Section<SectionKey>[]>(() => [
 	},
 	{ key: "informational", label: "Informational" },
 	{ key: "history", label: "History" },
-	{ key: "allowlist", label: "Allowlist" },
+	{ key: "plugins", label: "Allowed plugins" },
+	{ key: "allowlist", label: "Allowlisted files" },
 	{ key: "acks", label: "Acknowledged paths" },
 ]);
 /** Sites with a file scan, for the empty state; null until loaded. */
@@ -63,10 +74,41 @@ const canTriage = computed(() => authStore.canExecute);
 const expanded = ref(new Set<number>());
 const incidentFindings = ref<Record<number, ScanFinding[]>>({});
 const informational = ref<ScanFinding[]>([]);
-// The history section's page is in the URL (?page=&per=), like every
-// list's; choosing another section drops it.
-const list = useListState({ sortKeys: [], defaultSort: "" });
+// The history and plugin sections' page, and the plugin list's search
+// and sort, are in the URL like every list's; choosing another section
+// drops them.
+const list = useListState({
+	sortKeys: ["plugin", "added"],
+	defaultSort: "plugin",
+	descFirst: ["added"],
+});
 const showRemoved = ref(false);
+
+/** Allowlisted plugins: unknown-plugin entries, trusted by slug. */
+interface PluginEntry {
+	entry: ScanAllowlistEntry;
+	slug: string;
+	name: string;
+}
+const pluginEntries = computed<PluginEntry[]>(() =>
+	scanStore.allowlist
+		.filter((e) => e.rule === unknownPluginRule)
+		.map((entry) => ({
+			entry,
+			slug: pluginSlug(entry.path),
+			name: pluginName(entry.snippet),
+		})),
+);
+const fileEntries = computed(() =>
+	scanStore.allowlist.filter((e) => e.rule !== unknownPluginRule),
+);
+const pluginList = useClientList(pluginEntries, list, {
+	search: (p, q) =>
+		p.slug.toLowerCase().includes(q) ||
+		p.name.toLowerCase().includes(q) ||
+		p.entry.reason.toLowerCase().includes(q),
+	sortValue: (p, key) => (key === "added" ? p.entry.created_at : p.slug),
+});
 
 const triageMode = ref<"allowlist" | "acknowledge" | null>(null);
 const triageFindings = ref<ScanFinding[]>([]);
@@ -106,6 +148,7 @@ async function refresh() {
 				);
 				await Promise.all([...expanded.value].map(loadFindings));
 				break;
+			case "plugins":
 			case "allowlist":
 				await scanStore.fetchAllowlist(showRemoved.value);
 				break;
@@ -269,17 +312,16 @@ async function closeIncident(inc: Incident) {
 	}
 }
 
-async function removeAllowlist(id: number, sha: string) {
-	if (
-		!(await confirm(
-			`Remove ${sha.slice(0, 12)}… from the allowlist? Files with this content will be flagged again; findings it already covered stay allowlisted.`,
-			{ confirmLabel: "Remove", danger: true },
-		))
-	) {
+async function removeAllowlist(e: ScanAllowlistEntry) {
+	const question =
+		e.rule === unknownPluginRule
+			? `Remove the plugin ${pluginSlug(e.path)} from the allowlist? It will be flagged again on every site that has it; findings it already covered stay allowlisted.`
+			: `Remove ${e.sha256.slice(0, 12)}… from the allowlist? Files with this content will be flagged again; findings it already covered stay allowlisted.`;
+	if (!(await confirm(question, { confirmLabel: "Remove", danger: true }))) {
 		return;
 	}
 	try {
-		await scanStore.removeAllowlist(id);
+		await scanStore.removeAllowlist(e.id);
 		await refresh();
 	} catch (e) {
 		toastStore.addToast(
@@ -314,7 +356,11 @@ async function removeAck(id: number, path: string) {
 	<div class="security-panel">
 		<SectionBar v-model="section" :sections="sections">
 			<label
-				v-if="section === 'allowlist' || section === 'acks'"
+				v-if="
+					section === 'plugins' ||
+					section === 'allowlist' ||
+					section === 'acks'
+				"
 				class="checkbox-label"
 			>
 				<input v-model="showRemoved" type="checkbox" />
@@ -417,7 +463,7 @@ async function removeAck(id: number, path: string) {
 						v-else
 						:findings="incidentFindings[inc.id] ?? []"
 						:can-triage="canTriage"
-						@allowlist="(f) => openTriage('allowlist', [f])"
+						@allowlist="(fs) => openTriage('allowlist', fs)"
 						@acknowledge="(fs) => openTriage('acknowledge', fs)"
 						@dismiss="dismiss"
 						@redact="redact"
@@ -431,7 +477,8 @@ async function removeAck(id: number, path: string) {
 			<p class="sub-text section-hint">
 				Low-severity findings, such as stray database dumps and backups,
 				don't open incidents. Clean up the file, acknowledge its path if
-				it's meant to be there, or dismiss it.
+				it's meant to be there, or dismiss it. Allowlist a plugin that
+				isn't on wordpress.org to trust it on every site.
 			</p>
 			<p
 				v-if="!loading && informational.length === 0"
@@ -444,7 +491,7 @@ async function removeAck(id: number, path: string) {
 				:findings="informational"
 				:can-triage="canTriage"
 				show-site
-				@allowlist="(f) => openTriage('allowlist', [f])"
+				@allowlist="(fs) => openTriage('allowlist', fs)"
 				@acknowledge="(fs) => openTriage('acknowledge', fs)"
 				@dismiss="dismiss"
 				@redact="redact"
@@ -534,14 +581,101 @@ async function removeAck(id: number, path: string) {
 			</div>
 		</div>
 
-		<!-- Allowlist -->
+		<!-- Allowed plugins -->
+		<div v-else-if="section === 'plugins'" class="card">
+			<p class="sub-text section-hint">
+				Plugins that aren't on wordpress.org or from J&amp;Co Digital,
+				trusted by slug on every site, including sites that get them
+				later. Allowlist an unknown-plugin finding to add one.
+			</p>
+			<ListToolbar
+				:list="list"
+				placeholder="Search by slug, name or reason"
+			/>
+			<p
+				v-if="!loading && pluginList.total.value === 0"
+				class="sub-text empty-state"
+			>
+				{{
+					pluginEntries.length
+						? "No plugin matches."
+						: "No plugins are allowlisted."
+				}}
+			</p>
+			<div v-else class="table-container">
+				<table class="data-table">
+					<thead>
+						<tr>
+							<SortableTh :list="list" sort-key="plugin"
+								>Plugin</SortableTh
+							>
+							<th>Reason</th>
+							<th class="hide-col-3-sm">First seen on</th>
+							<SortableTh :list="list" sort-key="added"
+								>Added</SortableTh
+							>
+							<th v-if="canTriage"></th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr
+							v-for="p in pluginList.pageItems.value"
+							:key="p.entry.id"
+							:class="{ 'row-muted': p.entry.removed }"
+						>
+							<td>
+								<code class="font-medium">{{ p.slug }}</code>
+								<div
+									v-if="p.name && p.name !== p.slug"
+									class="sub-text"
+								>
+									{{ p.name }}
+								</div>
+							</td>
+							<td>{{ p.entry.reason }}</td>
+							<td class="sub-text hide-col-3-sm">
+								{{ siteDomain(p.entry.site_id) }}
+							</td>
+							<td class="sub-text">
+								{{ formatTime(p.entry.created_at) }} by
+								{{ p.entry.created_by }}
+								<div v-if="p.entry.removed">
+									Removed
+									{{ formatTime(p.entry.updated_at) }} by
+									{{ p.entry.updated_by }}
+								</div>
+							</td>
+							<td v-if="canTriage" class="text-right">
+								<button
+									v-if="!p.entry.removed"
+									class="icon-btn"
+									title="Remove from the allowlist"
+									@click="removeAllowlist(p.entry)"
+								>
+									<AppIcon name="trash" size="14" />
+								</button>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+				<div class="pagination-wrapper">
+					<Pagination
+						:list="list"
+						:page="pluginList.page.value"
+						:total="pluginList.total.value"
+					/>
+				</div>
+			</div>
+		</div>
+
+		<!-- Allowlisted files -->
 		<div v-else-if="section === 'allowlist'" class="card">
 			<p class="sub-text section-hint">
 				File content trusted on every site. Allowlist a finding to add
 				an entry.
 			</p>
 			<p
-				v-if="!loading && scanStore.allowlist.length === 0"
+				v-if="!loading && fileEntries.length === 0"
 				class="sub-text empty-state"
 			>
 				The allowlist is empty.
@@ -559,7 +693,7 @@ async function removeAck(id: number, path: string) {
 					</thead>
 					<tbody>
 						<tr
-							v-for="e in scanStore.allowlist"
+							v-for="e in fileEntries"
 							:key="e.id"
 							:class="{ 'row-muted': e.removed }"
 						>
@@ -586,7 +720,7 @@ async function removeAck(id: number, path: string) {
 									v-if="!e.removed"
 									class="icon-btn"
 									title="Remove from the allowlist"
-									@click="removeAllowlist(e.id, e.sha256)"
+									@click="removeAllowlist(e)"
 								>
 									<AppIcon name="trash" size="14" />
 								</button>
@@ -600,8 +734,9 @@ async function removeAck(id: number, path: string) {
 		<!-- Path acknowledgements -->
 		<div v-else-if="section === 'acks'" class="card">
 			<p class="sub-text section-hint">
-				Paths of stray, foreign-owned or unreadable files that are meant
-				to be there, per site.
+				Paths of stray, foreign-owned or unreadable files, and accounts,
+				that are meant to be there, per site. Plugins are allowlisted
+				instead.
 			</p>
 			<p
 				v-if="!loading && scanStore.pathAcks.length === 0"

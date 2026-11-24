@@ -2,8 +2,10 @@ package api
 
 import (
 	"errors"
+	"net/http"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -150,5 +152,112 @@ func TestImpersonatesWordPress(t *testing.T) {
 	}
 	if impersonatesWordPress(nil) {
 		t.Error("impersonatesWordPress(nil) = true")
+	}
+}
+
+// A plugin is trusted on every site by allowlisting its slug, several at
+// once, and not by path acknowledgements; a plugin posing as WordPress
+// with a trusted slug is still flagged.
+func TestAllowlistUnknownPlugins(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t,
+		agentSite{611, 9, "one.example.com", "deployed", true},
+		agentSite{612, 9, "two.example.com", "deployed", true},
+		agentSite{613, 9, "three.example.com", "deployed", true})
+	fakeWPOrg(t, map[string]bool{})
+	one, two, three := utils.SpinupWPSiteUUID(611), utils.SpinupWPSiteUUID(612), utils.SpinupWPSiteUUID(613)
+	apply := func(siteID string, slugs ...string) {
+		t.Helper()
+		var plugins []models.WPPlugin
+		for _, s := range slugs {
+			plugins = append(plugins, models.WPPlugin{Name: s, Status: "active", Version: "1.0"})
+		}
+		if _, err := sitestate.ApplyPlugins(siteID, plugins, sitestate.SourceAgent, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	apply(one, "polylang-pro", "gravityforms")
+	apply(two, "polylang-pro")
+	findings := unknownPluginFindings(t)
+	pp, gf := findings[one+" wp-content/plugins/polylang-pro"], findings[one+" wp-content/plugins/gravityforms"]
+
+	w := postJSON(t, AddScanPathAcksHandler, "POST", "/api/scan/acks", map[string]any{"finding_ids": []int64{pp.ID}, "reason": "premium"})
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("acknowledging a plugin path: %d", w.Code)
+	}
+
+	w = postJSON(t, AddScanAllowlistHandler, "POST", "/api/scan/allowlist", map[string]any{"finding_ids": []int64{pp.ID, gf.ID}, "reason": "premium", "close_matching": true})
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"allowlisted":3`) {
+		t.Fatalf("allowlist plugins: %d %s", w.Code, w.Body.String())
+	}
+	if entries, _ := db.ListScanAllowlist(false); len(entries) != 2 {
+		t.Fatalf("allowlist = %+v", entries)
+	}
+
+	// The slug is trusted on a site that gets the plugin later.
+	apply(three, "polylang-pro")
+	if f := unknownPluginFindings(t)[three+" wp-content/plugins/polylang-pro"]; f.Status != models.ScanFindingAllowlisted {
+		t.Fatalf("allowlisted plugin on a new site = %+v", f)
+	}
+
+	// A plugin with a trusted slug that poses as WordPress isn't, and
+	// can't be allowlisted.
+	if err := db.SavePluginInfo(models.PluginInfo{Slug: "gravityforms", Name: "WordPress", Author: "WordPress"}); err != nil {
+		t.Fatal(err)
+	}
+	apply(two, "polylang-pro", "gravityforms")
+	fake := unknownPluginFindings(t)[two+" wp-content/plugins/gravityforms"]
+	if fake.Status != models.ScanFindingOpen || fake.Severity != "high" || fake.IncidentID == nil {
+		t.Fatalf("plugin posing as WordPress with a trusted slug = %+v", fake)
+	}
+	w = postJSON(t, AddScanAllowlistHandler, "POST", "/api/scan/allowlist", map[string]any{"finding_id": fake.ID, "reason": "x"})
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("allowlisting a plugin posing as WordPress: %d", w.Code)
+	}
+}
+
+// Per-site acknowledgements of plugins made before plugins could be
+// allowlisted become one allowlist entry per plugin on startup.
+func TestMovePluginPathAcks(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t,
+		agentSite{621, 9, "one.example.com", "deployed", true},
+		agentSite{622, 9, "two.example.com", "deployed", true},
+		agentSite{623, 9, "three.example.com", "deployed", true})
+	fakeWPOrg(t, map[string]bool{})
+	sites := []string{utils.SpinupWPSiteUUID(621), utils.SpinupWPSiteUUID(622), utils.SpinupWPSiteUUID(623)}
+	for _, siteID := range sites {
+		if _, err := sitestate.ApplyPlugins(siteID, []models.WPPlugin{{Name: "polylang-pro", Status: "active", Version: "1.0"}}, sitestate.SourceAgent, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	findings := unknownPluginFindings(t)
+	path := "wp-content/plugins/polylang-pro"
+	// The old acknowledgements, on two of the three sites.
+	for i, reason := range []string{"premium", "client's licence"} {
+		siteID := sites[i]
+		if _, err := db.AddScanPathAck(models.ScanPathAck{SiteID: siteID, Rule: ruleUnknownPlugin, Path: path, Reason: reason, AuditFields: models.AuditFields{CreatedBy: "alice"}}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.SetScanFindingStatus([]int64{findings[siteID+" "+path].ID}, models.ScanFindingAcknowledged, "alice"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.AddScanPathAck(models.ScanPathAck{SiteID: sites[0], Rule: "stray-file", Path: "backup.sql", Reason: "kept", AuditFields: models.AuditFields{CreatedBy: "alice"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	MovePluginPathAcks()
+	MovePluginPathAcks()
+
+	entries, _ := db.ListScanAllowlist(false)
+	if len(entries) != 1 || entries[0].SHA256 != unknownPluginHash("polylang-pro") || entries[0].Path != path || entries[0].CreatedBy != "alice" || entries[0].Reason != "premium; client's licence" {
+		t.Fatalf("allowlist = %+v", entries)
+	}
+	if acks, _ := db.ListScanPathAcks("", false); len(acks) != 1 || acks[0].Rule != "stray-file" {
+		t.Fatalf("path acks left = %+v", acks)
+	}
+	if f := unknownPluginFindings(t)[sites[2]+" "+path]; f.Status != models.ScanFindingAllowlisted {
+		t.Fatalf("plugin on the site without an acknowledgement = %+v", f)
 	}
 }

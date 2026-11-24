@@ -24,8 +24,9 @@ var scanIncidentMinRank = config.ScanSeverityRank("medium")
 // scanStateRules are the rules that describe a file's state rather than a
 // change to it, which a path acknowledgement can cover; for new-admin and
 // new-app-password, the path names the account or password
-// ("users/<login>", "users/<login>/app-passwords/<uuid>").
-var scanStateRules = map[string]bool{"stray-file": true, "foreign-owner": true, "unreadable": true, ruleNewAdmin: true, ruleNewAppPassword: true, ruleUnknownPlugin: true}
+// ("users/<login>", "users/<login>/app-passwords/<uuid>"). unknown-plugin
+// isn't one: a plugin is trusted on every site by allowlisting its slug.
+var scanStateRules = map[string]bool{"stray-file": true, "foreign-owner": true, "unreadable": true, ruleNewAdmin: true, ruleNewAppPassword: true}
 
 // scanTriageBy is who status changes jman-api makes on its own are
 // recorded as.
@@ -67,7 +68,7 @@ func triageScanFindings(siteID string, alert bool) {
 		if entry, err := db.GetScanAllowlistEntryByHash(f.SHA256); err != nil {
 			verb.LogPrintf(verb.Normal, "%v", err)
 			continue
-		} else if entry != nil {
+		} else if entry != nil && allowlistCovers(f) {
 			if _, err := db.SetScanFindingStatus([]int64{f.ID}, models.ScanFindingAllowlisted, scanTriageBy); err != nil {
 				verb.LogPrintf(verb.Normal, "%v", err)
 			}
