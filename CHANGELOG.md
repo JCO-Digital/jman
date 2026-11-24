@@ -1,5 +1,22 @@
 # Changelog
 
+## 7.47.0 (2026-11-24)
+
+#### Features
+
+- updates: reset rewrite rules after updates (5b9b574)
+- api: take turns between servers in the update queue (08990c5)
+- api: prioritize the update queue and combine plugin updates (3e17f7b)
+- updates: log every update attempt and keep wp-cli's output of failures (e0cf505)
+
+#### Bug Fixes
+
+- updates: keep combined-run errors to the jobs that failed (be6fc0c)
+
+#### Documentation
+
+- describe combined update runs in the job output and update log (99dcdad)
+
 ## 7.46.0 (2026-11-24)
 
 #### Features
