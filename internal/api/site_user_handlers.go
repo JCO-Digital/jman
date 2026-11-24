@@ -145,6 +145,7 @@ func SiteUserCreateHandler(w http.ResponseWriter, r *http.Request) {
 		Role:  body.Role,
 	})
 	job.CreatedBy = getUsername(r)
+	job.Priority = defaultJobPriority(1)
 	if err := updatejobs.EnqueueUserCreate(&job, body.Password); err != nil {
 		verb.LogPrintf(verb.Normal, "SiteUserCreateHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to queue the user")
@@ -233,6 +234,7 @@ func SiteUserDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		Reassign: reassign,
 	})
 	job.CreatedBy = getUsername(r)
+	job.Priority = defaultJobPriority(1)
 	if err := updatejobs.Enqueue(&job); err != nil {
 		verb.LogPrintf(verb.Normal, "SiteUserDeleteHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to queue the user delete")

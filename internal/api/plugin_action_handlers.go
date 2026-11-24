@@ -99,6 +99,7 @@ func SitePluginActionHandler(w http.ResponseWriter, r *http.Request) {
 
 	job := models.NewUpdateJob(body.Action, siteID, models.PluginsPayload{Plugins: withInstalledVersions(siteID, names)})
 	job.CreatedBy = getUsername(r)
+	job.Priority = defaultJobPriority(1)
 	if err := updatejobs.Enqueue(&job); err != nil {
 		verb.LogPrintf(verb.Normal, "SitePluginActionHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to queue plugin change")
@@ -205,6 +206,7 @@ func SitePluginInstallHandler(w http.ResponseWriter, r *http.Request) {
 	job := models.NewUpdateJob(models.UpdateJobKindInstall, siteID, install)
 	job.UploadPath = uploadPath
 	job.CreatedBy = getUsername(r)
+	job.Priority = defaultJobPriority(1)
 
 	if err := updatejobs.Enqueue(&job); err != nil {
 		if job.UploadPath != "" {

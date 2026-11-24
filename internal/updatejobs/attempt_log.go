@@ -87,14 +87,18 @@ func (a *attempt) failed() bool {
 
 // attemptLine is one line of the update log.
 type attemptLine struct {
-	Time      time.Time `json:"time"`
-	JobID     int64     `json:"job_id"`
-	JobKind   string    `json:"job_kind"`
-	CreatedBy string    `json:"created_by"`
-	Type      string    `json:"type"`
-	SiteID    string    `json:"site_id"`
-	Site      string    `json:"site"`
-	Server    string    `json:"server"`
+	Time  time.Time `json:"time"`
+	JobID int64     `json:"job_id"`
+	// JobIDs lists every job of a combined run (docs/update-queue.md),
+	// first JobID; the attempt's results cover all their plugins. Empty
+	// for a job that ran on its own.
+	JobIDs    []int64 `json:"job_ids,omitempty"`
+	JobKind   string  `json:"job_kind"`
+	CreatedBy string  `json:"created_by"`
+	Type      string  `json:"type"`
+	SiteID    string  `json:"site_id"`
+	Site      string  `json:"site"`
+	Server    string  `json:"server"`
 	// WPVersion is the cached WordPress version when the job started.
 	WPVersion string `json:"wp_version"`
 	// PHPVersion is the site's PHP-FPM version; CLIPHPVersion is the PHP
@@ -155,6 +159,20 @@ func updateLogPath() string {
 // PHP versions first, which takes a wp-cli call, so call it after the job
 // is finished.
 func logAttempts(job models.UpdateJob, site models.CliSite, wpVersion string, attempts []*attempt) {
+	logJobAttempts([]models.UpdateJob{job}, site, wpVersion, attempts)
+}
+
+// logJobAttempts appends the attempts of jobs that ran together to the
+// update log, each attempt once: under the first job, with every job's ID
+// in job_ids.
+func logJobAttempts(jobs []models.UpdateJob, site models.CliSite, wpVersion string, attempts []*attempt) {
+	job := jobs[0]
+	var jobIDs []int64
+	if len(jobs) > 1 {
+		for _, j := range jobs {
+			jobIDs = append(jobIDs, j.ID)
+		}
+	}
 	path := updateLogPath()
 	if path == "" || len(attempts) == 0 {
 		return
@@ -179,6 +197,7 @@ func logAttempts(job models.UpdateJob, site models.CliSite, wpVersion string, at
 		line := attemptLine{
 			Time:          a.started.UTC(),
 			JobID:         job.ID,
+			JobIDs:        jobIDs,
 			JobKind:       job.Kind,
 			CreatedBy:     job.CreatedBy,
 			Type:          a.kind,

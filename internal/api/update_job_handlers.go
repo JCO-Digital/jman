@@ -19,7 +19,7 @@ import (
 const recentJobWindow = 10 * time.Minute
 
 // maxPluginsPerJob bounds one `wp plugin update` call.
-const maxPluginsPerJob = 50
+const maxPluginsPerJob = updatejobs.MaxPluginsPerRun
 
 // CreatePluginUpdateJobsHandler queues background plugin updates: one job
 // per site, each updating all of its listed plugins in one WP-CLI call.
@@ -27,8 +27,15 @@ const maxPluginsPerJob = 50
 // allow_major, which is only accepted for a job with a single plugin (an
 // explicitly confirmed update), so bulk updates can't bypass locks.
 //
+// priority (low, normal, high or urgent; urgent needs the admin level)
+// applies to every job. Without it, jobs are high for a single site and
+// normal for more, and high for a site with a vulnerable listed plugin.
+// bulk marks a request as one of many in an update of several sites that a
+// client queues one site at a time (as the CLI does), so it gets the
+// default for several sites.
+//
 //	POST /api/plugin-update-jobs
-//	{"jobs": [{"site_id": "<uuid>", "plugins": ["akismet", "jetpack"]}]}
+//	{"jobs": [{"site_id": "<uuid>", "plugins": ["akismet", "jetpack"]}], "priority": "normal", "bulk": false}
 func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Jobs []struct {
@@ -36,6 +43,8 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 			Plugins    []string `json:"plugins"`
 			AllowMajor bool     `json:"allow_major"`
 		} `json:"jobs"`
+		Priority string `json:"priority"`
+		Bulk     bool   `json:"bulk"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -44,6 +53,25 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 	if len(body.Jobs) == 0 {
 		WriteError(w, http.StatusBadRequest, "At least one job is required")
 		return
+	}
+	var priority models.UpdateJobPriority
+	var vulnerable map[string]map[string]bool
+	if body.Priority != "" {
+		p, err := parseJobPriority(r, body.Priority)
+		if err != nil {
+			writePriorityError(w, err)
+			return
+		}
+		priority = p
+	} else {
+		sites := len(body.Jobs)
+		if body.Bulk {
+			sites = max(sites, 2)
+		}
+		priority = defaultJobPriority(sites)
+		if priority < models.UpdateJobPriorityHigh {
+			vulnerable = vulnerablePluginsBySite()
+		}
 	}
 
 	// Validate the whole request before queueing anything.
@@ -75,6 +103,7 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 			AllowMajor: req.AllowMajor,
 		})
 		job.CreatedBy = getUsername(r)
+		job.Priority = withVulnerableBoost(priority, plugins, vulnerable[siteID])
 		jobs = append(jobs, job)
 	}
 
@@ -95,12 +124,10 @@ func CreatePluginUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for i := range jobs {
-		if err := updatejobs.Enqueue(&jobs[i]); err != nil {
-			verb.LogPrintf(verb.Normal, "CreatePluginUpdateJobsHandler: %v", err)
-			WriteError(w, http.StatusInternalServerError, "Failed to queue plugin updates")
-			return
-		}
+	if n, err := updatejobs.EnqueueAll(jobs); err != nil {
+		verb.LogPrintf(verb.Normal, "CreatePluginUpdateJobsHandler: queued %d of %d jobs: %v", n, len(jobs), err)
+		WriteError(w, http.StatusInternalServerError, "Failed to queue plugin updates")
+		return
 	}
 	WriteJSON(w, http.StatusCreated, jobs)
 }
@@ -120,6 +147,7 @@ func ListUpdateJobsHandler(w http.ResponseWriter, r *http.Request) {
 		jobs[i].TextDiff = nil
 		jobs[i].Calls = nil
 	}
+	updatejobs.WithPositions(jobs)
 	WriteJSON(w, http.StatusOK, jobs)
 }
 
@@ -166,7 +194,9 @@ func GetUpdateJobHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Job not found")
 		return
 	}
-	WriteJSON(w, http.StatusOK, job)
+	jobs := []models.UpdateJob{*job}
+	updatejobs.WithPositions(jobs)
+	WriteJSON(w, http.StatusOK, jobs[0])
 }
 
 func uniquePluginSlugs(plugins []string) ([]string, error) {

@@ -266,6 +266,20 @@ func TestPluginUpdateQueuesJob(t *testing.T) {
 	}
 }
 
+func TestPluginUpdatePriority(t *testing.T) {
+	srv := newFakeJmanAPI(t)
+	t.Cleanup(func() { flagPriority = "" })
+	calls := runJman(t, srv, "plugin", "update", "a.example.com", "akismet", "--priority", "urgent")
+	if len(calls) != 2 || !strings.Contains(calls[1], `"priority":"urgent"`) || strings.Contains(calls[1], `"bulk"`) {
+		t.Errorf("calls: %v", calls)
+	}
+	flagPriority = ""
+	rootCmd.SetArgs([]string{"plugin", "update", "a.example.com", "akismet", "--priority", "asap"})
+	if err := rootCmd.ExecuteContext(context.Background()); err == nil || !strings.Contains(err.Error(), "invalid priority") {
+		t.Errorf("--priority asap: %v, want an invalid priority error", err)
+	}
+}
+
 func TestPluginRemoveDeactivatesFirst(t *testing.T) {
 	srv := newFakeJmanAPI(t)
 	calls := runJman(t, srv, "plugin", "remove", "a.example.com", "akismet")

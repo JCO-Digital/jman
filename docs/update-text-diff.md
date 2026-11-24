@@ -70,7 +70,9 @@ They are recorded in the diff result.
 
 Fetching runs inside the job's worker, so it adds time per site. With
 `Workers = 4` that's acceptable for a few pages per site, but it's worth
-measuring (see Open questions).
+measuring (see Open questions). Plugin update jobs that run together on a
+site (see `docs/update-queue.md`) share one baseline and one after fetch;
+every job in the group gets the same diff.
 
 ### Fetching
 

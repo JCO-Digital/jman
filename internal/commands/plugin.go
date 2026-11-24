@@ -25,6 +25,7 @@ import (
 var (
 	flagPluginLive bool
 	flagAllowMajor bool
+	flagPriority   string
 )
 
 var pluginCmd = &cobra.Command{
@@ -251,6 +252,7 @@ Without a plugin name, it shows every plugin on each site.`,
 func init() {
 	listPluginCmd.Flags().BoolVar(&flagPluginLive, "live", false, "read the plugins from the sites over SSH")
 	updatePluginCmd.Flags().BoolVar(&flagAllowMajor, "allow-major", false, "update a locked plugin past fix releases (one plugin on one site only)")
+	updatePluginCmd.Flags().StringVar(&flagPriority, "priority", "", "queue priority: low, normal, high or urgent (admins only); by default high for one site, normal for several, high for vulnerable plugins")
 	pluginCmd.AddCommand(listPluginCmd)
 	pluginCmd.AddCommand(installPluginCmd)
 	pluginCmd.AddCommand(updatePluginCmd)
@@ -286,6 +288,11 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 	if len(args) > 1 {
 		pluginName = args[1]
 	}
+	if flagPriority != "" {
+		if _, err := models.ParseUpdateJobPriority(flagPriority); err != nil {
+			return err
+		}
+	}
 	sites, m, err := promptSites(cmd, args[0], changesSite)
 	if err != nil {
 		return err
@@ -306,7 +313,7 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 
 	var queued []models.UpdateJob
 	for _, site := range sites {
-		job, err := queuePluginUpdates(ctx, c, m, site, pluginName)
+		job, err := queuePluginUpdates(ctx, c, m, site, pluginName, len(sites) > 1)
 		if err != nil {
 			if fatal := fatalAPIError(err); fatal != nil {
 				return fatal
@@ -402,8 +409,10 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 
 // queuePluginUpdates checks a site for plugin updates through jman-api,
 // shows them, and queues an update job for pluginName (or all plugins with
-// updates if it is ""). It returns nil if there was nothing to update.
-func queuePluginUpdates(ctx context.Context, c *client.Client, m *mirror.Mirror, site models.CliSite, pluginName string) (*models.UpdateJob, error) {
+// updates if it is ""). bulk tells jman-api the site is one of several, so
+// the job gets the priority of a bulk update. It returns nil if there was
+// nothing to update.
+func queuePluginUpdates(ctx context.Context, c *client.Client, m *mirror.Mirror, site models.CliSite, pluginName string, bulk bool) (*models.UpdateJob, error) {
 	verb.Printf(verb.Verbose, "Checking for plugin updates on %s (%s)...\n", verb.Blue(site.Name), site.ServerName)
 	var updates []models.WPPlugin
 	if err := c.Get(ctx, "/sites/"+site.ID+"/plugin-updates", &updates); err != nil {
@@ -434,6 +443,12 @@ func queuePluginUpdates(ctx context.Context, c *client.Client, m *mirror.Mirror,
 	}
 
 	body := map[string]any{"jobs": []map[string]any{{"site_id": site.ID, "plugins": toUpdate, "allow_major": flagAllowMajor}}}
+	if bulk {
+		body["bulk"] = true
+	}
+	if flagPriority != "" {
+		body["priority"] = flagPriority
+	}
 	var jobs []models.UpdateJob
 	if err := c.Post(ctx, "/plugin-update-jobs", body, &jobs); err != nil {
 		return nil, err

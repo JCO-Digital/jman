@@ -6,9 +6,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/config"
+	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
@@ -156,5 +158,48 @@ func TestUpdateLogCore(t *testing.T) {
 	run(job)
 	if lines := readUpdateLog(t); len(lines) != 1 {
 		t.Errorf("log lines with the log off = %d, want still 1", len(lines))
+	}
+}
+
+// Jobs that ran together each keep the output of their shared failed
+// call, and the log has the call once, listing every job.
+func TestUpdateLogRecordsCombinedRunOnce(t *testing.T) {
+	setupRunnerTest(t)
+	updatePlugins = func(_ models.CliSite, plugins []string, rec *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
+		*rec = append(*rec, models.WPCLICall{Args: append([]string{"plugin", "update"}, plugins...), Stderr: "Warning: Download failed.", Error: "Error: No plugins updated (1 failed)."})
+		return []wpcli.UpdateResult{
+			{Name: "a", OldVersion: "1.0", NewVersion: "1.0", Status: "Error", Error: "Download failed."},
+			{Name: "b", OldVersion: "2.0", NewVersion: "2.1", Status: "Updated"},
+		}, &wpcli.UpdateFailure{Err: errors.New("failed to update plugin: Download failed."), Versions: map[string]string{"a": "1.0", "b": "2.1"}}
+	}
+	first := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"})
+	second := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "b", OldVersion: "2.0"})
+	for _, j := range []*models.UpdateJob{&first, &second} {
+		if err := db.CreateUpdateJob(j); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runBatch([]models.UpdateJob{first, second})
+
+	for _, j := range []models.UpdateJob{first, second} {
+		if stored := storedJob(t, j.ID); len(stored.Calls) != 1 || !stored.HasOutput {
+			t.Errorf("job %d calls = %+v, want the shared failed call", j.ID, stored.Calls)
+		}
+	}
+	// Only the job with the failed plugin is failed by the shared call.
+	if stored := storedJob(t, first.ID); stored.Error == "" {
+		t.Error("job with the failed plugin has no error")
+	}
+	if stored := storedJob(t, second.ID); stored.Error != "" {
+		t.Errorf("job whose plugin updated has error %q, want none", stored.Error)
+	}
+	lines := readUpdateLog(t)
+	if len(lines) != 1 {
+		t.Fatalf("got %d log lines, want the one shared call", len(lines))
+	}
+	l := lines[0]
+	if l.JobID != first.ID || !slices.Equal(l.JobIDs, []int64{first.ID, second.ID}) || len(l.Results) != 2 || !l.Failed {
+		t.Errorf("log line = job %d, jobs %v, %d results, failed %v; want job %d, both jobs, both plugins, failed",
+			l.JobID, l.JobIDs, len(l.Results), l.Failed, first.ID)
 	}
 }

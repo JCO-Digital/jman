@@ -355,6 +355,7 @@ func PluginZipUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		})
 		jobs[i].UploadPath = z.Path
 		jobs[i].CreatedBy = getUsername(r)
+		jobs[i].Priority = defaultJobPriority(len(targets))
 	}
 	n, err := updatejobs.EnqueueAll(jobs)
 	if err != nil {

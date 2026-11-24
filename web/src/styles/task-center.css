@@ -213,8 +213,13 @@
 		color: var(--primary);
 		cursor: pointer;
 
-		&:hover {
+		&:hover:not(:disabled) {
 			text-decoration: underline;
+		}
+
+		&:disabled {
+			color: var(--text-muted);
+			cursor: default;
 		}
 	}
 }
@@ -237,4 +242,23 @@
 .task-panel-leave-to {
 	opacity: 0;
 	transform: translateY(8px) scale(0.97);
+}
+
+/* A queued or running job's priority, when it isn't normal. */
+.task-priority {
+	padding: 0 6px;
+	border-radius: 999px;
+	font-weight: 500;
+	background: var(--badge-default-bg);
+	color: var(--badge-default-text);
+}
+
+.task-priority--high {
+	background: var(--badge-must-use-bg);
+	color: var(--badge-must-use-text);
+}
+
+.task-priority--urgent {
+	background: var(--warning-bg);
+	color: var(--warning-text);
 }

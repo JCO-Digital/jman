@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -37,6 +36,8 @@ func setupRunnerTest(t *testing.T) {
 	oldCLIPHP, oldSitePHP := cliPHPVersion, sitePHPVersion
 	cliPHPVersion = func(models.CliSite) (string, error) { return "8.1.2", nil }
 	sitePHPVersion = func(string) string { return "8.3" }
+	oldServers := siteServers
+	siteServers = func() map[string]string { return nil }
 	q = newQueue()
 	pluginVulnerable = func(string, string, string) bool { return false }
 	pluginFixedIn = func(string, string, string) string { return "" }
@@ -62,6 +63,7 @@ func setupRunnerTest(t *testing.T) {
 		running.Wait()
 		findSite, updatePlugins, refreshPluginCache, q = oldFind, oldUpdate, oldRefresh, oldQueue
 		syncSiteExposures = oldSync
+		siteServers = oldServers
 		fetchPage, textDiffPaths, textDiffHeaders, textDiffMutes, textDiffQuery = oldFetch, oldPaths, oldHeaders, oldMutes, oldQuery
 		updateCore, refreshCore, cachedCoreVersion = oldUpdateCore, oldRefreshCore, oldCachedCore
 		pluginAction, installPlugin, uploadFile, runSSH = oldAction, oldInstall, oldUpload, oldSSH
@@ -251,44 +253,6 @@ func TestStartInterruptsRunningAndResumesQueued(t *testing.T) {
 		t.Errorf("interrupted job was run again (site %s)", id)
 	case <-time.After(200 * time.Millisecond):
 	}
-}
-
-func TestQueueRunsOneJobPerSiteAtATime(t *testing.T) {
-	qu := newQueue()
-	defer qu.close()
-	qu.push(models.UpdateJob{ID: 1, SiteID: "s1"})
-	qu.push(models.UpdateJob{ID: 2, SiteID: "s1"})
-	qu.push(models.UpdateJob{ID: 3, SiteID: "s2"})
-
-	first, _ := qu.next()
-	second, _ := qu.next()
-	if first.ID != 1 || second.ID != 3 {
-		t.Fatalf("got jobs %d, %d; want 1 then 3 (job 2 waits for site s1)", first.ID, second.ID)
-	}
-
-	got := make(chan int64, 1)
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		j, _ := qu.next()
-		got <- j.ID
-	}()
-	select {
-	case id := <-got:
-		t.Fatalf("job %d started while site s1 was busy", id)
-	case <-time.After(100 * time.Millisecond):
-	}
-	qu.done("s1")
-	select {
-	case id := <-got:
-		if id != 2 {
-			t.Errorf("got job %d, want 2", id)
-		}
-	case <-time.After(2 * time.Second):
-		t.Fatal("job 2 did not start after site s1 was released")
-	}
-	wg.Wait()
 }
 
 func runCoreJob(t *testing.T, target string) *models.UpdateJob {

@@ -2,7 +2,8 @@
 // A plugins job updates one or more plugins on one site with a single
 // `wp plugin update` call; a core job runs `wp core update`; other jobs
 // manage plugins or WordPress users. Jobs for
-// different sites run concurrently, jobs for the same site one at a time.
+// different sites run concurrently, jobs for the same site one at a time,
+// in priority order (see queue.go).
 // Jobs live in api.db, so their state survives page reloads and is visible
 // to every user, and each finished job writes one entry to the site update
 // ledger.
@@ -25,9 +26,6 @@ import (
 	"github.com/JCO-Digital/jman/internal/vuln"
 	"github.com/JCO-Digital/jman/internal/wpcli"
 )
-
-// Workers is how many jobs (on different sites) run at once.
-const Workers = 4
 
 // jobRetention is how long finished jobs are kept; their outcome stays in
 // the site update ledger.
@@ -100,69 +98,11 @@ var (
 	}
 )
 
-// queue holds the IDs of jobs waiting to run and the sites with a job in
-// progress.
-type queue struct {
-	mu      sync.Mutex
-	cond    *sync.Cond
-	pending []models.UpdateJob
-	busy    map[string]bool
-	closed  bool
-}
-
 var q = newQueue()
 
 // running tracks the goroutines started by Start, so tests can stop the
 // runner and wait for it before swapping package state.
 var running sync.WaitGroup
-
-func newQueue() *queue {
-	qu := &queue{busy: map[string]bool{}}
-	qu.cond = sync.NewCond(&qu.mu)
-	return qu
-}
-
-func (qu *queue) push(job models.UpdateJob) {
-	qu.mu.Lock()
-	qu.pending = append(qu.pending, job)
-	qu.mu.Unlock()
-	qu.cond.Broadcast()
-}
-
-// next blocks until a job whose site isn't busy is available, marks that
-// site busy and returns the job. ok is false once the queue is closed.
-func (qu *queue) next() (job models.UpdateJob, ok bool) {
-	qu.mu.Lock()
-	defer qu.mu.Unlock()
-	for {
-		if qu.closed {
-			return job, false
-		}
-		for i, j := range qu.pending {
-			if qu.busy[j.SiteID] {
-				continue
-			}
-			qu.pending = append(qu.pending[:i], qu.pending[i+1:]...)
-			qu.busy[j.SiteID] = true
-			return j, true
-		}
-		qu.cond.Wait()
-	}
-}
-
-func (qu *queue) done(siteID string) {
-	qu.mu.Lock()
-	delete(qu.busy, siteID)
-	qu.mu.Unlock()
-	qu.cond.Broadcast()
-}
-
-func (qu *queue) close() {
-	qu.mu.Lock()
-	qu.closed = true
-	qu.mu.Unlock()
-	qu.cond.Broadcast()
-}
 
 // Start recovers jobs left by a previous process and starts the workers.
 // Jobs that were running are marked interrupted (their outcome is
@@ -213,21 +153,24 @@ func Start(ctx context.Context) error {
 		return fmt.Errorf("failed to load queued update jobs: %w", err)
 	}
 	qu := q
-	for _, job := range queued {
-		qu.push(job)
-	}
+	qu.push(queued...)
 
-	for range Workers {
+	for i := range Workers + ExpressWorkers {
+		express := i >= Workers
 		running.Add(1)
 		go func() {
 			defer running.Done()
 			for {
-				job, ok := qu.next()
+				c, ok := qu.next(express)
 				if !ok {
 					return
 				}
-				run(job)
-				qu.done(job.SiteID)
+				if len(c.jobs) == 1 {
+					run(c.jobs[0])
+				} else {
+					runBatch(c.jobs)
+				}
+				qu.done(c)
 			}
 		}()
 	}
@@ -251,7 +194,7 @@ func Start(ctx context.Context) error {
 		}
 	}()
 
-	log.Printf("Update job runner started (%d workers, %d queued jobs, %d interrupted)", Workers, len(queued), len(interrupted))
+	log.Printf("Update job runner started (%d workers + %d for high priority jobs, %d queued jobs, %d interrupted)", Workers, ExpressWorkers, len(queued), len(interrupted))
 	return nil
 }
 
@@ -274,9 +217,7 @@ func EnqueueAll(jobs []models.UpdateJob) (n int, err error) {
 		}
 		n++
 	}
-	for _, job := range jobs[:n] {
-		q.push(job)
-	}
+	q.push(jobs[:n]...)
 	return n, err
 }
 
@@ -318,7 +259,7 @@ func run(job models.UpdateJob) {
 
 	var baseline *textBaseline
 	if runsTextDiff(job) {
-		baseline = takeTextBaseline(job, *site)
+		baseline = takeTextBaseline([]models.UpdateJob{job}, *site)
 	}
 
 	switch {
@@ -341,7 +282,7 @@ func run(job models.UpdateJob) {
 	}
 
 	if baseline != nil {
-		compareText(job, baseline)
+		compareText([]models.UpdateJob{job}, baseline)
 	}
 
 	// The job refreshed the site's plugin (or core) cache: bring its
@@ -352,30 +293,84 @@ func run(job models.UpdateJob) {
 	}
 }
 
-// runPlugins updates the job's plugins. Unlocked plugins are updated with
-// one WP-CLI call; locked plugins (unless the job allows major updates)
-// with a second, patch-only call, and only if their pending update comes
-// from WordPress.org: wp-cli looks fix releases up there by slug, which
-// would replace a custom plugin that shares a WordPress.org plugin's slug.
-// Locks are read here rather than when the job was queued, so a lock added
-// in between still applies.
+// runBatch runs plugin update jobs on one site together (see takeBatch):
+// one WP-CLI call for all their plugins, one text diff that every job
+// gets, and one exposure sync. Each job still gets its own results and
+// ledger entry.
+func runBatch(jobs []models.UpdateJob) {
+	ids := make([]int64, len(jobs))
+	for i, job := range jobs {
+		ids[i] = job.ID
+	}
+	if err := db.StartUpdateJobBatch(ids); err != nil {
+		log.Printf("Update jobs %v: failed to mark running: %v", ids, err)
+	}
+	log.Printf("Update jobs %v on site %s run together", ids, jobs[0].SiteID)
+
+	site, siteErr := findSite(jobs[0].SiteID)
+	var valid []models.UpdateJob
+	for _, job := range jobs {
+		err := siteErr
+		if err == nil {
+			err = checkPayload(job)
+		}
+		if err != nil {
+			finish(job, models.UpdateJobFailed, failAll(jobPlugins(job), err.Error()), err.Error())
+			continue
+		}
+		valid = append(valid, job)
+	}
+	if len(valid) == 0 {
+		return
+	}
+
+	baseline := takeTextBaseline(valid, *site)
+	runPluginJobs(valid, *site)
+	compareText(valid, baseline)
+	if err := syncSiteExposures(site.ID); err != nil {
+		log.Printf("Update jobs %v: failed to sync vulnerability exposures for site %s: %v", ids, site.ID, err)
+	}
+}
+
+// runPlugins updates one job's plugins.
 func runPlugins(job models.UpdateJob, site models.CliSite) {
-	payload := jobPluginsPayload(job)
-	plugins := payload.Plugins
-	// Checked against the pre-update versions, for the ledger status.
-	updatedVulnerable := anyVulnerable(job.SiteID, plugins)
-	wpVersion := cachedCoreVersion(job.SiteID)
+	runPluginJobs([]models.UpdateJob{job}, site)
+}
+
+// runPluginJobs updates the plugins of one or more plugin update jobs on a
+// site, which share allow_major. Unlocked plugins are updated with one
+// WP-CLI call; locked plugins (unless the jobs allow major updates) with a
+// second, patch-only call, and only if their pending update comes from
+// WordPress.org: wp-cli looks fix releases up there by slug, which would
+// replace a custom plugin that shares a WordPress.org plugin's slug. Locks
+// are read here rather than when the jobs were queued, so a lock added in
+// between still applies.
+//
+// Each job gets its own results and ledger entry, and the wp-cli output of
+// the run's failed attempts. The update log gets each attempt once.
+func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
+	lead := jobs[0]
+	allowMajor := jobPluginsPayload(lead).AllowMajor
+	plugins := mergePlugins(jobs)
+	// Checked against the pre-update versions, for each job's ledger status.
+	updatedVulnerable := make([]bool, len(jobs))
+	for i, job := range jobs {
+		updatedVulnerable[i] = anyVulnerable(job.SiteID, jobPlugins(job))
+	}
+	wpVersion := cachedCoreVersion(lead.SiteID)
 
 	var free, locked []models.PluginUpdateRequest
-	if payload.AllowMajor {
+	if allowMajor {
 		free = plugins
 	} else {
-		locks, err := siteLocks(job.SiteID)
+		locks, err := siteLocks(lead.SiteID)
 		if err != nil {
 			// Without the locks it's unknown which plugins may get major
 			// updates, so update none.
 			msg := fmt.Sprintf("failed to load update locks: %v", err)
-			finish(job, models.UpdateJobFailed, failAll(plugins, msg), msg)
+			for _, job := range jobs {
+				finish(job, models.UpdateJobFailed, failAll(jobPlugins(job), msg), msg)
+			}
 			return
 		}
 		for _, p := range plugins {
@@ -400,14 +395,14 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 		attempts = append(attempts, a)
 		if err != nil {
 			errs = append(errs, err.Error())
-			log.Printf("Plugin update job %d on %s: %v", job.ID, site.Name, err)
+			log.Printf("Plugin update job %d on %s: %v", lead.ID, site.Name, err)
 		}
 		for _, r := range buildResults(free, updates, err) {
 			byName[r.Name] = r
 		}
 	}
 	if len(locked) > 0 {
-		results, a := updateLocked(job, site, locked, &errs)
+		results, a := updateLocked(lead, site, locked, &errs)
 		for _, r := range results {
 			byName[r.Name] = r
 		}
@@ -423,18 +418,14 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 	// the post-update state.
 	cacheErr := refreshPluginCache(site)
 	if cacheErr != nil {
-		log.Printf("Plugin update job %d: failed to refresh plugin cache for %s: %v", job.ID, site.Name, cacheErr)
+		log.Printf("Plugin update job %d: failed to refresh plugin cache for %s: %v", lead.ID, site.Name, cacheErr)
 	} else {
 		if len(locked) > 0 {
-			markHeldBack(job.SiteID, locked, byName)
+			markHeldBack(lead.SiteID, locked, byName)
 		}
-		markUnchanged(job.SiteID, covered, byName)
+		markUnchanged(lead.SiteID, covered, byName)
 	}
 
-	results := make([]models.UpdateResult, len(plugins))
-	for i, p := range plugins {
-		results[i] = byName[p.Name]
-	}
 	for _, a := range attempts {
 		a.results = a.results[:0]
 		for _, name := range covered[a] {
@@ -442,10 +433,58 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 		}
 	}
 	jobErr := strings.Join(errs, "; ")
-	storeAttemptCalls(job, attempts)
-	finish(job, models.UpdateJobDone, results, jobErr)
-	writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable), "")
-	logAttempts(job, site, wpVersion, attempts)
+	runFailed := false
+	for _, r := range byName {
+		runFailed = runFailed || r.Status == models.UpdateFailed
+	}
+	for i, job := range jobs {
+		requested := jobPlugins(job)
+		results := make([]models.UpdateResult, len(requested))
+		for k, p := range requested {
+			results[k] = byName[p.Name]
+		}
+		// When plugins failed, the error belongs to the jobs that have
+		// them: a job of a combined run whose plugins all updated isn't
+		// failed by another job's plugin. Without failed plugins it's a
+		// warning about the site (e.g. maintenance mode) for every job.
+		errMsg := jobErr
+		if runFailed && !anyFailed(results) {
+			errMsg = ""
+		}
+		storeAttemptCalls(job, attempts)
+		finish(job, models.UpdateJobDone, results, errMsg)
+		writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable[i]), "")
+	}
+	logJobAttempts(jobs, site, wpVersion, attempts)
+}
+
+// anyFailed reports whether any result failed.
+func anyFailed(results []models.UpdateResult) bool {
+	for _, r := range results {
+		if r.Status == models.UpdateFailed {
+			return true
+		}
+	}
+	return false
+}
+
+// mergePlugins returns the plugins of jobs, each once, in the order they
+// were requested.
+func mergePlugins(jobs []models.UpdateJob) []models.PluginUpdateRequest {
+	if len(jobs) == 1 {
+		return jobPlugins(jobs[0])
+	}
+	seen := map[string]bool{}
+	var merged []models.PluginUpdateRequest
+	for _, job := range jobs {
+		for _, p := range jobPlugins(job) {
+			if !seen[p.Name] {
+				seen[p.Name] = true
+				merged = append(merged, p)
+			}
+		}
+	}
+	return merged
 }
 
 // markUnchanged finds plugins wp-cli reported as updated whose version in
