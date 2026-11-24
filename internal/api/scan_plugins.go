@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -197,11 +199,16 @@ func impersonatesWordPress(info *models.PluginInfo) bool {
 	return false
 }
 
+// unknownPluginHash is the hash of an unknown-plugin finding: the slug's,
+// so one allowlist entry covers a plugin on every site and in every
+// version.
+func unknownPluginHash(slug string) string {
+	sum := sha256.Sum256([]byte(ruleUnknownPlugin + "\x00" + slug))
+	return hex.EncodeToString(sum[:])
+}
+
 // unknownPluginFinding describes a plugin that isn't on wordpress.org.
-// The hash identifies the slug, not the files, so one allowlist entry
-// covers a premium plugin on every site and in every version.
 func unknownPluginFinding(p models.WPPlugin, info *models.PluginInfo, appeared bool) models.ScanFinding {
-	sum := sha256.Sum256([]byte(ruleUnknownPlugin + "\x00" + p.Name))
 	name, author := p.Name, ""
 	if info != nil {
 		if s := utils.CleanHTML(info.Name); s != "" {
@@ -214,7 +221,7 @@ func unknownPluginFinding(p models.WPPlugin, info *models.PluginInfo, appeared b
 		Rule:     ruleUnknownPlugin,
 		Severity: "low",
 		Path:     "wp-content/plugins/" + p.Name,
-		SHA256:   hex.EncodeToString(sum[:]),
+		SHA256:   unknownPluginHash(p.Name),
 		Snippet:  fmt.Sprintf("plugin: %s\nname: %s\nauthor: %s\nversion: %s\nstatus: %s", p.Name, name, author, p.Version, p.Status),
 		Detail:   fmt.Sprintf("plugin %s (%q) isn't on wordpress.org or from J&Co Digital; if it's a known premium or custom plugin, allowlist it once for every site", p.Name, name),
 	}
@@ -227,4 +234,90 @@ func unknownPluginFinding(p models.WPPlugin, info *models.PluginInfo, appeared b
 		f.Detail = fmt.Sprintf("plugin %s (%q) appeared on the site without jman installing it, and isn't on wordpress.org or from J&Co Digital", p.Name, name)
 	}
 	return f
+}
+
+// MovePluginPathAcks turns the per-site path acknowledgements of
+// unknown-plugin findings, which jman made before plugins could be
+// allowlisted, into one allowlist entry per plugin, and marks the plugin's
+// open findings on every site allowlisted. The entry keeps the oldest
+// acknowledgement's author and time, and every distinct reason. jman-api
+// runs it on startup; once the acknowledgements are removed it does
+// nothing.
+func MovePluginPathAcks() {
+	scanTriageMu.Lock()
+	defer scanTriageMu.Unlock()
+
+	acks, err := db.ListScanPathAcks("", false)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+		return
+	}
+	byPath := map[string][]models.ScanPathAck{}
+	var paths []string
+	// Oldest first: the list is newest first.
+	for i := len(acks) - 1; i >= 0; i-- {
+		a := acks[i]
+		if a.Rule != ruleUnknownPlugin {
+			continue
+		}
+		if _, seen := byPath[a.Path]; !seen {
+			paths = append(paths, a.Path)
+		}
+		byPath[a.Path] = append(byPath[a.Path], a)
+	}
+
+	incidents := map[int64]bool{}
+	for _, path := range paths {
+		group := byPath[path]
+		first := group[0]
+		var reasons []string
+		for _, a := range group {
+			if !slices.Contains(reasons, a.Reason) {
+				reasons = append(reasons, a.Reason)
+			}
+		}
+		reason := strings.Join(reasons, "; ")
+		if len(reason) > maxScanTriageReason {
+			reason = reason[:maxScanTriageReason]
+		}
+		hash := unknownPluginHash(strings.TrimPrefix(path, "wp-content/plugins/"))
+		snippet := ""
+		if found, err := db.ListScanFindings(db.ScanFindingFilter{SiteID: first.SiteID, Rule: ruleUnknownPlugin, Path: path, Limit: 1}); err == nil && len(found) > 0 {
+			snippet = found[0].Snippet
+		}
+		if _, err := db.AddScanAllowlistEntry(models.ScanAllowlistEntry{
+			SHA256:      hash,
+			Reason:      reason,
+			SiteID:      first.SiteID,
+			Rule:        ruleUnknownPlugin,
+			Path:        path,
+			Snippet:     snippet,
+			AuditFields: models.AuditFields{CreatedAt: first.CreatedAt, CreatedBy: first.CreatedBy},
+		}); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+			continue
+		}
+		for _, a := range group {
+			if _, err := db.RemoveScanPathAck(a.ID, scanTriageBy); err != nil {
+				verb.LogPrintf(verb.Normal, "%v", err)
+			}
+		}
+		open, err := db.ListScanFindings(db.ScanFindingFilter{SHA256: hash, Status: models.ScanFindingOpen})
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+			continue
+		}
+		var covered []models.StoredScanFinding
+		for _, f := range open {
+			if allowlistCovers(f) {
+				covered = append(covered, f)
+			}
+		}
+		if _, err := db.SetScanFindingStatus(findingIDs(covered), models.ScanFindingAllowlisted, scanTriageBy); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}
+		maps.Copy(incidents, findingIncidents(covered))
+		verb.LogPrintf(verb.Normal, "Moved %d path acknowledgement(s) of plugin %s to the allowlist", len(group), path)
+	}
+	closeEmptySecurityIncidents(incidents, scanTriageBy)
 }

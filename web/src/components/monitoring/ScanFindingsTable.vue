@@ -3,7 +3,12 @@ import { computed, ref, watch } from "vue";
 import { useDataStore } from "../../stores/data";
 import AppIcon from "../AppIcon.vue";
 import type { ScanFinding } from "../../types";
-import { severityClass, isStateRule } from "./scan";
+import {
+	canAllowlist,
+	isStateRule,
+	severityClass,
+	unknownPluginRule,
+} from "./scan";
 
 interface Props {
 	findings: ScanFinding[];
@@ -21,7 +26,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-	(e: "allowlist", finding: ScanFinding): void;
+	(e: "allowlist", findings: ScanFinding[]): void;
 	(e: "acknowledge", findings: ScanFinding[]): void;
 	(e: "dismiss", findings: ScanFinding[]): void;
 	(e: "redact", findings: ScanFinding[]): void;
@@ -56,6 +61,13 @@ const allSelected = computed(
 const selectionIsStateRules = computed(() =>
 	selectedFindings.value.every((f) => isStateRule(f.rule)),
 );
+// Plugins are allowlisted in bulk; files one at a time, after reading
+// what they hold.
+const selectionIsPlugins = computed(() =>
+	selectedFindings.value.every(
+		(f) => f.rule === unknownPluginRule && canAllowlist(f),
+	),
+);
 
 function toggle(set: Set<number>, id: number) {
 	if (set.has(id)) set.delete(id);
@@ -81,10 +93,6 @@ function formatTime(iso?: string): string {
 		minute: "2-digit",
 	});
 }
-
-function canAllowlist(f: ScanFinding): boolean {
-	return !!f.sha256 && f.engine !== "api";
-}
 </script>
 
 <template>
@@ -94,6 +102,14 @@ function canAllowlist(f: ScanFinding): boolean {
 			class="flex-row gap-2 bulk-bar"
 		>
 			<span class="sub-text">{{ selectedFindings.length }} selected</span>
+			<button
+				v-if="selectionIsPlugins"
+				class="btn btn-sm btn-outline"
+				title="Trust these plugins on every site"
+				@click="emit('allowlist', selectedFindings)"
+			>
+				Allowlist plugins
+			</button>
 			<button
 				v-if="selectionIsStateRules"
 				class="btn btn-sm btn-outline"
@@ -219,8 +235,12 @@ function canAllowlist(f: ScanFinding): boolean {
 									<button
 										v-if="canAllowlist(f)"
 										class="btn btn-sm btn-outline"
-										title="Trust this file content on every site"
-										@click="emit('allowlist', f)"
+										:title="
+											f.rule === unknownPluginRule
+												? 'Trust this plugin on every site'
+												: 'Trust this file content on every site'
+										"
+										@click="emit('allowlist', [f])"
 									>
 										Allowlist
 									</button>

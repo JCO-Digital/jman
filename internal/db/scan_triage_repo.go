@@ -293,7 +293,8 @@ func CountOpenScanFindings(incidentID int64) (int, error) {
 }
 
 // AddScanAllowlistEntry trusts a file hash on every site. It returns the
-// existing entry when the hash is already allowlisted.
+// existing entry when the hash is already allowlisted. CreatedAt is kept
+// when set (an entry moved from elsewhere), and is now otherwise.
 func AddScanAllowlistEntry(e models.ScanAllowlistEntry) (*models.ScanAllowlistEntry, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
@@ -303,11 +304,15 @@ func AddScanAllowlistEntry(e models.ScanAllowlistEntry) (*models.ScanAllowlistEn
 		return existing, err
 	}
 	now := time.Now()
+	created := now
+	if !e.CreatedAt.IsZero() {
+		created = e.CreatedAt
+	}
 	var id int64
 	err := dbConn.QueryRow(`
 	INSERT INTO scan_allowlist (sha256, reason, site_id, rule, path, snippet, created_at, created_by, updated_at, updated_by)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	RETURNING id`, e.SHA256, e.Reason, e.SiteID, e.Rule, e.Path, e.Snippet, now, e.CreatedBy, now, e.CreatedBy).Scan(&id)
+	RETURNING id`, e.SHA256, e.Reason, e.SiteID, e.Rule, e.Path, e.Snippet, created, e.CreatedBy, now, e.CreatedBy).Scan(&id)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add allowlist entry: %w", err)
 	}

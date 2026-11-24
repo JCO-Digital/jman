@@ -103,6 +103,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Move per-site acknowledgements of plugins to the allowlist.
+	api.MovePluginPathAcks()
 	// Put scan findings stored before security incidents existed in one.
 	api.TriagePendingScanFindings()
 	// Remove snippets of findings triaged long ago, now and daily.

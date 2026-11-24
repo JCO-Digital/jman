@@ -5,11 +5,18 @@ import { useDataStore } from "../../stores/data";
 import { useToastStore } from "../../stores/toast";
 import AppIcon from "../AppIcon.vue";
 import type { ScanFinding } from "../../types";
+import {
+	canAllowlist,
+	pluginName,
+	pluginSlug,
+	unknownPluginRule,
+} from "./scan";
 
 interface Props {
 	/**
-	 * allowlist trusts findings[0]'s hash; acknowledge trusts the paths.
-	 * Both offer to cover the other open findings that match.
+	 * allowlist trusts the findings' hashes (one file's content, or the
+	 * slugs of one or more plugins); acknowledge trusts the paths. Both
+	 * offer to cover the other open findings that match.
 	 */
 	mode: "allowlist" | "acknowledge" | null;
 	findings: ScanFinding[];
@@ -32,19 +39,27 @@ const matching = ref<ScanFinding[] | null>(null);
 const saving = ref(false);
 
 const finding = computed(() => props.findings[0]);
+// Plugins are allowlisted by slug, several at once.
+const isPlugins = computed(
+	() =>
+		props.findings.length > 0 &&
+		props.findings.every((f) => f.rule === unknownPluginRule),
+);
 
 watch(
 	() => props.mode,
 	async (mode) => {
 		reason.value = "";
-		closeMatching.value = false;
+		// A plugin is trusted everywhere once allowlisted, so its open
+		// findings elsewhere are covered by default; files are opt-in.
+		closeMatching.value = mode === "allowlist" && isPlugins.value;
 		matching.value = null;
 		if (!mode) return;
 		const targets = props.findings;
 		try {
 			const found =
 				mode === "allowlist"
-					? await findSameHash(targets[0])
+					? await findSameHashes(targets)
 					: await findSamePaths(targets);
 			if (props.findings === targets) matching.value = found;
 		} catch (e) {
@@ -58,15 +73,19 @@ watch(
 	},
 );
 
-/** The other open findings with the same file content. */
-async function findSameHash(target?: ScanFinding): Promise<ScanFinding[]> {
-	if (!target?.sha256) return [];
-	const found = await scanStore.fetchFindings({
-		sha256: target.sha256,
-		status: "open",
-		limit: 1000,
-	});
-	return found.filter((f) => f.id !== target.id);
+/**
+ * The other open findings with the same hashes (file content or plugin
+ * slug) that an allowlist entry would cover.
+ */
+async function findSameHashes(targets: ScanFinding[]): Promise<ScanFinding[]> {
+	const selected = new Set(targets.map((f) => f.id));
+	const hashes = [...new Set(targets.map((f) => f.sha256).filter(Boolean))];
+	const lists = await Promise.all(
+		hashes.map((sha256) =>
+			scanStore.fetchFindings({ sha256, status: "open", limit: 1000 }),
+		),
+	);
+	return lists.flat().filter((f) => !selected.has(f.id) && canAllowlist(f));
 }
 
 /**
@@ -94,6 +113,25 @@ async function findSamePaths(targets: ScanFinding[]): Promise<ScanFinding[]> {
 	return [...byID.values()];
 }
 
+/** The selected plugins, one row per slug with the sites it's on. */
+const pluginList = computed(() => {
+	const bySlug = new Map<
+		string,
+		{ slug: string; name: string; sites: string[] }
+	>();
+	for (const f of props.findings) {
+		const slug = pluginSlug(f.path);
+		const row = bySlug.get(slug) ?? {
+			slug,
+			name: pluginName(f.snippet),
+			sites: [],
+		};
+		row.sites.push(siteDomain(f.site_id));
+		bySlug.set(slug, row);
+	}
+	return [...bySlug.values()];
+});
+
 const matchingSites = computed(() => {
 	const domains = new Set(
 		(matching.value ?? []).map((f) => siteDomain(f.site_id)),
@@ -107,18 +145,20 @@ function siteDomain(siteId: string): string {
 
 async function submit() {
 	const why = reason.value.trim();
-	const target = finding.value;
-	if (!why || !props.mode || !target) return;
+	if (!why || !props.mode || !props.findings.length) return;
 	saving.value = true;
 	try {
 		if (props.mode === "allowlist") {
 			const res = await scanStore.addAllowlist(
-				target.id,
+				props.findings.map((f) => f.id),
 				why,
 				closeMatching.value,
 			);
+			const what = isPlugins.value
+				? `${res?.entries.length ?? 0} plugin(s)`
+				: "Hash";
 			toastStore.addToast(
-				`Hash allowlisted; ${res?.allowlisted ?? 0} finding(s) marked allowlisted`,
+				`${what} allowlisted; ${res?.allowlisted ?? 0} finding(s) marked allowlisted`,
 				"success",
 			);
 		} else {
@@ -157,7 +197,14 @@ async function submit() {
 		<div v-if="mode" class="modal-overlay" @click.self="emit('close')">
 			<div class="modal-content card triage-modal">
 				<header class="modal-header">
-					<h2 v-if="mode === 'allowlist'">Allowlist file content</h2>
+					<h2 v-if="mode === 'allowlist' && isPlugins">
+						Allowlist {{ pluginList.length }} plugin{{
+							pluginList.length === 1 ? "" : "s"
+						}}
+					</h2>
+					<h2 v-else-if="mode === 'allowlist'">
+						Allowlist file content
+					</h2>
 					<h2 v-else>
 						Acknowledge {{ findings.length }} path{{
 							findings.length === 1 ? "" : "s"
@@ -169,7 +216,25 @@ async function submit() {
 				</header>
 
 				<form @submit.prevent="submit">
-					<template v-if="mode === 'allowlist' && finding">
+					<template v-if="mode === 'allowlist' && isPlugins">
+						<p class="hint">
+							These plugins won't be flagged on any site again,
+							including sites that get them later. A plugin with
+							the same slug that poses as WordPress still is.
+						</p>
+						<ul class="path-list">
+							<li v-for="p in pluginList" :key="p.slug">
+								<code>{{ p.slug }}</code>
+								<template v-if="p.name && p.name !== p.slug">
+									{{ p.name }}
+								</template>
+								<span class="sub-text">
+									({{ p.sites.join(", ") }})</span
+								>
+							</li>
+						</ul>
+					</template>
+					<template v-else-if="mode === 'allowlist' && finding">
 						<p class="hint">
 							Files with this exact content won't be flagged on
 							any site again. Anyone can review the entry, and
@@ -214,9 +279,11 @@ async function submit() {
 							required
 							maxlength="1000"
 							:placeholder="
-								mode === 'allowlist'
-									? 'e.g. WP Migrate DB index.php placeholder'
-									: 'e.g. Deploy script runs as root'
+								mode === 'acknowledge'
+									? 'e.g. Deploy script runs as root'
+									: isPlugins
+										? 'e.g. Premium plugin from the vendor'
+										: 'e.g. WP Migrate DB index.php placeholder'
 							"
 						/>
 					</div>
@@ -232,14 +299,21 @@ async function submit() {
 									type="checkbox"
 								/>
 								Also mark the {{ matching.length }} other open
-								finding(s) with this content allowlisted
+								finding(s)
+								{{
+									isPlugins
+										? "of these plugins"
+										: "with this content"
+								}}
+								allowlisted
 							</label>
 							<p class="hint">
 								On {{ matchingSites.join(", ") }}
 							</p>
 						</template>
 						<p v-else class="hint">
-							No other open finding has this content.
+							No other open finding has
+							{{ isPlugins ? "these plugins" : "this content" }}.
 						</p>
 					</template>
 

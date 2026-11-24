@@ -96,16 +96,20 @@ export const useScanStore = defineStore("scan", () => {
 		});
 	}
 
-	/** Trusts a finding's file hash on every site. */
+	/** Trusts findings' hashes (file content, plugin slugs) on every site. */
 	async function addAllowlist(
-		findingId: number,
+		findingIds: number[],
 		reason: string,
 		closeMatching: boolean,
 	) {
-		return send<{ entry: ScanAllowlistEntry; allowlisted: number }>(
+		return send<{ entries: ScanAllowlistEntry[]; allowlisted: number }>(
 			"POST",
 			"/scan/allowlist",
-			{ finding_id: findingId, reason, close_matching: closeMatching },
+			{
+				finding_ids: findingIds,
+				reason,
+				close_matching: closeMatching,
+			},
 		);
 	}
 
