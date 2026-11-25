@@ -32,6 +32,7 @@ func StartScheduler(ctx context.Context) {
 			case <-ticker.C:
 				runTick()
 			case <-ctx.Done():
+				FlushTaskNotifications()
 				log.Println("Task scheduler stopped.")
 				return
 			}
@@ -174,38 +175,6 @@ func sendSlackReminder(task *models.Task) {
 	}
 }
 
-// NotifyTaskChange notifies current's assignee about a task being created,
-// (re)assigned to them, or otherwise edited — unless they are the one who
-// made the change themselves (actor). old is nil for a newly-created task;
-// actor is the username performing the change ("system" for scheduler-driven
-// changes, which never matches a real assignee, so those always notify).
-//
-// A create or (re)assignment sends the full task; any other change sends
-// only what changed (title/type/priority are always included for context).
-func NotifyTaskChange(old, current *models.Task, actor string) {
-	if current.AssignedTo == nil || *current.AssignedTo == "" {
-		return
-	}
-	if actor != "" && actor == *current.AssignedTo {
-		return
-	}
-
-	wasAlreadyAssignedToThem := old != nil && old.AssignedTo != nil && *old.AssignedTo == *current.AssignedTo
-
-	var message string
-	if !wasAlreadyAssignedToThem {
-		message = formatFullTaskMessage(current, old == nil)
-	} else {
-		changes := diffTaskFields(old, current)
-		if len(changes) == 0 {
-			return
-		}
-		message = formatTaskChangeMessage(current, changes)
-	}
-
-	sendToAssignee(current, message)
-}
-
 // formatFullTaskMessage renders the complete task, used when a task is
 // created or (re)assigned to someone.
 func formatFullTaskMessage(task *models.Task, created bool) string {
@@ -267,9 +236,8 @@ type taskFieldChange struct {
 	Old, New string
 }
 
-// diffTaskFields compares the user-editable fields of old and current
-// (excluding AssignedTo, handled separately by NotifyTaskChange) and returns
-// only those that differ.
+// diffTaskFields compares the user-editable fields of old and current and
+// returns only those that differ.
 func diffTaskFields(old, current *models.Task) []taskFieldChange {
 	var changes []taskFieldChange
 	add := func(label, oldVal, newVal string) {
@@ -286,6 +254,7 @@ func diffTaskFields(old, current *models.Task) []taskFieldChange {
 	add("Due Date", formatDatePtr(old.DueDate), formatDatePtr(current.DueDate))
 	add("Reminder Date", formatDatePtr(old.ReminderDate), formatDatePtr(current.ReminderDate))
 	add("Interval", derefStr(old.Interval), derefStr(current.Interval))
+	add("Assignee", derefStr(old.AssignedTo), derefStr(current.AssignedTo))
 
 	return changes
 }

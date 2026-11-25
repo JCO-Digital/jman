@@ -182,14 +182,20 @@ Returns a list of tasks matching the provided filters.
 		"completed_at": "2024-03-14T09:00:00Z",
 		"updated_at": "2024-03-14T09:00:00Z",
 		"created_by": "system",
-		"completed_by": "niklas"
+		"completed_by": "niklas",
+		"checklist_total": 3,
+		"checklist_done": 1
 	}
 ]
 ```
 
+Each task carries its checklist progress (`checklist_total`, `checklist_done`) and, for a repeating or dynamic task created by completing another, `previous_task_id`.
+
 ### Get Task
 
 `GET /tasks/{id}` (Protected: `basic`)
+
+Also returns the task's `checklist` (items in order: `id`, `text`, `done`, `done_by`, `done_at`, `ref_type`, `ref_id`, ...) and `watchers` (usernames). Both are left out when empty. Create, update and complete answer with the task in this form too.
 
 ### Create Task
 
@@ -212,12 +218,15 @@ Returns a list of tasks matching the provided filters.
 | `due_date` | datetime | No | |
 | `reminder_date` | datetime | No | |
 | `metadata` | string | No | JSON string |
+| `checklist` | array | No | Items to start the checklist with: `{"text": ..., "ref_type": ..., "ref_id": ...}` (see Task Checklist) |
+
+The creator starts watching the task.
 
 ### Update Task
 
 `PATCH /tasks/{id}` (Protected: `edit`)
 
-Updates specific fields of a task.
+Updates the fields given: `title`, `description`, `type`, `status`, `priority`, `interval`, `assigned_to`, `due_date`, `reminder_date`, `site_id`, `server_id`, `organization_id`, `plugin_slug`, `metadata`. The checklist and watchers have their own endpoints.
 
 ### Complete Task
 
@@ -228,6 +237,25 @@ Marks a task as completed. If the task is `repeating` or `dynamic`, a new task i
 ### Delete Task
 
 `DELETE /tasks/{id}` (Protected: `edit`)
+
+Also deletes the task's checklist, watchers and notes.
+
+### Task Checklist
+
+Each endpoint answers with the task's whole checklist, in order.
+
+- `POST /tasks/{id}/checklist` (Protected: `edit`): appends `{"items": [{"text": "...", "ref_type": "site", "ref_id": "<uuid>"}]}`. `text` is required (at most 1000 characters). `ref_type` (`site`, `server`, `plugin`, `inventory_item`) and `ref_id` are optional and make the item stand for that record; `text` is then its name when added, so the item still reads right once the record is gone. Answers `201`.
+- `PATCH /tasks/{id}/checklist/{itemId}` (Protected: `edit`): `{"text": "...", "done": true}`, either or both. Ticking records `done_by` and `done_at`.
+- `PUT /tasks/{id}/checklist/order` (Protected: `edit`): `{"ids": [3, 1, 2]}`, the items in their new order.
+- `DELETE /tasks/{id}/checklist/{itemId}` (Protected: `edit`).
+
+### Watch Task
+
+`PUT /tasks/{id}/watch` and `DELETE /tasks/{id}/watch` (Protected: `basic`) start and stop watching the task as the signed-in user, and answer with the task's watchers.
+
+### Task Notes
+
+Notes on a task use the generic notes endpoints with `parent_type: "Task"` and the task's ID as `parent_id`. `POST /notes` for a task takes `"watch": false` to keep the author from starting to watch it (by default they do), and tells the task's assignee and watchers about the note.
 
 ---
 

@@ -271,6 +271,12 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PATCH /api/tasks/{id}", edit(UpdateTaskHandler))
 	mux.Handle("POST /api/tasks/{id}/complete", edit(CompleteTaskHandler))
 	mux.Handle("DELETE /api/tasks/{id}", edit(DeleteTaskHandler))
+	mux.Handle("POST /api/tasks/{id}/checklist", edit(AddTaskChecklistItemsHandler))
+	mux.Handle("PUT /api/tasks/{id}/checklist/order", edit(ReorderTaskChecklistHandler))
+	mux.Handle("PATCH /api/tasks/{id}/checklist/{itemId}", edit(UpdateTaskChecklistItemHandler))
+	mux.Handle("DELETE /api/tasks/{id}/checklist/{itemId}", edit(DeleteTaskChecklistItemHandler))
+	mux.Handle("PUT /api/tasks/{id}/watch", basic(WatchTaskHandler))
+	mux.Handle("DELETE /api/tasks/{id}/watch", basic(WatchTaskHandler))
 
 	// --- Report routes ---
 	mux.Handle("GET /api/reports", basic(ListReportsHandler))

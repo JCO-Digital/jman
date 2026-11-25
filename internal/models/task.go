@@ -62,4 +62,53 @@ type Task struct {
 	CreatedBy   string    `json:"created_by"`
 	CompletedBy *string   `json:"completed_by,omitempty"`
 	UpdatedAt   time.Time `json:"updated_at"`
+
+	// PreviousTaskID is the task a repeating or dynamic task was created
+	// from when that one was completed.
+	PreviousTaskID *int `json:"previous_task_id,omitempty"`
+
+	// Checklist counts, filled in on every read.
+	ChecklistTotal int `json:"checklist_total"`
+	ChecklistDone  int `json:"checklist_done"`
+
+	// Checklist and Watchers are only filled in when one task is read.
+	Checklist []TaskChecklistItem `json:"checklist,omitempty"`
+	Watchers  []string            `json:"watchers,omitempty"`
+}
+
+// TaskChecklistRefType is the kind of record a checklist item stands for.
+type TaskChecklistRefType string
+
+const (
+	TaskChecklistRefSite          TaskChecklistRefType = "site"
+	TaskChecklistRefServer        TaskChecklistRefType = "server"
+	TaskChecklistRefPlugin        TaskChecklistRefType = "plugin"
+	TaskChecklistRefInventoryItem TaskChecklistRefType = "inventory_item"
+)
+
+// IsValidTaskChecklistRefType reports whether t is a known ref type.
+func IsValidTaskChecklistRefType(t TaskChecklistRefType) bool {
+	switch t {
+	case TaskChecklistRefSite, TaskChecklistRefServer, TaskChecklistRefPlugin, TaskChecklistRefInventoryItem:
+		return true
+	}
+	return false
+}
+
+// TaskChecklistItem is one line of a task's checklist. An item may stand for
+// a site, server, plugin or inventory item (RefType/RefID); Text is then the
+// record's name when it was added, so the item still reads right after the
+// record is gone.
+type TaskChecklistItem struct {
+	ID        int                  `json:"id"`
+	TaskID    int                  `json:"task_id"`
+	Position  int                  `json:"position"`
+	Text      string               `json:"text"`
+	Done      bool                 `json:"done"`
+	DoneBy    *string              `json:"done_by,omitempty"`
+	DoneAt    *time.Time           `json:"done_at,omitempty"`
+	RefType   TaskChecklistRefType `json:"ref_type,omitempty"`
+	RefID     string               `json:"ref_id,omitempty"`
+	CreatedAt time.Time            `json:"created_at"`
+	CreatedBy string               `json:"created_by"`
 }
