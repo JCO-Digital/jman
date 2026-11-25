@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, nextTick } from "vue";
 import { useTaskStore } from "../stores/tasks";
 import { useDataStore } from "../stores/data";
 import { useOrganizationStore } from "../stores/organization";
 import { useUserStore } from "../stores/user";
 import AppIcon from "./AppIcon.vue";
-import type { Task, TaskType, TaskPriority } from "../types";
+import SearchableSelect from "./SearchableSelect.vue";
+import TaskChecklist, { type ChecklistRow } from "./TaskChecklist.vue";
+import type {
+	NewTaskChecklistItem,
+	Task,
+	TaskType,
+	TaskPriority,
+} from "../types";
+
+// The new-task form. A task is edited in place once it exists
+// (TaskDetailModal).
 
 const props = defineProps<{
-	task?: Task | null;
-	/** Prefilled fields for a new task. */
+	/** Prefilled fields. */
 	defaults?: Partial<
 		Pick<
 			Task,
@@ -28,99 +37,73 @@ const dataStore = useDataStore();
 const orgStore = useOrganizationStore();
 const userStore = useUserStore();
 
-const isEditing = computed(() => !!props.task);
 const isSaving = ref(false);
 const saveError = ref<string | null>(null);
+const titleInput = ref<HTMLInputElement | null>(null);
 
+const d = props.defaults ?? {};
 const form = reactive({
-	title: "",
-	description: "",
+	title: d.title ?? "",
+	description: d.description ?? "",
 	type: "one-time" as TaskType,
-	priority: "medium" as TaskPriority,
+	priority: (d.priority ?? "medium") as TaskPriority,
 	assigned_to: "",
 	// Site/server ids are UUID strings; "" means none.
-	site_id: "",
+	site_id: d.site_id ?? "",
 	server_id: "",
 	organization_id: "" as number | "",
-	plugin_slug: "",
+	plugin_slug: d.plugin_slug ?? "",
 	interval: "",
 	due_date: "",
 	reminder_date: "",
 });
 
-function toDateInput(iso: string | null): string {
-	if (!iso) return "";
-	const d = new Date(iso);
-	const pad = (n: number) => String(n).padStart(2, "0");
-	return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function resetForm() {
-	if (props.task) {
-		form.title = props.task.title;
-		form.description = props.task.description ?? "";
-		form.type = props.task.type;
-		form.priority = props.task.priority;
-		form.assigned_to = props.task.assigned_to ?? "";
-		form.site_id = props.task.site_id ?? "";
-		form.server_id = props.task.server_id ?? "";
-		form.organization_id = props.task.organization_id ?? "";
-		form.plugin_slug = props.task.plugin_slug ?? "";
-		form.interval = props.task.interval ?? "";
-		form.due_date = toDateInput(props.task.due_date);
-		form.reminder_date = toDateInput(props.task.reminder_date);
-	} else {
-		form.title = "";
-		form.description = "";
-		form.type = "one-time";
-		form.priority = "medium";
-		form.assigned_to = "";
-		form.site_id = "";
-		form.server_id = "";
-		form.organization_id = "";
-		form.plugin_slug = "";
-		form.interval = "";
-		form.due_date = "";
-		form.reminder_date = "";
-		const d = props.defaults;
-		if (d) {
-			form.title = d.title ?? "";
-			form.description = d.description ?? "";
-			form.priority = d.priority ?? "medium";
-			form.site_id = d.site_id ?? "";
-			form.plugin_slug = d.plugin_slug ?? "";
-		}
+// The checklist to create the task with; ids are only for the list.
+const checklist = ref<ChecklistRow[]>([]);
+let nextDraftId = 1;
+function addItems(items: NewTaskChecklistItem[]) {
+	for (const item of items) {
+		checklist.value.push({ id: nextDraftId++, done: false, ...item });
 	}
 }
-
-watch(() => props.task, resetForm, { immediate: true });
+function renameItem(item: ChecklistRow, text: string) {
+	const it = checklist.value.find((i) => i.id === item.id);
+	if (it) it.text = text;
+}
+function removeItem(item: ChecklistRow) {
+	checklist.value = checklist.value.filter((i) => i.id !== item.id);
+}
+function reorderItems(ids: number[]) {
+	const byId = new Map(checklist.value.map((i) => [i.id, i]));
+	checklist.value = ids.map((id) => byId.get(id)!).filter(Boolean);
+}
 
 onMounted(() => {
 	if (!dataStore.isLoaded) dataStore.initData();
 	if (orgStore.organizations.length === 0) orgStore.fetchOrganizations();
 	userStore.ensureUsers();
+	nextTick(() => titleInput.value?.focus());
 });
 
-function toIso(
-	value: string,
-	hours: number,
-	minutes: number,
-	seconds: number,
-): string | null {
+const siteOptions = computed(() => [
+	{ value: "", label: "— None —" },
+	...dataStore.sites.map((s) => ({ value: s.id, label: s.domain })),
+]);
+const serverOptions = computed(() => [
+	{ value: "", label: "— None —" },
+	...dataStore.servers.map((s) => ({ value: s.id, label: s.name })),
+]);
+const orgOptions = computed(() => [
+	{ value: "", label: "— None —" },
+	...orgStore.organizations.map((o) => ({ value: o.id, label: o.name })),
+]);
+
+function toIso(value: string, endOfDay: boolean): string | null {
 	if (!value) return null;
-	const parts = value.split("-");
-	const year = Number(parts[0]);
-	const month = Number(parts[1]);
-	const day = Number(parts[2]);
-	return new Date(
-		year,
-		month - 1,
-		day,
-		hours,
-		minutes,
-		seconds,
-		0,
-	).toISOString();
+	const [y, m, day] = value.split("-").map(Number);
+	return endOfDay
+		? new Date(y!, m! - 1, day!, 23, 59, 59).toISOString()
+		: new Date(y!, m! - 1, day!, 0, 0, 0).toISOString();
 }
 
 async function save() {
@@ -128,42 +111,37 @@ async function save() {
 		saveError.value = "Title is required.";
 		return;
 	}
-	if (
-		(form.type === "repeating" || form.type === "dynamic") &&
-		!form.interval.trim()
-	) {
-		saveError.value = "Interval is required for repeating/dynamic tasks.";
+	if (form.type !== "one-time" && !form.interval.trim()) {
+		saveError.value = "Repeating tasks need an interval.";
 		return;
 	}
 
 	isSaving.value = true;
 	saveError.value = null;
-
-	const payload = {
-		title: form.title.trim(),
-		description: form.description.trim() || "",
-		type: form.type,
-		priority: form.priority,
-		assigned_to: form.assigned_to.trim() || null,
-		site_id: form.site_id || null,
-		server_id: form.server_id || null,
-		organization_id:
-			form.organization_id !== "" ? Number(form.organization_id) : null,
-		plugin_slug: form.plugin_slug.trim() || null,
-		interval:
-			form.type !== "one-time" ? form.interval.trim() || null : null,
-		due_date: toIso(form.due_date, 23, 59, 59),
-		reminder_date: toIso(form.reminder_date, 0, 0, 0),
-	};
-
 	try {
-		let result: Task;
-		if (isEditing.value && props.task) {
-			result = await taskStore.updateTask(props.task.id, payload);
-		} else {
-			result = await taskStore.createTask(payload);
-		}
-		emit("saved", result);
+		const task = await taskStore.createTask({
+			title: form.title.trim(),
+			description: form.description.trim(),
+			type: form.type,
+			priority: form.priority,
+			assigned_to: form.assigned_to || null,
+			site_id: form.site_id || null,
+			server_id: form.server_id || null,
+			organization_id:
+				form.organization_id !== ""
+					? Number(form.organization_id)
+					: null,
+			plugin_slug: form.plugin_slug.trim() || null,
+			interval: form.type !== "one-time" ? form.interval.trim() : null,
+			due_date: toIso(form.due_date, true),
+			reminder_date: toIso(form.reminder_date, false),
+			checklist: checklist.value.map((i) => ({
+				text: i.text,
+				ref_type: i.ref_type,
+				ref_id: i.ref_id,
+			})),
+		});
+		emit("saved", task);
 	} catch (e: any) {
 		saveError.value = e.message || "Failed to save task.";
 	} finally {
@@ -175,159 +153,181 @@ async function save() {
 <template>
 	<Teleport to="body">
 		<div class="modal-overlay" @click.self="emit('close')">
-			<div class="modal-content card">
-				<header class="modal-header">
-					<h2>{{ isEditing ? "Edit Task" : "New Task" }}</h2>
-					<button class="modal-close" @click="emit('close')">
+			<form
+				class="modal-content card task-form"
+				@submit.prevent="save"
+				@keydown.ctrl.enter.prevent="save"
+				@keydown.meta.enter.prevent="save"
+			>
+				<header class="task-form-head">
+					<h2>New Task</h2>
+					<button
+						type="button"
+						class="modal-close"
+						title="Close"
+						@click="emit('close')"
+					>
 						<AppIcon name="x" size="20" />
 					</button>
 				</header>
 
-				<form class="content" @submit.prevent="save">
-					<div class="form-group">
-						<label for="task-title">
-							Title <span class="text-error">*</span>
-						</label>
-						<input
-							id="task-title"
-							v-model="form.title"
-							type="text"
-							placeholder="Task title"
-							required
-						/>
-					</div>
-
-					<div class="form-group">
-						<label for="task-desc">Description</label>
-						<textarea
-							id="task-desc"
-							v-model="form.description"
-							placeholder="Optional description"
-							rows="3"
-						></textarea>
-					</div>
-
-					<div class="form-row">
+				<div class="task-form-body">
+					<div class="task-form-main">
 						<div class="form-group">
-							<label for="task-type">Type</label>
-							<select id="task-type" v-model="form.type">
-								<option value="one-time">One-time</option>
-								<option value="repeating">Repeating</option>
-								<option value="dynamic">Dynamic</option>
-							</select>
-						</div>
-
-						<div class="form-group">
-							<label for="task-priority">Priority</label>
-							<select id="task-priority" v-model="form.priority">
-								<option value="low">Low</option>
-								<option value="medium">Medium</option>
-								<option value="high">High</option>
-							</select>
-						</div>
-					</div>
-
-					<div
-						v-if="
-							form.type === 'repeating' || form.type === 'dynamic'
-						"
-						class="form-group"
-					>
-						<label for="task-interval">
-							Interval <span class="text-error">*</span>
-						</label>
-						<input
-							id="task-interval"
-							v-model="form.interval"
-							type="text"
-							placeholder="e.g. 30d, 1w, 1m, 1y"
-						/>
-					</div>
-
-					<div class="form-row">
-						<div class="form-group">
-							<label for="task-due">Due Date</label>
+							<label for="task-title">
+								Title <span class="text-error">*</span>
+							</label>
 							<input
-								id="task-due"
-								v-model="form.due_date"
-								type="date"
+								id="task-title"
+								ref="titleInput"
+								v-model="form.title"
+								type="text"
+								placeholder="What needs doing?"
+								maxlength="300"
+								required
 							/>
 						</div>
 
 						<div class="form-group">
-							<label for="task-reminder">Reminder Date</label>
-							<input
-								id="task-reminder"
-								v-model="form.reminder_date"
-								type="date"
+							<label for="task-desc">Description</label>
+							<textarea
+								id="task-desc"
+								v-model="form.description"
+								placeholder="Optional details"
+								rows="4"
+							></textarea>
+						</div>
+
+						<TaskChecklist
+							:items="checklist"
+							can-edit
+							:can-tick="false"
+							draft
+							@add="addItems"
+							@rename="renameItem"
+							@remove="removeItem"
+							@reorder="reorderItems"
+						/>
+					</div>
+
+					<aside class="task-form-side">
+						<div class="form-row">
+							<div class="form-group">
+								<label for="task-priority">Priority</label>
+								<select
+									id="task-priority"
+									v-model="form.priority"
+								>
+									<option value="low">Low</option>
+									<option value="medium">Medium</option>
+									<option value="high">High</option>
+								</select>
+							</div>
+							<div class="form-group">
+								<label for="task-assigned">Assignee</label>
+								<select
+									id="task-assigned"
+									v-model="form.assigned_to"
+								>
+									<option value="">Unassigned</option>
+									<option
+										v-for="user in userStore.users"
+										:key="user.username"
+										:value="user.username"
+									>
+										{{ user.displayName }}
+									</option>
+								</select>
+							</div>
+						</div>
+
+						<div class="form-row">
+							<div class="form-group">
+								<label for="task-due">Due</label>
+								<input
+									id="task-due"
+									v-model="form.due_date"
+									type="date"
+								/>
+							</div>
+							<div class="form-group">
+								<label for="task-reminder">Reminder</label>
+								<input
+									id="task-reminder"
+									v-model="form.reminder_date"
+									type="date"
+								/>
+							</div>
+						</div>
+
+						<div class="form-row">
+							<div class="form-group">
+								<label for="task-type">Repeats</label>
+								<select id="task-type" v-model="form.type">
+									<option value="one-time">Never</option>
+									<option value="repeating">
+										From the due date
+									</option>
+									<option value="dynamic">
+										From completion
+									</option>
+								</select>
+							</div>
+							<div
+								v-if="form.type !== 'one-time'"
+								class="form-group"
+							>
+								<label for="task-interval">
+									Every <span class="text-error">*</span>
+								</label>
+								<input
+									id="task-interval"
+									v-model="form.interval"
+									type="text"
+									placeholder="30d, 1w, 1m, 1y"
+								/>
+							</div>
+						</div>
+
+						<h3 class="side-heading">Linked to</h3>
+						<div class="form-group">
+							<label>Site</label>
+							<SearchableSelect
+								:model-value="form.site_id"
+								:options="siteOptions"
+								placeholder="— None —"
+								@update:model-value="
+									form.site_id = String($event ?? '')
+								"
 							/>
 						</div>
-					</div>
-
-					<div class="form-group">
-						<label for="task-assigned">Assigned To</label>
-						<select id="task-assigned" v-model="form.assigned_to">
-							<option value="">— Unassigned —</option>
-							<option
-								v-for="user in userStore.users"
-								:key="user.username"
-								:value="user.username"
-							>
-								{{ user.displayName }}
-							</option>
-						</select>
-					</div>
-
-					<div class="form-row">
 						<div class="form-group">
-							<label for="task-site">Site</label>
-							<select id="task-site" v-model="form.site_id">
-								<option value="">— None —</option>
-								<option
-									v-for="site in dataStore.sites"
-									:key="site.id"
-									:value="site.id"
-								>
-									{{ site.domain }}
-								</option>
-							</select>
+							<label>Server</label>
+							<SearchableSelect
+								:model-value="form.server_id"
+								:options="serverOptions"
+								placeholder="— None —"
+								@update:model-value="
+									form.server_id = String($event ?? '')
+								"
+							/>
 						</div>
-
 						<div class="form-group">
-							<label for="task-server">Server</label>
-							<select id="task-server" v-model="form.server_id">
-								<option value="">— None —</option>
-								<option
-									v-for="server in dataStore.servers"
-									:key="server.id"
-									:value="server.id"
-								>
-									{{ server.name }}
-								</option>
-							</select>
+							<label>Organization</label>
+							<SearchableSelect
+								:model-value="form.organization_id"
+								:options="orgOptions"
+								placeholder="— None —"
+								@update:model-value="
+									form.organization_id =
+										$event === '' || $event == null
+											? ''
+											: Number($event)
+								"
+							/>
 						</div>
-					</div>
-
-					<div class="form-row">
 						<div class="form-group">
-							<label for="task-org">Organization</label>
-							<select
-								id="task-org"
-								v-model="form.organization_id"
-							>
-								<option value="">— None —</option>
-								<option
-									v-for="org in orgStore.organizations"
-									:key="org.id"
-									:value="org.id"
-								>
-									{{ org.name }}
-								</option>
-							</select>
-						</div>
-
-						<div class="form-group">
-							<label for="task-plugin">Plugin Slug</label>
+							<label for="task-plugin">Plugin slug</label>
 							<input
 								id="task-plugin"
 								v-model="form.plugin_slug"
@@ -335,40 +335,120 @@ async function save() {
 								placeholder="plugin-slug"
 							/>
 						</div>
-					</div>
+					</aside>
+				</div>
 
-					<div v-if="saveError" class="error-banner">
-						<p>{{ saveError }}</p>
-					</div>
-
-					<footer class="form-actions">
-						<button
-							type="button"
-							class="btn btn-outline"
-							@click="emit('close')"
-						>
-							Cancel
-						</button>
-						<button
-							type="submit"
-							class="btn btn-primary"
-							:disabled="isSaving"
-						>
-							{{
-								isSaving
-									? "Saving…"
-									: isEditing
-										? "Save Changes"
-										: "Create Task"
-							}}
-						</button>
-					</footer>
-				</form>
-			</div>
+				<footer class="task-form-foot">
+					<p v-if="saveError" class="form-error">{{ saveError }}</p>
+					<button
+						type="button"
+						class="btn btn-outline"
+						@click="emit('close')"
+					>
+						Cancel
+					</button>
+					<button
+						type="submit"
+						class="btn btn-primary"
+						:disabled="isSaving"
+					>
+						{{ isSaving ? "Creating…" : "Create Task" }}
+					</button>
+				</footer>
+			</form>
 		</div>
 	</Teleport>
 </template>
 
 <style scoped>
-/* Scoped styles removed in favor of global modal and form classes */
+.modal-content.task-form {
+	max-width: 1040px;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.task-form-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 16px 20px 14px 24px;
+	border-bottom: 1px solid var(--border-color);
+
+	& h2 {
+		margin: 0;
+	}
+}
+
+.task-form-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 360px;
+	min-height: 0;
+	flex: 1;
+}
+
+.task-form-main {
+	padding: 20px 24px;
+	overflow-y: auto;
+
+	& textarea {
+		resize: vertical;
+	}
+}
+
+.task-form-side {
+	padding: 20px;
+	overflow-y: auto;
+	border-left: 1px solid var(--border-color);
+	background: var(--bg-body);
+
+	& .form-row {
+		gap: 12px;
+	}
+	& .form-group {
+		margin-bottom: 12px;
+	}
+}
+
+.side-heading {
+	margin: 8px 0 10px;
+	padding-top: 14px;
+	border-top: 1px solid var(--border-color);
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-muted);
+}
+
+.task-form-foot {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 12px;
+	padding: 14px 24px;
+	border-top: 1px solid var(--border-color);
+
+	& .form-error {
+		margin: 0 auto 0 0;
+	}
+}
+
+@media (max-width: 860px) {
+	.modal-content.task-form {
+		overflow-y: auto;
+	}
+	.task-form-body {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.task-form-main,
+	.task-form-side {
+		overflow: visible;
+	}
+	.task-form-side {
+		border-left: none;
+		border-top: 1px solid var(--border-color);
+	}
+}
 </style>

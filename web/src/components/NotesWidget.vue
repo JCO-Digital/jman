@@ -12,6 +12,17 @@ import AppIcon from "./AppIcon.vue";
 const props = defineProps<{
 	parentType: NoteParentType;
 	parentId: string | number;
+	/** Drops the card around the notes, for use inside another panel. */
+	flat?: boolean;
+	/**
+	 * Offers "Watch this task" next to the add button (ticked by default),
+	 * for task notes.
+	 */
+	watchOption?: boolean;
+}>();
+
+const emit = defineEmits<{
+	(e: "added", note: Note, watched: boolean): void;
 }>();
 
 const notesStore = useNotesStore();
@@ -27,6 +38,14 @@ const editingContent = ref("");
 const isSaving = ref(false);
 
 const isFormExpanded = ref(false);
+const watchTask = ref(true);
+
+const notes = computed(() =>
+	notesStore.notesFor(props.parentType, props.parentId),
+);
+const isLoading = computed(() =>
+	notesStore.isLoadingFor(props.parentType, props.parentId),
+);
 const isListExpanded = ref(false);
 
 const newNoteTextarea = ref<HTMLTextAreaElement | null>(null);
@@ -40,13 +59,13 @@ const expandForm = () => {
 
 const visibleNotes = computed(() => {
 	if (isListExpanded.value) {
-		return notesStore.notes;
+		return notes.value;
 	}
-	return notesStore.notes.slice(0, 3);
+	return notes.value.slice(0, 3);
 });
 
 const remainingNotesCount = computed(() => {
-	return Math.max(0, notesStore.notes.length - 3);
+	return Math.max(0, notes.value.length - 3);
 });
 
 const loadNotes = () => {
@@ -70,13 +89,16 @@ const handleAddNote = async () => {
 	if (!newNoteContent.value.trim()) return;
 	isAdding.value = true;
 	try {
-		await notesStore.createNote(
+		const watched = !!props.watchOption && watchTask.value;
+		const note = await notesStore.createNote(
 			props.parentType,
 			props.parentId,
 			newNoteContent.value,
+			props.watchOption ? { watch: watched } : {},
 		);
 		newNoteContent.value = "";
 		isFormExpanded.value = false;
+		emit("added", note, watched);
 		toastStore.addToast("Note added successfully.", "success");
 	} catch (e: any) {
 		toastStore.addToast("Failed to add note: " + e.message, "error");
@@ -139,7 +161,7 @@ const formatNoteDate = (dateString: string) => {
 </script>
 
 <template>
-	<section class="card notes-section">
+	<section :class="flat ? 'notes-flat' : 'card notes-section'">
 		<div class="card-header border-none mb-2">
 			<div class="flex-row items-center gap-2">
 				<AppIcon name="note" size="18" />
@@ -168,7 +190,11 @@ const formatNoteDate = (dateString: string) => {
 				class="note-textarea"
 				:disabled="isAdding"
 			></textarea>
-			<div class="flex-row justify-end gap-2 mt-2">
+			<div class="flex-row justify-end items-center gap-2 mt-2">
+				<label v-if="watchOption" class="watch-option">
+					<input v-model="watchTask" type="checkbox" />
+					Watch this task
+				</label>
 				<button
 					class="btn btn-outline btn-sm"
 					:disabled="isAdding"
@@ -187,10 +213,13 @@ const formatNoteDate = (dateString: string) => {
 		</div>
 
 		<!-- Notes list -->
-		<div v-if="notesStore.isLoading" class="loading-container py-4">
+		<div
+			v-if="isLoading && notes.length === 0"
+			class="loading-container py-4"
+		>
 			<LoadingSpinner message="Loading notes..." />
 		</div>
-		<div v-else-if="notesStore.notes.length === 0" class="empty-state py-4">
+		<div v-else-if="notes.length === 0" class="empty-state py-4">
 			No notes available.
 		</div>
 		<div v-else class="notes-list">
@@ -282,6 +311,18 @@ const formatNoteDate = (dateString: string) => {
 <style scoped>
 .notes-section {
 	margin-top: 1rem;
+}
+.notes-flat .card-header {
+	padding: 0;
+}
+.watch-option {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 0.85rem;
+	color: var(--text-muted);
+	cursor: pointer;
+	margin-right: auto;
 }
 .border-none {
 	border: none;

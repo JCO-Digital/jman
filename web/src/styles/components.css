@@ -1573,3 +1573,23 @@ details[open] .expand-icon {
 		padding-left: 0;
 	}
 }
+
+/* A task's checklist progress, next to its title in task lists. */
+.checklist-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	flex-shrink: 0;
+	padding: 1px 6px;
+	border-radius: 9999px;
+	font-size: 11px;
+	font-weight: 500;
+	font-variant-numeric: tabular-nums;
+	background: var(--badge-default-bg);
+	color: var(--badge-default-text);
+
+	&.complete {
+		background: var(--badge-active-bg);
+		color: var(--badge-active-text);
+	}
+}

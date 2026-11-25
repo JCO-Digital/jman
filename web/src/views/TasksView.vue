@@ -299,6 +299,23 @@ function vulnStatus(task: Task) {
 							<div class="flex-between gap-2">
 								<span class="truncate">{{ task.title }}</span>
 								<span
+									v-if="task.checklist_total"
+									:class="[
+										'checklist-chip',
+										{
+											complete:
+												task.checklist_done ===
+												task.checklist_total,
+										},
+									]"
+									:title="`Checklist: ${task.checklist_done} of ${task.checklist_total} done`"
+								>
+									<AppIcon name="check" size="11" />
+									{{ task.checklist_done }}/{{
+										task.checklist_total
+									}}
+								</span>
+								<span
 									v-if="vulnStatus(task).isVuln"
 									:class="[
 										'status-badge',
@@ -380,7 +397,10 @@ function vulnStatus(task: Task) {
 		<TaskFormModal
 			v-if="showFormModal"
 			@close="showFormModal = false"
-			@saved="showFormModal = false"
+			@saved="
+				showFormModal = false;
+				openTask($event.id);
+			"
 		/>
 	</div>
 </template>
