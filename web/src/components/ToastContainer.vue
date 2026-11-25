@@ -10,7 +10,23 @@ const store = useNotificationStore();
 const authStore = useAuthStore();
 
 // The open task center lists the same entries, so toasts step aside.
-const visible = computed(() => (store.panelOpen ? [] : store.popups));
+const shown = computed(() => (store.panelOpen ? [] : store.popups));
+
+const isQueued = (t: { type: string; task?: { status: string } }) =>
+	t.type === "running" && t.task?.status === "queued";
+
+// Starting many updates queues them all at once: past a few, their toasts
+// fold into one so they don't cover the side of the screen.
+const MAX_QUEUED_TOASTS = 2;
+const queued = computed(() => shown.value.filter(isQueued));
+const foldQueued = computed(() => queued.value.length > MAX_QUEUED_TOASTS);
+const visible = computed(() =>
+	foldQueued.value ? shown.value.filter((t) => !isQueued(t)) : shown.value,
+);
+
+const pauseQueued = () => queued.value.forEach((t) => store.pauseTimer(t.id));
+const resumeQueued = () => queued.value.forEach((t) => store.resumeTimer(t.id));
+const dismissQueued = () => queued.value.forEach((t) => store.dismiss(t.id));
 const now = useNow(
 	computed(() => visible.value.some((t) => t.type === "running")),
 );
@@ -63,6 +79,31 @@ const now = useNow(
 					class="toast-dismiss"
 					aria-label="Dismiss"
 					@click="store.dismiss(toast.id)"
+				>
+					<AppIcon name="x" size="18" />
+				</button>
+			</div>
+			<div
+				v-if="foldQueued"
+				key="queued-summary"
+				class="toast toast--running"
+				@mouseenter="pauseQueued"
+				@mouseleave="resumeQueued"
+			>
+				<span class="spinner spinner-small toast-spinner"></span>
+				<div class="toast-body">
+					<div class="toast-title">
+						{{ queued.length }} jobs queued
+					</div>
+					<span class="toast-message">
+						Each shows here when it starts; the task center lists
+						them all.
+					</span>
+				</div>
+				<button
+					class="toast-dismiss"
+					aria-label="Dismiss"
+					@click="dismissQueued"
 				>
 					<AppIcon name="x" size="18" />
 				</button>

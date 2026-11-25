@@ -69,6 +69,12 @@ const DEFAULT_DURATION: Record<ToastType, number> = {
 	info: 5000,
 };
 
+/**
+ * How long a queued job's toast stays up. Starting many updates queues
+ * them all at once; each pops up again when it starts running.
+ */
+export const QUEUED_DURATION = 4000;
+
 const STORAGE_PREFIX = "jman_notifications:";
 /** Bounds the remembered cleared/hidden job IDs. */
 const MAX_REMEMBERED_IDS = 200;
@@ -281,8 +287,9 @@ export const useNotificationStore = defineStore("notifications", () => {
 
 	/**
 	 * Creates or updates a task entry from a job. Status changes pop the
-	 * entry up again for the user's own jobs: running ones stay up (unless
-	 * hidden) until they finish, finished ones get a normal toast timer.
+	 * entry up again for the user's own jobs: queued ones for a few seconds,
+	 * running ones until they finish (unless hidden), finished ones with a
+	 * normal toast timer.
 	 * notify is false for jobs that finished before this tab saw them run;
 	 * those are only added to the history.
 	 */
@@ -361,6 +368,8 @@ export const useNotificationStore = defineStore("notifications", () => {
 		clearTimer(id);
 		if (show && !u.active) {
 			startTimer(id, DEFAULT_DURATION[u.type as ToastType]);
+		} else if (show && u.status === "queued") {
+			startTimer(id, QUEUED_DURATION);
 		}
 		if (!u.active) {
 			hiddenJobs.delete(u.jobId);
