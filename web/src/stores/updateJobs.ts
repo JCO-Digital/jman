@@ -3,6 +3,8 @@ import { computed, ref } from "vue";
 import { useDataStore } from "./data";
 import { useNotificationStore, type NotificationType } from "./notifications";
 import { useSiteUsersStore } from "./siteUsers";
+import { useAuthStore } from "./auth";
+import { useDesktopNotifyStore } from "./desktopNotify";
 import type {
 	PluginActionKind,
 	StagedPluginZip,
@@ -76,6 +78,8 @@ export type InstallSource =
 export const useUpdateJobsStore = defineStore("updateJobs", () => {
 	const dataStore = useDataStore();
 	const notifications = useNotificationStore();
+	const authStore = useAuthStore();
+	const desktopNotify = useDesktopNotifyStore();
 	const siteUsersStore = useSiteUsersStore();
 
 	const jobs = ref<UpdateJob[]>([]);
@@ -672,11 +676,30 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				syncNotification(job, true);
 			} else if (busyWatched.delete(job.id)) {
 				syncNotification(job, true);
+				reportFinished(job);
 			} else {
 				syncNotification(job, false);
 			}
 		}
 		jobs.value = [...byId.values()].sort((a, b) => a.id - b.id);
+		const me = authStore.user?.username;
+		desktopNotify.ownBusy(
+			jobs.value.filter((j) => j.created_by === me && isBusy(j)).length,
+		);
+	}
+
+	/** Hands a job of yours this tab saw finish to the desktop notifications. */
+	function reportFinished(job: UpdateJob) {
+		if (job.created_by !== authStore.user?.username) return;
+		const { title, message, type } = describeJob(job);
+		desktopNotify.jobFinished({
+			jobId: job.id,
+			failed: type === "error",
+			review: hasTextDiffFindings(job),
+			title,
+			message,
+			site: dataStore.getSiteById(job.site_id)?.domain ?? job.site_id,
+		});
 	}
 
 	async function fetchJobs() {

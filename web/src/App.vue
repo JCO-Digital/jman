@@ -6,6 +6,7 @@ import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
 import { useMonitorStore } from "./stores/monitor";
 import { useIncidentStore } from "./stores/incidents";
+import { useDesktopNotifyStore } from "./stores/desktopNotify";
 import { useVulnStore } from "./stores/vulns";
 import { useUserStore } from "./stores/user";
 import { useUpdateJobsStore } from "./stores/updateJobs";
@@ -30,6 +31,7 @@ authStore.initialize();
 
 const monitorStore = useMonitorStore();
 const incidentStore = useIncidentStore();
+const desktopNotify = useDesktopNotifyStore();
 const vulnStore = useVulnStore();
 
 let monitorIntervalId: ReturnType<typeof setInterval> | null = null;
@@ -48,6 +50,7 @@ const startIntervals = () => {
 		monitorStore.fetchHistory();
 		incidentStore.fetchActiveCount();
 		vulnStore.fetchSummary();
+		void desktopNotify.pollIncidents();
 	}, settingsStore.monitorRefreshInterval * 1000);
 
 	// General data refresh (sites, servers, plugins, etc.)
@@ -77,6 +80,7 @@ watch(
 		if (authenticated) {
 			dataStore.initData();
 			notificationStore.initialize();
+			desktopNotify.initialize();
 			updateJobsStore.initialize();
 			startIntervals();
 		} else {
@@ -85,6 +89,7 @@ watch(
 			userStore.clearCache();
 			updateJobsStore.reset();
 			notificationStore.reset();
+			desktopNotify.reset();
 		}
 	},
 	{ immediate: true },
