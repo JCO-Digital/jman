@@ -1,5 +1,17 @@
 # Changelog
 
+## 7.48.0 (2026-11-25)
+
+#### Features
+
+- ui: add desktop notifications for jobs, reviews and incidents (e6e46b7)
+- ui: redesign the task modal with checklist, notes and watching (1f4839f)
+- tasks: add checklists, notes and watchers to tasks (a750ac0)
+
+#### Bug Fixes
+
+- ui: hide queued job toasts after a few seconds (efb246b)
+
 ## 7.47.0 (2026-11-24)
 
 #### Features
