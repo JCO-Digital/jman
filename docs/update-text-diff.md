@@ -207,6 +207,10 @@ Baseline snapshots are only kept in memory for the duration of the job.
   `text_diff`.
 - **Task center:** a job stays "running" until its check is done, then its
   message says what the check found, with a "Review changes" link.
+- **Desktop notifications:** with "Update review results" turned on in
+  Account settings, the browser shows a notification when a check of one of
+  your jobs finds something to review (as part of the batch's "jobs
+  finished" notification, or on its own). Clicking it opens Update review.
 - **Update review** (`/updates`, `GET /api/update-jobs/text-diffs`): the
   last week's checks, grouped into runs (jobs one person queued within 15
   minutes of each other, so no batch ID is needed). Broken and changed sites

@@ -5,6 +5,7 @@ import { useUserStore } from "../../stores/user";
 import { validatePasswordStrength } from "../../utils/passwordStrength";
 import QRCode from "qrcode";
 import { BASE_URL, apiFetch } from "../../utils/api";
+import DesktopNotificationSettings from "./DesktopNotificationSettings.vue";
 
 const authStore = useAuthStore();
 const userStore = useUserStore();
@@ -360,6 +361,8 @@ function cancelDisable() {
 				</ol>
 			</div>
 		</section>
+
+		<DesktopNotificationSettings />
 
 		<!-- Section 2: Change Password -->
 		<section class="card">
