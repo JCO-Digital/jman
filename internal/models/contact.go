@@ -55,12 +55,13 @@ const (
 	NoteParentTypeSite          NoteParentType = "Site"
 	NoteParentTypePlugin        NoteParentType = "Plugin"
 	NoteParentTypeInventoryItem NoteParentType = "InventoryItem"
+	NoteParentTypeTask          NoteParentType = "Task"
 )
 
 // IsValidNoteParentType reports whether t is a known note parent type.
 func IsValidNoteParentType(t NoteParentType) bool {
 	switch t {
-	case NoteParentTypeOrganization, NoteParentTypeSite, NoteParentTypePlugin, NoteParentTypeInventoryItem:
+	case NoteParentTypeOrganization, NoteParentTypeSite, NoteParentTypePlugin, NoteParentTypeInventoryItem, NoteParentTypeTask:
 		return true
 	}
 	return false

@@ -4,20 +4,18 @@ import { useTaskStore } from "../stores/tasks";
 import { useToastStore } from "../stores/toast";
 import { useTaskModal } from "../composables/useTaskModal";
 import type { Task } from "../types";
-import TaskInfoModal from "./TaskInfoModal.vue";
-import TaskFormModal from "./TaskFormModal.vue";
+import TaskDetailModal from "./TaskDetailModal.vue";
 
-// Shows the task in the URL's ?task=<id> (see useTaskModal) over any view,
-// and its edit form. Mounted once in App.vue for signed-in users.
+// Shows the task in the URL's ?task=<id> (see useTaskModal) over any view.
+// Mounted once in App.vue for signed-in users.
 
 const taskStore = useTaskStore();
 const toast = useToastStore();
 const { taskId, closeTask } = useTaskModal();
 
-// The task as fetched by ID, for one that isn't in the store's list (a
-// link to a completed task, or a view that hasn't loaded the list).
+// The task as read on its own: with its checklist and watchers, which the
+// list doesn't carry, and for a task that isn't in the list at all.
 const fetched = ref<Task | null>(null);
-const editing = ref(false);
 
 // The store's copy wins, so changes made anywhere show up here at once.
 const task = computed<Task | null>(() => {
@@ -32,8 +30,7 @@ const task = computed<Task | null>(() => {
 watch(
 	taskId,
 	async (id) => {
-		editing.value = false;
-		if (id == null || fetched.value?.id === id) return;
+		if (id == null) return;
 		const result = await taskStore.getTask(id);
 		if (taskId.value !== id) return;
 		if (result) {
@@ -46,28 +43,17 @@ watch(
 	{ immediate: true },
 );
 
-function handleSaved(saved: Task) {
-	fetched.value = saved;
-	editing.value = false;
-}
-
 function handleUpdated(updated: Task) {
-	fetched.value = updated;
+	if (fetched.value?.id === updated.id) fetched.value = updated;
 }
 </script>
 
 <template>
-	<TaskFormModal
-		v-if="task && editing"
+	<TaskDetailModal
+		v-if="task"
 		:task="task"
-		@close="editing = false"
-		@saved="handleSaved"
-	/>
-	<TaskInfoModal
-		v-else-if="task"
-		:task="task"
+		:details="fetched?.id === task.id ? fetched : null"
 		@close="closeTask"
-		@edit="editing = true"
 		@updated="handleUpdated"
 	/>
 </template>

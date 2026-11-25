@@ -6,6 +6,8 @@ import type {
 	CreateTaskPayload,
 	UpdateTaskPayload,
 	TaskFilters,
+	TaskChecklistItem,
+	NewTaskChecklistItem,
 } from "../types";
 import { handleErrorResponse, BASE_URL, apiFetch } from "../utils/api";
 
@@ -58,6 +60,60 @@ export const useTaskStore = defineStore("tasks", () => {
 		} else {
 			tasks.value.push(task);
 		}
+	}
+
+	// Puts a changed checklist on the listed task, so its progress shows
+	// at once.
+	function patchChecklist(id: number, checklist: TaskChecklistItem[]) {
+		const t = tasks.value.find((t) => t.id === id);
+		if (!t) return;
+		t.checklist = checklist;
+		t.checklist_total = checklist.length;
+		t.checklist_done = checklist.filter((i) => i.done).length;
+	}
+
+	async function checklistRequest(
+		id: number,
+		path: string,
+		method: string,
+		body?: unknown,
+	): Promise<TaskChecklistItem[]> {
+		const res = await apiFetch(`${BASE_URL}/tasks/${id}/checklist${path}`, {
+			method,
+			headers:
+				body === undefined
+					? undefined
+					: { "Content-Type": "application/json" },
+			body: body === undefined ? undefined : JSON.stringify(body),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		const checklist: TaskChecklistItem[] = await res.json();
+		patchChecklist(id, checklist);
+		return checklist;
+	}
+
+	const addChecklistItems = (id: number, items: NewTaskChecklistItem[]) =>
+		checklistRequest(id, "", "POST", { items });
+	const updateChecklistItem = (
+		id: number,
+		itemId: number,
+		changes: { text?: string; done?: boolean },
+	) => checklistRequest(id, `/${itemId}`, "PATCH", changes);
+	const deleteChecklistItem = (id: number, itemId: number) =>
+		checklistRequest(id, `/${itemId}`, "DELETE");
+	const reorderChecklist = (id: number, ids: number[]) =>
+		checklistRequest(id, "/order", "PUT", { ids });
+
+	/** Watches (or unwatches) a task as the signed-in user. */
+	async function setWatching(id: number, watch: boolean): Promise<string[]> {
+		const res = await apiFetch(`${BASE_URL}/tasks/${id}/watch`, {
+			method: watch ? "PUT" : "DELETE",
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		const watchers: string[] = await res.json();
+		const t = tasks.value.find((t) => t.id === id);
+		if (t) t.watchers = watchers;
+		return watchers;
 	}
 
 	async function createTask(payload: CreateTaskPayload): Promise<Task> {
@@ -130,5 +186,11 @@ export const useTaskStore = defineStore("tasks", () => {
 		setStatus,
 		completeTask,
 		deleteTask,
+		upsertTask,
+		addChecklistItems,
+		updateChecklistItem,
+		deleteChecklistItem,
+		reorderChecklist,
+		setWatching,
 	};
 });

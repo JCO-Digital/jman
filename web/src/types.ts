@@ -683,7 +683,8 @@ export type NoteParentType =
 	| "Organization"
 	| "Site"
 	| "Plugin"
-	| "InventoryItem";
+	| "InventoryItem"
+	| "Task";
 
 export interface Note {
 	id: number;
@@ -1053,6 +1054,41 @@ export interface Task {
 	created_by: string;
 	completed_at: string | null;
 	completed_by: string | null;
+	/** The task this one was created from when that was completed. */
+	previous_task_id?: number | null;
+	checklist_total: number;
+	checklist_done: number;
+	/** Only on a task read on its own (GET /tasks/{id}); omitted when empty. */
+	checklist?: TaskChecklistItem[];
+	/** Only on a task read on its own; omitted when empty. */
+	watchers?: string[];
+}
+
+export type TaskChecklistRefType =
+	| "site"
+	| "server"
+	| "plugin"
+	| "inventory_item";
+
+export interface TaskChecklistItem {
+	id: number;
+	task_id: number;
+	position: number;
+	text: string;
+	done: boolean;
+	done_by?: string | null;
+	done_at?: string | null;
+	ref_type?: TaskChecklistRefType;
+	ref_id?: string;
+	created_at: string;
+	created_by: string;
+}
+
+/** A checklist item to add. */
+export interface NewTaskChecklistItem {
+	text: string;
+	ref_type?: TaskChecklistRefType;
+	ref_id?: string;
 }
 
 export interface CreateTaskPayload {
@@ -1069,9 +1105,11 @@ export interface CreateTaskPayload {
 	interval?: string | null;
 	due_date?: string | null;
 	reminder_date?: string | null;
+	/** Only on create; the checklist has its own endpoints after that. */
+	checklist?: NewTaskChecklistItem[];
 }
 
-export type UpdateTaskPayload = Partial<CreateTaskPayload>;
+export type UpdateTaskPayload = Partial<Omit<CreateTaskPayload, "checklist">>;
 
 export interface TaskFilters {
 	status?: TaskStatus | "";

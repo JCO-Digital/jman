@@ -7,6 +7,7 @@ import (
 
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
+	"github.com/JCO-Digital/jman/internal/tasks"
 	"github.com/JCO-Digital/jman/internal/verb"
 )
 
@@ -403,11 +404,17 @@ func ListNotesHandler(w http.ResponseWriter, r *http.Request) {
 
 // CreateNoteHandler creates a new note.
 func CreateNoteHandler(w http.ResponseWriter, r *http.Request) {
-	var note models.Note
-	if err := json.NewDecoder(r.Body).Decode(&note); err != nil {
+	var body struct {
+		models.Note
+		// Watch is for a note on a task: whether its author starts watching
+		// the task (the default).
+		Watch *bool `json:"watch"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		WriteError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	note := body.Note
 	if note.Content == "" || note.ParentID == "" || note.ParentType == "" {
 		WriteError(w, http.StatusBadRequest, "Content, ParentID and ParentType are required")
 		return
@@ -419,11 +426,32 @@ func CreateNoteHandler(w http.ResponseWriter, r *http.Request) {
 
 	note.ID = 0
 
+	var task *models.Task
+	if note.ParentType == models.NoteParentTypeTask {
+		taskID, err := strconv.Atoi(note.ParentID)
+		if err == nil {
+			task, err = db.GetTask(taskID)
+		}
+		if err != nil || task == nil {
+			WriteError(w, http.StatusBadRequest, "Unknown task")
+			return
+		}
+	}
+
 	username := getUsername(r)
 	if err := db.SaveNote(&note, username); err != nil {
 		verb.LogPrintf(verb.Normal, "CreateNoteHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
+	}
+	if task != nil {
+		if body.Watch == nil || *body.Watch {
+			if err := db.WatchTask(task.ID, username); err != nil {
+				verb.LogPrintf(verb.Normal, "CreateNoteHandler: watch task %d: %v", task.ID, err)
+			}
+		}
+		// The author is left out, so watching first doesn't matter.
+		go tasks.NotifyTaskNote(task, username, note.Content)
 	}
 	WriteJSON(w, http.StatusCreated, note)
 }

@@ -99,6 +99,10 @@ func GetTaskHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusNotFound, "Task not found")
 		return
 	}
+	if err := db.LoadTaskDetails(task); err != nil {
+		WriteError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
 
 	WriteJSON(w, http.StatusOK, task)
 }
@@ -131,9 +135,30 @@ func CreateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if task.Type == "" {
 		task.Type = models.TaskTypeOneTime
 	}
+	checklist, err := validChecklistItems(task.Checklist)
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	task.PreviousTaskID = nil
 
 	if err := db.SaveTask(&task, claims.Username); err != nil {
 		WriteError(w, http.StatusInternalServerError, "Failed to create task")
+		return
+	}
+	if len(checklist) > 0 {
+		if _, err := db.AddTaskChecklistItems(task.ID, checklist, claims.Username); err != nil {
+			WriteError(w, http.StatusInternalServerError, "Failed to save checklist")
+			return
+		}
+	}
+	// Whoever creates a task hears what happens to it, until they unwatch.
+	if err := db.WatchTask(task.ID, claims.Username); err != nil {
+		WriteError(w, http.StatusInternalServerError, "Failed to watch task")
+		return
+	}
+	if err := db.LoadTaskDetails(&task); err != nil {
+		WriteError(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 
@@ -196,6 +221,19 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	if has("organization_id") {
 		existing.OrganizationID = updates.OrganizationID
 	}
+	if has("plugin_slug") {
+		existing.PluginSlug = updates.PluginSlug
+	}
+	if has("type") {
+		if updates.Type == "" {
+			WriteError(w, http.StatusBadRequest, "Type cannot be empty")
+			return
+		}
+		existing.Type = updates.Type
+	}
+	if has("interval") {
+		existing.Interval = updates.Interval
+	}
 
 	if has("title") {
 		if updates.Title == "" {
@@ -249,6 +287,10 @@ func UpdateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Failed to update task")
 		return
 	}
+	if err := db.LoadTaskDetails(existing); err != nil {
+		WriteError(w, http.StatusInternalServerError, "Database error")
+		return
+	}
 
 	taskCopy := *existing
 	go tasks.NotifyTaskChange(&before, &taskCopy, claims.Username)
@@ -283,6 +325,10 @@ func CompleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		WriteError(w, http.StatusInternalServerError, "Failed to complete task")
+		return
+	}
+	if err := db.LoadTaskDetails(task); err != nil {
+		WriteError(w, http.StatusInternalServerError, "Database error")
 		return
 	}
 

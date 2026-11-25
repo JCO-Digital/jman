@@ -1105,7 +1105,37 @@ func initAPISchema() error {
 				"last_notified_at": "DATETIME",
 				"created_by":       "TEXT",
 				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"previous_task_id": "INTEGER",
 			},
+		},
+		{
+			// One line of a task's checklist. ref_type/ref_id optionally
+			// point at a site, server, plugin or inventory item; text keeps
+			// its name from when it was added.
+			Name: "task_checklist_items",
+			Columns: map[string]string{
+				"id":         "INTEGER PRIMARY KEY AUTOINCREMENT",
+				"task_id":    "INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE",
+				"position":   "INTEGER NOT NULL DEFAULT 0",
+				"text":       "TEXT NOT NULL",
+				"done":       "INTEGER NOT NULL DEFAULT 0",
+				"done_by":    "TEXT",
+				"done_at":    "DATETIME",
+				"ref_type":   "TEXT",
+				"ref_id":     "TEXT",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by": "TEXT",
+			},
+		},
+		{
+			// Users who get a task's notifications besides its assignee.
+			Name: "task_watchers",
+			Columns: map[string]string{
+				"task_id":    "INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE",
+				"username":   "TEXT NOT NULL",
+				"created_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+			},
+			PrimaryKey: []string{"task_id", "username"},
 		},
 		{
 			Name: "site_update_ledger",
@@ -1408,6 +1438,10 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks(assigned_to);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_task_checklist_items_task_id ON task_checklist_items(task_id);")
 	if err != nil {
 		return err
 	}

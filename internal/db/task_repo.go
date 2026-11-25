@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
@@ -40,8 +41,8 @@ func SaveTask(task *models.Task, username string) error {
 			site_id, server_id, organization_id, plugin_slug,
 			assigned_to, metadata, interval, due_date, reminder_date,
 			created_at, created_by, updated_at, last_notified_at,
-			completed_at, completed_by
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			completed_at, completed_by, previous_task_id
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		RETURNING id
 		`
 		var id int64
@@ -50,7 +51,7 @@ func SaveTask(task *models.Task, username string) error {
 			task.SiteID, task.ServerID, task.OrganizationID, task.PluginSlug,
 			task.AssignedTo, task.Metadata, task.Interval, task.DueDate, task.ReminderDate,
 			now, username, now, task.LastNotifiedAt,
-			task.CompletedAt, task.CompletedBy,
+			task.CompletedAt, task.CompletedBy, task.PreviousTaskID,
 		).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("failed to insert task: %w", err)
@@ -82,7 +83,17 @@ func SaveTask(task *models.Task, username string) error {
 	return nil
 }
 
-// scanTaskRow scans a task row.
+// taskColumns are the columns scanTaskRow reads, checklist counts included.
+const taskColumns = `
+		id, type, status, priority, title, description,
+		site_id, server_id, organization_id, plugin_slug,
+		assigned_to, metadata, interval, due_date, reminder_date,
+		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at,
+		previous_task_id,
+		(SELECT COUNT(*) FROM task_checklist_items c WHERE c.task_id = tasks.id),
+		(SELECT COUNT(*) FROM task_checklist_items c WHERE c.task_id = tasks.id AND c.done = 1)`
+
+// scanTaskRow scans a task row selected with taskColumns.
 func scanTaskRow(scanner interface{ Scan(dest ...any) error }) (*models.Task, error) {
 	var t models.Task
 	err := scanner.Scan(
@@ -90,6 +101,7 @@ func scanTaskRow(scanner interface{ Scan(dest ...any) error }) (*models.Task, er
 		&t.SiteID, &t.ServerID, &t.OrganizationID, &t.PluginSlug,
 		&t.AssignedTo, &t.Metadata, &t.Interval, &t.DueDate, &t.ReminderDate,
 		&t.CreatedAt, &t.CompletedAt, &t.CompletedBy, &t.CreatedBy, &t.UpdatedAt, &t.LastNotifiedAt,
+		&t.PreviousTaskID, &t.ChecklistTotal, &t.ChecklistDone,
 	)
 	if err != nil {
 		return nil, err
@@ -106,10 +118,7 @@ func GetTask(id int) (*models.Task, error) {
 
 	query := `
 	SELECT
-		id, type, status, priority, title, description,
-		site_id, server_id, organization_id, plugin_slug,
-		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
+` + taskColumns + `
 	FROM tasks WHERE id = ?`
 
 	t, err := scanTaskRow(database.QueryRow(query, id))
@@ -143,10 +152,7 @@ func GetTasks(filter TaskFilter) ([]models.Task, error) {
 
 	query := `
 	SELECT
-		id, type, status, priority, title, description,
-		site_id, server_id, organization_id, plugin_slug,
-		assigned_to, metadata, interval, due_date, reminder_date,
-		created_at, completed_at, completed_by, created_by, updated_at, last_notified_at
+` + taskColumns + `
 	FROM tasks WHERE 1=1`
 
 	var args []interface{}
@@ -311,7 +317,30 @@ func createNextRecurringTask(prevTask *models.Task, username string) error {
 		ReminderDate:   nextReminderDate,
 	}
 
-	return SaveTask(newTask, username)
+	prevID := prevTask.ID
+	newTask.PreviousTaskID = &prevID
+	if err := SaveTask(newTask, username); err != nil {
+		return err
+	}
+	// The next round starts with the same checklist, nothing ticked, and
+	// the same people watching. Notes stay on the task they were written
+	// on; the new task links back to it instead.
+	if _, err := GetAPIDB().Exec(`
+		INSERT INTO task_checklist_items (task_id, position, text, done, ref_type, ref_id, created_at, created_by)
+		SELECT ?, position, text, 0, ref_type, ref_id, ?, ?
+		FROM task_checklist_items WHERE task_id = ? ORDER BY position, id`,
+		newTask.ID, time.Now(), username, prevTask.ID,
+	); err != nil {
+		return fmt.Errorf("failed to copy checklist: %w", err)
+	}
+	if _, err := GetAPIDB().Exec(`
+		INSERT INTO task_watchers (task_id, username, created_at)
+		SELECT ?, username, created_at FROM task_watchers WHERE task_id = ?`,
+		newTask.ID, prevTask.ID,
+	); err != nil {
+		return fmt.Errorf("failed to copy watchers: %w", err)
+	}
+	return nil
 }
 
 // parseCustomDuration handles "d", "w", "m", "y" formats that Go's time.ParseDuration doesn't support.
@@ -344,6 +373,12 @@ func DeleteTask(id int) error {
 	database := GetAPIDB()
 	if database == nil {
 		return fmt.Errorf("database not initialized")
+	}
+	// Checklist items and watchers go with the task (ON DELETE CASCADE);
+	// notes aren't tied to it by a foreign key.
+	if _, err := database.Exec("DELETE FROM notes WHERE parent_type = ? AND parent_id = ?",
+		models.NoteParentTypeTask, strconv.Itoa(id)); err != nil {
+		return fmt.Errorf("failed to delete task notes: %w", err)
 	}
 	_, err := database.Exec("DELETE FROM tasks WHERE id = ?", id)
 	return err
