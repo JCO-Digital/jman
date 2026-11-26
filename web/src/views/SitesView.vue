@@ -34,6 +34,7 @@ const list = useListState({
 		"organization",
 		"server",
 		"environment",
+		"tier",
 		"plugins",
 		"vulns",
 	],
@@ -41,6 +42,8 @@ const list = useListState({
 	descFirst: ["plugins", "vulns"],
 	filters: {
 		env: ENVIRONMENTS,
+		// A tier id, or "none" for production sites without one.
+		tier: true,
 		multisite: ["1"],
 		filemods: ["enabled", "disabled"],
 	},
@@ -52,6 +55,9 @@ const batchEnvironment = ref<SiteEnvironment | "">("");
 const isApplyingBatch = ref(false);
 
 onMounted(() => {
+	dataStore.fetchSiteTiers().catch((e) => {
+		console.error("Failed to load site tiers", e);
+	});
 	ignoreStore.fetchIgnoreEntries();
 	organizationStore.fetchOrganizations();
 });
@@ -72,6 +78,12 @@ const getOrganizationName = (orgId?: number) => {
 const toggleFilter = (name: "multisite" | "filemods", value: string) => {
 	list.setFilter(name, list.filters.value[name] === value ? "" : value);
 };
+
+/** The domain of the production site a linked site belongs to. */
+function productionDomain(site: EnrichedSite): string {
+	if (!site.production_site_id) return "";
+	return dataStore.getSiteById(site.production_site_id)?.domain ?? "";
+}
 
 // The Vulns column counts plugin and WordPress core vulnerabilities.
 function vulnCount(site: EnrichedSite): number {
@@ -107,6 +119,11 @@ const sites = useClientList(() => dataStore.enrichedSites, list, {
 		if (f.env === "unclassified" && site.environment) return false;
 		if (f.env && f.env !== "unclassified" && site.environment !== f.env)
 			return false;
+		if (f.tier) {
+			if (site.environment !== "production") return false;
+			if (f.tier === "none" ? site.tier : String(site.tier) !== f.tier)
+				return false;
+		}
 		if (f.multisite && !site.wp_flags?.is_multisite) return false;
 		const fileModsOff = Boolean(site.wp_flags?.disallow_file_mods);
 		if (f.filemods === "enabled" && fileModsOff) return false;
@@ -123,6 +140,8 @@ const sites = useClientList(() => dataStore.enrichedSites, list, {
 				return site.server;
 			case "environment":
 				return site.environment;
+			case "tier":
+				return site.tier ?? 0;
 			case "plugins":
 				return site.plugins.length;
 			case "vulns":
@@ -263,6 +282,26 @@ function timeSince(dateString: string) {
 				<option value="archived">Archived</option>
 				<option value="unclassified">Unclassified</option>
 			</select>
+			<select
+				:value="list.filters.value.tier"
+				aria-label="Tier"
+				@change="
+					list.setFilter(
+						'tier',
+						($event.target as HTMLSelectElement).value,
+					)
+				"
+			>
+				<option value="">All tiers</option>
+				<option
+					v-for="tier in dataStore.siteTiers"
+					:key="tier.id"
+					:value="String(tier.id)"
+				>
+					{{ tier.name }}
+				</option>
+				<option value="none">No tier</option>
+			</select>
 			<button
 				type="button"
 				class="filter-chip"
@@ -360,6 +399,13 @@ function timeSince(dateString: string) {
 						</SortableTh>
 						<SortableTh
 							:list="list"
+							sort-key="tier"
+							class="col-narrow text-center"
+						>
+							Tier
+						</SortableTh>
+						<SortableTh
+							:list="list"
 							sort-key="plugins"
 							class="col-narrow text-center"
 						>
@@ -380,12 +426,12 @@ function timeSince(dateString: string) {
 							dataStore.isLoading && dataStore.sites.length === 0
 						"
 					>
-						<td colspan="6">
+						<td colspan="7">
 							<LoadingSpinner message="Loading data..." />
 						</td>
 					</tr>
 					<tr v-else-if="paginatedSites.length === 0">
-						<td colspan="6" class="empty-state">
+						<td colspan="7" class="empty-state">
 							<span v-if="list.query.value"
 								>No sites found matching "{{
 									list.query.value
@@ -437,6 +483,13 @@ function timeSince(dateString: string) {
 								>
 									File Mods Disabled
 								</span>
+							</div>
+							<div
+								v-if="productionDomain(site)"
+								class="text-muted font-xs"
+							>
+								{{ site.environment }} of
+								{{ productionDomain(site) }}
 							</div>
 							<div
 								v-if="site.disk_usage"
@@ -512,6 +565,15 @@ function timeSince(dateString: string) {
 								:class="site.environment"
 							>
 								{{ site.environment }}
+							</span>
+							<span v-else class="text-muted">—</span>
+						</td>
+						<td class="col-narrow text-center">
+							<span
+								v-if="site.tier"
+								class="status-badge badge-sm tier"
+							>
+								{{ dataStore.tierName(site.tier) }}
 							</span>
 							<span v-else class="text-muted">—</span>
 						</td>

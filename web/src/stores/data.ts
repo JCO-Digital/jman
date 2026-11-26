@@ -4,6 +4,7 @@ import type {
 	Server,
 	Site,
 	SiteEnvironment,
+	SiteTier,
 	Plugin,
 	PluginInfo,
 	PluginVulnerability,
@@ -49,6 +50,9 @@ export const useDataStore = defineStore("data", () => {
 	const servers = ref<Server[]>([]);
 	const sites = ref<Site[]>([]);
 	const siteOrganizationLinks = ref<Record<string, number>>({});
+	// The site tiers from jman-api's config, lowest first; loaded once.
+	const siteTiers = ref<SiteTier[]>([]);
+	let siteTiersRequest: Promise<void> | null = null;
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<PluginVulnerability[]>([]);
@@ -596,6 +600,68 @@ export const useDataStore = defineStore("data", () => {
 		}
 	}
 
+	/** Loads the site tiers once; later calls reuse the first request. */
+	function fetchSiteTiers(): Promise<void> {
+		siteTiersRequest ??= (async () => {
+			const res = await apiFetch(`${BASE_URL}/site-tiers`);
+			if (!res.ok) await handleErrorResponse(res);
+			siteTiers.value = await res.json();
+		})().catch((e) => {
+			siteTiersRequest = null;
+			throw e;
+		});
+		return siteTiersRequest;
+	}
+
+	/** A tier's name, or "Tier <id>" for one no longer configured. */
+	function tierName(id: number | undefined): string {
+		if (!id) return "";
+		return siteTiers.value.find((t) => t.id === id)?.name ?? `Tier ${id}`;
+	}
+
+	/** Sets a production site's tier; null clears it. */
+	async function setSiteTier(siteId: string, tier: number | null) {
+		const res = await apiFetch(`${BASE_URL}/sites/${siteId}/tier`, {
+			method: "PUT",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ tier }),
+		});
+		if (!res.ok) await handleErrorResponse(res);
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.tier = tier || undefined;
+			persist(CACHE_KEY_SITES, () => sites.value);
+		}
+	}
+
+	/**
+	 * Links a staging, development or archived site to its production
+	 * site; null removes the link.
+	 */
+	async function setProductionSite(
+		siteId: string,
+		productionSiteId: string | null,
+	) {
+		const res = await apiFetch(
+			`${BASE_URL}/sites/${siteId}/production-site`,
+			productionSiteId
+				? {
+						method: "PUT",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							production_site_id: productionSiteId,
+						}),
+					}
+				: { method: "DELETE" },
+		);
+		if (!res.ok) await handleErrorResponse(res);
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.production_site_id = productionSiteId || undefined;
+			persist(CACHE_KEY_SITES, () => sites.value);
+		}
+	}
+
 	/** A site's update locks: the site lock and plugin locks by slug. */
 	function getSiteLocks(siteId: string): {
 		site?: UpdateLock;
@@ -679,6 +745,7 @@ export const useDataStore = defineStore("data", () => {
 		// State
 		servers,
 		sites,
+		siteTiers,
 		plugins,
 		pluginInfo,
 		vulnerabilities,
@@ -707,6 +774,10 @@ export const useDataStore = defineStore("data", () => {
 		getVulnerabilitiesBySlug,
 		setSiteOrganizationLink,
 		setSiteEnvironment,
+		fetchSiteTiers,
+		tierName,
+		setSiteTier,
+		setProductionSite,
 		getSiteLocks,
 		isPluginLocked,
 		lockUpdates,

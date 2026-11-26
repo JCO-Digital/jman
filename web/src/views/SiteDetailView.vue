@@ -35,6 +35,7 @@ import SiteUsersCard from "../components/SiteUsersCard.vue";
 import VulnerabilityList from "../components/VulnerabilityList.vue";
 import BackportRuleModal from "../components/BackportRuleModal.vue";
 import SiteTextDiffCard from "../components/SiteTextDiffCard.vue";
+import SiteEnvironmentsCard from "../components/SiteEnvironmentsCard.vue";
 import {
 	type VulnListItem,
 	compareVersions,
@@ -411,6 +412,9 @@ const hasMultipleLines = (entry: SiteUpdateLedgerEntry) => {
 
 // Fetch initial data
 onMounted(async () => {
+	dataStore.fetchSiteTiers().catch((e) => {
+		console.error("Failed to load site tiers", e);
+	});
 	await Promise.all([dataStore.initData(), ignoreStore.fetchIgnoreEntries()]);
 });
 
@@ -491,6 +495,44 @@ const onEnvironmentChange = async () => {
 	} catch (e: any) {
 		environmentDraft.value = previous;
 		toast.addToast("Failed to update environment: " + e.message, "error");
+	}
+};
+
+// Tiers apply to production sites; a linked staging or dev site shows its
+// production site's.
+const tierDraft = ref<number | "">("");
+watch(
+	() => site.value?.tier,
+	(tier) => {
+		tierDraft.value = tier ?? "";
+	},
+	{ immediate: true },
+);
+
+const tierOptions = computed(() => {
+	const tiers = [...dataStore.siteTiers];
+	const current = site.value?.tier;
+	if (current && !tiers.some((t) => t.id === current)) {
+		tiers.push({ id: current, name: dataStore.tierName(current) });
+	}
+	return tiers;
+});
+
+const linkedProductionSite = computed(() =>
+	site.value?.production_site_id
+		? dataStore.getSiteById(site.value.production_site_id)
+		: undefined,
+);
+
+const onTierChange = async () => {
+	if (!site.value) return;
+	const previous = site.value.tier ?? "";
+	try {
+		await dataStore.setSiteTier(site.value.id, tierDraft.value || null);
+		toast.addToast("Tier updated.", "success");
+	} catch (e: any) {
+		tierDraft.value = previous;
+		toast.addToast("Failed to update tier: " + e.message, "error");
 	}
 };
 
@@ -1116,6 +1158,12 @@ const unlinkOrganization = async () => {
 				>
 					{{ site.environment }}
 				</span>
+				<span
+					v-if="site.environment === 'production' && site.tier"
+					class="status-badge badge-sm tier"
+				>
+					{{ dataStore.tierName(site.tier) }}
+				</span>
 				{{ serverName }}
 			</template>
 			<template v-if="site" #tabs>
@@ -1146,6 +1194,38 @@ const unlinkOrganization = async () => {
 						<option value="development">Development</option>
 						<option value="archived">Archived</option>
 					</select>
+					<template v-if="site.environment === 'production'">
+						<label for="site-tier" class="font-medium">Tier</label>
+						<select
+							id="site-tier"
+							v-model="tierDraft"
+							:disabled="!authStore.canEdit"
+							@change="onTierChange"
+						>
+							<option value="">No tier</option>
+							<option
+								v-for="tier in tierOptions"
+								:key="tier.id"
+								:value="tier.id"
+							>
+								{{ tier.name }}
+							</option>
+						</select>
+					</template>
+					<span v-else-if="linkedProductionSite" class="text-muted">
+						{{ site.environment }} of
+						<RouterLink
+							:to="{
+								name: 'site-detail',
+								params: { id: linkedProductionSite.id },
+							}"
+							>{{ linkedProductionSite.domain }}</RouterLink
+						><template v-if="linkedProductionSite.tier">
+							·
+							{{ dataStore.tierName(linkedProductionSite.tier) }}
+							tier</template
+						>
+					</span>
 				</div>
 
 				<div class="detail-layout detail-aside-first">
@@ -1173,6 +1253,7 @@ const unlinkOrganization = async () => {
 								:server-id="site.server_id"
 							/>
 						</div>
+						<SiteEnvironmentsCard :site="site" />
 						<section class="card mt-4">
 							<div class="card-header">
 								<h2>Organization Information</h2>
