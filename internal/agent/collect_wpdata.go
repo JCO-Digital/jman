@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/JCO-Digital/jman/internal/agent/scan"
 	"strings"
 	"sync"
 	"time"
@@ -75,8 +76,10 @@ type wpDataRunner interface {
 
 // resolvePath and resolveIdentity are seams for tests.
 var (
-	resolvePath     = ResolveSitePath
-	resolveIdentity = resolveSiteIdentity
+	resolvePath = ResolveSitePath
+	// readSiteCoreVersion reads a site's WordPress version and locale.
+	readSiteCoreVersion = scan.ReadCoreVersion
+	resolveIdentity     = resolveSiteIdentity
 )
 
 // collectWPDataForSites collects the WordPress data of the due WordPress
@@ -196,20 +199,24 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 		plugins = []models.WPPlugin{}
 	}
 
-	out, err = runner.run(ctx, id, sitePath, "core", "version")
-	if err != nil {
-		return fail(err)
+	// `wp core version` only reads wp-includes/version.php, so it's read
+	// here without starting PHP; wp-cli is the fallback for a site where
+	// that doesn't work.
+	version, locale := readSiteCoreVersion(sitePath)
+	if version == "" {
+		if out, err = runner.run(ctx, id, sitePath, "core", "version"); err != nil {
+			return fail(err)
+		}
+		version = lastLine(out)
 	}
-	core := models.SiteCore{Version: lastLine(out)}
+	core := models.SiteCore{Version: version}
 	if core.Version == "" {
 		return fail(fmt.Errorf("wp-cli reported no WordPress version"))
 	}
 	// A failed update check still leaves the installed state worth
 	// reporting, as the SSH refresh does.
-	if out, err := runner.run(ctx, id, sitePath, "core", "check-update", "--format=json"); err != nil {
+	if updates, err := coreUpdates(ctx, runner, id, sitePath, version, locale); err != nil {
 		verb.LogPrintf(verb.Normal, "Failed to check core updates for %s: %v", site.Domain, err)
-	} else if updates, err := wpcli.ParseCoreUpdates(out); err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to parse core updates for %s: %v", site.Domain, err)
 	} else {
 		core.MinorUpdate, core.MajorUpdate = wpcli.SplitCoreUpdates(updates)
 	}
@@ -231,6 +238,53 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 		data.Users = users
 	}
 	return data
+}
+
+// coreUpdatesTTL is how long the core updates found for a WordPress
+// version and locale are reused for other sites on the server.
+const coreUpdatesTTL = time.Hour
+
+type cachedCoreUpdates struct {
+	updates []wpcli.CoreUpdate
+	at      time.Time
+}
+
+// coreUpdatesCache holds the core updates found per version and locale.
+// `wp core check-update` starts WordPress and asks api.wordpress.org, and
+// its answer depends only on the installed version and package locale,
+// so sites running the same ones share it.
+var (
+	coreUpdatesCache   = map[string]cachedCoreUpdates{}
+	coreUpdatesCacheMu sync.Mutex
+)
+
+// coreUpdates returns the core updates available for version, checking on
+// the site unless another site with the same version and locale was
+// checked within coreUpdatesTTL. Without a known locale it always checks.
+func coreUpdates(ctx context.Context, runner wpDataRunner, id siteIdentity, sitePath, version, locale string) ([]wpcli.CoreUpdate, error) {
+	key := version + "|" + locale
+	if locale != "" {
+		coreUpdatesCacheMu.Lock()
+		c, ok := coreUpdatesCache[key]
+		coreUpdatesCacheMu.Unlock()
+		if ok && time.Since(c.at) < coreUpdatesTTL {
+			return c.updates, nil
+		}
+	}
+	out, err := runner.run(ctx, id, sitePath, "core", "check-update", "--format=json")
+	if err != nil {
+		return nil, err
+	}
+	updates, err := wpcli.ParseCoreUpdates(out)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse core updates: %w", err)
+	}
+	if locale != "" {
+		coreUpdatesCacheMu.Lock()
+		coreUpdatesCache[key] = cachedCoreUpdates{updates: updates, at: time.Now()}
+		coreUpdatesCacheMu.Unlock()
+	}
+	return updates, nil
 }
 
 // adminUserTTL is how long a site's administrator user ID is reused before

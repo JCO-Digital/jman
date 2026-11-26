@@ -278,10 +278,19 @@ func scanSite(ctx context.Context, stateDir string, site models.AgentManifestSit
 	opts := scanOptions(ctx, prev, site.Domain)
 	opts.Content = contentDue(prev, contentInterval, start)
 	opts.Home = homeOf(id)
+	if opts.Hashes, err = scan.LoadHashes(stateDir, site.SiteID); err != nil {
+		verb.LogPrintf(verb.Normal, "Discarding the kept file hashes of %s: %v", site.Domain, err)
+	}
 	walk, err := runScan(ctx, id, sitePath, opts)
 	if err != nil {
 		return fail(err)
 	}
+	// The hashes only spare the next walk reading unchanged files, so
+	// they're kept whatever happens to the report.
+	if err := scan.SaveHashes(stateDir, site.SiteID, walk.Hashes); err != nil {
+		verb.LogPrintf(verb.Normal, "Failed to keep the file hashes of %s: %v", site.Domain, err)
+	}
+	walk.Hashes = nil
 	if walk.CoreNote != "" {
 		verb.LogPrintf(verb.Verbose, "%s: core files not checked: %s", site.Domain, walk.CoreNote)
 	}

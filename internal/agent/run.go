@@ -39,6 +39,9 @@ const backlogCatchUpInterval = 30 * time.Second
 // RunService runs the agent's continuous collection and self-update loop
 // until ctx is cancelled.
 func RunService(ctx context.Context, cfg Config, version string) error {
+	if err := lowerPriority(); err != nil {
+		verb.LogPrintf(verb.Normal, "Running at normal priority: %v", err)
+	}
 	client := NewClient(cfg)
 	checksums = client
 	normalInterval := time.Duration(cfg.ReportIntervalMinutes) * time.Minute
@@ -195,6 +198,10 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	hasBacklog := false
 	totalTrafficEntries := 0
 
+	// Sites whose disk usage this report carries; they're marked measured
+	// once it's sent, so a failed report measures them again.
+	var diskMeasured []string
+
 	sites := rotateSites(manifest.Sites, reportRotationCounter)
 	reportRotationCounter++
 
@@ -217,10 +224,13 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 			}
 			verb.LogPrintf(verb.Normal, "Skipping %s for %s: %v", skipTarget, site.Domain, err)
 		} else {
-			if bytesUsed, err := CollectDiskUsage(sitePath); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to measure disk usage for %s at %s: %v", site.Domain, sitePath, err)
-			} else {
-				siteReport.DiskUsageBytes = &bytesUsed
+			if diskUsageDue(site.SiteID, time.Now()) {
+				if bytesUsed, err := CollectDiskUsage(sitePath); err != nil {
+					verb.LogPrintf(verb.Normal, "Failed to measure disk usage for %s at %s: %v", site.Domain, sitePath, err)
+				} else {
+					siteReport.DiskUsageBytes = &bytesUsed
+					diskMeasured = append(diskMeasured, site.SiteID)
+				}
 			}
 
 			if site.IsWordpress {
@@ -271,6 +281,9 @@ func collectAndReport(ctx context.Context, client *Client, cfg Config, version s
 	}
 
 	markWPCollected(wpCollected, time.Now())
+	for _, siteID := range diskMeasured {
+		markDiskUsage(siteID, time.Now())
+	}
 	saveScans(cfg.StateDir, scansDone, time.Now())
 
 	for siteID, state := range pendingLogStates {

@@ -126,10 +126,16 @@ func SaveState(stateDir, siteID string, s *State) error {
 	if err != nil {
 		return err
 	}
+	return writeFileAtomic(p, siteID, s)
+}
+
+// writeFileAtomic writes v as JSON to p, root-only, by renaming a
+// temporary file into place.
+func writeFileAtomic(p, siteID string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		return err
 	}
-	b, err := json.Marshal(s)
+	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}

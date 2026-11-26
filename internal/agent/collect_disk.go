@@ -9,8 +9,38 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// diskUsageInterval is how often a site's disk usage is measured. Each
+// measurement walks the whole site, uploads included; a report cycle
+// runs every few minutes, and every 30 seconds while traffic logs catch
+// up, which disk usage doesn't need.
+const diskUsageInterval = time.Hour
+
+// lastDiskUsage is when each site's disk usage was last measured, in
+// memory: after a restart every site is measured on the first cycle.
+var (
+	lastDiskUsage   = map[string]time.Time{}
+	lastDiskUsageMu sync.Mutex
+)
+
+// diskUsageDue reports whether a site's disk usage is due for measuring.
+func diskUsageDue(siteID string, now time.Time) bool {
+	lastDiskUsageMu.Lock()
+	defer lastDiskUsageMu.Unlock()
+	last, ok := lastDiskUsage[siteID]
+	return !ok || now.Sub(last) >= diskUsageInterval
+}
+
+// markDiskUsage records that a site's disk usage was measured and
+// reported at at.
+func markDiskUsage(siteID string, at time.Time) {
+	lastDiskUsageMu.Lock()
+	lastDiskUsage[siteID] = at
+	lastDiskUsageMu.Unlock()
+}
 
 // CollectDiskUsage returns the total size in bytes of the given directory,
 // preferring `du -sb` (fast, accounts for actual block usage) and falling

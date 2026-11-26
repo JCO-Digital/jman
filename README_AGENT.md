@@ -10,7 +10,7 @@ On each collection cycle, `jman-agent`:
 
 1. Calls `GET /api/agent/manifest` on `jman-api` (authenticated with its own per-server token) to find out which sites live on this server and where.
 2. Collects, locally and without SSH:
-   - **Disk usage** per site, via `du -sb` (falling back to a manual directory walk if `du` isn't available).
+   - **Disk usage** per site, via `du -sb` (falling back to a manual directory walk if `du` isn't available), at most once an hour.
    - **WordPress flags** per site, by reading `wp-config.php` directly for the `MULTISITE` and `DISALLOW_FILE_MODS` constants.
    - **Visitor traffic** per site, by tailing its nginx access logs — see [Visitor Traffic Analytics](#visitor-traffic-analytics) below.
    - **WordPress data** (installed plugins, core version and available updates) per WordPress site, with wp-cli run as the site's owner, about once an hour — see [WordPress Data](#wordpress-data) below.
@@ -123,9 +123,11 @@ A systemd unit file is provided in the repository. To install it:
 
 The service runs as `root` by default (see the comments in `jman-agent.service`) since the agent needs read access to every site's files to measure disk usage and check `wp-config.php`, and write access to its own binary to self-update.
 
+As a service, the agent lowers its own CPU priority (nice 10) and I/O priority (the lowest best-effort level) at startup, and everything it starts (`du`, wp-cli, scans) inherits them, so it yields to the sites on a busy server. No change to the unit file is needed.
+
 ## WordPress Data
 
-About once an hour (`agentWpDataInterval` in jman-api's config; the agent has no setting of its own), the agent runs `wp plugin list`, `wp core version` and `wp core check-update` for each WordPress site, as the site's owner. `wp plugin list` runs with the site's plugins loaded (themes skipped), because premium plugins report their updates only when loaded; if that fails, for example because of a broken plugin, it runs again with `--skip-plugins`. The other commands always run with plugins and themes skipped (`--skip-plugins --skip-themes`), so site code beyond WordPress core doesn't run for them.
+About once an hour (`agentWpDataInterval` in jman-api's config; the agent has no setting of its own), the agent runs `wp plugin list` and `wp core check-update` for each WordPress site, as the site's owner, and reads the core version from `wp-includes/version.php` as `wp core version` does (falling back to running it). Sites on the same WordPress version and package locale share one `wp core check-update` for an hour, since its answer depends on nothing else. `wp plugin list` runs with the site's plugins loaded (themes skipped), because premium plugins report their updates only when loaded; if that fails, for example because of a broken plugin, it runs again with `--skip-plugins`. The other commands always run with plugins and themes skipped (`--skip-plugins --skip-themes`), so site code beyond WordPress core doesn't run for them.
 
 The agent runs as root, but **never runs wp-cli as root**. Each call runs as the Unix user that owns the site's directory (`/sites/<domain>/files`), with that user's primary group, no supplementary groups, a fixed `PATH`, and a fresh environment that doesn't include the agent's own (which holds its token). A site is skipped, and the reason reported to jman-api, if:
 
@@ -179,6 +181,8 @@ Core files are checked against wordpress.org's checksums for the WordPress versi
 `--check-scan` checks right away, and says which plugins it couldn't check and why; add `--wporg` to get the checksums straight from wordpress.org, before jman-api serves them.
 
 Scans never follow symlinks or open anything but regular files, hash files up to 16 MiB, are limited to 10 minutes per site and run at a lower CPU priority. Walking a 40 GB site with about 75,000 files takes around a second.
+
+Core and plugin files checked against checksums aren't read again while they're unchanged: the agent keeps each one's hash with its inode, size, mtime and ctime in its root-only state directory (`scan/<site>.hashes.json`) and passes them to the scan child, which reuses a hash only while all of these match. An edit always moves the ctime, which the site's owner can't set back, and a file changed within 2 seconds of a scan is read again next time. Tracked files (uploads PHP, mu-plugins, drop-ins, config files) are still hashed on every scan.
 
 ## Self-Updating
 

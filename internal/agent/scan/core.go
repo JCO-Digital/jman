@@ -39,6 +39,9 @@ type Options struct {
 	// Home, when set, is the site user's home directory: the walk also
 	// records its shell startup files and programs (see WalkHome).
 	Home string `json:"home,omitempty"`
+	// Hashes are the file hashes the last walk kept (Result.Hashes): a
+	// core or plugin file that hasn't changed since isn't read again.
+	Hashes map[string]FileHash `json:"hashes,omitempty"`
 }
 
 // maxCoreModified is how many core files may differ from their checksums
@@ -57,6 +60,13 @@ var (
 // readCoreVersion returns the WordPress version and package locale set in
 // a site's wp-includes/version.php, or "" if there is none. The locale is
 // en_US unless the package is localized.
+// ReadCoreVersion returns the WordPress version and package locale in a
+// site's wp-includes/version.php, as `wp core version` reads them, or ""
+// if they can't be read.
+func ReadCoreVersion(root string) (string, string) {
+	return readCoreVersion(root)
+}
+
 func readCoreVersion(root string) (string, string) {
 	b, ok := readSmallFile(root+"/wp-includes/version.php", maxVersionBytes)
 	if !ok {
