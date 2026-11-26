@@ -285,47 +285,19 @@ func forgetAdminUser(siteID string) {
 }
 
 // collectSiteUsers lists a site's users without the excluded roles, which
-// it counts, and counts each listed user's posts.
+// it counts, and reads each listed user's post count and application
+// passwords (see wpcli.CollectSiteUsers). Post counts only inform the
+// delete checks, which the delete job repeats on the site, and
+// application passwords only the security checks in jman-api, so either
+// can be missing.
 func collectSiteUsers(ctx context.Context, runner wpDataRunner, id siteIdentity, sitePath string) (*models.SiteUsers, error) {
-	out, err := runner.run(ctx, id, sitePath, wpcli.UserListArgs()...)
+	run := func(args ...string) (string, error) { return runner.run(ctx, id, sitePath, args...) }
+	users, warnings, err := wpcli.CollectSiteUsers(run, "")
 	if err != nil {
 		return nil, err
 	}
-	list, err := wpcli.ParseUserList(out, "")
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse the user list: %w", err)
-	}
-	counts := make(map[string]int, len(wpcli.ExcludedUserRoles))
-	for _, role := range wpcli.ExcludedUserRoles {
-		out, err := runner.run(ctx, id, sitePath, wpcli.UserCountArgs(role)...)
-		if err != nil {
-			return nil, err
-		}
-		if counts[role], err = wpcli.ParseUserCount(out); err != nil {
-			return nil, err
-		}
-	}
-	users := wpcli.NewSiteUsers(list, counts)
-	// Post counts only inform the delete checks, which the delete job
-	// repeats on the site, so a failure leaves them unknown.
-	out, err = runner.run(ctx, id, sitePath, "eval", wpcli.UserPostCountsEval)
-	if err == nil {
-		var posts map[int]int
-		if posts, err = wpcli.ParseUserPostCounts(out); err == nil {
-			wpcli.SetPostCounts(users.Users, posts)
-		}
-	}
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to count posts per user at %s: %v", sitePath, err)
-	}
-	// Application passwords only inform the security checks in jman-api, so
-	// a failure leaves them uncollected.
-	out, err = runner.run(ctx, id, sitePath, "eval", wpcli.UserAppPasswordsEval)
-	if err == nil {
-		err = wpcli.SetAppPasswords(&users, out)
-	}
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to read application passwords at %s: %v", sitePath, err)
+	for _, w := range warnings {
+		verb.LogPrintf(verb.Normal, "Users at %s: %s", sitePath, w)
 	}
 	return &users, nil
 }

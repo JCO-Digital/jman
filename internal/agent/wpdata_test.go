@@ -362,9 +362,7 @@ func TestFirstErrorLine(t *testing.T) {
 func usersRunner() *fakeRunner {
 	r := okRunner()
 	r.out["user list --role__not_in=subscriber,customer --fields=ID,user_login,user_email,display_name,roles,user_registered --orderby=ID --order=ASC --number=1001 --format=json"] = `[{"ID":"1","user_login":"admin","user_email":"admin@example.com","display_name":"Admin","roles":"administrator","user_registered":"2020-01-01 00:00:00"}]`
-	r.out["user list --role=subscriber --format=count"] = "1234\n"
-	r.out["user list --role=customer --format=count"] = "0\n"
-	r.out["eval "+wpcli.UserPostCountsEval] = `{"1":3}`
+	r.out["eval "+wpcli.UserExtrasEval] = `{"counts":{"subscriber":1234,"customer":0},"posts":{"1":3},"app_passwords":{},"errors":{}}`
 	return r
 }
 
@@ -404,7 +402,7 @@ func TestCollectSiteWPDataUsers(t *testing.T) {
 
 	// Posts that can't be counted leave the counts unknown.
 	runner = usersRunner()
-	runner.fail = map[string]error{"eval " + wpcli.UserPostCountsEval: errors.New("boom")}
+	runner.out["eval "+wpcli.UserExtrasEval] = `{"counts":{"subscriber":1234,"customer":0},"app_passwords":{},"errors":{"posts":"boom"}}`
 	data = collectSiteWPData(context.Background(), runner, site, true)
 	if data.Users == nil || len(data.Users.Users) != 1 || data.Users.Users[0].PostCount != nil {
 		t.Errorf("users = %+v", data.Users)
@@ -412,7 +410,7 @@ func TestCollectSiteWPDataUsers(t *testing.T) {
 
 	// A failed user list still reports plugins and core.
 	runner = usersRunner()
-	runner.fail = map[string]error{"user list --role=customer --format=count": errors.New("boom")}
+	runner.fail = map[string]error{"eval " + wpcli.UserExtrasEval: errors.New("boom")}
 	data = collectSiteWPData(context.Background(), runner, site, true)
 	if data.Error != "" || data.Users != nil || data.Core == nil || data.Hash != models.WPDataHash(data.Plugins, *data.Core, nil) {
 		t.Errorf("data = %+v", data)

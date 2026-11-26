@@ -1,6 +1,7 @@
 package wpcli
 
 import (
+	"errors"
 	"os/exec"
 	"reflect"
 	"strings"
@@ -32,18 +33,7 @@ func TestParseUserList(t *testing.T) {
 	}
 }
 
-func TestParseUserPostCounts(t *testing.T) {
-	counts, err := ParseUserPostCounts("PHP Notice: x\n{\"1\":12,\"7\":1}")
-	if err != nil || len(counts) != 2 || counts[1] != 12 || counts[7] != 1 {
-		t.Errorf("counts = %v, %v", counts, err)
-	}
-	if counts, err := ParseUserPostCounts("{}"); err != nil || len(counts) != 0 {
-		t.Errorf("no posts = %v, %v", counts, err)
-	}
-	if _, err := ParseUserPostCounts("Error: no database"); err == nil {
-		t.Error("no error for output without JSON")
-	}
-
+func TestSetPostCounts(t *testing.T) {
 	users := []models.SiteUser{{ID: 1}, {ID: 2}}
 	SetPostCounts(users, map[int]int{1: 12})
 	if users[0].PostCount == nil || *users[0].PostCount != 12 || users[1].PostCount == nil || *users[1].PostCount != 0 {
@@ -86,7 +76,7 @@ func TestUserEvalCodeParses(t *testing.T) {
 		t.Skip("php not installed")
 	}
 	for name, code := range map[string]string{
-		"post counts":  UserPostCountsEval,
+		"user details": UserExtrasEval,
 		"delete check": UserDeleteCheckCode(5, "o'brien@example.com"),
 	} {
 		cmd := exec.Command(php, "-l")
@@ -108,16 +98,86 @@ func TestParseUserDeleteCheck(t *testing.T) {
 	}
 }
 
-func TestSetAppPasswords(t *testing.T) {
-	su := NewSiteUsers([]models.SiteUser{{ID: 1, Login: "admin"}, {ID: 7, Login: "ed"}}, nil)
-	out := "PHP Notice: something\n" + `{"1":[{"uuid":"u1","name":"wordpress_1778988921","created":1711152199,"last_used":null,"last_ip":""}],"9":[{"uuid":"u9","name":"subscriber's","created":1}]}`
-	if err := SetAppPasswords(&su, out); err != nil {
-		t.Fatal(err)
+func TestSiteUsersFromExtras(t *testing.T) {
+	list := func() []models.SiteUser { return []models.SiteUser{{ID: 1, Login: "admin"}, {ID: 7, Login: "ed"}} }
+
+	out := "PHP Notice: something\n" + `{"counts":{"subscriber":1234,"customer":0},"posts":{"1":12,"9":4},` +
+		`"app_passwords":{"1":[{"uuid":"u1","name":"wordpress_1778988921","created":1711152199,"last_used":null,"last_ip":""}],"9":[{"uuid":"u9","name":"subscriber's","created":1}]},"errors":{}}`
+	su, warnings, err := SiteUsersFromExtras(list(), out)
+	if err != nil || len(warnings) != 0 {
+		t.Fatalf("err = %v, warnings = %v", err, warnings)
+	}
+	if su.ExcludedCounts["subscriber"] != 1234 || su.ExcludedCounts["customer"] != 0 {
+		t.Errorf("counts = %v", su.ExcludedCounts)
+	}
+	if pc := su.Users[0].PostCount; pc == nil || *pc != 12 {
+		t.Errorf("admin posts = %v, want 12", pc)
+	}
+	if pc := su.Users[1].PostCount; pc == nil || *pc != 0 {
+		t.Errorf("ed posts = %v, want 0", pc)
 	}
 	if !su.AppPasswordsCollected || len(su.Users[0].AppPasswords) != 1 || su.Users[0].AppPasswords[0].UUID != "u1" || su.Users[0].AppPasswords[0].LastUsed != nil || len(su.Users[1].AppPasswords) != 0 {
-		t.Fatalf("users = %+v", su)
+		t.Errorf("app passwords = %+v", su.Users)
 	}
-	if err := SetAppPasswords(&su, "Error: no database"); err == nil {
-		t.Error("no error for output without JSON")
+
+	// Posts and application passwords that couldn't be read are left
+	// unknown with a warning.
+	su, warnings, err = SiteUsersFromExtras(list(), `{"counts":{"subscriber":1,"customer":2},"errors":{"posts":"Table 'wp_posts' doesn't exist"}}`)
+	if err != nil || len(warnings) != 2 || !strings.Contains(warnings[0], "wp_posts") {
+		t.Fatalf("err = %v, warnings = %v", err, warnings)
+	}
+	if su.Users[0].PostCount != nil || su.AppPasswordsCollected {
+		t.Errorf("users = %+v", su)
+	}
+
+	// Users that couldn't be counted fail the whole list.
+	for _, bad := range []string{
+		`{"counts":{"subscriber":1},"errors":{"counts":"Lost connection"}}`,
+		`{"counts":{"subscriber":1},"errors":{}}`,
+		"Error: no database",
+	} {
+		if _, _, err := SiteUsersFromExtras(list(), bad); err == nil {
+			t.Errorf("no error for %s", bad)
+		}
+	}
+}
+
+func TestCollectSiteUsersFallsBackWithoutEval(t *testing.T) {
+	list := `[{"ID":"1","user_login":"admin","user_email":"a@example.com","display_name":"Admin","roles":"administrator","user_registered":"2020-01-01 00:00:00"}]`
+	extras := `{"counts":{"subscriber":3,"customer":1},"posts":{"1":2},"app_passwords":{},"errors":{}}`
+
+	var calls []string
+	run := func(evalFails bool) func(args ...string) (string, error) {
+		return func(args ...string) (string, error) {
+			cmd := strings.Join(args, " ")
+			calls = append(calls, cmd)
+			switch {
+			case args[0] == "eval":
+				if evalFails {
+					return "", errors.New("PHP Fatal error: eval() has been disabled for security reasons")
+				}
+				return extras, nil
+			case strings.Contains(cmd, "--role=subscriber"):
+				return "5\n", nil
+			case strings.Contains(cmd, "--role=customer"):
+				return "0\n", nil
+			default:
+				return list, nil
+			}
+		}
+	}
+
+	su, warnings, err := CollectSiteUsers(run(false), "s1")
+	if err != nil || len(warnings) != 0 || len(calls) != 2 || su.ExcludedCounts["subscriber"] != 3 || su.Users[0].SiteID != "s1" {
+		t.Fatalf("with eval: su = %+v, warnings = %v, err = %v, calls = %v", su, warnings, err, calls)
+	}
+
+	calls = nil
+	su, warnings, err = CollectSiteUsers(run(true), "s1")
+	if err != nil || len(warnings) != 1 || len(calls) != 4 {
+		t.Fatalf("without eval: warnings = %v, err = %v, calls = %v", warnings, err, calls)
+	}
+	if su.ExcludedCounts["subscriber"] != 5 || su.Users[0].PostCount != nil || su.AppPasswordsCollected {
+		t.Errorf("without eval: su = %+v", su)
 	}
 }

@@ -6,22 +6,26 @@ There are two independent fixes: reuse SSH connections, and give those hosts lon
 
 ## 1. Reuse SSH connections
 
-WP-CLI's `--ssh` runs the system `ssh`, which reads `~/.ssh/config`. That makes connection reuse a pure SSH setting, with no jman code involved. Add this to the SSH config of the user that runs jman: the jman-api service user on the server, and your own user for laptop CLI use.
+WP-CLI's `--ssh` runs the system `ssh`, which reads `~/.ssh/config`. That makes connection reuse a pure SSH setting, with no jman code involved.
+
+It helps on every host, not only slow ones. Each WP-CLI call opens its own SSH connection, and jman-api makes several calls per site: about six on each slow tick of the refresh for a site without jman-agent, and several per plugin update. With reuse, the calls to a site share one connection. Add this to the SSH config of the jman-api service user on the server:
 
 ```
-Host *.ssh.wpengine.net
+Host *
     ControlMaster auto
     ControlPath ~/.ssh/cm-%C
     ControlPersist 10m
     ServerAliveInterval 30
 ```
 
-- `ControlMaster auto` makes the first connection to a host a master. Later `ssh` processes reuse it instead of doing a new handshake and authentication.
-- `ControlPath ~/.ssh/cm-%C` names the socket after a hash of the connection details, so each site user gets its own master. Keep it in a directory only that user can read; `~/.ssh` is.
-- `ControlPersist 10m` keeps the master open for 10 minutes after the last command. A batch of updates to one site then shares a single connection.
-- `ServerAliveInterval 30` stops the gateway dropping an idle master.
+Put it after any more specific `Host` blocks: ssh takes the first value it finds for each option. For your own user's laptop CLI use, limit it to the slow hosts with `Host *.ssh.wpengine.net` instead, if you'd rather not keep connections open to every host you use.
 
-To check it, run the same command twice against one site and compare timings:
+- `ControlMaster auto` makes the first connection to a host a master. Later `ssh` processes reuse it instead of doing a new handshake and authentication. If several start at once before a master exists, one becomes the master and the others connect on their own; nothing fails.
+- `ControlPath ~/.ssh/cm-%C` names the socket after a hash of the connection details, so each site user gets its own master. Keep it in a directory only that user can read (`~/.ssh`, mode 700): anyone who can open the socket can use the connection.
+- `ControlPersist 10m` keeps the master open for 10 minutes after the last command. The calls of one slow tick, or a batch of updates to one site, then share a single connection.
+- `ServerAliveInterval 30` stops a gateway or firewall dropping an idle master.
+
+To check it, run the same command twice against one site and compare timings, or look for `~/.ssh/cm-*` sockets during a refresh:
 
 ```bash
 time wp --ssh=<user>@<user>.ssh.wpengine.net --path=<path> core version
@@ -31,7 +35,7 @@ ssh -O check <user>@<user>.ssh.wpengine.net   # "Master running"
 
 To undo it, remove the block and run `ssh -O exit <target>` for any open masters.
 
-This only helps if the handshake is the slow part. If the second run is no faster, the time goes into WordPress starting up on WP Engine's side, and only longer timeouts help.
+On a slow host, this only helps if the handshake is the slow part. If the second run is no faster, the time goes into WordPress starting up on WP Engine's side, and only longer timeouts help.
 
 ## 2. Longer WP-CLI timeouts
 
