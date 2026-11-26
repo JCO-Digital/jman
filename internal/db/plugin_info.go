@@ -50,6 +50,49 @@ func SavePluginInfo(info models.PluginInfo) error {
 	return nil
 }
 
+// SavePluginInfoPartial saves plugin metadata learned without fetching it
+// from wordpress.org (a site's plugin list, the vulnerability feed's name).
+// Unlike SavePluginInfo, it leaves fetched_at as it was, so the next
+// refresh still fetches the full metadata on schedule. A new row gets the
+// Unix epoch as fetched_at, which makes it due right away.
+func SavePluginInfoPartial(info models.PluginInfo) error {
+	db := GetInventoryDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	query := `
+	INSERT INTO plugin_info (
+		slug, name, version, author, author_profile, requires, tested, last_updated, homepage, fetched_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, '1970-01-01 00:00:00')
+	ON CONFLICT(slug) DO UPDATE SET
+		name = excluded.name,
+		version = excluded.version,
+		author = excluded.author,
+		author_profile = excluded.author_profile,
+		requires = excluded.requires,
+		tested = excluded.tested,
+		last_updated = excluded.last_updated,
+		homepage = excluded.homepage;
+	`
+
+	_, err := db.Exec(query,
+		info.Slug,
+		info.Name,
+		info.Version,
+		info.Author,
+		info.AuthorProfile,
+		info.Requires,
+		info.Tested,
+		info.LastUpdated,
+		info.Homepage,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to save plugin info for %s: %w", info.Slug, err)
+	}
+	return nil
+}
+
 // GetPluginInfo retrieves a plugin's metadata and its last fetch timestamp from the database.
 func GetPluginInfo(slug string) (*models.PluginInfo, time.Time, error) {
 	db := GetInventoryDB()

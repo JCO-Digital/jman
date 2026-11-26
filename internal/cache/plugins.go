@@ -104,6 +104,7 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer wpcli.AcquireHost(site.SSH)()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
@@ -133,6 +134,25 @@ func GetCachedPlugins(ttl ...time.Duration) ([]models.WPPlugin, error) {
 		return db.GetAllSitePlugins()
 	}
 	return existingPlugins, nil
+}
+
+// SSHSweptSiteIDs returns the sites whose plugins, users and core the
+// slow refresh reads over SSH (GetCachedPlugins and GetCachedCoreVersions
+// with a TTL of 0): every site in the cached site list that jman-agent
+// doesn't collect. It returns nil if the site list can't be read.
+func SSHSweptSiteIDs() map[string]bool {
+	sites, err := GetFastSiteList()
+	if err != nil {
+		return nil
+	}
+	agentSites := db.AgentCollectedSites()
+	ids := make(map[string]bool, len(sites))
+	for _, s := range sites {
+		if !agentSites[s.ID] {
+			ids[s.ID] = true
+		}
+	}
+	return ids
 }
 
 // UpdateSitePluginCache fetches current plugins for a specific site and

@@ -123,7 +123,7 @@ func runSlowTick() {
 	// below, and pace themselves per registry, so they run alongside it.
 	go runDomainLookups()
 
-	if err := cache.RunFullRefresh(slowTTL()); err != nil {
+	if err := cache.RunFullRefresh(slowTTLs()); err != nil {
 		log.Printf("Refresh scheduler: full refresh failed: %v", err)
 		return
 	}
@@ -141,14 +141,21 @@ func runSlowTick() {
 	}
 }
 
-// slowTTL is the TTL passed to the cache layer's refresh functions. A TTL
-// of 0 forces a fetch (see cache.ReadJSONCache), which is what a scheduler
-// wants: the tick interval itself already governs how often data is
-// refreshed, so each tick should unconditionally fetch rather than be
-// skipped by the cache's own TTL check. The fast tick always fetches too
-// (see RefreshServersAndSites).
-func slowTTL() time.Duration {
-	return 0
+// slowTTLs are the TTLs of the slow tick's refresh (see
+// cache.RefreshTTLs). What is read from the sites is always read again
+// (a TTL of 0): the tick interval already governs how often, and changes
+// made outside jman should show up by the next tick. Plugin metadata
+// changes rarely, and the latest version of each plugin is also taken
+// from the sites' update data on every read, so a day is enough. Plugin
+// and core vulnerability data is fetched again every two hours, which
+// keeps new vulnerabilities showing up within hours without asking
+// wpvulnerability.net for every plugin every tick.
+func slowTTLs() cache.RefreshTTLs {
+	return cache.RefreshTTLs{
+		Sites:      0,
+		PluginInfo: 24 * time.Hour,
+		Vulns:      2 * time.Hour,
+	}
 }
 
 // runDomainLookups refreshes the registry data (nameservers, registrar,

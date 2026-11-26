@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/cache"
 	"github.com/JCO-Digital/jman/internal/db"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/sitestate"
@@ -16,8 +17,10 @@ import (
 )
 
 // CollectAgentlessSites iterates over all managed sites in inventory.db that have
-// WP-CLI enabled but do not have an agent installed, collecting wp-config flags,
-// disk usage, core version, and installed plugins via remote WP-CLI/SSH.
+// WP-CLI enabled but do not have an agent installed, collecting wp-config flags
+// and disk usage via remote WP-CLI/SSH. It also collects core version, plugins
+// and users, but only for sites the slow refresh's SSH sweep doesn't already
+// read (see cache.SSHSweptSiteIDs), since it runs right after that sweep.
 func CollectAgentlessSites() error {
 	sites, err := db.ListManagedSites()
 	if err != nil {
@@ -37,6 +40,9 @@ func CollectAgentlessSites() error {
 
 	verb.Printf(verb.Normal, "Starting agentless collection for %d sites...\n", len(targetSites))
 
+	// nil (no site list) means none count as swept: collect everything.
+	swept := cache.SSHSweptSiteIDs()
+
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 6) // bounded concurrency
 
@@ -44,10 +50,11 @@ func CollectAgentlessSites() error {
 		wg.Add(1)
 		go func(site models.ManagedSite) {
 			defer wg.Done()
+			defer wpcli.AcquireHost(site.ToCliSite().SSH)()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			if err := collectSingleSite(site); err != nil {
+			if err := collectSingleSite(site, !swept[site.ID]); err != nil {
 				verb.LogPrintf(verb.Normal, "Agentless collection failed for %s: %v", site.Domain, err)
 			}
 		}(s)
@@ -74,7 +81,9 @@ if (defined("AUTOMATIC_UPDATER_DISABLED") && AUTOMATIC_UPDATER_DISABLED) {
 }
 echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS, "auto_update_core" => $auto]);`
 
-func collectSingleSite(site models.ManagedSite) error {
+// collectSingleSite reads a site's WordPress flags and disk usage, and with
+// wpData also its core version, plugins and users.
+func collectSingleSite(site models.ManagedSite, wpData bool) error {
 	sshSpec := fmt.Sprintf("%s@%s", site.SSHUser, site.SSHHost)
 	if site.SSHPort > 0 && site.SSHPort != 22 {
 		sshSpec = fmt.Sprintf("%s@%s:%d", site.SSHUser, site.SSHHost, site.SSHPort)
@@ -107,6 +116,10 @@ func collectSingleSite(site models.ManagedSite) error {
 		if bytesUsed, parseErr := strconv.ParseInt(strings.TrimSpace(diskRes.Output), 10, 64); parseErr == nil && bytesUsed > 0 {
 			_ = db.RecordSiteDiskUsage(site.ID, bytesUsed, time.Now())
 		}
+	}
+
+	if !wpData {
+		return nil
 	}
 
 	// 3. Collect WordPress Core Version
