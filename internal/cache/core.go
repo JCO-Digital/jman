@@ -2,6 +2,8 @@ package cache
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -212,10 +214,13 @@ func groupCoreVersions(versions []models.SiteCore, sites []models.CliSite) []mod
 		})
 	}
 
+	// Sorted for stable reports, as in groupPlugins.
 	versionData := make([]models.CoreVersionData, 0, len(versionMap))
 	for _, data := range versionMap {
+		slices.SortFunc(data.Sites, func(a, b models.PluginSite) int { return strings.Compare(a.SiteID, b.SiteID) })
 		versionData = append(versionData, *data)
 	}
+	slices.SortFunc(versionData, func(a, b models.CoreVersionData) int { return strings.Compare(a.Version, b.Version) })
 
 	return versionData
 }

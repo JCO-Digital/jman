@@ -16,7 +16,6 @@ import type {
 	UpdateLock,
 } from "../types";
 import { useAuthStore } from "./auth";
-import { useMonitorStore } from "./monitor";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 
 // Cache keys are versioned: bump a key when the shape of what it holds
@@ -230,7 +229,6 @@ export const useDataStore = defineStore("data", () => {
 	});
 
 	const enrichedSites = computed<EnrichedSite[]>(() => {
-		const monitorStore = useMonitorStore();
 		return sites.value.map((site) => {
 			const vulns = (
 				vulnerabilitiesBySiteId.value.get(site.id) || []
@@ -263,8 +261,6 @@ export const useDataStore = defineStore("data", () => {
 				vulnerabilities: vulns,
 				coreVulnerabilities:
 					coreVulnerabilitiesBySiteId.value.get(site.id) || [],
-				monitorHistory:
-					monitorStore.historyByDomain.get(site.domain) || [],
 			};
 		});
 	});
@@ -273,6 +269,56 @@ export const useDataStore = defineStore("data", () => {
 		if (site.server_name) return site.server_name;
 		if (site.server_id == null) return NO_SERVER_LABEL;
 		return serversByIdMap.value.get(site.server_id)?.name ?? "—";
+	}
+
+	// The lists are kept in sessionStorage so a reload doesn't fetch them
+	// again. Writing them is batched: a bulk update changes plugins once per
+	// finished job, and serializing the whole list each time is slow. A
+	// write that fails (the storage quota on a large dataset) drops that
+	// entry rather than leave a stale one, and never fails a data load.
+	const pendingWrites = new Map<string, () => unknown>();
+	let persistTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function persist(key: string, value: () => unknown) {
+		pendingWrites.set(key, value);
+		if (persistTimer === null) {
+			persistTimer = setTimeout(flushPersist, 1000);
+		}
+	}
+
+	function flushPersist() {
+		persistTimer = null;
+		for (const [key, value] of pendingWrites) {
+			try {
+				sessionStorage.setItem(key, JSON.stringify(value()));
+			} catch {
+				try {
+					sessionStorage.removeItem(key);
+				} catch {
+					// storage unavailable
+				}
+			}
+		}
+		pendingWrites.clear();
+	}
+
+	// A reload with a cache doesn't fetch the lists again, so writes still
+	// pending when the page goes away are made then.
+	if (typeof window !== "undefined") {
+		window.addEventListener("pagehide", () => {
+			if (persistTimer !== null) {
+				clearTimeout(persistTimer);
+				flushPersist();
+			}
+		});
+	}
+
+	function cancelPersist() {
+		if (persistTimer !== null) {
+			clearTimeout(persistTimer);
+			persistTimer = null;
+		}
+		pendingWrites.clear();
 	}
 
 	// Actions
@@ -326,6 +372,7 @@ export const useDataStore = defineStore("data", () => {
 	}
 
 	function clearCache() {
+		cancelPersist();
 		sessionStorage.removeItem(CACHE_KEY_SERVERS);
 		sessionStorage.removeItem(CACHE_KEY_SITES);
 		sessionStorage.removeItem(CACHE_KEY_SITE_ORG_LINKS);
@@ -353,9 +400,9 @@ export const useDataStore = defineStore("data", () => {
 				if (res.ok) {
 					const data = await res.json();
 					coreVulnerabilities.value = data;
-					sessionStorage.setItem(
+					persist(
 						CACHE_KEY_CORE_VULNS,
-						JSON.stringify(data),
+						() => coreVulnerabilities.value,
 					);
 				} else if (res.status !== 401) {
 					console.error(
@@ -373,10 +420,7 @@ export const useDataStore = defineStore("data", () => {
 				if (res.ok) {
 					const data = await res.json();
 					vulnerabilities.value = data;
-					sessionStorage.setItem(
-						CACHE_KEY_VULNS,
-						JSON.stringify(data),
-					);
+					persist(CACHE_KEY_VULNS, () => vulnerabilities.value);
 				} else if (res.status !== 401) {
 					vulnsError.value = "Failed to load vulnerability data";
 					console.error(
@@ -403,15 +447,12 @@ export const useDataStore = defineStore("data", () => {
 		try {
 			const headers: Record<string, string> = {};
 
-			const monitorStore = useMonitorStore();
-
 			const [serversRes, sitesRes, pluginsRes, pluginInfoRes] =
 				await Promise.all([
 					apiFetch(`${BASE_URL}/servers`, { headers }),
 					apiFetch(`${BASE_URL}/sites`, { headers }),
 					apiFetch(`${BASE_URL}/plugins`, { headers }),
 					apiFetch(`${BASE_URL}/plugininfo`, { headers }),
-					monitorStore.fetchHistory(),
 				]);
 
 			// Fetch vulnerabilities separately to not block primary data
@@ -448,19 +489,10 @@ export const useDataStore = defineStore("data", () => {
 			plugins.value = pluginsData;
 			pluginInfo.value = pluginInfoData;
 
-			sessionStorage.setItem(
-				CACHE_KEY_SERVERS,
-				JSON.stringify(serversData),
-			);
-			sessionStorage.setItem(CACHE_KEY_SITES, JSON.stringify(sitesData));
-			sessionStorage.setItem(
-				CACHE_KEY_PLUGINS,
-				JSON.stringify(pluginsData),
-			);
-			sessionStorage.setItem(
-				CACHE_KEY_PLUGIN_INFO,
-				JSON.stringify(pluginInfoData),
-			);
+			persist(CACHE_KEY_SERVERS, () => servers.value);
+			persist(CACHE_KEY_SITES, () => sites.value);
+			persist(CACHE_KEY_PLUGINS, () => plugins.value);
+			persist(CACHE_KEY_PLUGIN_INFO, () => pluginInfo.value);
 
 			isLoaded.value = true;
 		} catch (e: any) {
@@ -476,9 +508,6 @@ export const useDataStore = defineStore("data", () => {
 			const hasCache = loadFromCache();
 			if (!hasCache) {
 				await fetchFromApi();
-			} else {
-				const monitorStore = useMonitorStore();
-				await monitorStore.ensureHistory();
 			}
 		}
 	}
@@ -518,10 +547,7 @@ export const useDataStore = defineStore("data", () => {
 			plugin.update = "";
 
 			// Persist to session storage so it survives reloads
-			sessionStorage.setItem(
-				CACHE_KEY_PLUGINS,
-				JSON.stringify(plugins.value),
-			);
+			persist(CACHE_KEY_PLUGINS, () => plugins.value);
 		}
 	}
 
@@ -537,10 +563,7 @@ export const useDataStore = defineStore("data", () => {
 			...plugins.value.filter((p) => p.site_id !== siteId),
 			...sitePlugins,
 		];
-		sessionStorage.setItem(
-			CACHE_KEY_PLUGINS,
-			JSON.stringify(plugins.value),
-		);
+		persist(CACHE_KEY_PLUGINS, () => plugins.value);
 	}
 
 	function applyCoreUpdate(siteId: string, core: SiteCore) {
@@ -549,10 +572,7 @@ export const useDataStore = defineStore("data", () => {
 			site.wp_core = core;
 
 			// Persist to session storage so it survives reloads
-			sessionStorage.setItem(
-				CACHE_KEY_SITES,
-				JSON.stringify(sites.value),
-			);
+			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}
 
@@ -572,10 +592,7 @@ export const useDataStore = defineStore("data", () => {
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.environment = environment || undefined;
-			sessionStorage.setItem(
-				CACHE_KEY_SITES,
-				JSON.stringify(sites.value),
-			);
+			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}
 
@@ -603,10 +620,7 @@ export const useDataStore = defineStore("data", () => {
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.update_locks = locks;
-			sessionStorage.setItem(
-				CACHE_KEY_SITES,
-				JSON.stringify(sites.value),
-			);
+			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}
 
@@ -658,10 +672,7 @@ export const useDataStore = defineStore("data", () => {
 		} else {
 			siteOrganizationLinks.value[siteId] = organizationId;
 		}
-		sessionStorage.setItem(
-			CACHE_KEY_SITE_ORG_LINKS,
-			JSON.stringify(siteOrganizationLinks.value),
-		);
+		persist(CACHE_KEY_SITE_ORG_LINKS, () => siteOrganizationLinks.value);
 	}
 
 	return {

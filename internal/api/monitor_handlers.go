@@ -9,7 +9,7 @@ import (
 )
 
 // MonitorHistoryHandler returns aggregated history from monitor_history.
-// Query param: hours (default 48).
+// Query params: hours (default 48) and domain (optional, one site).
 func MonitorHistoryHandler(w http.ResponseWriter, r *http.Request) {
 	hoursStr := r.URL.Query().Get("hours")
 	hours := 48
@@ -19,7 +19,9 @@ func MonitorHistoryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	history, err := db.GetMonitorHistory(hours)
+	// domain limits the history to one site, which is all the site page
+	// needs.
+	history, err := db.GetMonitorHistory(hours, r.URL.Query().Get("domain"))
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "MonitorHistoryHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")

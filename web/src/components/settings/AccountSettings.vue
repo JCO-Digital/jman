@@ -3,7 +3,6 @@ import { ref, computed, nextTick, onMounted } from "vue";
 import { useAuthStore } from "../../stores/auth";
 import { useUserStore } from "../../stores/user";
 import { validatePasswordStrength } from "../../utils/passwordStrength";
-import QRCode from "qrcode";
 import { BASE_URL, apiFetch } from "../../utils/api";
 import DesktopNotificationSettings from "./DesktopNotificationSettings.vue";
 
@@ -202,6 +201,9 @@ async function startSetup2FA() {
 		tfaSetupData.value = data;
 		await nextTick();
 		if (qrCanvas.value) {
+			// Loaded only here, for TOTP setup, so the settings pages don't
+			// carry it.
+			const { default: QRCode } = await import("qrcode");
 			await QRCode.toCanvas(qrCanvas.value, data.uri, { width: 200 });
 		}
 	} catch (e: any) {

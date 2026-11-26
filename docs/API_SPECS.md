@@ -17,6 +17,7 @@ This document provides a comprehensive technical specification for the `jman-api
   - Required minimum variations: 200,000,000,000,000.
   - Pool sizes: Lowercase (26), Uppercase (26), Numbers (10), Special characters (16).
 - **Date Format**: ISO 8601 / RFC 3339 (`YYYY-MM-DDTHH:MM:SSZ`)
+- **Caching and compression**: a successful JSON response to a `GET` has an `ETag` and `Cache-Control: private, no-cache`; send it back in `If-None-Match` to get `304 Not Modified` while the data is unchanged. Responses of 1 KB or more are gzip-compressed for clients that accept it.
 
 ---
 
@@ -882,7 +883,7 @@ named by their apex (registrable) domain.
 
 ### Monitoring
 
-`GET /monitor/history` (Protected: `basic`)
+`GET /monitor/history` (Protected: `basic`): status history of the last `?hours=` (default 48), for every site or, with `?domain=`, one.
 `GET /monitor/status` (Protected: `basic`)
 `GET /monitor/checks` (Protected: `basic`): every monitor check, with the `domain` and `url` it checks and the names of its secret headers. Optional `?site_id=` filter.
 `GET /monitor/checks/{id}` (Protected: `basic`)

@@ -67,7 +67,7 @@ func runServe(cmd *cobra.Command, args []string) error {
 			api.VersionMiddleware(config.AppVersion,
 				api.CorsMiddleware(
 					api.MaxBodyMiddleware(
-						api.JsonMiddleware(mux),
+						api.JsonMiddleware(api.ConditionalJSONMiddleware(mux)),
 					),
 				),
 			),
