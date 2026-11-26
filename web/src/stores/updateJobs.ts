@@ -264,6 +264,12 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				...describeMuInstall(job, site),
 			};
 		}
+		if (job.kind === "file_mods") {
+			return {
+				title: `File mods · ${site}`,
+				...describeFileMods(job, site),
+			};
+		}
 		if (job.kind === "core") {
 			return {
 				title: `WordPress core · ${site}`,
@@ -462,6 +468,43 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		}
 		return {
 			message: `Installed ${file} on ${siteName}.`,
+			type: "success",
+		};
+	}
+
+	function describeFileMods(
+		job: JobOfKind<"file_mods">,
+		siteName: string,
+	): { message: string; type: NotificationType } {
+		const change = job.payload.disallow
+			? "disallowing file changes from wp-admin"
+			: "allowing file changes from wp-admin";
+		switch (job.status) {
+			case "queued":
+				return {
+					message: `Queued: ${change} on ${siteName}.`,
+					type: "running",
+				};
+			case "running":
+				return {
+					message: `${change.charAt(0).toUpperCase()}${change.slice(1)} on ${siteName}…`,
+					type: "running",
+				};
+			case "interrupted":
+				return {
+					message: `Setting DISALLOW_FILE_MODS on ${siteName} was interrupted by a jman-api restart. Check its wp-config.php.`,
+					type: "error",
+				};
+		}
+		const r = job.results[0];
+		if (job.status === "failed" || r?.status === "failed") {
+			return {
+				message: `Failed to set DISALLOW_FILE_MODS on ${siteName}: ${truncate(r?.error || job.error || "Unknown error")}`,
+				type: "error",
+			};
+		}
+		return {
+			message: `DISALLOW_FILE_MODS set to ${job.payload.disallow} on ${siteName}.`,
 			type: "success",
 		};
 	}

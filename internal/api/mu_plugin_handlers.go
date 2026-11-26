@@ -25,8 +25,9 @@ import (
 const (
 	// maxMuPluginBytes bounds a mu-plugin file, downloaded or uploaded.
 	maxMuPluginBytes = 1 << 20
-	// maxMuPluginSites bounds the sites of one mu-plugin install request.
-	maxMuPluginSites = 1000
+	// maxBulkJobSites bounds the sites of one request that queues a job
+	// per site (mu-plugin installs, DISALLOW_FILE_MODS changes).
+	maxBulkJobSites = 1000
 
 	muPluginReleasesURL = "https://api.github.com/repos/JCO-Digital/bojaco-mu-plugin/releases/latest"
 	// muPluginDownloadPrefix is the only place a bojaco mu-plugin URL may
@@ -128,7 +129,7 @@ func InstallMuPluginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sites, err := muPluginSites(req.Sites)
+	sites, err := bulkJobSites(req.Sites)
 	if err != nil {
 		WriteError(w, http.StatusBadRequest, err.Error())
 		return
@@ -239,14 +240,14 @@ func readMuPluginUpload(w http.ResponseWriter, r *http.Request) (muPluginRequest
 	return req, &muPluginFile{name: models.MuPluginBojaco, source: "upload " + name, data: data}, 0, nil
 }
 
-// muPluginSites resolves and checks the sites of a request, in order and
+// bulkJobSites resolves and checks the sites of a request, in order and
 // without duplicates.
-func muPluginSites(raw []string) ([]string, error) {
+func bulkJobSites(raw []string) ([]string, error) {
 	if len(raw) == 0 {
 		return nil, fmt.Errorf("At least one site is required")
 	}
-	if len(raw) > maxMuPluginSites {
-		return nil, fmt.Errorf("At most %d sites can be changed at once", maxMuPluginSites)
+	if len(raw) > maxBulkJobSites {
+		return nil, fmt.Errorf("At most %d sites can be changed at once", maxBulkJobSites)
 	}
 	seen := map[string]bool{}
 	var sites []string

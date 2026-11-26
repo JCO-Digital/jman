@@ -85,8 +85,7 @@ This prevents unauthorized or tampered binaries from being installed via the upd
 ### Prerequisites
 
 - A user account in jman-api. Changing plugins and WordPress core needs the execute level.
-- SSH access to the sites, for `wp`, `admin`, `mods`, `setup` and `plugin list --live`/`plugin info`.
-- `wp-cli` available locally and on the target servers.
+- For `jman wp` only: SSH access to the sites, and `wp-cli` locally and on the target servers. Every other command goes through jman-api.
 - Go (needed if building from source, v1.25 or later recommended)
 
 ## Configuration
@@ -162,9 +161,8 @@ jman --fresh search mysite   # or check jman-api before any one command
 | `wp`     | Run a `wp-cli` command on a target site.                              |
 | `core`   | Manage WordPress core (check, update, version) on target sites.       |
 | `search` | Search for sites or plugins matching a query.                         |
-| `admin`  | Create a new administrator user on target sites.                      |
 | `plugin` | Plugin actions (list, install, update, remove, info) on target sites. |
-| `mods`   | Set `DISALLOW_FILE_MODS` to true on target sites.                     |
+| `mods`   | Allow or disallow file changes from wp-admin (`DISALLOW_FILE_MODS`).  |
 | `alias`  | Create SSH/WP-CLI alias files for all sites or a filtered collection. |
 | `vuln`   | Show plugin and core vulnerabilities found by jman-api.               |
 | `ignore` | Manage unified ignore list for monitoring and vulnerabilities.        |

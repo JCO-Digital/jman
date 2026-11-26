@@ -486,6 +486,22 @@ The job writes the file under a temporary name next to it and renames it, then r
 
 ---
 
+### DISALLOW_FILE_MODS Changes
+
+`POST /file-mods` (Protected: `execute`)
+
+Sets `DISALLOW_FILE_MODS` in the `wp-config.php` of a set of sites, as one `file_mods` job per site (`wp config set --raw DISALLOW_FILE_MODS true|false`). `true` stops plugin, theme and core changes from wp-admin.
+
+```json
+{ "sites": ["<site uuid>", "…"], "disallow": true }
+```
+
+At most 1000 sites per request. Returns `202 Accepted` with `{ "jobs": [ { "id": 13, "kind": "file_mods", "…": "…" } ] }`. A finished job stores the new flag for the site and writes a ledger entry with `update_type` `config` and status `changed` (or `failed`).
+
+- `400`: invalid sites, or `disallow` missing.
+
+---
+
 ### Plugin Updates from a ZIP
 
 For plugins that don't update through WordPress (some paid plugins), a plugin ZIP can be installed over the plugin on many sites. It takes two calls: stage the ZIP, then queue the update.
@@ -1409,6 +1425,16 @@ Calls WP-CLI live to fetch the current list of plugins that have updates availab
 ```
 
 Returns an empty array if no updates are available.
+
+
+### Live Reads of a Site
+
+These run WP-CLI on the site over jman-api's SSH, so they need `execute` and take a few seconds. A failed read returns `502`, an unknown site `404`.
+
+- `GET /sites/{id}/plugins/live`: all of the site's plugins, in the format of `GET /sites/{id}/plugins`. They are stored as the refresh would store them, so changes made outside jman go to the update ledger.
+- `GET /sites/{id}/plugins/details`: every plugin's `name` (slug), `title`, `version`, `status`, `author` and `update_version`, as `wp plugin list` reports them.
+- `GET /sites/{id}/plugins/{slug}/info`: one plugin's `name`, `slug`, `version` and `author` as `wp plugin get` reports them; `404` if it isn't installed, `400` for an invalid slug.
+- `GET /sites/{id}/users/live`: the site's users, in the format of `GET /sites/{id}/users`, stored as the refresh would store them.
 
 ### Update Locks
 

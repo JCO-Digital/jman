@@ -11,6 +11,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/JCO-Digital/jman/internal/client"
 	"github.com/JCO-Digital/jman/internal/mirror"
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/search"
@@ -41,7 +42,7 @@ var listUserCmd = &cobra.Command{
 	Short: "List the users of target sites.",
 	Long: `Lists the WordPress users of target sites from jman-api's data, without subscribers and WooCommerce customers, which are counted.
 
-With --live, the users are read from the sites over SSH instead.`,
+With --live, jman-api reads the users from the sites over SSH instead (it needs the execute level).`,
 	Args: usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -59,11 +60,21 @@ With --live, the users are read from the sites over SSH instead.`,
 			return nil
 		}
 
+		var c *client.Client
+		ctx := cmd.Context()
+		if flagUserLive {
+			if c, err = apiClient(); err != nil {
+				return err
+			}
+		}
 		for _, site := range sites {
 			users, found := mirrorSiteUsers(m, site.ID)
 			if flagUserLive {
 				verb.Printf(verb.Verbose, "Listing users on %s (%s)...\n", verb.Blue(site.Name), site.ServerName)
-				if users, err = wpcli.GetSiteUsers(site); err != nil {
+				if err := c.Get(ctx, "/sites/"+site.ID+"/users/live", &users); err != nil {
+					if fatal := fatalAPIError(err); fatal != nil {
+						return fatal
+					}
 					verb.Printf(verb.Normal, "Error listing users on %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 					continue
 				}
@@ -293,7 +304,7 @@ Deleting a user deletes all their posts. A user who has posts is only deleted wi
 }
 
 func init() {
-	listUserCmd.Flags().BoolVar(&flagUserLive, "live", false, "read the users from the sites over SSH")
+	listUserCmd.Flags().BoolVar(&flagUserLive, "live", false, "have jman-api read the users from the sites over SSH")
 	addUserCmd.Flags().StringVar(&flagUserRole, "role", "administrator", "the new user's role")
 	addUserCmd.Flags().StringVar(&flagUserPassword, "password", "", "the new user's password (generated if not given)")
 	deleteUserCmd.Flags().StringVar(&flagUserReassign, "reassign", "", "login or email of the user who gets the deleted users' posts")

@@ -459,13 +459,15 @@ export type LedgerStatus =
 	| "installed"
 	/** A WordPress user created by a user job. */
 	| "created"
+	/** A wp-config.php setting changed by a job (update type "config"). */
+	| "changed"
 	/** A change jman found on the site but didn't make itself. */
 	| "detected";
 
 export interface SiteUpdateLedgerEntry {
 	id: number;
 	site_id: string;
-	update_type: "core" | "plugin" | "theme" | "user" | "mu-plugin";
+	update_type: "core" | "plugin" | "theme" | "user" | "mu-plugin" | "config";
 	status: LedgerStatus;
 	data_json?: string;
 	updated_by: string;
@@ -759,7 +761,8 @@ export type UpdateJobKind =
 	| PluginActionKind
 	| "install"
 	| UserJobKind
-	| "mu_install";
+	| "mu_install"
+	| "file_mods";
 
 /** Job kinds that create or delete a WordPress user. */
 export type UserJobKind = "user_create" | "user_delete";
@@ -850,6 +853,12 @@ export interface MuInstallJobPayload {
 	sha256: string;
 }
 
+/** Payload of jobs that set DISALLOW_FILE_MODS in wp-config.php. */
+export interface FileModsJobPayload {
+	/** True stops plugin, theme and core changes from wp-admin. */
+	disallow: boolean;
+}
+
 /** Payload of user create jobs; the password is never part of it. */
 export interface UserCreateJobPayload {
 	login: string;
@@ -873,13 +882,15 @@ export type UpdateJobPayload =
 	| { kind: "install"; payload: InstallJobPayload }
 	| { kind: "user_create"; payload: UserCreateJobPayload }
 	| { kind: "user_delete"; payload: UserDeleteJobPayload }
-	| { kind: "mu_install"; payload: MuInstallJobPayload };
+	| { kind: "mu_install"; payload: MuInstallJobPayload }
+	| { kind: "file_mods"; payload: FileModsJobPayload };
 
 /**
  * A background change on one site: `wp plugin update` for one or more
  * plugins (kind "plugins"), `wp core update`, activating, deactivating,
  * deleting or uninstalling plugins, installing one plugin, creating or
- * deleting a WordPress user, or writing a file into mu-plugins.
+ * deleting a WordPress user, writing a file into mu-plugins, or setting
+ * DISALLOW_FILE_MODS.
  */
 /** A text diff's state: the check runs on after the job has finished. */
 export type TextDiffStatus = "running" | "done" | "interrupted";
