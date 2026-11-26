@@ -176,6 +176,44 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.record(r)
 		f.queue(w, models.UpdateJob{Kind: models.UpdateJobKindCore})
 
+	case r.Method == http.MethodPost && path == "/file-mods":
+		var body struct {
+			Sites    []string `json:"sites"`
+			Disallow bool     `json:"disallow"`
+		}
+		_ = json.Unmarshal([]byte(f.record(r)), &body)
+		job := models.NewUpdateJob(models.UpdateJobKindFileMods, "", models.FileModsPayload{Disallow: body.Disallow})
+		f.mu.Lock()
+		job.ID = f.next
+		f.next++
+		job.SiteID = body.Sites[0]
+		job.Status = models.UpdateJobQueued
+		f.jobs[job.ID] = job
+		f.mu.Unlock()
+		w.WriteHeader(http.StatusAccepted)
+		_ = json.NewEncoder(w).Encode(map[string]any{"jobs": []models.UpdateJob{job}})
+
+	case r.Method == http.MethodGet && path == sitePath+"/plugins/live":
+		f.record(r)
+		_ = json.NewEncoder(w).Encode([]models.WPPlugin{{SiteID: testSiteID, Name: "live-only", Status: "active", Version: "1.0"}})
+
+	case r.Method == http.MethodGet && path == sitePath+"/plugins/details":
+		f.record(r)
+		_ = json.NewEncoder(w).Encode([]models.PluginDetails{{Slug: "akismet", Title: "Akismet", Version: "5.0", Status: "active", UpdateVersion: "5.1"}})
+
+	case r.Method == http.MethodGet && path == sitePath+"/plugins/akismet/info":
+		f.record(r)
+		_ = json.NewEncoder(w).Encode(models.PluginInfo{Slug: "akismet", Name: "Akismet", Version: "5.0"})
+
+	case r.Method == http.MethodGet && path == sitePath+"/plugins/missing/info":
+		f.record(r)
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"Plugin missing is not installed"}`))
+
+	case r.Method == http.MethodGet && path == sitePath+"/users/live":
+		f.record(r)
+		_ = json.NewEncoder(w).Encode(models.SiteUsers{Users: []models.SiteUser{{SiteID: testSiteID, ID: 2, Login: "liveuser", Roles: "editor"}}})
+
 	case r.Method == http.MethodGet && strings.HasPrefix(path, "/update-jobs/"):
 		f.mu.Lock()
 		var job models.UpdateJob
@@ -198,6 +236,8 @@ func (f *fakeJmanAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			job.Results = []models.UpdateResult{{Name: "jetpack", NewVersion: "14.0", Status: models.UpdateDone}}
 		case models.UpdateJobKindUserCreate, models.UpdateJobKindUserDelete:
 			job.Results = []models.UpdateResult{{Name: "user", Status: models.UpdateDone}}
+		case models.UpdateJobKindFileMods:
+			job.Results = []models.UpdateResult{{Name: "DISALLOW_FILE_MODS", Status: models.UpdateDone}}
 		default:
 			job.Results = []models.UpdateResult{{Name: payload.Plugins[0].Name, Status: models.UpdateDone}}
 		}
@@ -383,5 +423,51 @@ func TestUserDelete(t *testing.T) {
 	// Display names aren't matched.
 	if calls := runJman(t, srv, "user", "delete", "nobody"); len(calls) != 0 {
 		t.Errorf("calls: %v", calls)
+	}
+}
+
+// These commands used to run WP-CLI over SSH from the CLI; they now go
+// through jman-api.
+
+func TestModsQueuesFileModsJobs(t *testing.T) {
+	srv := newFakeJmanAPI(t)
+	calls := runJman(t, srv, "mods", "disable", "a.example.com")
+	want := `POST /file-mods {"disallow":true,"sites":["site-a"]}`
+	if strings.Join(calls, "\n") != want {
+		t.Errorf("calls:\n%s\nwant:\n%s", strings.Join(calls, "\n"), want)
+	}
+	calls = runJman(t, srv, "mods", "allow", "a.example.com")
+	if want := `POST /file-mods {"disallow":false,"sites":["site-a"]}`; strings.Join(calls, "\n") != want {
+		t.Errorf("calls:\n%s\nwant:\n%s", strings.Join(calls, "\n"), want)
+	}
+}
+
+func TestLiveListsGoThroughAPI(t *testing.T) {
+	srv := newFakeJmanAPI(t)
+	t.Cleanup(func() { flagPluginLive, flagUserLive = false, false })
+
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"plugin", "list", "a.example.com", "--live"}, "GET /sites/site-a/plugins/live "},
+		{[]string{"user", "list", "a.example.com", "--live"}, "GET /sites/site-a/users/live "},
+		{[]string{"plugin", "info", "a.example.com"}, "GET /sites/site-a/plugins/details "},
+		{[]string{"plugin", "info", "a.example.com", "akismet"}, "GET /sites/site-a/plugins/akismet/info "},
+		// Not installed: reported, not an error.
+		{[]string{"plugin", "info", "a.example.com", "missing"}, "GET /sites/site-a/plugins/missing/info "},
+	} {
+		calls := runJman(t, srv, c.args...)
+		if strings.Join(calls, "\n") != c.want {
+			t.Errorf("jman %s: calls %q, want %q", strings.Join(c.args, " "), calls, c.want)
+		}
+	}
+
+	// Without --live, the lists come from the local copy alone.
+	flagPluginLive, flagUserLive = false, false
+	for _, args := range [][]string{{"plugin", "list", "a.example.com"}, {"user", "list", "a.example.com"}} {
+		if calls := runJman(t, srv, args...); len(calls) != 0 {
+			t.Errorf("jman %s: calls %q, want none", strings.Join(args, " "), calls)
+		}
 	}
 }

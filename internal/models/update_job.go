@@ -28,6 +28,9 @@ const (
 	// UpdateJobKindMuInstall writes one file into wp-content/mu-plugins:
 	// the bojaco mu-plugin or a bojaco-compat plugin.
 	UpdateJobKindMuInstall = "mu_install"
+	// UpdateJobKindFileMods sets DISALLOW_FILE_MODS in the site's
+	// wp-config.php.
+	UpdateJobKindFileMods = "file_mods"
 )
 
 // IsPluginActionKind reports whether kind is one of the plugin management
@@ -131,7 +134,8 @@ const (
 // for a set of plugins (Kind "plugins"), `wp core update` (Kind "core"),
 // activating, deactivating, deleting or uninstalling a set of plugins,
 // installing one plugin (Kind "install"), creating or deleting a
-// WordPress user, or writing a file into mu-plugins (Kind "mu_install"). What to change is in Payload, whose type depends on Kind
+// WordPress user, writing a file into mu-plugins (Kind "mu_install"), or
+// setting DISALLOW_FILE_MODS (Kind "file_mods"). What to change is in Payload, whose type depends on Kind
 // (see the *Payload types).
 type UpdateJob struct {
 	ID      int64           `json:"id"`
@@ -263,6 +267,13 @@ type MuInstallPayload struct {
 	// the uploaded file.
 	Source string `json:"source"`
 	SHA256 string `json:"sha256"`
+}
+
+// FileModsPayload is the payload of file_mods jobs.
+type FileModsPayload struct {
+	// Disallow is the value DISALLOW_FILE_MODS is set to: true stops
+	// plugin, theme and core changes from wp-admin.
+	Disallow bool `json:"disallow"`
 }
 
 // MuPluginBojaco is the bojaco mu-plugin's file name in mu-plugins.

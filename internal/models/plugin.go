@@ -48,3 +48,13 @@ func SanitizePluginInfo(info *PluginInfo) {
 	info.Name = utils.CleanHTML(info.Name)
 	info.Author = utils.CleanHTML(info.Author)
 }
+
+// PluginDetails is a plugin as `wp plugin list` describes it.
+type PluginDetails struct {
+	Slug          string `json:"name"`
+	Title         string `json:"title"`
+	Version       string `json:"version"`
+	Status        string `json:"status"`
+	Author        string `json:"author"`
+	UpdateVersion string `json:"update_version"`
+}

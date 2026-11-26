@@ -233,12 +233,19 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	// --- Plugin management routes (background jobs) ---
 	mux.Handle("GET /api/sites/{id}/plugins", basic(SitePluginsHandler))
 	mux.Handle("GET /api/sites/{id}/users", basic(SiteUserListHandler))
+	// Live reads run WP-CLI on the site, so they need the execute level
+	// like the other live endpoints.
+	mux.Handle("GET /api/sites/{id}/plugins/live", execute(SiteLivePluginsHandler))
+	mux.Handle("GET /api/sites/{id}/plugins/details", execute(SitePluginDetailsHandler))
+	mux.Handle("GET /api/sites/{id}/plugins/{slug}/info", execute(SitePluginInfoHandler))
+	mux.Handle("GET /api/sites/{id}/users/live", execute(SiteLiveUsersHandler))
 	mux.Handle("POST /api/sites/{id}/users", execute(SiteUserCreateHandler))
 	mux.Handle("DELETE /api/sites/{id}/users/{userId}", execute(SiteUserDeleteHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-actions", execute(SitePluginActionHandler))
 	mux.Handle("POST /api/sites/{id}/plugin-install", execute(SitePluginInstallHandler))
 	// The bojaco mu-plugin or a bojaco-compat plugin on many sites.
 	mux.Handle("POST /api/mu-plugins", execute(InstallMuPluginHandler))
+	mux.Handle("POST /api/file-mods", execute(FileModsHandler))
 	// Updating a plugin from a ZIP on many sites: stage the ZIP, then queue.
 	mux.Handle("GET /api/plugin-zips/sources", execute(PluginZipSourcesHandler))
 	mux.Handle("POST /api/plugin-zips", execute(StagePluginZipHandler))

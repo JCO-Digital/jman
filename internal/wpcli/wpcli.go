@@ -226,16 +226,6 @@ func GetWPCommandDump(ssh, path string) (string, error) {
 	return res.Output, nil
 }
 
-// SetDisallowFileMods updates the DISALLOW_FILE_MODS constant in wp-config.php.
-func SetDisallowFileMods(ssh, path string, value bool) error {
-	valStr := "false"
-	if value {
-		valStr = "true"
-	}
-	_, err := RunWP(CliOptions{SSH: ssh, Path: path}, "config", "set", "--raw", "DISALLOW_FILE_MODS", valStr)
-	return err
-}
-
 // shellQuoteArg quotes s for safe inclusion in a POSIX shell command line.
 // This is needed because the ssh client joins all trailing arguments with a
 // single space and hands the result to the remote user's shell for parsing

@@ -19,7 +19,6 @@ import (
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
 	"github.com/JCO-Digital/jman/internal/vuln"
-	"github.com/JCO-Digital/jman/internal/wpcli"
 )
 
 // pluginSlugRegex matches valid WordPress plugin slugs. The first character must be
@@ -513,19 +512,12 @@ func SitePluginUpdatesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plugins, err := wpcli.GetPluginsWithUpdates(*site)
+	plugins, err := readLivePlugins(*site)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SitePluginUpdatesHandler error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get plugins from site")
 		return
 	}
-
-	// Persist the freshly-fetched plugin state for this site; changes made
-	// outside jman since the last read go to the update ledger.
-	if _, err := sitestate.ApplyPlugins(site.ID, plugins, sitestate.SourceSSH, time.Now()); err != nil {
-		verb.PrintErrorf(verb.Normal, "Warning: failed to save plugins for site %s: %v\n", site.Name, err)
-	}
-	cache.UpdatePluginInfoFromPlugins(plugins)
 
 	updates := []models.WPPlugin{}
 	for _, p := range plugins {

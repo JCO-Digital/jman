@@ -25,6 +25,8 @@ func checkPayload(job models.UpdateJob) error {
 		if p, err = models.DecodePayload[models.MuInstallPayload](job); err == nil && !models.ValidMuPluginFile(p.File) {
 			err = fmt.Errorf("invalid mu-plugin file name %q", p.File)
 		}
+	case job.Kind == models.UpdateJobKindFileMods:
+		_, err = models.DecodePayload[models.FileModsPayload](job)
 	default:
 		_, err = models.DecodePayload[models.PluginsPayload](job)
 	}

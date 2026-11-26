@@ -30,6 +30,10 @@ const (
 	// user is LedgerDeleted.
 	LedgerCreated = "created"
 
+	// LedgerChanged is a wp-config.php setting changed by a job (update
+	// type "config").
+	LedgerChanged = "changed"
+
 	// LedgerDetected is a change jman found on the site but didn't make
 	// itself (e.g. an update in wp-admin or a WordPress auto-update).
 	LedgerDetected = "detected"

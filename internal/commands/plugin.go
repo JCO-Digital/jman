@@ -18,7 +18,6 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
-	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +40,7 @@ var listPluginCmd = &cobra.Command{
 	Short: "List plugins on target sites.",
 	Long: `Lists the plugins on target sites from jman-api's data. Plugins whose updates are limited to fix releases by an update lock are marked as locked.
 
-With --live, the plugins are read from the sites over SSH instead.`,
+With --live, jman-api reads the plugins from the sites over SSH instead (it needs the execute level).`,
 	Args: usageArgs,
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) == 0 {
@@ -59,11 +58,21 @@ With --live, the plugins are read from the sites over SSH instead.`,
 			return nil
 		}
 
+		var c *client.Client
+		ctx := cmd.Context()
+		if flagPluginLive {
+			if c, err = apiClient(); err != nil {
+				return err
+			}
+		}
 		for _, site := range sites {
 			plugins := m.SitePlugins(site.ID)
 			if flagPluginLive {
 				verb.Printf(verb.Verbose, "Listing plugins on %s (%s)...\n", verb.Blue(site.Name), site.ServerName)
-				if plugins, err = wpcli.GetPlugins(site, false); err != nil {
+				if err := c.Get(ctx, "/sites/"+site.ID+"/plugins/live", &plugins); err != nil {
+					if fatal := fatalAPIError(err); fatal != nil {
+						return fatal
+					}
 					verb.Printf(verb.Normal, "Error listing plugins on %s:\n%v\n", verb.Blue(site.Name), verb.Red(err))
 					continue
 				}
@@ -235,13 +244,21 @@ Without a plugin name, it shows every plugin on each site.`,
 			return nil
 		}
 
+		c, err := apiClient()
+		if err != nil {
+			return err
+		}
+		ctx := cmd.Context()
 		for _, site := range sites {
 			if pluginName == "" {
-				err = allPluginsInfo(site)
+				err = allPluginsInfo(ctx, c, site)
 			} else {
-				err = pluginInfo(site, pluginName)
+				err = pluginInfo(ctx, c, site, pluginName)
 			}
 			if err != nil {
+				if fatal := fatalAPIError(err); fatal != nil {
+					return fatal
+				}
 				verb.Printf(verb.Normal, "Error fetching plugin info on %s: %v\n", verb.Blue(site.Name), verb.Red(err))
 			}
 		}
@@ -250,7 +267,7 @@ Without a plugin name, it shows every plugin on each site.`,
 }
 
 func init() {
-	listPluginCmd.Flags().BoolVar(&flagPluginLive, "live", false, "read the plugins from the sites over SSH")
+	listPluginCmd.Flags().BoolVar(&flagPluginLive, "live", false, "have jman-api read the plugins from the sites over SSH")
 	updatePluginCmd.Flags().BoolVar(&flagAllowMajor, "allow-major", false, "update a locked plugin past fix releases (one plugin on one site only)")
 	updatePluginCmd.Flags().StringVar(&flagPriority, "priority", "", "queue priority: low, normal, high or urgent (admins only); by default high for one site, normal for several, high for vulnerable plugins")
 	pluginCmd.AddCommand(listPluginCmd)
@@ -505,16 +522,20 @@ func runPluginAction(ctx context.Context, c *client.Client, site models.CliSite,
 	return result
 }
 
-func pluginInfo(site models.CliSite, pluginName string) error {
+// pluginInfo prints one plugin's info as the site reports it, read by
+// jman-api over SSH.
+func pluginInfo(ctx context.Context, c *client.Client, site models.CliSite, pluginName string) error {
 	verb.Printf(verb.Verbose, "Fetching info for '%s' on %s (%s)...\n", verb.Yellow(pluginName), verb.Blue(site.Name), site.ServerName)
-	info, err := wpcli.GetPluginInfo(site, pluginName)
-	if err != nil {
-		return err
+	if !utils.IsValidSlug(pluginName) {
+		return fmt.Errorf("invalid plugin slug %q", pluginName)
 	}
-
-	if info == nil {
-		verb.Printf(verb.Normal, "Plugin '%s' not found on %s.\n", verb.Yellow(pluginName), verb.Blue(site.Name))
-		return nil
+	var info models.PluginInfo
+	if err := c.Get(ctx, "/sites/"+site.ID+"/plugins/"+pluginName+"/info", &info); err != nil {
+		if isStatus(err, http.StatusNotFound) {
+			verb.Printf(verb.Normal, "Plugin '%s' not found on %s.\n", verb.Yellow(pluginName), verb.Blue(site.Name))
+			return nil
+		}
+		return err
 	}
 
 	verb.Printf(verb.Normal, "Plugin info for '%s' on %s:\n", verb.Yellow(pluginName), verb.Blue(site.Name))
@@ -526,10 +547,10 @@ func pluginInfo(site models.CliSite, pluginName string) error {
 }
 
 // allPluginsInfo prints the details of every plugin on a site as a table.
-func allPluginsInfo(site models.CliSite) error {
+func allPluginsInfo(ctx context.Context, c *client.Client, site models.CliSite) error {
 	verb.Printf(verb.Verbose, "Fetching plugin details on %s (%s)...\n", verb.Blue(site.Name), site.ServerName)
-	plugins, err := wpcli.GetPluginDetails(site)
-	if err != nil {
+	var plugins []models.PluginDetails
+	if err := c.Get(ctx, "/sites/"+site.ID+"/plugins/details", &plugins); err != nil {
 		return err
 	}
 	if len(plugins) == 0 {
@@ -611,7 +632,7 @@ func fatalAPIError(err error) error {
 	case errors.Is(err, client.ErrUnauthorized), errors.As(err, &upgrade):
 		return err
 	case isStatus(err, http.StatusForbidden):
-		return errors.New("changing sites needs the execute level in jman-api")
+		return errors.New("this needs the execute level in jman-api: it changes sites or reads them over SSH")
 	}
 	return nil
 }

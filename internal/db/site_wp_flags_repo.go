@@ -36,6 +36,20 @@ func SetSiteWpFlags(siteID string, isMultisite, disallowFileMods bool, autoUpdat
 	return nil
 }
 
+// SetSiteDisallowFileMods updates the stored DISALLOW_FILE_MODS flag of a
+// site after jman changed it. A site without stored flags is left alone:
+// its next collection stores them all.
+func SetSiteDisallowFileMods(siteID string, disallow bool) error {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if _, err := dbConn.Exec(`UPDATE site_wp_flags SET disallow_file_mods = ?, updated_at = CURRENT_TIMESTAMP WHERE site_id = ?`, disallow, siteID); err != nil {
+		return fmt.Errorf("failed to set DISALLOW_FILE_MODS for site %s: %w", siteID, err)
+	}
+	return nil
+}
+
 // GetAllSiteWpFlags returns a map of site UUID to its current WordPress config flags.
 func GetAllSiteWpFlags() (map[string]models.SiteWpFlags, error) {
 	dbConn := GetAPIDB()

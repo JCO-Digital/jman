@@ -417,6 +417,12 @@ func RemovePlugin(site models.CliSite, plugin string) (bool, error) {
 	return strings.Contains(res.Output, "Success: Uninstalled"), nil
 }
 
+// ErrPluginNotFound is GetPluginInfo's error for a plugin that isn't
+// installed on the site.
+var ErrPluginNotFound = errors.New("plugin not found")
+
+// GetPluginInfo returns a plugin's info as the site reports it (`wp plugin
+// get`), or an error wrapping ErrPluginNotFound if it isn't installed.
 func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration) (*models.PluginInfo, error) {
 	t := time.Duration(0)
 	if len(timeout) > 0 {
@@ -425,7 +431,7 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: t}, "plugin", "get", plugin, "--format=json")
 	if err != nil {
 		if strings.Contains(res.Error, "plugin could not be found.") {
-			return nil, fmt.Errorf("plugin %s not found", plugin)
+			return nil, fmt.Errorf("plugin %s: %w", plugin, ErrPluginNotFound)
 		}
 		return nil, err
 	}
@@ -459,20 +465,10 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 	}, nil
 }
 
-// PluginDetails is a plugin as `wp plugin list` describes it.
-type PluginDetails struct {
-	Slug          string `json:"name"`
-	Title         string `json:"title"`
-	Version       string `json:"version"`
-	Status        string `json:"status"`
-	Author        string `json:"author"`
-	UpdateVersion string `json:"update_version"`
-}
-
 // GetPluginDetails returns the details of every plugin on a site with one
 // `wp plugin list` call. WP-CLI versions without the author field are
 // retried without it.
-func GetPluginDetails(site models.CliSite) ([]PluginDetails, error) {
+func GetPluginDetails(site models.CliSite) ([]models.PluginDetails, error) {
 	fields := "name,title,version,status,author,update_version"
 	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}
 	res, err := RunWP(opts, "plugin", "list", "--fields="+fields, "--format=json")
@@ -485,13 +481,13 @@ func GetPluginDetails(site models.CliSite) ([]PluginDetails, error) {
 	return parsePluginDetails(res.Output)
 }
 
-func parsePluginDetails(output string) ([]PluginDetails, error) {
+func parsePluginDetails(output string) ([]models.PluginDetails, error) {
 	output = strings.TrimSpace(output)
 	idx := strings.Index(output, "[")
 	if idx == -1 {
 		return nil, fmt.Errorf("no valid JSON array found in output")
 	}
-	var details []PluginDetails
+	var details []models.PluginDetails
 	if err := json.NewDecoder(strings.NewReader(output[idx:])).Decode(&details); err != nil {
 		return nil, fmt.Errorf("failed to parse plugin list JSON: %w", err)
 	}

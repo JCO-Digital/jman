@@ -112,10 +112,12 @@ The values go in headers because a `304` has no body, and because headers stay r
 | `fetch` | SpinupWP, wp.org, vuln feeds → local cache/DB | Removed. `jman refresh` replaces it |
 | `search`, completions, target resolution | `cache.*` JSON and SpinupWP | Mirror, filtered in memory in Go |
 | `alias` | Cache + `db.ListManagedSites` | Mirror |
-| `wp`, `admin`, `mods` | SSH using cached site data | Unchanged, with SSH details from the mirror |
-| `setup mu` / `setup compat` | SSH, plus `db.GetSitesWithPlugin` | SSH, with the plugin lookup from the mirror |
-| `plugin list` | SSH | Mirror. `--live` reads the site over SSH |
-| `plugin info` | SSH | Unchanged (SSH) |
+| `wp` | SSH using cached site data | Unchanged, with SSH details from the mirror |
+| `mods` | SSH | `POST /api/file-mods`, one `file_mods` job per site |
+| `setup mu` / `setup compat` | SSH, plus `db.GetSitesWithPlugin` | `POST /api/mu-plugins`, with the plugin lookup from the mirror |
+| `plugin list` | SSH | Mirror. `--live`: `GET /api/sites/{id}/plugins/live` |
+| `user list` | SSH | Mirror. `--live`: `GET /api/sites/{id}/users/live` |
+| `plugin info` | SSH | `GET /api/sites/{id}/plugins/{slug}/info`, or `/plugins/details` for every plugin |
 | `plugin update` | SSH via `wpcli.UpdatePlugin` | `POST /api/plugin-update-jobs`, then poll `GET /api/update-jobs/{id}` |
 | `plugin install` | SSH | `POST /api/sites/{id}/plugin-install`. A local ZIP is uploaded as multipart, a slug or URL is sent as JSON |
 | `plugin remove` | SSH | `POST /api/sites/{id}/plugin-actions`: `deactivate` if active, then `uninstall` |
@@ -160,6 +162,12 @@ None of this changes existing behaviour, so it can ship on its own.
 - `vuln list/sites/core/backports` format jman-api's reports with the new `internal/vulnview` package, which jman-api's daily Slack site report uses too. `--slack` was removed (a hidden flag explains why); jman-api already sends the reports.
 - `ignore` reads and writes jman-api's ignore list. It used to write to the laptop's own `inventory.db`, so entries added with the CLI never reached jman-api.
 - `wp`, `admin`, `mods` and `setup mu/compat` still run over SSH, with their sites from the local copy.
+
+### Phase 3b: the remaining SSH commands (done)
+
+- `mods` queues a `file_mods` job per site (`POST /api/file-mods`), which sets `DISALLOW_FILE_MODS`, stores the new flag and writes a `config` ledger entry.
+- `plugin list --live`, `user list --live` and `plugin info` ask jman-api, which reads the site over its own SSH (execute level). The live lists are stored as the refresh would store them.
+- Only `jman wp` still connects to sites from the laptop. Running any wp-cli command through jman-api would amount to remote code execution over HTTP, so it stays a direct tool for people with their own SSH access.
 
 ### Phase 4: dependency cleanup (done)
 

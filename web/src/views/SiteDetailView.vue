@@ -193,6 +193,7 @@ const ledgerStatusTitle: Record<LedgerStatus, string> = {
 	deleted: "Plugins deleted",
 	installed: "Plugin installed",
 	created: "User created",
+	changed: "Config changed",
 	detected: "Changed outside jman (found by jman-agent or a refresh)",
 };
 
@@ -223,6 +224,16 @@ function formatMuInstall(data: any): string {
 	let txt = `Installed mu-plugin ${data.file}`;
 	if (data.source) txt += `\nSource: ${data.source}`;
 	if (data.sha256) txt += `\nSHA-256: ${data.sha256}`;
+	if (data.error) txt += `\n[Error: ${data.error}]`;
+	return txt;
+}
+
+/** Describes a config job's ledger entry. */
+function formatConfigChange(data: any): string {
+	let txt =
+		data.action === "file_mods"
+			? `Set DISALLOW_FILE_MODS to ${data.disallow_file_mods}`
+			: `Changed ${data.action}`;
 	if (data.error) txt += `\n[Error: ${data.error}]`;
 	return txt;
 }
@@ -267,6 +278,9 @@ function formatLedgerDetails(entry: SiteUpdateLedgerEntry) {
 		}
 		if (entry.update_type === "mu-plugin") {
 			return formatMuInstall(data);
+		}
+		if (entry.update_type === "config") {
+			return formatConfigChange(data);
 		}
 		if (data.action) {
 			const verbs: Record<string, string> = {
