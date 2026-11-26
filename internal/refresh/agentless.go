@@ -3,7 +3,6 @@ package refresh
 import (
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,11 +63,14 @@ func CollectAgentlessSites() error {
 	return nil
 }
 
-// wpFlagsEval reports the site's WordPress config flags as JSON. The core
-// auto-update setting mirrors what jman-agent reads from wp-config.php
-// ("disabled", the WP_AUTO_UPDATE_CORE value, or "default"), except that
-// with no WP_AUTO_UPDATE_CORE it also honours the wp-admin toggle for
-// major updates (the auto_update_core_major option).
+// wpFlagsEval reports the site's WordPress config flags and disk usage
+// as JSON, in one WordPress start. The core auto-update setting mirrors
+// what jman-agent reads from wp-config.php ("disabled", the
+// WP_AUTO_UPDATE_CORE value, or "default"), except that with no
+// WP_AUTO_UPDATE_CORE it also honours the wp-admin toggle for major
+// updates (the auto_update_core_major option). Disk usage is POSIX
+// `du -sk` of the WordPress root in bytes, 0 if it couldn't be measured,
+// as when the server disables shell_exec.
 const wpFlagsEval = `$auto = "default";
 if (defined("AUTOMATIC_UPDATER_DISABLED") && AUTOMATIC_UPDATER_DISABLED) {
 	$auto = "disabled";
@@ -79,7 +81,32 @@ if (defined("AUTOMATIC_UPDATER_DISABLED") && AUTOMATIC_UPDATER_DISABLED) {
 } elseif (get_site_option("auto_update_core_major") === "enabled") {
 	$auto = "true";
 }
-echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS, "auto_update_core" => $auto]);`
+$disk = 0;
+// A server can disable shell_exec; calling it then throws.
+$du = function_exists("shell_exec") ? @shell_exec("du -sk . 2>/dev/null") : null;
+if ($du && preg_match("/^(\\d+)/", $du, $m)) { $disk = ((int) $m[1]) * 1024; }
+echo json_encode(["multisite" => is_multisite(), "disallow_file_mods" => defined("DISALLOW_FILE_MODS") && DISALLOW_FILE_MODS, "auto_update_core" => $auto, "disk_bytes" => $disk]);`
+
+// siteFlags is wpFlagsEval's output.
+type siteFlags struct {
+	Multisite        bool   `json:"multisite"`
+	DisallowFileMods bool   `json:"disallow_file_mods"`
+	AutoUpdateCore   string `json:"auto_update_core"`
+	DiskBytes        int64  `json:"disk_bytes"`
+}
+
+// parseSiteFlags parses wpFlagsEval output, skipping any PHP notices
+// printed before the JSON.
+func parseSiteFlags(output string) (siteFlags, error) {
+	var flags siteFlags
+	output = strings.TrimSpace(output)
+	idx := strings.Index(output, "{")
+	if idx == -1 {
+		return flags, fmt.Errorf("no JSON object found in flags output")
+	}
+	err := json.Unmarshal([]byte(output[idx:]), &flags)
+	return flags, err
+}
 
 // collectSingleSite reads a site's WordPress flags and disk usage, and with
 // wpData also its core version, plugins and users.
@@ -96,25 +123,17 @@ func collectSingleSite(site models.ManagedSite, wpData bool) error {
 	}
 	cliSite := site.ToCliSite()
 
-	// 1. Collect WP Flags (MULTISITE, DISALLOW_FILE_MODS, core auto-updates)
+	// 1. Collect WP flags (MULTISITE, DISALLOW_FILE_MODS, core
+	// auto-updates) and disk usage.
 	flagRes, flagErr := wpcli.RunWP(opts, "eval", wpFlagsEval)
-	if flagErr == nil && flagRes.Output != "" {
-		var flags struct {
-			Multisite        bool   `json:"multisite"`
-			DisallowFileMods bool   `json:"disallow_file_mods"`
-			AutoUpdateCore   string `json:"auto_update_core"`
-		}
-		if err := json.Unmarshal([]byte(strings.TrimSpace(flagRes.Output)), &flags); err == nil {
+	if flagErr == nil {
+		if flags, err := parseSiteFlags(flagRes.Output); err == nil {
 			_ = db.SetSiteWpFlags(site.ID, flags.Multisite, flags.DisallowFileMods, &flags.AutoUpdateCore)
-		}
-	}
-
-	// 2. Collect Disk Usage (via POSIX du -sk in WP root)
-	diskCmd := `$out = @shell_exec("du -sk . 2>/dev/null"); if ($out && preg_match("/^(\\d+)/", $out, $m)) { echo ((int)$m[1]) * 1024; } else { echo 0; }`
-	diskRes, diskErr := wpcli.RunWP(opts, "eval", diskCmd)
-	if diskErr == nil && diskRes.Output != "" {
-		if bytesUsed, parseErr := strconv.ParseInt(strings.TrimSpace(diskRes.Output), 10, 64); parseErr == nil && bytesUsed > 0 {
-			_ = db.RecordSiteDiskUsage(site.ID, bytesUsed, time.Now())
+			if flags.DiskBytes > 0 {
+				_ = db.RecordSiteDiskUsage(site.ID, flags.DiskBytes, time.Now())
+			}
+		} else {
+			verb.LogPrintf(verb.Normal, "Agentless collection: failed to parse flags of %s: %v", site.Domain, err)
 		}
 	}
 

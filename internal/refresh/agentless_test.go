@@ -2,6 +2,8 @@ package refresh
 
 import (
 	"os"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/JCO-Digital/jman/internal/config"
@@ -101,5 +103,53 @@ func TestManagedSiteToCliSite(t *testing.T) {
 	}
 	if cliSite.Path != "sites/wpenginetest" {
 		t.Errorf("expected Path 'sites/wpenginetest', got %q", cliSite.Path)
+	}
+}
+
+func TestParseSiteFlags(t *testing.T) {
+	flags, err := parseSiteFlags("PHP Notice: x\n" + `{"multisite":true,"disallow_file_mods":false,"auto_update_core":"minor","disk_bytes":1048576}`)
+	if err != nil || !flags.Multisite || flags.DisallowFileMods || flags.AutoUpdateCore != "minor" || flags.DiskBytes != 1048576 {
+		t.Errorf("flags = %+v, %v", flags, err)
+	}
+	if _, err := parseSiteFlags("Error: no database"); err == nil {
+		t.Error("no error for output without JSON")
+	}
+}
+
+// TestWPFlagsEvalParses checks the PHP sent to `wp eval` with php -l,
+// where PHP is installed.
+func TestWPFlagsEvalParses(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	cmd := exec.Command(php, "-l")
+	cmd.Stdin = strings.NewReader("<?php " + wpFlagsEval)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("%v\n%s", err, out)
+	}
+}
+
+// TestWPFlagsEvalWithoutShellExec runs the flags eval with stand-ins for
+// the WordPress functions it calls, on a PHP that disables shell_exec as
+// some servers do: the flags must still come out, with no disk usage.
+func TestWPFlagsEvalWithoutShellExec(t *testing.T) {
+	php, err := exec.LookPath("php")
+	if err != nil {
+		t.Skip("php not installed")
+	}
+	stubs := `function is_multisite() { return true; } function get_site_option($k) { return false; } `
+	for _, disabled := range []string{"", "shell_exec"} {
+		out, err := exec.Command(php, "-d", "disable_functions="+disabled, "-r", stubs+wpFlagsEval).CombinedOutput()
+		if err != nil {
+			t.Fatalf("disable_functions=%q: %v\n%s", disabled, err, out)
+		}
+		flags, err := parseSiteFlags(string(out))
+		if err != nil || !flags.Multisite || flags.AutoUpdateCore != "default" {
+			t.Fatalf("disable_functions=%q: flags = %+v, %v (%s)", disabled, flags, err, out)
+		}
+		if (disabled == "") != (flags.DiskBytes > 0) {
+			t.Errorf("disable_functions=%q: disk = %d", disabled, flags.DiskBytes)
+		}
 	}
 }

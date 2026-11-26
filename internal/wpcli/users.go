@@ -36,58 +36,141 @@ func UserCountArgs(role string) []string {
 	return []string{"user", "list", "--role=" + role, "--format=count"}
 }
 
-// UserPostCountsEval is PHP for `wp eval` that prints how many posts each
-// author has, as a JSON object of user ID to count. It counts every post
-// type and status straight from the posts table, as deleting a user
-// deletes all of them; post_author is indexed, so this stays cheap on large
-// sites.
-const UserPostCountsEval = `global $wpdb;
-$rows = $wpdb->get_results("SELECT post_author, COUNT(*) FROM {$wpdb->posts} WHERE post_author > 0 GROUP BY post_author", ARRAY_N);
-if ($wpdb->last_error) { WP_CLI::error($wpdb->last_error); }
-$out = array();
-foreach ((array) $rows as $r) { $out[(string) $r[0]] = (int) $r[1]; }
-echo json_encode((object) $out);`
-
-// UserAppPasswordsEval is PHP for `wp eval` that prints every user's
-// application passwords, as a JSON object of user ID to a list of them,
-// in one query. It leaves out the password hashes.
-const UserAppPasswordsEval = `global $wpdb;
-$rows = $wpdb->get_results($wpdb->prepare("SELECT user_id, meta_value FROM {$wpdb->usermeta} WHERE meta_key = %s", '_application_passwords'), ARRAY_N);
-if ($wpdb->last_error) { WP_CLI::error($wpdb->last_error); }
-$out = array();
-foreach ((array) $rows as $r) {
-	$list = maybe_unserialize($r[1]);
-	if (!is_array($list)) { continue; }
-	foreach ($list as $p) {
-		if (!is_array($p)) { continue; }
-		$out[(string) $r[0]][] = array(
-			'uuid' => isset($p['uuid']) ? (string) $p['uuid'] : '',
-			'name' => isset($p['name']) ? (string) $p['name'] : '',
-			'created' => isset($p['created']) ? (int) $p['created'] : 0,
-			'last_used' => isset($p['last_used']) ? (int) $p['last_used'] : null,
-			'last_ip' => isset($p['last_ip']) ? (string) $p['last_ip'] : '',
-		);
-	}
+// UserExtrasEval is PHP for `wp eval` that prints, as one JSON object,
+// everything a site's user list needs besides the list itself:
+//
+//   - "counts": the number of users with each of ExcludedUserRoles, as
+//     `wp user list --role=<role> --format=count` counts them;
+//   - "posts": how many posts each author has, by user ID. It counts every
+//     post type and status straight from the posts table, as deleting a
+//     user deletes all of them; post_author is indexed, so this stays
+//     cheap on large sites;
+//   - "app_passwords": every user's application passwords by user ID,
+//     without the password hashes.
+//
+// A part whose query failed is left out, with the database error under
+// "errors". One WordPress start replaces the four that separate wp-cli
+// runs took.
+var UserExtrasEval = `global $wpdb;
+$out = array('counts' => array(), 'errors' => array());
+foreach (json_decode('` + mustJSON(ExcludedUserRoles) + `') as $role) {
+	$q = new WP_User_Query(array('role' => $role, 'fields' => 'ID', 'number' => 1, 'count_total' => true));
+	if ($wpdb->last_error) { $out['errors']['counts'] = $wpdb->last_error; break; }
+	$out['counts'][$role] = (int) $q->get_total();
 }
-echo json_encode((object) $out);`
+$rows = $wpdb->get_results("SELECT post_author, COUNT(*) FROM {$wpdb->posts} WHERE post_author > 0 GROUP BY post_author", ARRAY_N);
+if ($wpdb->last_error) {
+	$out['errors']['posts'] = $wpdb->last_error;
+} else {
+	$posts = array();
+	foreach ((array) $rows as $r) { $posts[(string) $r[0]] = (int) $r[1]; }
+	$out['posts'] = (object) $posts;
+}
+$rows = $wpdb->get_results($wpdb->prepare("SELECT user_id, meta_value FROM {$wpdb->usermeta} WHERE meta_key = %s", '_application_passwords'), ARRAY_N);
+if ($wpdb->last_error) {
+	$out['errors']['app_passwords'] = $wpdb->last_error;
+} else {
+	$pw = array();
+	foreach ((array) $rows as $r) {
+		$list = maybe_unserialize($r[1]);
+		if (!is_array($list)) { continue; }
+		foreach ($list as $p) {
+			if (!is_array($p)) { continue; }
+			$pw[(string) $r[0]][] = array(
+				'uuid' => isset($p['uuid']) ? (string) $p['uuid'] : '',
+				'name' => isset($p['name']) ? (string) $p['name'] : '',
+				'created' => isset($p['created']) ? (int) $p['created'] : 0,
+				'last_used' => isset($p['last_used']) ? (int) $p['last_used'] : null,
+				'last_ip' => isset($p['last_ip']) ? (string) $p['last_ip'] : '',
+			);
+		}
+	}
+	$out['app_passwords'] = (object) $pw;
+}
+$out['errors'] = (object) $out['errors'];
+echo json_encode($out);`
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
 
 // maxAppPasswordName caps an application password's stored name.
 const maxAppPasswordName = 200
 
-// SetAppPasswords parses UserAppPasswordsEval output, skipping any PHP
-// notices printed before the JSON, and sets the listed users'
-// application passwords. Users of excluded roles aren't listed, so theirs
-// are left out.
-func SetAppPasswords(su *models.SiteUsers, output string) error {
+// userExtras is UserExtrasEval's output.
+type userExtras struct {
+	Counts       map[string]int                      `json:"counts"`
+	Posts        map[string]int                      `json:"posts"`
+	AppPasswords map[string][]models.SiteAppPassword `json:"app_passwords"`
+	Errors       map[string]string                   `json:"errors"`
+}
+
+// SiteUsersFromExtras builds a site's users from its parsed user list (as
+// fetched with UserListArgs) and UserExtrasEval output, skipping any PHP
+// notices printed before the JSON. It fails if the excluded roles
+// couldn't be counted. Post counts and application passwords only inform
+// checks that are repeated or optional, so if either couldn't be read it
+// is left unknown and described in warnings.
+func SiteUsersFromExtras(list []models.SiteUser, output string) (su models.SiteUsers, warnings []string, err error) {
 	output = strings.TrimSpace(output)
 	idx := strings.Index(output, "{")
 	if idx == -1 {
-		return fmt.Errorf("no JSON object found in application password output")
+		return models.SiteUsers{}, nil, fmt.Errorf("no JSON object found in user details output")
 	}
-	var raw map[string][]models.SiteAppPassword
-	if err := json.Unmarshal([]byte(output[idx:]), &raw); err != nil {
-		return fmt.Errorf("failed to parse application passwords: %w", err)
+	var extras userExtras
+	if err := json.Unmarshal([]byte(output[idx:]), &extras); err != nil {
+		return models.SiteUsers{}, nil, fmt.Errorf("failed to parse user details: %w", err)
 	}
+	if msg := extras.Errors["counts"]; msg != "" {
+		return models.SiteUsers{}, nil, fmt.Errorf("failed to count users: %s", msg)
+	}
+	counts := make(map[string]int, len(ExcludedUserRoles))
+	for _, role := range ExcludedUserRoles {
+		n, ok := extras.Counts[role]
+		if !ok {
+			return models.SiteUsers{}, nil, fmt.Errorf("no count of %s users in user details", role)
+		}
+		counts[role] = n
+	}
+	su = NewSiteUsers(list, counts)
+
+	if extras.Posts == nil {
+		warnings = append(warnings, "failed to count posts per user: "+missingReason(extras.Errors["posts"]))
+	} else {
+		posts := make(map[int]int, len(extras.Posts))
+		for k, n := range extras.Posts {
+			id, err := strconv.Atoi(k)
+			if err != nil {
+				return models.SiteUsers{}, nil, fmt.Errorf("invalid user ID %q in post counts", k)
+			}
+			posts[id] = n
+		}
+		SetPostCounts(su.Users, posts)
+	}
+
+	if extras.AppPasswords == nil {
+		warnings = append(warnings, "failed to read application passwords: "+missingReason(extras.Errors["app_passwords"]))
+	} else {
+		setAppPasswords(&su, extras.AppPasswords)
+	}
+	return su, warnings, nil
+}
+
+func missingReason(dbError string) string {
+	if dbError != "" {
+		return dbError
+	}
+	return "not in the output"
+}
+
+// setAppPasswords sets the listed users' application passwords from raw,
+// by user ID. Users of excluded roles aren't listed, so theirs are left
+// out.
+func setAppPasswords(su *models.SiteUsers, raw map[string][]models.SiteAppPassword) {
 	for i := range su.Users {
 		list := raw[strconv.Itoa(su.Users[i].ID)]
 		if len(list) > models.MaxAppPasswordsPerUser {
@@ -101,78 +184,67 @@ func SetAppPasswords(su *models.SiteUsers, output string) error {
 		su.Users[i].AppPasswords = list
 	}
 	su.AppPasswordsCollected = true
-	return nil
+}
+
+// CollectSiteUsers reads a site's users through run, which runs one
+// wp-cli command on the site and returns its output: the list without the
+// excluded roles (UserListArgs), then everything else in one
+// UserExtrasEval. If that eval fails, which a server that blocks eval
+// would make it, the excluded roles are counted with UserCountArgs
+// instead and post counts and application passwords are left unknown.
+// Anything left unknown is described in warnings. siteID is set on each
+// user.
+func CollectSiteUsers(run func(args ...string) (string, error), siteID string) (su models.SiteUsers, warnings []string, err error) {
+	out, err := run(UserListArgs()...)
+	if err != nil {
+		return models.SiteUsers{}, nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	list, err := ParseUserList(out, siteID)
+	if err != nil {
+		return models.SiteUsers{}, nil, err
+	}
+
+	out, err = run("eval", UserExtrasEval)
+	if err == nil {
+		su, warnings, err = SiteUsersFromExtras(list, out)
+		if err == nil {
+			return su, warnings, nil
+		}
+	}
+	warnings = []string{fmt.Sprintf("failed to read user details, counting users without them: %v", err)}
+
+	counts := make(map[string]int, len(ExcludedUserRoles))
+	for _, role := range ExcludedUserRoles {
+		out, err := run(UserCountArgs(role)...)
+		if err != nil {
+			return models.SiteUsers{}, nil, fmt.Errorf("failed to count %s users: %w", role, err)
+		}
+		if counts[role], err = ParseUserCount(out); err != nil {
+			return models.SiteUsers{}, nil, err
+		}
+	}
+	return NewSiteUsers(list, counts), warnings, nil
 }
 
 // GetSiteUsers returns the target site's users, without the excluded
-// roles, which are counted. If the posts can't be counted, the users'
-// post counts are left unknown.
+// roles, which are counted (see CollectSiteUsers).
 func GetSiteUsers(site models.CliSite) (models.SiteUsers, error) {
 	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path}
-	res, err := RunWP(opts, UserListArgs()...)
-	if err != nil {
-		return models.SiteUsers{}, fmt.Errorf("failed to list users: %w (stderr: %s)", err, res.Error)
+	run := func(args ...string) (string, error) {
+		res, err := RunWP(opts, args...)
+		if err != nil {
+			return "", fmt.Errorf("%w (stderr: %s)", err, res.Error)
+		}
+		return res.Output, nil
 	}
-	users, err := ParseUserList(res.Output, site.ID)
+	su, warnings, err := CollectSiteUsers(run, site.ID)
 	if err != nil {
 		return models.SiteUsers{}, err
 	}
-	counts := make(map[string]int, len(ExcludedUserRoles))
-	for _, role := range ExcludedUserRoles {
-		res, err := RunWP(opts, UserCountArgs(role)...)
-		if err != nil {
-			return models.SiteUsers{}, fmt.Errorf("failed to count %s users: %w (stderr: %s)", role, err, res.Error)
-		}
-		n, err := ParseUserCount(res.Output)
-		if err != nil {
-			return models.SiteUsers{}, err
-		}
-		counts[role] = n
-	}
-	su := NewSiteUsers(users, counts)
-	res, err = RunWP(opts, "eval", UserPostCountsEval)
-	if err == nil {
-		var posts map[int]int
-		if posts, err = ParseUserPostCounts(res.Output); err == nil {
-			SetPostCounts(su.Users, posts)
-		}
-	}
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to count posts per user on %s: %v", site.Name, err)
-	}
-	// Application passwords only inform the security checks, so a failure
-	// leaves them uncollected.
-	res, err = RunWP(opts, "eval", UserAppPasswordsEval)
-	if err == nil {
-		err = SetAppPasswords(&su, res.Output)
-	}
-	if err != nil {
-		verb.LogPrintf(verb.Normal, "Failed to read application passwords on %s: %v", site.Name, err)
+	for _, w := range warnings {
+		verb.LogPrintf(verb.Normal, "Users of %s: %s", site.Name, w)
 	}
 	return su, nil
-}
-
-// ParseUserPostCounts parses UserPostCountsEval output, skipping any PHP
-// notices printed before the JSON.
-func ParseUserPostCounts(output string) (map[int]int, error) {
-	output = strings.TrimSpace(output)
-	idx := strings.Index(output, "{")
-	if idx == -1 {
-		return nil, fmt.Errorf("no JSON object found in post count output")
-	}
-	var raw map[string]int
-	if err := json.Unmarshal([]byte(output[idx:]), &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse post counts: %w", err)
-	}
-	counts := make(map[int]int, len(raw))
-	for k, n := range raw {
-		id, err := strconv.Atoi(k)
-		if err != nil {
-			return nil, fmt.Errorf("invalid user ID %q in post counts", k)
-		}
-		counts[id] = n
-	}
-	return counts, nil
 }
 
 // SetPostCounts sets each user's post count from counts by user ID; users
