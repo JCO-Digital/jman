@@ -639,6 +639,17 @@
 	color: light-dark(#64748b, #94a3b8);
 }
 
+/* A production site's service tier */
+.status-badge.tier {
+	background-color: var(--badge-must-use-bg);
+	color: var(--badge-must-use-text);
+}
+
+/* The site being viewed, in a table of its environments */
+.data-table .is-current {
+	background-color: var(--bg-hover);
+}
+
 /* Audit & Meta Info */
 .card-footer-audit {
 	font-size: 11px;

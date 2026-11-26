@@ -563,6 +563,13 @@ func DeleteManagedSite(id string) error {
 	if _, err := dbConn.Exec(query, id); err != nil {
 		return fmt.Errorf("failed to delete managed site: %w", err)
 	}
+	// Drop its environment links (either side) and tier with it.
+	if _, err := dbConn.Exec(`DELETE FROM site_production_link WHERE site_id = ? OR production_site_id = ?`, id, id); err != nil {
+		return fmt.Errorf("failed to delete site links: %w", err)
+	}
+	if _, err := dbConn.Exec(`DELETE FROM site_tier WHERE site_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete site tier: %w", err)
+	}
 
 	return nil
 }

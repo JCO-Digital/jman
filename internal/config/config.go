@@ -182,6 +182,17 @@ type AppConfig struct {
 	//	batch = false        # no Message Batches API for this agent
 	AIAgents map[string]AIAgentConfig `toml:"aiAgents" mapstructure:"aiAgents"`
 
+	// SiteTiers are the service tiers production sites can be on (see
+	// docs/site-environments-tiers.md). Each has a stable numeric id, which
+	// is what a site stores and what code compares, and a display name.
+	// Leave gaps between ids so a tier can go between two others later.
+	// Empty means the default tiers (models.DefaultSiteTiers):
+	//
+	//	[[siteTiers]]
+	//	id = 10
+	//	name = "Basic"
+	SiteTiers []SiteTierConfig `toml:"siteTiers" mapstructure:"siteTiers"`
+
 	// APIURL is the jman-api base URL the CLI uses, e.g.
 	// "https://jman.example.com". `jman login <url>` sets it.
 	APIURL string `toml:"apiUrl" mapstructure:"apiUrl"`
@@ -210,6 +221,12 @@ type AIAgentConfig struct {
 	// Batch = false stops a batchable agent from using the Message Batches
 	// API.
 	Batch *bool `toml:"batch" mapstructure:"batch"`
+}
+
+// SiteTierConfig is one configured site tier; see AppConfig.SiteTiers.
+type SiteTierConfig struct {
+	ID   int    `toml:"id" mapstructure:"id"`
+	Name string `toml:"name" mapstructure:"name"`
 }
 
 // WPCLIHostTimeout sets a minimum WP-CLI timeout, in minutes, for every SSH

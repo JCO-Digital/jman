@@ -207,6 +207,11 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("POST /api/sites/{id}/link", edit(LinkSiteHandler))
 	mux.Handle("DELETE /api/sites/{id}/link", edit(UnlinkSiteHandler))
 	mux.Handle("PATCH /api/sites/{id}/environment", edit(SetSiteEnvironmentHandler))
+	// Environment links and tiers (docs/site-environments-tiers.md).
+	mux.Handle("PUT /api/sites/{id}/production-site", edit(SetSiteProductionLinkHandler))
+	mux.Handle("DELETE /api/sites/{id}/production-site", edit(DeleteSiteProductionLinkHandler))
+	mux.Handle("PUT /api/sites/{id}/tier", edit(SetSiteTierHandler))
+	mux.Handle("GET /api/site-tiers", basic(ListSiteTiersHandler))
 
 	// --- Plugin update routes ---
 	mux.Handle("GET /api/sites/{id}/plugin-updates", execute(SitePluginUpdatesHandler))

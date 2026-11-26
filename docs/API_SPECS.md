@@ -351,6 +351,15 @@ These endpoints require at least **`basic`** level.
 `GET /plugins` (Protected: `basic`)
 `GET /plugininfo` (Protected: `basic`)
 
+### Site Environments and Tiers
+
+Staging, development and archived sites can be linked to their production site, and production sites have a tier. `GET /sites` reports both: `production_site_id` on a linked site and `tier` (a tier id) on a production site. See [site-environments-tiers.md](site-environments-tiers.md).
+
+`GET /site-tiers` (Protected: `basic`): the tiers, lowest first, as `[{"id": 10, "name": "Basic"}, …]`.
+`PUT /sites/{id}/tier` (Protected: `edit`): `{"tier": 30}` sets a production site's tier; `null` or `0` clears it. Unknown tiers and non-production sites get 400.
+`PUT /sites/{id}/production-site` (Protected: `edit`): `{"production_site_id": "<uuid>"}` links a staging, development or archived site to a production site, replacing any earlier link. Links don't chain: the parent must be production and not linked itself, and a site others are linked to can't be linked (400).
+`DELETE /sites/{id}/production-site` (Protected: `edit`): removes the link.
+
 ### WordPress Users of Sites
 
 These are the managed sites' WordPress users, not jman's own users (see User Management). Subscribers and WooCommerce customers aren't listed, only counted by role. At most 1000 users are kept per site (`truncated` is set when a site has more). Users are collected with the plugin data, by jman-agent or over SSH.

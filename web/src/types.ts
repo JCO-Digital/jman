@@ -81,6 +81,16 @@ export type SiteEnvironment =
 	| "development"
 	| "archived";
 
+/**
+ * A service tier for production sites, from jman-api's siteTiers config.
+ * The id is stable and ranks the tier (higher is higher); the name is for
+ * display only.
+ */
+export interface SiteTier {
+	id: number;
+	name: string;
+}
+
 export interface SiteDiskUsage {
 	bytes_used: number;
 	measured_at: string;
@@ -181,6 +191,13 @@ export interface Site {
 	updated_at?: string;
 	updated_by?: string;
 	environment?: SiteEnvironment;
+	/**
+	 * The production site a staging, development or archived site is
+	 * linked to.
+	 */
+	production_site_id?: string;
+	/** A production site's tier id (SiteTier.id); absent for none. */
+	tier?: number;
 	disk_usage?: SiteDiskUsage;
 	wp_flags?: SiteWpFlags;
 	last_update?: SiteUpdateLedgerEntry;
