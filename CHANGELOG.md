@@ -1,5 +1,24 @@
 # Changelog
 
+## 7.49.0 (2026-11-26)
+
+#### Features
+
+- cli: move mods, plugin info and live reads to jman-api (29da280)
+
+#### Performance Improvements
+
+- db: add missing indexes, prune monitor history, batch writes (8616196)
+- cut UI polling and add ETags and gzip to API responses (561766d)
+- agent: reuse file hashes, share core checks, lower priority (de0d1b4)
+- wpcli: read user details and site flags in one eval each (d08213d)
+- refresh: stop repeating work in the slow tick (54de0ae)
+- vuln: match vulnerabilities from stored data only (12c1127)
+
+#### Documentation
+
+- recommend SSH connection reuse for every host (a984e9d)
+
 ## 7.48.0 (2026-11-25)
 
 #### Features
