@@ -14,6 +14,10 @@ func SaveManagedServer(server models.ManagedServer) error {
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
+	return saveManagedServer(dbConn, server)
+}
+
+func saveManagedServer(dbConn execer, server models.ManagedServer) error {
 
 	query := `
 	INSERT INTO servers (id, provider, provider_server_id, name, is_logical, ip_address, ssh_port, updated_at)
@@ -206,6 +210,10 @@ func SaveManagedSite(site models.ManagedSite) error {
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
+	return saveManagedSite(dbConn, site)
+}
+
+func saveManagedSite(dbConn execer, site models.ManagedSite) error {
 
 	query := `
 	INSERT INTO sites (

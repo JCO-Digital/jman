@@ -82,7 +82,17 @@ func runTick() {
 	if err := db.DownsampleOldSiteDiskUsage(time.Now().Add(-siteDiskUsageFullResolution)); err != nil {
 		log.Printf("Error downsampling old site disk usage: %v", err)
 	}
+	if n, err := db.PruneMonitorHistory(time.Now().Add(-monitorHistoryRetention)); err != nil {
+		log.Printf("Error pruning old monitor history: %v", err)
+	} else if n > 0 {
+		log.Printf("Pruned %d monitor history entries older than %s", n, monitorHistoryRetention)
+	}
 }
+
+// monitorHistoryRetention is how long monitor_history entries are kept
+// after their last check. The UI shows at most 48 hours; the rest only
+// grew the table, which every history read and backup scanned.
+const monitorHistoryRetention = 90 * 24 * time.Hour
 
 // siteTrafficHourlyRetention is how long site_traffic_hourly rows are kept
 // before being pruned in favor of their already-computed site_traffic_daily

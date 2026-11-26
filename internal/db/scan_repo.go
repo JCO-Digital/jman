@@ -70,6 +70,26 @@ func UpsertScanFinding(siteID string, f models.ScanFinding, ruleSetVersion strin
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
+	return upsertScanFinding(dbConn, siteID, f, ruleSetVersion, seenAt)
+}
+
+// UpsertScanFindings is UpsertScanFinding for a scan's findings, in one
+// transaction. A finding that fails is passed to onErr and skipped.
+func UpsertScanFindings(siteID string, findings []models.ScanFinding, ruleSetVersion string, seenAt time.Time, onErr func(error)) error {
+	if len(findings) == 0 {
+		return nil
+	}
+	return inAPITx(func(ex execer) error {
+		for _, f := range findings {
+			if err := upsertScanFinding(ex, siteID, f, ruleSetVersion, seenAt); err != nil {
+				onErr(err)
+			}
+		}
+		return nil
+	})
+}
+
+func upsertScanFinding(dbConn execer, siteID string, f models.ScanFinding, ruleSetVersion string, seenAt time.Time) error {
 	_, err := dbConn.Exec(`
 	INSERT INTO scan_findings (site_id, engine, rule, severity, path, sha256, snippet, detail, rule_set_version, first_seen_at, last_seen_at)
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

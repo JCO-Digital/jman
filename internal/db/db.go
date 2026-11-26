@@ -440,6 +440,10 @@ func initInventorySchema() error {
 	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_sites_domain ON sites(domain);")
 	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_sites_provider_site_id ON sites(provider, provider_site_id);")
 	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_servers_provider_server_id ON servers(provider, provider_server_id);")
+	// Lookups of a plugin across sites (GetSitesWithPlugin, the special
+	// plugin check) filter by slug alone; the (site_id, slug) key can't serve
+	// them.
+	_, _ = inventoryDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_plugins_slug ON site_plugins(slug, status);")
 	// Enforces one rule per vulnerability and branch; the CLI and jman-api
 	// both write here, so this must not rely on a check-then-insert.
 	if _, err := inventoryDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_vuln_backports_uuid_branch ON vuln_backports(vuln_uuid, branch);"); err != nil {
@@ -1396,6 +1400,12 @@ func initAPISchema() error {
 	if err != nil {
 		return err
 	}
+	// The history the UI reads and the retention prune both select by
+	// last_seen.
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_history_last_seen ON monitor_history(last_seen);")
+	if err != nil {
+		return err
+	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_monitor_checks_site_id ON monitor_checks(site_id);")
 	if err != nil {
 		return err
@@ -1475,19 +1485,34 @@ func initAPISchema() error {
 	if err != nil {
 		return err
 	}
-	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_hourly_site_id ON site_traffic_hourly(site_id);")
+	// Redundant with the (site_id, hour) and (site_id, day) primary keys'
+	// indexes, as for site_disk_usage above; every traffic upsert paid for
+	// them.
+	_, err = apiDB.Exec("DROP INDEX IF EXISTS idx_site_traffic_hourly_site_id;")
 	if err != nil {
 		return err
 	}
-	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_traffic_daily_site_id ON site_traffic_daily(site_id);")
+	_, err = apiDB.Exec("DROP INDEX IF EXISTS idx_site_traffic_daily_site_id;")
 	if err != nil {
 		return err
 	}
-	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_id ON site_update_ledger(site_id);")
+	// Covers the latest entry per site (GetLatestSiteUpdateLedgerEntries,
+	// read with every site list) without reading the rows, and serves the
+	// per-site lookups the plain site_id index did.
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_site_update_ledger_site_status ON site_update_ledger(site_id, status, id);")
+	if err != nil {
+		return err
+	}
+	_, err = apiDB.Exec("DROP INDEX IF EXISTS idx_site_update_ledger_site_id;")
 	if err != nil {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_plugin_update_jobs_status ON plugin_update_jobs(status);")
+	if err != nil {
+		return err
+	}
+	// The job list's recently finished jobs and the job prune.
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_plugin_update_jobs_finished_at ON plugin_update_jobs(finished_at);")
 	if err != nil {
 		return err
 	}
@@ -1542,6 +1567,11 @@ func initAPISchema() error {
 		return err
 	}
 	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_ai_runs_agent_created ON ai_runs(agent, created_at);")
+	if err != nil {
+		return err
+	}
+	// The daily budget sums every agent's runs since midnight.
+	_, err = apiDB.Exec("CREATE INDEX IF NOT EXISTS idx_ai_runs_created ON ai_runs(created_at);")
 	if err != nil {
 		return err
 	}

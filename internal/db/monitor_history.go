@@ -178,3 +178,18 @@ func RecordMonitorHistory(checkID, domain, status string, errorCode int) error {
 	}
 	return nil
 }
+
+// PruneMonitorHistory deletes the history entries whose last check was
+// before cutoff, and returns how many it deleted. A status run still
+// going keeps its entry, whose last_seen moves with every check.
+func PruneMonitorHistory(cutoff time.Time) (int64, error) {
+	db := GetAPIDB()
+	if db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	res, err := db.Exec(`DELETE FROM monitor_history WHERE last_seen < ?`, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("failed to prune monitor history: %w", err)
+	}
+	return res.RowsAffected()
+}

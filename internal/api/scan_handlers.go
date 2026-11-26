@@ -76,6 +76,7 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 			verb.LogPrintf(verb.Normal, "Agent reported %d scan findings for site %s; keeping the first %d", len(findings), siteID, maxAgentScanFindings)
 			findings = findings[:maxAgentScanFindings]
 		}
+		valid := make([]models.ScanFinding, 0, len(findings))
 		for _, f := range findings {
 			if f.Engine == "api" || f.Rule == "" || !validScanSeverities[f.Severity] {
 				verb.LogPrintf(verb.Normal, "Dropped invalid scan finding for site %s: engine=%q rule=%q severity=%q", siteID, f.Engine, f.Rule, f.Severity)
@@ -84,9 +85,14 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 			f.Path = truncateUTF8(f.Path, maxScanFindingPath)
 			f.Snippet = truncateUTF8(f.Snippet, maxScanFindingSnippet)
 			f.Detail = truncateUTF8(f.Detail, maxScanFindingDetail)
-			if err := db.UpsertScanFinding(siteID, f, s.RuleSetVersion, scannedAt); err != nil {
-				verb.LogPrintf(verb.Normal, "%v", err)
-			}
+			valid = append(valid, f)
+		}
+		// One transaction for the scan's findings, up to
+		// maxAgentScanFindings of them.
+		if err := db.UpsertScanFindings(siteID, valid, s.RuleSetVersion, scannedAt, func(err error) {
+			verb.LogPrintf(verb.Normal, "%v", err)
+		}); err != nil {
+			verb.LogPrintf(verb.Normal, "%v", err)
 		}
 		if s.FindingsOmitted > 0 {
 			verb.LogPrintf(verb.Normal, "Agent left %d scan finding(s) for site %s out of its report", s.FindingsOmitted, siteID)
