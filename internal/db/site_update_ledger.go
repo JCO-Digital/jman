@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -90,10 +91,14 @@ func GetSiteUpdateLedger(siteID string) ([]models.SiteUpdateLedgerEntry, error) 
 	return entries, nil
 }
 
-// managementStatuses are the ledger statuses of plugin management actions,
-// which the "latest update" queries skip: activating or deleting a plugin
-// doesn't make a site up to date.
-var managementStatuses = []any{models.LedgerActivated, models.LedgerDeactivated, models.LedgerDeleted, models.LedgerInstalled}
+// managementStatuses are the ledger statuses of plugin management actions
+// and config changes, which the "latest update" queries skip: activating
+// or deleting a plugin, or setting DISALLOW_FILE_MODS, doesn't make a
+// site up to date.
+var managementStatuses = []any{models.LedgerActivated, models.LedgerDeactivated, models.LedgerDeleted, models.LedgerInstalled, models.LedgerChanged}
+
+// managementPlaceholders is the "?, ?, …" list for managementStatuses.
+var managementPlaceholders = strings.TrimSuffix(strings.Repeat("?, ", len(managementStatuses)), ", ")
 
 // GetLatestSiteUpdateLedgerEntry retrieves the most recent update ledger
 // entry (skipping plugin management actions) for a specific site.
@@ -106,7 +111,7 @@ func GetLatestSiteUpdateLedgerEntry(siteID string) (*models.SiteUpdateLedgerEntr
 	query := `
 	SELECT id, site_id, update_type, status, data_json, updated_by, updated_at
 	FROM site_update_ledger
-	WHERE site_id = ? AND status NOT IN (?, ?, ?, ?)
+	WHERE site_id = ? AND status NOT IN (` + managementPlaceholders + `)
 	ORDER BY updated_at DESC
 	LIMIT 1
 	`
@@ -137,7 +142,7 @@ func GetLatestSiteUpdateLedgerEntries() (map[string]models.SiteUpdateLedgerEntry
 	INNER JOIN (
 		SELECT site_id, MAX(id) as max_id
 		FROM site_update_ledger
-		WHERE status NOT IN (?, ?, ?, ?)
+		WHERE status NOT IN (` + managementPlaceholders + `)
 		GROUP BY site_id
 	) t2 ON t1.id = t2.max_id
 	`

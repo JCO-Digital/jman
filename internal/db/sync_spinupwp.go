@@ -11,12 +11,34 @@ import (
 
 // SyncSpinupWPIntoInventory imports or updates SpinupWP servers and sites
 // into the authoritative managed servers and sites tables in inventory.db,
-// and marks the SpinupWP sites it no longer lists as removed.
+// and marks the SpinupWP sites it no longer lists as removed. It runs on
+// every refresh, so it's one transaction: one commit for every server and
+// site, and no half-applied sync if a row fails.
 func SyncSpinupWPIntoInventory(servers []models.Server, sites []models.Site) error {
 	dbConn := GetInventoryDB()
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
+	// Read before the transaction takes the write lock.
+	known, err := ListManagedSites("spinupwp")
+	if err != nil {
+		return fmt.Errorf("failed to list SpinupWP sites: %w", err)
+	}
+	tx, err := dbConn.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin the SpinupWP sync: %w", err)
+	}
+	if err := syncSpinupWP(tx, servers, sites, known); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit the SpinupWP sync: %w", err)
+	}
+	return nil
+}
+
+func syncSpinupWP(ex execer, servers []models.Server, sites []models.Site, known []models.ManagedSite) error {
 
 	serverMap := make(map[int]models.Server, len(servers))
 	for _, srv := range servers {
@@ -33,7 +55,7 @@ func SyncSpinupWPIntoInventory(servers []models.Server, sites []models.Site) err
 		if managedServer.SSHPort == 0 {
 			managedServer.SSHPort = 22
 		}
-		if err := SaveManagedServer(managedServer); err != nil {
+		if err := saveManagedServer(ex, managedServer); err != nil {
 			return fmt.Errorf("failed to sync server %s: %w", srv.Name, err)
 		}
 	}
@@ -67,12 +89,12 @@ func SyncSpinupWPIntoInventory(servers []models.Server, sites []models.Site) err
 			HasAgent:       true,
 			Status:         site.Status,
 		}
-		if err := SaveManagedSite(managedSite); err != nil {
+		if err := saveManagedSite(ex, managedSite); err != nil {
 			return fmt.Errorf("failed to sync site %s: %w", site.Domain, err)
 		}
 	}
 
-	return markRemovedSpinupWPSites(sites)
+	return markRemovedSpinupWPSites(ex, sites, known)
 }
 
 // SiteStatusRemoved marks a SpinupWP site that SpinupWP no longer lists. It
@@ -84,7 +106,8 @@ const SiteStatusRemoved = "removed"
 // markRemovedSpinupWPSites marks the SpinupWP sites in inventory.db that
 // aren't in sites, SpinupWP's current list, as removed. An empty list is
 // ignored: it more likely means a failed fetch than no sites at all.
-func markRemovedSpinupWPSites(sites []models.Site) error {
+// known are the SpinupWP sites inventory.db held before the sync.
+func markRemovedSpinupWPSites(dbConn execer, sites []models.Site, known []models.ManagedSite) error {
 	if len(sites) == 0 {
 		return nil
 	}
@@ -93,11 +116,6 @@ func markRemovedSpinupWPSites(sites []models.Site) error {
 		listed[utils.SpinupWPSiteUUID(site.ID)] = true
 	}
 
-	known, err := ListManagedSites("spinupwp")
-	if err != nil {
-		return fmt.Errorf("failed to list SpinupWP sites: %w", err)
-	}
-	dbConn := GetInventoryDB()
 	for _, ms := range known {
 		if listed[ms.ID] || ms.Status == SiteStatusRemoved {
 			continue

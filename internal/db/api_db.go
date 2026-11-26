@@ -121,3 +121,38 @@ func EndOfDayUTC(day string) (time.Time, error) {
 	}
 	return t.AddDate(0, 0, 1).Add(-time.Nanosecond), nil
 }
+
+// apiTx is a transaction on api.db whose Exec normalizes time arguments
+// as APIDB's does. Like *APIDB, it's an execer, so a repository function
+// can write directly or as part of a transaction.
+type apiTx struct {
+	*sql.Tx
+}
+
+func (t apiTx) Exec(query string, args ...any) (sql.Result, error) {
+	return t.Tx.Exec(query, normalizeArgs(args)...)
+}
+
+// inAPITx runs fn in one transaction on api.db and commits it unless fn
+// returns an error. With SQLite, a statement that fails inside it doesn't
+// abort the transaction, so fn can skip a bad row and go on. Writing many
+// rows in one transaction takes the write lock and syncs the WAL once
+// instead of once per row.
+func inAPITx(fn func(ex execer) error) error {
+	db := GetAPIDB()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	if err := fn(apiTx{tx}); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+	return nil
+}

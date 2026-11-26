@@ -11,6 +11,12 @@ import (
 
 const updateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff, calls, error, priority, batch_id, created_by, created_at, started_at, finished_at`
 
+// listUpdateJobColumns are updateJobColumns for job lists, which show only
+// whether a job has wp-cli output: the output is replaced by that.
+const listUpdateJobColumns = `id, kind, site_id, status, payload, upload_path, results, core, text_diff,
+	CASE WHEN calls IS NULL OR calls IN ('', 'null', '[]') THEN NULL ELSE 'listed' END,
+	error, priority, batch_id, created_by, created_at, started_at, finished_at`
+
 // CreateUpdateJob stores a new queued job and sets its ID, Status
 // and CreatedAt. Kind defaults to plugins.
 func CreateUpdateJob(job *models.UpdateJob) error {
@@ -78,7 +84,9 @@ func LatestUpdateJobBy(createdBy string) (*models.UpdateJob, error) {
 }
 
 // ListUpdateJobs returns every queued or running job plus those that
-// finished at or after finishedSince, oldest first.
+// finished at or after finishedSince, oldest first. As a list, the jobs
+// have their text diff's summary but not the diff, and HasOutput but not
+// the wp-cli output (GetUpdateJob has both).
 func ListUpdateJobs(finishedSince time.Time) ([]models.UpdateJob, error) {
 	db := GetAPIDB()
 	if db == nil {
@@ -86,7 +94,7 @@ func ListUpdateJobs(finishedSince time.Time) ([]models.UpdateJob, error) {
 	}
 
 	rows, err := db.Query(
-		`SELECT `+updateJobColumns+` FROM plugin_update_jobs
+		`SELECT `+listUpdateJobColumns+` FROM plugin_update_jobs
 		 WHERE status IN (?, ?) OR finished_at >= ?
 		 ORDER BY id`,
 		models.UpdateJobQueued, models.UpdateJobRunning, finishedSince,
@@ -94,18 +102,18 @@ func ListUpdateJobs(finishedSince time.Time) ([]models.UpdateJob, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list update jobs: %w", err)
 	}
-	return scanUpdateJobs(rows)
+	return scanUpdateJobList(rows, true)
 }
 
 // ListTextDiffJobs returns the jobs created at or after since that have a
-// text diff, newest first.
+// text diff, newest first, as a list (see ListUpdateJobs).
 func ListTextDiffJobs(since time.Time) ([]models.UpdateJob, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
 	rows, err := db.Query(
-		`SELECT `+updateJobColumns+` FROM plugin_update_jobs
+		`SELECT `+listUpdateJobColumns+` FROM plugin_update_jobs
 		 WHERE text_diff IS NOT NULL AND created_at >= ?
 		 ORDER BY id DESC`,
 		since,
@@ -113,7 +121,7 @@ func ListTextDiffJobs(since time.Time) ([]models.UpdateJob, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to list text diff jobs: %w", err)
 	}
-	return scanUpdateJobs(rows)
+	return scanUpdateJobList(rows, true)
 }
 
 // ListQueuedUpdateJobs returns the jobs still waiting to run, oldest first.
@@ -328,6 +336,21 @@ func PruneFinishedUpdateJobs(cutoff time.Time) error {
 }
 
 func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
+	return scanUpdateJobList(rows, false)
+}
+
+// listTextDiff is the part of a TextDiff its summary needs: decoding only
+// this skips the pages' text, the bulk of a diff.
+type listTextDiff struct {
+	Status string `json:"status"`
+	Pages  []struct {
+		Outcome string `json:"outcome"`
+	} `json:"pages"`
+}
+
+// scanUpdateJobList scans jobs selected with updateJobColumns, or with
+// listUpdateJobColumns if list is set.
+func scanUpdateJobList(rows *sql.Rows, list bool) ([]models.UpdateJob, error) {
 	defer rows.Close()
 
 	jobs := []models.UpdateJob{}
@@ -359,7 +382,20 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 				return nil, fmt.Errorf("invalid core state in job %d: %w", job.ID, err)
 			}
 		}
-		if textDiff.Valid && textDiff.String != "" {
+		switch {
+		case !textDiff.Valid || textDiff.String == "":
+		case list:
+			var d listTextDiff
+			if err := json.Unmarshal([]byte(textDiff.String), &d); err != nil {
+				return nil, fmt.Errorf("invalid text diff in job %d: %w", job.ID, err)
+			}
+			td := models.TextDiff{Status: d.Status, Pages: make([]models.TextDiffPage, len(d.Pages))}
+			for i, p := range d.Pages {
+				td.Pages[i].Outcome = p.Outcome
+			}
+			summary := td.Summary()
+			job.TextDiffSummary = &summary
+		default:
 			job.TextDiff = &models.TextDiff{}
 			if err := json.Unmarshal([]byte(textDiff.String), job.TextDiff); err != nil {
 				return nil, fmt.Errorf("invalid text diff in job %d: %w", job.ID, err)
@@ -367,7 +403,9 @@ func scanUpdateJobs(rows *sql.Rows) ([]models.UpdateJob, error) {
 			summary := job.TextDiff.Summary()
 			job.TextDiffSummary = &summary
 		}
-		if calls.Valid && calls.String != "" && calls.String != "null" {
+		if list {
+			job.HasOutput = calls.Valid
+		} else if calls.Valid && calls.String != "" && calls.String != "null" {
 			if err := json.Unmarshal([]byte(calls.String), &job.Calls); err != nil {
 				return nil, fmt.Errorf("invalid calls in job %d: %w", job.ID, err)
 			}

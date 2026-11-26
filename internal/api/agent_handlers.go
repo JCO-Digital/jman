@@ -239,24 +239,21 @@ func AgentReportHandler(w http.ResponseWriter, r *http.Request) {
 			applyAgentScan(siteReport.SiteID, siteReport.Scan, measuredAt)
 		}
 
-		for _, hourly := range siteReport.TrafficHourly {
-			if err := db.UpsertSiteTrafficHourly(siteReport.SiteID, hourly); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %s hour %s: %v", siteReport.SiteID, hourly.Hour, err)
-				continue
-			}
-			if hourTime, err := time.Parse(time.RFC3339, hourly.Hour); err == nil {
-				dailyRollupsNeeded[siteDay{siteID: siteReport.SiteID, day: hourTime.Format("2006-01-02")}] = true
-			}
-		}
-
 		// Pre-aggregated backlog beyond jman-agent's hourly retention window
-		// (see models.TrafficDailyEntry) — stored directly, and deliberately
+		// (see models.TrafficDailyEntry) is stored directly, and deliberately
 		// NOT added to dailyRollupsNeeded, since there's no corresponding
 		// hourly data to recompute from (that would just overwrite it with
-		// an empty rollup).
-		for _, daily := range siteReport.TrafficDaily {
-			if err := db.UpsertSiteTrafficDaily(siteReport.SiteID, daily); err != nil {
-				verb.LogPrintf(verb.Normal, "Failed to record traffic for site %s day %s: %v", siteReport.SiteID, daily.Day, err)
+		// an empty rollup). Both are stored in one transaction per site.
+		siteID := siteReport.SiteID
+		storedHours, err := db.RecordSiteTraffic(siteID, siteReport.TrafficHourly, siteReport.TrafficDaily, func(err error) {
+			verb.LogPrintf(verb.Normal, "Failed to record traffic for site %s: %v", siteID, err)
+		})
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "Failed to record traffic for site %s: %v", siteID, err)
+		}
+		for _, hourly := range storedHours {
+			if hourTime, err := time.Parse(time.RFC3339, hourly.Hour); err == nil {
+				dailyRollupsNeeded[siteDay{siteID: siteID, day: hourTime.Format("2006-01-02")}] = true
 			}
 		}
 

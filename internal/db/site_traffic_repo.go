@@ -21,6 +21,10 @@ func UpsertSiteTrafficHourly(siteID string, entry models.TrafficHourlyEntry) err
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
+	return upsertSiteTrafficHourly(dbConn, siteID, entry)
+}
+
+func upsertSiteTrafficHourly(dbConn execer, siteID string, entry models.TrafficHourlyEntry) error {
 
 	// Stored as a time value rather than the agent's RFC3339 text, so it
 	// compares correctly against time-valued cutoffs (see APIDB).
@@ -75,6 +79,10 @@ func UpsertSiteTrafficDaily(siteID string, entry models.TrafficDailyEntry) error
 	if dbConn == nil {
 		return fmt.Errorf("database not initialized")
 	}
+	return upsertSiteTrafficDaily(dbConn, siteID, entry)
+}
+
+func upsertSiteTrafficDaily(dbConn execer, siteID string, entry models.TrafficDailyEntry) error {
 
 	topPages, err := json.Marshal(entry.TopPages)
 	if err != nil {
@@ -108,6 +116,35 @@ func UpsertSiteTrafficDaily(siteID string, entry models.TrafficDailyEntry) error
 		return fmt.Errorf("failed to upsert daily traffic for site %s: %w", siteID, err)
 	}
 	return nil
+}
+
+// RecordSiteTraffic stores one site's traffic from an agent report, hours
+// and days, in one transaction, and returns the hours it stored. A row
+// that fails is passed to onErr and skipped.
+func RecordSiteTraffic(siteID string, hourly []models.TrafficHourlyEntry, daily []models.TrafficDailyEntry, onErr func(error)) ([]models.TrafficHourlyEntry, error) {
+	if len(hourly) == 0 && len(daily) == 0 {
+		return nil, nil
+	}
+	var stored []models.TrafficHourlyEntry
+	err := inAPITx(func(ex execer) error {
+		for _, h := range hourly {
+			if err := upsertSiteTrafficHourly(ex, siteID, h); err != nil {
+				onErr(err)
+				continue
+			}
+			stored = append(stored, h)
+		}
+		for _, d := range daily {
+			if err := upsertSiteTrafficDaily(ex, siteID, d); err != nil {
+				onErr(err)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return stored, nil
 }
 
 // RecomputeSiteTrafficDaily rebuilds the daily rollup for a site/day from
