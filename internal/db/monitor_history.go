@@ -9,8 +9,9 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
-// GetMonitorHistory returns monitoring history for all sites for the specified number of hours.
-func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
+// GetMonitorHistory returns the monitoring history of the last hours, for
+// every site or, with domain set, for one.
+func GetMonitorHistory(hours int, domain string) ([]models.MonitorHistory, error) {
 	db := GetAPIDB()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -19,10 +20,15 @@ func GetMonitorHistory(hours int) ([]models.MonitorHistory, error) {
 	query := `
 		SELECT id, COALESCE(check_id, ''), domain, status, error_code, first_seen, last_seen, count
 		FROM monitor_history
-		WHERE last_seen >= ?
-		ORDER BY first_seen DESC
-	`
-	rows, err := db.Query(query, time.Now().Add(-time.Duration(hours)*time.Hour))
+		WHERE last_seen >= ?`
+	args := []any{time.Now().Add(-time.Duration(hours) * time.Hour)}
+	if domain != "" {
+		query += ` AND domain = ?`
+		args = append(args, domain)
+	}
+	query += `
+		ORDER BY first_seen DESC`
+	rows, err := db.Query(query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query monitor history: %w", err)
 	}

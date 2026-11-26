@@ -2,6 +2,8 @@ package cache
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -242,10 +244,14 @@ func groupPlugins(plugins []models.WPPlugin, sites []models.CliSite) []models.WP
 		})
 	}
 
+	// Sorted, so the reports built from it (GET /api/vulns) come out the
+	// same while the data is the same, and keep their ETag.
 	pluginData := make([]models.WPPluginData, 0, len(pluginMap))
 	for _, data := range pluginMap {
+		slices.SortFunc(data.Sites, func(a, b models.PluginSite) int { return strings.Compare(a.SiteID, b.SiteID) })
 		pluginData = append(pluginData, *data)
 	}
+	slices.SortFunc(pluginData, func(a, b models.WPPluginData) int { return strings.Compare(a.Name, b.Name) })
 
 	return pluginData
 }

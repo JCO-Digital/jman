@@ -16,10 +16,11 @@ import { BASE_URL, apiFetch, handleErrorResponse } from "../utils/api";
 export const useMonitorStore = defineStore("monitor", () => {
 	const authStore = useAuthStore();
 
-	const history = ref<MonitorHistory[]>([]);
+	/** Status history by domain, fetched per site by the site page. */
+	const historyByDomain = ref<Record<string, MonitorHistory[]>>({});
 	const currentStatus = ref<Record<string, MonitorStatus>>({});
+	/** Set while a site's history is loaded for the first time. */
 	const isLoadingHistory = ref(false);
-	const historyFetched = ref(false);
 	const checks = ref<MonitorCheck[]>([]);
 	const checksFetched = ref(false);
 
@@ -33,26 +34,17 @@ export const useMonitorStore = defineStore("monitor", () => {
 		return map;
 	});
 
-	const historyByDomain = computed(() => {
-		const map = new Map<string, MonitorHistory[]>();
-		for (const item of history.value) {
-			if (!map.has(item.domain)) {
-				map.set(item.domain, []);
-			}
-			map.get(item.domain)!.push(item);
-		}
-		return map;
-	});
-
 	/**
-	 * GET /api/monitor/history?hours=48
-	 * Returns aggregated status history for all sites.
+	 * GET /api/monitor/history?hours=48&domain=...
+	 * Loads one site's status history. Only the site page shows history, so
+	 * it isn't loaded for every site.
 	 */
-	async function fetchHistory(hours: number = 48) {
-		isLoadingHistory.value = true;
+	async function fetchSiteHistory(domain: string, hours: number = 48) {
+		const first = !(domain in historyByDomain.value);
+		if (first) isLoadingHistory.value = true;
 		try {
 			const res = await apiFetch(
-				`${BASE_URL}/monitor/history?hours=${hours}`,
+				`${BASE_URL}/monitor/history?hours=${hours}&domain=${encodeURIComponent(domain)}`,
 			);
 			if (!res.ok) {
 				if (res.status === 401) {
@@ -61,21 +53,16 @@ export const useMonitorStore = defineStore("monitor", () => {
 				}
 				throw new Error("Failed to fetch monitor history");
 			}
-			const data = await res.json();
-			history.value = data || [];
-			historyFetched.value = true;
-			return history.value;
+			const data: MonitorHistory[] = (await res.json()) || [];
+			historyByDomain.value = {
+				...historyByDomain.value,
+				[domain]: data,
+			};
+			return data;
 		} catch (error) {
 			console.error("Failed to fetch monitor history:", error);
-			throw error;
 		} finally {
-			isLoadingHistory.value = false;
-		}
-	}
-
-	async function ensureHistory() {
-		if (!historyFetched.value && !isLoadingHistory.value) {
-			await fetchHistory();
+			if (first) isLoadingHistory.value = false;
 		}
 	}
 
@@ -342,13 +329,10 @@ export const useMonitorStore = defineStore("monitor", () => {
 		issueCheckToken,
 		testCheck,
 		setCheckPaused,
-		history,
-		historyFetched,
 		historyByDomain,
 		currentStatus,
 		isLoadingHistory,
-		fetchHistory,
-		ensureHistory,
+		fetchSiteHistory,
 		fetchStatus,
 	};
 });

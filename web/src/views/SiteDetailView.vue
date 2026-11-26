@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from "vue";
+import {
+	ref,
+	computed,
+	watch,
+	onMounted,
+	onUnmounted,
+	defineAsyncComponent,
+} from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useDataStore } from "../stores/data";
 import { useMonitorStore } from "../stores/monitor";
+import { useSettingsStore } from "../stores/settings";
 import { useOrganizationStore } from "../stores/organization";
 import { useAuthStore } from "../stores/auth";
 import { useIgnoreStore } from "../stores/ignore";
@@ -13,7 +21,6 @@ import RouteTabs, { type RouteTab } from "../components/RouteTabs.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import InfoCard, { type InfoItem } from "../components/InfoCard.vue";
 import MonitorHistoryCard from "../components/MonitorHistoryCard.vue";
-import SiteTrafficCard from "../components/SiteTrafficCard.vue";
 import PluginRowActions from "../components/PluginRowActions.vue";
 import PluginInstallModal from "../components/PluginInstallModal.vue";
 import UpdateLockModal from "../components/UpdateLockModal.vue";
@@ -43,8 +50,15 @@ import {
 } from "../utils/format";
 import type { LedgerStatus, SiteUpdateLedgerEntry } from "../types";
 import { BASE_URL, apiFetch } from "../utils/api";
+import { createPoller } from "../utils/poller";
 
 // /site/<id>[/<tab>]: the overview is the default and left out.
+// The traffic card brings chart.js, about two thirds of this page's code,
+// and only shows on the traffic tab.
+const SiteTrafficCard = defineAsyncComponent(
+	() => import("../components/SiteTrafficCard.vue"),
+);
+
 const props = defineProps<{
 	id: string;
 	tab?: string;
@@ -53,6 +67,7 @@ const props = defineProps<{
 const router = useRouter();
 const dataStore = useDataStore();
 const monitorStore = useMonitorStore();
+const settingsStore = useSettingsStore();
 const organizationStore = useOrganizationStore();
 const authStore = useAuthStore();
 const coreUpdateStore = useCoreUpdateStore();
@@ -480,8 +495,29 @@ const onEnvironmentChange = async () => {
 };
 
 const history = computed(() =>
-	site.value ? monitorStore.historyByDomain.get(site.value.domain) || [] : [],
+	site.value ? monitorStore.historyByDomain[site.value.domain] || [] : [],
 );
+
+// The site's status history: loaded for this site only, and refreshed at
+// the monitor interval while the page is open and visible.
+const historyPoller = createPoller(
+	() => {
+		if (site.value) return monitorStore.fetchSiteHistory(site.value.domain);
+	},
+	() => settingsStore.monitorRefreshInterval * 1000,
+	{ pauseWhenHidden: true },
+);
+watch(
+	() => site.value?.domain,
+	(domain) => {
+		historyPoller.stop();
+		if (!domain) return;
+		void monitorStore.fetchSiteHistory(domain);
+		historyPoller.start();
+	},
+	{ immediate: true },
+);
+onUnmounted(() => historyPoller.stop());
 
 const sitePlugins = computed(() => {
 	const enrichedSite = dataStore.enrichedSites.find(

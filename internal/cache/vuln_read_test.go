@@ -78,3 +78,27 @@ func TestReadCachedCoreVulnerabilitiesNormalizes(t *testing.T) {
 		t.Errorf("FeedUuid = %q, want normalized from feed UUID", v.FeedUuid)
 	}
 }
+
+// Reports built from the grouped data keep their order (and the API
+// response its ETag) while the data is the same.
+func TestGroupPluginsIsSorted(t *testing.T) {
+	plugins := []models.WPPlugin{
+		{SiteID: "s2", Name: "zeta", Status: "active"},
+		{SiteID: "s3", Name: "alpha", Status: "active"},
+		{SiteID: "s1", Name: "alpha", Status: "active"},
+		{SiteID: "s1", Name: "mid", Status: "active"},
+	}
+	for i := 0; i < 20; i++ {
+		got := groupPlugins(plugins, nil)
+		if len(got) != 3 || got[0].Name != "alpha" || got[1].Name != "mid" || got[2].Name != "zeta" {
+			t.Fatalf("order = %+v", got)
+		}
+		if got[0].Sites[0].SiteID != "s1" || got[0].Sites[1].SiteID != "s3" {
+			t.Fatalf("site order = %+v", got[0].Sites)
+		}
+	}
+	cores := groupCoreVersions([]models.SiteCore{{SiteID: "b", Version: "6.8"}, {SiteID: "a", Version: "6.7"}, {SiteID: "c", Version: "6.7"}}, nil)
+	if len(cores) != 2 || cores[0].Version != "6.7" || cores[0].Sites[0].SiteID != "a" {
+		t.Fatalf("core order = %+v", cores)
+	}
+}

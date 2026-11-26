@@ -4,13 +4,13 @@ import { RouterView, useRoute } from "vue-router";
 import { useDataStore } from "./stores/data";
 import { useAuthStore } from "./stores/auth";
 import { useSettingsStore } from "./stores/settings";
-import { useMonitorStore } from "./stores/monitor";
 import { useIncidentStore } from "./stores/incidents";
 import { useDesktopNotifyStore } from "./stores/desktopNotify";
 import { useVulnStore } from "./stores/vulns";
 import { useUserStore } from "./stores/user";
 import { useUpdateJobsStore } from "./stores/updateJobs";
 import { useNotificationStore } from "./stores/notifications";
+import { createPoller } from "./utils/poller";
 import AppSidebar from "./components/AppSidebar.vue";
 import AppTopbar from "./components/AppTopbar.vue";
 import { useSidebar } from "./composables/useSidebar";
@@ -29,13 +29,31 @@ const notificationStore = useNotificationStore();
 
 authStore.initialize();
 
-const monitorStore = useMonitorStore();
 const incidentStore = useIncidentStore();
 const desktopNotify = useDesktopNotifyStore();
 const vulnStore = useVulnStore();
 
-let monitorIntervalId: ReturnType<typeof setInterval> | null = null;
-let dataIntervalId: ReturnType<typeof setInterval> | null = null;
+// The badges (active incidents, overdue vulnerabilities) and the data
+// lists only matter to a visible tab, so they pause while it's hidden and
+// catch up when it's shown. Desktop notifications are for hidden tabs, so
+// their incident poll keeps going.
+const badgePoller = createPoller(
+	() => {
+		incidentStore.fetchActiveCount();
+		vulnStore.fetchSummary();
+	},
+	() => settingsStore.monitorRefreshInterval * 1000,
+	{ pauseWhenHidden: true },
+);
+const notifyPoller = createPoller(
+	() => desktopNotify.pollIncidents(),
+	() => settingsStore.monitorRefreshInterval * 1000,
+);
+const dataPoller = createPoller(
+	() => dataStore.refreshData(),
+	() => settingsStore.dataRefreshInterval * 1000,
+	{ pauseWhenHidden: true },
+);
 
 const startIntervals = () => {
 	stopIntervals();
@@ -45,29 +63,15 @@ const startIntervals = () => {
 	incidentStore.fetchActiveCount();
 	vulnStore.fetchSummary();
 
-	// Monitor history & incidents refresh
-	monitorIntervalId = setInterval(() => {
-		monitorStore.fetchHistory();
-		incidentStore.fetchActiveCount();
-		vulnStore.fetchSummary();
-		void desktopNotify.pollIncidents();
-	}, settingsStore.monitorRefreshInterval * 1000);
-
-	// General data refresh (sites, servers, plugins, etc.)
-	dataIntervalId = setInterval(() => {
-		dataStore.refreshData();
-	}, settingsStore.dataRefreshInterval * 1000);
+	badgePoller.start();
+	notifyPoller.start();
+	dataPoller.start();
 };
 
 const stopIntervals = () => {
-	if (monitorIntervalId) {
-		clearInterval(monitorIntervalId);
-		monitorIntervalId = null;
-	}
-	if (dataIntervalId) {
-		clearInterval(dataIntervalId);
-		dataIntervalId = null;
-	}
+	badgePoller.stop();
+	notifyPoller.stop();
+	dataPoller.stop();
 };
 
 // Load data whenever the user becomes authenticated and handle intervals.

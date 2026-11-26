@@ -539,7 +539,6 @@ export interface EnrichedSite extends Site {
 	plugins: Plugin[];
 	vulnerabilities: EnrichedVulnerability[];
 	coreVulnerabilities: EnrichedCoreVulnerability[];
-	monitorHistory?: MonitorHistory[];
 	monitorStatus?: MonitorStatus;
 }
 
