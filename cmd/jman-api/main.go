@@ -51,6 +51,12 @@ func runServe(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load users config: %w", err)
 	}
 
+	// A tier's id is what sites store, so refuse a siteTiers list that
+	// doesn't give every tier a unique one.
+	if _, err := api.SiteTiers(); err != nil {
+		return fmt.Errorf("invalid siteTiers configuration: %w", err)
+	}
+
 	port := os.Getenv("JMAN_API_PORT")
 	if port == "" {
 		port = "8080"

@@ -349,6 +349,28 @@ func initInventorySchema() error {
 			},
 		},
 		{
+			// A staging, development or archived site's production site
+			// (docs/site-environments-tiers.md). One per linked site; a
+			// production site can have many.
+			Name: "site_production_link",
+			Columns: map[string]string{
+				"site_id":            "TEXT PRIMARY KEY",
+				"production_site_id": "TEXT NOT NULL",
+				"created_at":         "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"created_by":         "TEXT",
+			},
+		},
+		{
+			// A production site's tier, by its stable id (models.SiteTier).
+			Name: "site_tier",
+			Columns: map[string]string{
+				"site_id":    "TEXT PRIMARY KEY",
+				"tier":       "INTEGER NOT NULL",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT",
+			},
+		},
+		{
 			Name: "ignore_entries",
 			Columns: map[string]string{
 				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",

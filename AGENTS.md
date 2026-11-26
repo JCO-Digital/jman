@@ -34,6 +34,7 @@
 - Executes commands across multiple sites (bulk operations); plugin and core changes run as `jman-api` jobs, queued by priority with servers taking turns and a per-server limit, and plugin updates queued back to back on a site run together (`docs/update-queue.md`).
 - Manages plugins, WordPress core updates, and admin users.
 - Generates WP-CLI and SSH alias files.
+- Links staging, development and archived sites to their production site and gives production sites a tier; tiers are configured with stable numeric ids that code compares (`docs/site-environments-tiers.md`).
 
 ### 2. Monitoring & Vulnerability Tracking
 
@@ -67,7 +68,7 @@
 
 ### Configuration
 
-- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`, `hetznerApiTokens` for the inventory's Hetzner Cloud provider, `pluginZipUrlPrefixes` (the URL prefixes ZIP updates may download plugin ZIPs from), `textDiffMuteDays` (how long an update text diff mute lasts by default) and `textDiffQuery` (a query string added to every text diff fetch, e.g. to get past a dev site's login redirect; see `docs/update-text-diff.md`), `updateLog` (the JSONL file every update attempt is appended to, `off` to turn it off; see `docs/update-log.md`), and for the AI gateway `anthropicApiKey`, `aiEnabled`, `aiZdrConfirmed`, `aiFake`, `aiDailyBudgetUsd` and `aiAgents`.
+- **Main Config**: `jman` and `jman-api` share a TOML file layout (typically `~/.config/jman/config.toml`) managed via `viper`. The CLI uses `apiUrl` and the cache timing keys; `jman-api` uses the SpinupWP/Slack tokens and `slackChannel`, `slackMonitorChannel`, `slackTasksChannel`, `webUrl`, `minCliVersion` and `latestCliVersion`, `hetznerApiTokens` for the inventory's Hetzner Cloud provider, `pluginZipUrlPrefixes` (the URL prefixes ZIP updates may download plugin ZIPs from), `textDiffMuteDays` (how long an update text diff mute lasts by default) and `textDiffQuery` (a query string added to every text diff fetch, e.g. to get past a dev site's login redirect; see `docs/update-text-diff.md`), `updateLog` (the JSONL file every update attempt is appended to, `off` to turn it off; see `docs/update-log.md`), `siteTiers` (the production sites' tiers, each with a stable numeric `id` and a display `name`; see `docs/site-environments-tiers.md`), and for the AI gateway `anthropicApiKey`, `aiEnabled`, `aiZdrConfirmed`, `aiFake`, `aiDailyBudgetUsd` and `aiAgents`.
 - **API Users**: `jman-api` uses a separate `users.toml` for authentication, storing bcrypt-hashed passwords and TOTP secrets.
 - **XDG Support**: Follows XDG Base Directory Specification for configuration and data storage.
 

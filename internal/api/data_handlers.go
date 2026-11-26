@@ -171,13 +171,19 @@ type apiSite struct {
 	ServerName     string                     `json:"server_name"`
 	Domain         string                     `json:"domain"`
 	Environment    models.SiteEnvironmentType `json:"environment,omitempty"`
-	Status         string                     `json:"status"`
-	IsWordpress    bool                       `json:"is_wordpress"`
-	PHPVersion     string                     `json:"php_version"`
-	SiteUser       string                     `json:"site_user"`
-	ConnectionType string                     `json:"connection_type"`
-	SSHHost        string                     `json:"ssh_host"`
-	SSHPort        int                        `json:"ssh_port"`
+	// ProductionSiteID is the production site a staging, development or
+	// archived site is linked to.
+	ProductionSiteID string `json:"production_site_id,omitempty"`
+	// Tier is a production site's tier id (models.SiteTier); 0 for none
+	// and for every non-production site.
+	Tier           int    `json:"tier,omitempty"`
+	Status         string `json:"status"`
+	IsWordpress    bool   `json:"is_wordpress"`
+	PHPVersion     string `json:"php_version"`
+	SiteUser       string `json:"site_user"`
+	ConnectionType string `json:"connection_type"`
+	SSHHost        string `json:"ssh_host"`
+	SSHPort        int    `json:"ssh_port"`
 	// SSH is the target jman actually connects to for WP-CLI, in WP-CLI's
 	// --ssh form ("user@host", or "user@host:port" for non-default ports).
 	SSH      string `json:"ssh,omitempty"`
@@ -335,6 +341,14 @@ func loadAPISites() ([]apiSite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("agent collection status: %w", err)
 	}
+	productionLinks, err := db.GetAllSiteProductionLinks()
+	if err != nil {
+		return nil, fmt.Errorf("site links: %w", err)
+	}
+	siteTiers, err := db.GetAllSiteTiers()
+	if err != nil {
+		return nil, fmt.Errorf("site tiers: %w", err)
+	}
 
 	for i := range sites {
 		id := sites[i].ID
@@ -342,6 +356,12 @@ func loadAPISites() ([]apiSite, error) {
 		// takes precedence over the inventory default.
 		if env, ok := environments[id]; ok {
 			sites[i].Environment = models.SiteEnvironmentType(env)
+		}
+		sites[i].ProductionSiteID = productionLinks[id]
+		// Tiers apply to production sites only; a site moved out of
+		// production keeps its stored tier but reports none.
+		if sites[i].Environment == models.SiteEnvironmentProduction {
+			sites[i].Tier = siteTiers[id]
 		}
 		if usage, ok := diskUsage[id]; ok {
 			sites[i].DiskUsage = &usage
