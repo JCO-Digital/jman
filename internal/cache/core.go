@@ -70,6 +70,7 @@ func GetCachedCoreVersions(ttl ...time.Duration) ([]models.SiteCore, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			defer wpcli.AcquireHost(site.SSH)()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 

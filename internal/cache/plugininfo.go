@@ -47,14 +47,14 @@ func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
 			info.Name = slug
 		}
 		models.SanitizePluginInfo(info)
-		_ = db.SavePluginInfo(*info)
+		_ = db.SavePluginInfoPartial(*info)
 		return true
 	}
 
 	updated := false
 	if isFull {
 		models.SanitizePluginInfo(info)
-		_ = db.SavePluginInfo(*info)
+		_ = db.SavePluginInfoPartial(*info)
 		return true
 	}
 
@@ -79,7 +79,7 @@ func UpdatePluginInfo(slug, name, ver string, fullFetch ...bool) bool {
 	models.SanitizePluginInfo(existing)
 
 	if updated || existing.Name != oldName || existing.Author != oldAuthor {
-		_ = db.SavePluginInfo(*existing)
+		_ = db.SavePluginInfoPartial(*existing)
 		updated = true
 	}
 
@@ -100,7 +100,7 @@ func GetPluginInfo(slug string, ttl ...time.Duration) *models.PluginInfo {
 		oldName, oldAuthor := existing.Name, existing.Author
 		models.SanitizePluginInfo(existing)
 		if existing.Name != oldName || existing.Author != oldAuthor {
-			_ = db.SavePluginInfo(*existing)
+			_ = db.SavePluginInfoPartial(*existing)
 		}
 		return existing
 	}
@@ -206,7 +206,7 @@ func RefreshPluginInfoCache(slugs []string, ttl ...time.Duration) error {
 				oldName, oldAuthor := existing.Name, existing.Author
 				models.SanitizePluginInfo(existing)
 				if existing.Name != oldName || existing.Author != oldAuthor {
-					_ = db.SavePluginInfo(*existing)
+					_ = db.SavePluginInfoPartial(*existing)
 				}
 			}
 			continue
