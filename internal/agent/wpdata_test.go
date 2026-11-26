@@ -175,7 +175,16 @@ func stubSite(t *testing.T, runner *fakeRunner) {
 	adminUsersMu.Lock()
 	adminUsers = map[string]cachedAdminUser{}
 	adminUsersMu.Unlock()
-	t.Cleanup(func() { resolvePath, resolveIdentity, newRunner = oldPath, oldID, oldRunner })
+	coreUpdatesCacheMu.Lock()
+	coreUpdatesCache = map[string]cachedCoreUpdates{}
+	coreUpdatesCacheMu.Unlock()
+	// No version.php by default: wp-cli reports the version.
+	oldVersion := readSiteCoreVersion
+	readSiteCoreVersion = func(string) (string, string) { return "", "" }
+	t.Cleanup(func() {
+		resolvePath, resolveIdentity, newRunner = oldPath, oldID, oldRunner
+		readSiteCoreVersion = oldVersion
+	})
 }
 
 const pluginListJSON = `Deprecated: something on line 3
@@ -528,5 +537,53 @@ func TestCollectSiteWPDataAdminListFails(t *testing.T) {
 	adminUsersMu.Unlock()
 	if cached {
 		t.Error("administrator still cached after the list failed")
+	}
+}
+
+// The version comes from version.php without wp-cli, and sites with the
+// same version and locale share one update check.
+func TestCollectSiteWPDataSharesCoreChecks(t *testing.T) {
+	runner := okRunner()
+	stubSite(t, runner)
+	readSiteCoreVersion = func(sitePath string) (string, string) {
+		if sitePath == "/sites/c.example.com/files" {
+			return "6.6.1", "fi"
+		}
+		return "6.6.1", "en_US"
+	}
+
+	var checks int
+	for _, domain := range []string{"a.example.com", "b.example.com", "c.example.com"} {
+		runner.calls = nil
+		data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: domain, Domain: domain, IsWordpress: true}, false)
+		if data.Error != "" || data.Core == nil || data.Core.Version != "6.6.1" || data.Core.MinorUpdate != "6.6.2" || data.Core.MajorUpdate != "6.7.1" {
+			t.Fatalf("%s: data = %+v", domain, data)
+		}
+		for _, c := range runner.calls {
+			switch c {
+			case "core version":
+				t.Errorf("%s: ran wp core version", domain)
+			case "core check-update --format=json":
+				checks++
+			}
+		}
+	}
+	// a and b share en_US; c has its own locale.
+	if checks != 2 {
+		t.Errorf("core update checks = %d, want 2", checks)
+	}
+
+	// A failed check isn't shared.
+	stubSite(t, runner)
+	readSiteCoreVersion = func(string) (string, string) { return "6.6.1", "en_US" }
+	runner.fail = map[string]error{"core check-update --format=json": errors.New("boom")}
+	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "d", Domain: "d.example.com", IsWordpress: true}, false)
+	if data.Core == nil || data.Core.MinorUpdate != "" {
+		t.Fatalf("failed check: %+v", data.Core)
+	}
+	runner.fail = nil
+	data = collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "e", Domain: "e.example.com", IsWordpress: true}, false)
+	if data.Core == nil || data.Core.MinorUpdate != "6.6.2" {
+		t.Errorf("after a failed check: %+v", data.Core)
 	}
 }

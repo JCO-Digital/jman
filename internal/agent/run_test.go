@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/JCO-Digital/jman/internal/models"
 )
@@ -89,5 +90,22 @@ func TestRecoverPanic_PassesThroughNormalResult(t *testing.T) {
 	}
 	if !errors.Is(err, wantErr) {
 		t.Errorf("err = %v, want %v", err, wantErr)
+	}
+}
+
+func TestDiskUsageDue(t *testing.T) {
+	lastDiskUsageMu.Lock()
+	lastDiskUsage = map[string]time.Time{}
+	lastDiskUsageMu.Unlock()
+	now := time.Now()
+	if !diskUsageDue("s1", now) {
+		t.Error("a site never measured isn't due")
+	}
+	markDiskUsage("s1", now)
+	if diskUsageDue("s1", now.Add(diskUsageInterval-time.Minute)) {
+		t.Error("due again before the interval")
+	}
+	if !diskUsageDue("s1", now.Add(diskUsageInterval)) {
+		t.Error("not due after the interval")
 	}
 }

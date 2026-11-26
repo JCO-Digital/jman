@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // maxHashBytes is the largest file the walk hashes. A bigger tracked file
@@ -104,6 +105,10 @@ type Result struct {
 	// ContentChecked is set when the walk searched every PHP file in
 	// wp-content and the site directory for the content rules.
 	ContentChecked bool `json:"content_checked,omitempty"`
+	// Hashes are the hashes of the core and plugin files checked against
+	// checksums, for the next walk (Options.Hashes). The agent keeps them;
+	// they aren't reported.
+	Hashes map[string]FileHash `json:"hashes,omitempty"`
 }
 
 // Walk looks through the site directory root and records the files that
@@ -115,6 +120,7 @@ type Result struct {
 // and opens only regular files.
 func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 	res := &Result{Entries: []Entry{}, ContentChecked: opts.Content}
+	hashes := newHashCache(opts.Hashes, time.Now())
 	res.CoreVersion, res.CoreLocale = readCoreVersion(root)
 	watch := make(map[string]bool, len(opts.Watch))
 	for _, p := range opts.Watch {
@@ -224,7 +230,16 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 				// Core has no symlinks or special files.
 				e.Checksum = coreRule(rel, sums, func() (string, bool) { return "", false })
 			} else {
-				e.Checksum = coreRule(rel, sums, func() (string, bool) { return fileMD5(full) })
+				e.Checksum = coreRule(rel, sums, func() (string, bool) {
+					if h, ok := hashes.get(rel, info); ok && h.MD5 != "" {
+						return h.MD5, true
+					}
+					sum, ok := fileMD5(full)
+					if ok {
+						hashes.put(rel, info, sum, "")
+					}
+					return sum, ok
+				})
 			}
 			if e.Checksum == RuleCoreModified {
 				coreModified++
@@ -252,9 +267,20 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 		// content rules trust it.
 		verified := false
 		if slug, inner := pluginOf(rel); pluginSums[slug] != nil && IsPHPPath(rel) && info.Mode().IsRegular() && !isTracked(rel) {
-			body := readTracked(full, rel, &e, true)
-			if e.Checksum = pluginRule(inner, pluginSums[slug], e); e.Checksum != "" {
-				checkContent(&e, body)
+			// Most plugin files match their checksums and are trusted, so
+			// an unchanged one that matched isn't read again, and the rest
+			// are read for their hash first and in full only if they don't
+			// match.
+			if h, ok := hashes.get(rel, info); ok && h.SHA256 != "" && slices.Contains(pluginSums[slug].SHA256[inner], h.SHA256) {
+				verified = true
+			} else if readTracked(full, rel, &e, false); e.SHA256 != "" {
+				hashes.put(rel, info, "", e.SHA256)
+			}
+			if !verified {
+				e.Checksum = pluginRule(inner, pluginSums[slug], e)
+			}
+			if e.Checksum != "" {
+				checkContent(&e, readTracked(full, rel, &e, true))
 				if e.Checksum == RulePluginModified {
 					pluginModified[slug]++
 				} else {
@@ -338,6 +364,9 @@ func Walk(root string, ownerUID uint32, opts Options) (*Result, error) {
 	slices.Sort(res.PluginNotes)
 	if opts.Home != "" {
 		res.Entries = append(res.Entries, WalkHome(filepath.Clean(opts.Home), filepath.Clean(root))...)
+	}
+	if len(hashes.new) > 0 {
+		res.Hashes = hashes.new
 	}
 	return res, nil
 }
