@@ -20,7 +20,7 @@ func ValidateVulnBackport(rule models.VulnBackport) ([]string, error) {
 	}
 
 	if rule.Type == models.VulnBackportTypeCore {
-		resp, err := cache.GetCachedCoreVulnerabilities(rule.MinVersion)
+		resp, err := cache.ReadCachedCoreVulnerabilities(rule.MinVersion)
 		if err != nil || resp == nil || resp.Data == nil {
 			return []string{fmt.Sprintf("No vulnerability data for WordPress %s; the rule could not be verified.", rule.MinVersion)}, nil
 		}
@@ -34,7 +34,7 @@ func ValidateVulnBackport(rule models.VulnBackport) ([]string, error) {
 		return []string{fmt.Sprintf("WordPress %s is not reported as affected by vulnerability %s, so the rule may have no effect.", rule.MinVersion, rule.VulnUUID)}, nil
 	}
 
-	resp, err := cache.GetCachedVulnerabilities(rule.Slug)
+	resp, err := cache.ReadCachedVulnerabilities(rule.Slug)
 	if err != nil || resp == nil || resp.Data == nil {
 		return []string{fmt.Sprintf("No vulnerability data for plugin %q; the rule could not be verified.", rule.Slug)}, nil
 	}

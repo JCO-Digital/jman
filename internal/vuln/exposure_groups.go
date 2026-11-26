@@ -66,7 +66,7 @@ func loadGroupDetails(kind, slug, coreVersion string) groupDetails {
 	d := groupDetails{Name: slug, Vulns: map[string]models.Vulnerability{}}
 	if kind == models.VulnExposureCore {
 		d.Name = "WordPress " + coreVersion
-		if resp, err := cache.GetCachedCoreVulnerabilities(coreVersion); err == nil && resp != nil && resp.Data != nil {
+		if resp, err := cache.ReadCachedCoreVulnerabilities(coreVersion); err == nil && resp != nil && resp.Data != nil {
 			d.ByFeedUUID = map[string][]string{}
 			for _, v := range resp.Data.Vulnerability {
 				d.Vulns[v.Uuid] = v
@@ -77,7 +77,7 @@ func loadGroupDetails(kind, slug, coreVersion string) groupDetails {
 		}
 		return d
 	}
-	resp, err := cache.GetCachedVulnerabilities(slug)
+	resp, err := cache.ReadCachedVulnerabilities(slug)
 	if err != nil || resp == nil || resp.Data == nil {
 		return d
 	}

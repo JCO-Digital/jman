@@ -47,22 +47,43 @@ func IsVersionAffected(ver string, op models.Operator) bool {
 // GetVulnerabilityReportsForPlugin finds all vulnerabilities affecting the provided sites for a given plugin.
 // Vulnerabilities whose UUID appears in the ignore list are silently skipped. Sites whose version is
 // covered by a backport rule are listed in PatchedSites instead of Sites.
+//
+// It reads only cached vulnerability data (see cache.ReadCachedVulnerabilities).
 func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher) *models.VulnReport {
-	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
+	if special, err := cache.IsSpecialPlugin(pluginName); err != nil {
+		verb.LogPrintf(verb.Verbose, "Warning: failed to check if plugin %s is special: %v\n", pluginName, err)
+	} else if special {
+		return nil
+	}
+	return pluginReport(pluginName, sites, matcher, loadSiteServers(matcher))
+}
+
+// loadSiteServers returns the server ID of each site, which matcher needs
+// for server-level ignores. Without a matcher there is nothing to look up
+// and it returns nil.
+func loadSiteServers(matcher *db.VulnIgnoreMatcher) map[string]string {
+	if matcher == nil {
+		return nil
+	}
+	cliSites, err := cache.GetFastSiteList()
+	if err != nil {
+		verb.LogPrintf(verb.Verbose, "Warning: failed to fetch site list, server-level ignores may not be fully resolved: %v\n", err)
+		return nil
+	}
+	servers := make(map[string]string, len(cliSites))
+	for _, s := range cliSites {
+		servers[s.ID] = s.ServerID
+	}
+	return servers
+}
+
+// pluginReport is GetVulnerabilityReportsForPlugin with the site's server
+// IDs already loaded (see loadSiteServers).
+func pluginReport(pluginName string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher, siteServers map[string]string) *models.VulnReport {
+	vulnResponse, err := cache.ReadCachedVulnerabilities(pluginName)
 	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 		// Missing or invalid vulnerability cache for this plugin; skip it.
 		return nil
-	}
-
-	// Load site metadata for server ID lookups
-	cliSites, err := cache.GetFastSiteList()
-	siteMeta := make(map[string]models.CliSite)
-	if err == nil {
-		for _, s := range cliSites {
-			siteMeta[s.ID] = s
-		}
-	} else {
-		verb.LogPrintf(verb.Verbose, "Warning: failed to fetch site list, server-level ignores may not be fully resolved: %v\n", err)
 	}
 
 	pluginSuppressed := matcher != nil && matcher.IsPluginIgnored(pluginName)
@@ -83,18 +104,17 @@ func GetVulnerabilityReportsForPlugin(pluginName string, sites []models.PluginSi
 			continue
 		}
 
+		// vulnerability is a copy, but the cached response is shared: give
+		// it its own site lists rather than appending to the feed's.
 		v := vulnerability
 		v.Sites = []models.PluginSite{}
+		v.PatchedSites = nil
 
 		// Add every site whose installed plugin version falls inside the affected range.
 		allSitesSuppressed := true
 		for _, site := range sites {
 			if matcher != nil {
-				serverID := ""
-				if s, ok := siteMeta[site.SiteID]; ok {
-					serverID = s.ServerID
-				}
-				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, serverID)
+				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, siteServers[site.SiteID])
 			}
 
 			if !IsVersionAffected(site.Version, v.Operator) {
@@ -182,25 +202,52 @@ func FixedIn(vulns []models.Vulnerability) string {
 	return fixedIn
 }
 
-// ProcessVulnerabilities loads cached plugin inventory and vulnerability data, then
-// determines which sites are affected by which vulnerabilities based on version ranges.
+// ProcessVulnerabilities matches the stored plugin inventory against the
+// cached vulnerability data and returns, per plugin, the vulnerabilities
+// affecting active installs. It reads only stored data: it never runs
+// WP-CLI or fetches vulnerability data (the refresh scheduler does).
 func ProcessVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.VulnReport, error) {
+	return processVulnerabilities(matcher, "")
+}
+
+// processVulnerabilities is ProcessVulnerabilities for every site, or only
+// for siteID's plugins.
+func processVulnerabilities(matcher *db.VulnIgnoreMatcher, siteID string) ([]models.VulnReport, error) {
 	reports := []models.VulnReport{}
 
-	pluginData, err := cache.GetCachedPluginData()
+	pluginData, err := cache.GetFastCachedPluginData()
 	if err != nil {
 		return nil, err
 	}
+	siteServers := loadSiteServers(matcher)
 
 	for _, plugin := range pluginData {
+		sites := plugin.Sites
+		if siteID != "" {
+			if sites = onlySiteInstalls(sites, siteID); len(sites) == 0 {
+				continue
+			}
+		}
+		// Every plugin here has an active install, so none is a must-use
+		// plugin or drop-in only (see GetVulnerabilityReportsForPlugin).
 		verb.Printf(verb.Verbose, "Processing plugin: %s\n", plugin.Name)
-		report := GetVulnerabilityReportsForPlugin(plugin.Name, plugin.Sites, matcher)
-		if report != nil {
+		if report := pluginReport(plugin.Name, sites, matcher, siteServers); report != nil {
 			reports = append(reports, *report)
 		}
 	}
 
 	return reports, nil
+}
+
+// onlySiteInstalls returns the installs in sites that are on siteID.
+func onlySiteInstalls(sites []models.PluginSite, siteID string) []models.PluginSite {
+	var out []models.PluginSite
+	for _, s := range sites {
+		if s.SiteID == siteID {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // versionCompare compares v1 and v2 using semantic version parsing.

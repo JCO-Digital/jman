@@ -443,14 +443,15 @@ func VulnsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get vulnerability data first to get metadata.
-	vulnResponse, err := cache.GetCachedVulnerabilities(pluginName)
+	// Get vulnerability data first to get metadata. Like the rest of this
+	// handler, it reads only stored data; the refresh scheduler fetches it.
+	vulnResponse, err := cache.ReadCachedVulnerabilities(pluginName)
 	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 		WriteError(w, http.StatusNotFound, fmt.Sprintf("Vulnerability data not found for plugin %q.", pluginName))
 		return
 	}
 
-	pluginData, err := cache.GetCachedPluginData()
+	pluginData, err := cache.GetFastCachedPluginData()
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "VulnsHandler plugin data error: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Failed to get plugin data")

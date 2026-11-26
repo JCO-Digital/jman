@@ -177,34 +177,24 @@ func UpdatePluginInfoFromPlugins(plugins []models.WPPlugin) {
 	}
 }
 
-// GetCachedPluginData groups all active plugins into WPPluginData structures for easier scanning.
-func GetCachedPluginData() ([]models.WPPluginData, error) {
-	plugins, err := GetCachedPlugins(DefaultTTL)
-	if err != nil {
-		return []models.WPPluginData{}, err
-	}
-
-	return groupPlugins(plugins)
-}
-
-// GetFastCachedPluginData retrieves plugin data from the database without checking expiry or re-fetching.
+// GetFastCachedPluginData groups the stored active plugins by plugin, from
+// the database and the cached site list only: it never fetches or prunes.
 func GetFastCachedPluginData() ([]models.WPPluginData, error) {
 	plugins, err := db.GetAllSitePlugins()
 	if err != nil {
 		return []models.WPPluginData{}, err
 	}
-
-	return groupPlugins(plugins)
-}
-
-// groupPlugins is a internal helper to aggregate a flat plugin list into sites grouped by plugin.
-func groupPlugins(plugins []models.WPPlugin) ([]models.WPPluginData, error) {
-	sites, err := GetSiteList()
+	sites, err := GetFastSiteList()
 	if err != nil {
 		return []models.WPPluginData{}, fmt.Errorf("failed to get site list for grouping: %w", err)
 	}
+	return groupPlugins(plugins, sites), nil
+}
 
-	siteNames := make(map[string]string)
+// groupPlugins aggregates a flat plugin list into sites grouped by plugin,
+// keeping active plugins only. sites gives the site names.
+func groupPlugins(plugins []models.WPPlugin, sites []models.CliSite) []models.WPPluginData {
+	siteNames := make(map[string]string, len(sites))
 	for _, s := range sites {
 		siteNames[s.ID] = s.Name
 	}
@@ -218,19 +208,17 @@ func groupPlugins(plugins []models.WPPlugin) ([]models.WPPluginData, error) {
 
 		data, exists := pluginMap[plugin.Name]
 		if !exists {
-			newData := models.WPPluginData{
+			data = &models.WPPluginData{
 				Name:  plugin.Name,
 				Sites: []models.PluginSite{},
 			}
-			pluginMap[plugin.Name] = &newData
-			data = &newData
+			pluginMap[plugin.Name] = data
 		}
 
 		data.Sites = append(data.Sites, models.PluginSite{
-			SiteID:     plugin.SiteID,
-			SiteName:   siteNames[plugin.SiteID],
-			Version:    plugin.Version,
-			Suppressed: false, // Default value; will be populated by vuln scanning logic if needed.
+			SiteID:   plugin.SiteID,
+			SiteName: siteNames[plugin.SiteID],
+			Version:  plugin.Version,
 		})
 	}
 
@@ -239,7 +227,7 @@ func groupPlugins(plugins []models.WPPlugin) ([]models.WPPluginData, error) {
 		pluginData = append(pluginData, *data)
 	}
 
-	return pluginData, nil
+	return pluginData
 }
 
 // GetFastCachedPlugins retrieves plugins from the database without checking expiry.
