@@ -13,19 +13,15 @@ import (
 // Unlike plugins, the wpvulnerability.net core endpoint already scopes vulnerabilities to the
 // requested version, so every returned vulnerability applies to every site in sites.
 func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher) *models.CoreVulnReport {
-	vulnResponse, err := cache.GetCachedCoreVulnerabilities(coreVersion)
+	return coreReport(coreVersion, sites, matcher, loadSiteServers(matcher))
+}
+
+// coreReport is GetVulnerabilityReportForCoreVersion with the sites'
+// server IDs already loaded (see loadSiteServers).
+func coreReport(coreVersion string, sites []models.PluginSite, matcher *db.VulnIgnoreMatcher, siteServers map[string]string) *models.CoreVulnReport {
+	vulnResponse, err := cache.ReadCachedCoreVulnerabilities(coreVersion)
 	if err != nil || vulnResponse == nil || vulnResponse.Data == nil {
 		return nil
-	}
-
-	cliSites, err := cache.GetFastSiteList()
-	siteMeta := make(map[string]models.CliSite)
-	if err == nil {
-		for _, s := range cliSites {
-			siteMeta[s.ID] = s
-		}
-	} else {
-		verb.LogPrintf(verb.Verbose, "Warning: failed to fetch site list, server-level ignores may not be fully resolved: %v\n", err)
 	}
 
 	report := &models.CoreVulnReport{
@@ -44,16 +40,13 @@ func GetVulnerabilityReportForCoreVersion(coreVersion string, sites []models.Plu
 		}
 
 		v := vulnerability
+		v.PatchedSites = nil
 		v.Sites = make([]models.PluginSite, 0, len(sites))
 
 		allSitesSuppressed := true
 		for _, site := range sites {
 			if matcher != nil {
-				serverID := ""
-				if s, ok := siteMeta[site.SiteID]; ok {
-					serverID = s.ServerID
-				}
-				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, serverID)
+				site.Suppressed = matcher.IsSiteIgnored(site.SiteID, siteServers[site.SiteID])
 			}
 
 			v.Sites = append(v.Sites, site)
@@ -101,20 +94,34 @@ func corePatchedBy(matcher *db.VulnIgnoreMatcher, v models.Vulnerability, coreVe
 	return nil
 }
 
-// ProcessCoreVulnerabilities loads the cached WordPress core version inventory and vulnerability
-// data, then determines which sites are affected by which core vulnerabilities.
+// ProcessCoreVulnerabilities matches the stored WordPress core versions
+// against the cached vulnerability data and returns, per version, the
+// vulnerabilities affecting the sites running it. Like
+// ProcessVulnerabilities, it reads only stored data.
 func ProcessCoreVulnerabilities(matcher *db.VulnIgnoreMatcher) ([]models.CoreVulnReport, error) {
+	return processCoreVulnerabilities(matcher, "")
+}
+
+// processCoreVulnerabilities is ProcessCoreVulnerabilities for every site,
+// or only for siteID.
+func processCoreVulnerabilities(matcher *db.VulnIgnoreMatcher, siteID string) ([]models.CoreVulnReport, error) {
 	reports := []models.CoreVulnReport{}
 
-	versionData, err := cache.GetCachedCoreVersionData()
+	versionData, err := cache.GetFastCachedCoreVersionData()
 	if err != nil {
 		return nil, err
 	}
+	siteServers := loadSiteServers(matcher)
 
 	for _, vd := range versionData {
+		sites := vd.Sites
+		if siteID != "" {
+			if sites = onlySiteInstalls(sites, siteID); len(sites) == 0 {
+				continue
+			}
+		}
 		verb.Printf(verb.Verbose, "Processing core version: %s\n", vd.Version)
-		report := GetVulnerabilityReportForCoreVersion(vd.Version, vd.Sites, matcher)
-		if report != nil {
+		if report := coreReport(vd.Version, sites, matcher, siteServers); report != nil {
 			reports = append(reports, *report)
 		}
 	}

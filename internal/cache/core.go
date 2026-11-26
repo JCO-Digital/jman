@@ -169,24 +169,25 @@ func RefreshSiteCore(site models.CliSite, src sitestate.Source) (*models.SiteCor
 	}, nil
 }
 
-// GetCachedCoreVersionData groups all known sites by their installed WordPress core version.
-func GetCachedCoreVersionData() ([]models.CoreVersionData, error) {
-	versions, err := GetCachedCoreVersions(DefaultTTL)
+// GetFastCachedCoreVersionData groups the sites by their stored WordPress
+// core version, from the database and the cached site list only: it never
+// fetches or prunes.
+func GetFastCachedCoreVersionData() ([]models.CoreVersionData, error) {
+	versions, err := db.GetAllSiteCore()
 	if err != nil {
 		return []models.CoreVersionData{}, err
 	}
-
-	return groupCoreVersions(versions)
-}
-
-// groupCoreVersions is an internal helper to aggregate flat site-core rows into sites grouped by version.
-func groupCoreVersions(versions []models.SiteCore) ([]models.CoreVersionData, error) {
-	sites, err := GetSiteList()
+	sites, err := GetFastSiteList()
 	if err != nil {
 		return []models.CoreVersionData{}, fmt.Errorf("failed to get site list for grouping: %w", err)
 	}
+	return groupCoreVersions(versions, sites), nil
+}
 
-	siteNames := make(map[string]string)
+// groupCoreVersions aggregates flat site-core rows into sites grouped by
+// version. sites gives the site names.
+func groupCoreVersions(versions []models.SiteCore, sites []models.CliSite) []models.CoreVersionData {
+	siteNames := make(map[string]string, len(sites))
 	for _, s := range sites {
 		siteNames[s.ID] = s.Name
 	}
@@ -196,12 +197,11 @@ func groupCoreVersions(versions []models.SiteCore) ([]models.CoreVersionData, er
 	for _, v := range versions {
 		data, exists := versionMap[v.Version]
 		if !exists {
-			newData := models.CoreVersionData{
+			data = &models.CoreVersionData{
 				Version: v.Version,
 				Sites:   []models.PluginSite{},
 			}
-			versionMap[v.Version] = &newData
-			data = &newData
+			versionMap[v.Version] = data
 		}
 
 		data.Sites = append(data.Sites, models.PluginSite{
@@ -216,7 +216,7 @@ func groupCoreVersions(versions []models.SiteCore) ([]models.CoreVersionData, er
 		versionData = append(versionData, *data)
 	}
 
-	return versionData, nil
+	return versionData
 }
 
 // GetCachedCoreVulnerabilities fetches vulnerability data for a specific WordPress core version

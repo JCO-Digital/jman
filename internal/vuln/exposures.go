@@ -78,7 +78,7 @@ func syncVulnExposures(siteID string) error {
 	observed := map[exposureKey]observedExposure{}
 	evaluated := map[string]bool{}
 
-	if reports, err := ProcessVulnerabilities(matcher); err != nil {
+	if reports, err := processVulnerabilities(matcher, siteID); err != nil {
 		verb.LogPrintf(verb.Normal, "Warning: plugin vulnerabilities not processed, plugin exposures left as they are: %v\n", err)
 	} else {
 		siteUpdates := map[string]string{}
@@ -99,7 +99,7 @@ func syncVulnExposures(siteID string) error {
 		evaluated[models.VulnExposurePlugin] = true
 	}
 
-	if reports, err := ProcessCoreVulnerabilities(matcher); err != nil {
+	if reports, err := processCoreVulnerabilities(matcher, siteID); err != nil {
 		verb.LogPrintf(verb.Normal, "Warning: core vulnerabilities not processed, core exposures left as they are: %v\n", err)
 	} else if err := migrateCoreVulnIDs(time.Now()); err != nil {
 		verb.LogPrintf(verb.Normal, "Warning: core vulnerability IDs not migrated, core exposures left as they are: %v\n", err)
@@ -184,10 +184,10 @@ func onlySite(siteID string, observed map[exposureKey]observedExposure, open, re
 // exposures means the site is no longer affected.
 func exposureDataReadable(e models.VulnExposure) bool {
 	if e.Kind == models.VulnExposureCore {
-		resp, err := cache.GetCachedCoreVulnerabilities(e.Version)
+		resp, err := cache.ReadCachedCoreVulnerabilities(e.Version)
 		return err == nil && resp != nil && resp.Error == 0 && resp.Data != nil
 	}
-	resp, err := cache.GetCachedVulnerabilities(e.Slug)
+	resp, err := cache.ReadCachedVulnerabilities(e.Slug)
 	return err == nil && resp != nil && resp.Error == 0 && resp.Data != nil
 }
 

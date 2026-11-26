@@ -66,7 +66,7 @@ func migrateCoreVulnIDs(now time.Time) error {
 		if _, ok := versions[e.Version]; ok {
 			continue
 		}
-		resp, err := cache.GetCachedCoreVulnerabilities(e.Version)
+		resp, err := cache.ReadCachedCoreVulnerabilities(e.Version)
 		if err != nil || resp == nil || resp.Error != 0 || resp.Data == nil {
 			return fmt.Errorf("no vulnerability data for WordPress %s: %v", e.Version, err)
 		}

@@ -48,7 +48,12 @@ New table, separate from `incidents`: `vuln_exposures`
 It is synced on the refresh scheduler's slow tick (`runSlowTick`), in the
 place where `tasks.SyncVulnerabilities` runs now, reusing
 `vuln.ProcessVulnerabilities` / `ProcessCoreVulnerabilities`, so the existing
-ignore list, suppression and backport rules apply unchanged.
+ignore list, suppression and backport rules apply unchanged. These read
+only stored data (the plugin and core rows, the cached site list and the
+vulnerability cache through `cache.ReadCachedVulnerabilities`); the slow
+tick's `RunFullRefresh` fetches that data first. The same goes for the
+`/api/vulns` endpoints and the per-site sync after an update job, which
+matches only that site's plugins and core.
 
 ### Fix state
 
