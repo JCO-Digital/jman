@@ -1,5 +1,12 @@
 # Changelog
 
+## 7.50.0 (2026-11-26)
+
+#### Features
+
+- ui: show site environments, version differences and tiers (c79d97e)
+- api: link sites to their production site and add site tiers (22bfa89)
+
 ## 7.49.0 (2026-11-26)
 
 #### Features
