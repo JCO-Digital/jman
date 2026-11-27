@@ -109,6 +109,22 @@ func TestParsePluginListUnavailableUpdates(t *testing.T) {
 	}
 }
 
+// An install whose cached administrator no longer exists runs again
+// without --user.
+func TestAddPluginWithoutDeletedAdmin(t *testing.T) {
+	site := models.CliSite{ID: "test-site", Name: "example.com", Path: "/srv/www"}
+	fakeWP(t, map[string]string{
+		"*user\\ list*": `echo '[{"ID":3}]'`,
+		// Anchored, so the call with --user can't match the other.
+		"--path=/srv/www\\ --user=3\\ *plugin\\ install*": "echo \"Error: Invalid user ID, email or login: '3'\" >&2; exit 1",
+		"--path=/srv/www\\ --exec=*plugin\\ install*":     "echo 'Success: Installed 1 of 1 plugins.'",
+	})
+	ok, err := AddPlugin(site, "akismet", false, nil)
+	if err != nil || !ok {
+		t.Errorf("AddPlugin = %v, %v; want it installed without --user", ok, err)
+	}
+}
+
 // An available update without a package is flagged; one with a package,
 // without an update, or listed without the field (an old wp-cli) isn't.
 func TestParsePluginListNoPackage(t *testing.T) {

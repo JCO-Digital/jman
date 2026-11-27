@@ -99,6 +99,9 @@ func TestUpdateLogRecordsAttempts(t *testing.T) {
 	if len(l.Results) != 3 || l.Results[0].Status != models.UpdateFailed || !l.Results[1].VersionUnchanged || l.Results[2].VersionUnchanged {
 		t.Errorf("log results = %+v", l.Results)
 	}
+	if r := l.Results[0]; r.Cause != wpcli.CauseDownloadFailed || r.CauseDetail != "Unauthorized" {
+		t.Errorf("logged cause = %q, %q; want the download failure", r.Cause, r.CauseDetail)
+	}
 }
 
 // A successful attempt is logged without its output, and the job keeps

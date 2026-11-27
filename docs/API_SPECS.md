@@ -1405,7 +1405,9 @@ A failed plugin, ZIP or core update's result has `cause` when wp-cli's output sa
 | `timeout` | wp-cli didn't finish in time | |
 | `connection` | The server couldn't be reached over SSH | |
 
-One `wp plugin update` call updates all of a job's plugins, and wp-cli's warnings go to every plugin that failed in it, so only a warning that names its plugin (`<slug>: This update requires …`) is pinned to that plugin. Updates and installs run with the WordPress messages this reads kept in English (an `--exec` `gettext` filter on just those strings), whatever the site's language.
+One `wp plugin update` call updates all of a job's plugins, and wp-cli's warnings go to every plugin that failed in it. So when several plugins failed in one call, a requirement warning (`<slug>: This update requires …`) only counts for the plugin it names, and a download or install message only when the output holds one kind of them; with several kinds, the results get no `cause`. A timeout, a lost connection, a fatal error or WordPress's update lock stops the whole call, so it is every failed plugin's cause.
+
+Updates and installs run with the WordPress messages this reads kept in English (an `--exec` `gettext` filter on just those strings). Output from before that, or from a wp-cli too old for the filter, is only read in English, plus the Finnish and Swedish "Update package not available."
 
 ### Queue
 

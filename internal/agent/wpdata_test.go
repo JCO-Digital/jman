@@ -608,3 +608,21 @@ func TestCollectSiteWPDataOldWPCLIFields(t *testing.T) {
 		t.Errorf("listed with plugins skipped: %v", runner.calls)
 	}
 }
+
+// With an older wp-cli and a broken plugin, the loaded run fails on the
+// plugin and the skipped run on --fields: the skipped run is retried with
+// wp-cli's default fields, which still reports the plugins.
+func TestCollectSiteWPDataOldWPCLIBrokenPlugin(t *testing.T) {
+	runner := okRunner()
+	runner.fail = map[string]error{
+		"loaded: plugin list " + wpcli.PluginListFields + " --format=json": errors.New("PHP Fatal error: broken plugin"),
+		skippedList: errors.New("wp-cli [plugin list] failed: Error: Invalid field: update_unavailable_reason."),
+	}
+	runner.out[strings.Join(wpcli.SkippedPluginListArgs(), " ")] = pluginListJSON
+	stubSite(t, runner)
+
+	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
+	if data.Error != "" || len(data.Plugins) != 2 {
+		t.Fatalf("data = %+v", data)
+	}
+}

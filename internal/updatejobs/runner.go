@@ -416,7 +416,7 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 	byName := map[string]models.UpdateResult{}
 	// Plugins whose update the site can't take aren't tried: wp-cli
 	// would only refuse them, and in a call with others.
-	plugins, blocked := splitBlocked(lead.SiteID, mergePlugins(jobs))
+	plugins, blocked := splitBlocked(site, mergePlugins(jobs))
 	for _, r := range blocked {
 		byName[r.Name] = r
 	}
@@ -494,8 +494,14 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 	}
 
 	for _, a := range attempts {
+		failed := 0
 		for _, name := range covered[a] {
-			byName[name] = withCause(byName[name], a.calls)
+			if byName[name].Status == models.UpdateFailed {
+				failed++
+			}
+		}
+		for _, name := range covered[a] {
+			byName[name] = withCause(byName[name], a.calls, failed > 1)
 		}
 	}
 	for _, a := range attempts {
@@ -531,9 +537,10 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 }
 
 // withCause sets a failed result's Cause from its error and the stderr of
-// the calls of its attempt (see wpcli.FailureCause). Other results are
-// returned as they are.
-func withCause(r models.UpdateResult, calls []models.WPCLICall) models.UpdateResult {
+// the calls of its attempt (see wpcli.FailureCause); shared says other
+// plugins failed in the same attempt. Other results are returned as they
+// are.
+func withCause(r models.UpdateResult, calls []models.WPCLICall, shared bool) models.UpdateResult {
 	if r.Status != models.UpdateFailed {
 		return r
 	}
@@ -545,25 +552,29 @@ func withCause(r models.UpdateResult, calls []models.WPCLICall) models.UpdateRes
 	if r.Name == coreResultName {
 		plugin = ""
 	}
-	r.Cause, r.CauseDetail = wpcli.FailureCause(strings.Join(output, "\n"), plugin)
+	r.Cause, r.CauseDetail = wpcli.FailureCause(strings.Join(output, "\n"), plugin, shared)
 	return r
 }
 
-// splitBlocked returns the plugins whose cached update the site can take,
-// and a skipped result for each one whose update needs a newer WordPress
-// or PHP (WPPlugin.UpdateBlocked). Without a cached plugin list every
+// splitBlocked returns the plugins whose update the site can take, and a
+// skipped result for each one whose update needs a newer WordPress or PHP
+// (WPPlugin.UpdateBlocked). The cached list can be stale (WordPress may
+// have updated itself since), so when it blocks a requested plugin the
+// list is read from the site again first. Without a plugin list every
 // plugin is tried.
-func splitBlocked(siteID string, plugins []models.PluginUpdateRequest) ([]models.PluginUpdateRequest, []models.UpdateResult) {
-	cached, err := db.GetSitePlugins(siteID)
-	if err != nil {
-		log.Printf("Plugin update on site %s: failed to read cached plugins to skip blocked updates: %v", siteID, err)
-		return plugins, nil
-	}
-	reasons := map[string]string{}
-	for _, p := range cached {
-		if p.UpdateBlocked != "" {
-			reasons[p.Name] = p.UpdateBlocked
+func splitBlocked(site models.CliSite, plugins []models.PluginUpdateRequest) ([]models.PluginUpdateRequest, []models.UpdateResult) {
+	reasons, err := blockedReasons(site.ID, plugins)
+	if err == nil && len(reasons) > 0 {
+		if refreshErr := refreshPluginCache(site); refreshErr != nil {
+			// Unconfirmed: let wp-cli decide, and label its refusal.
+			log.Printf("Plugin update on %s: failed to refresh plugins before skipping blocked updates: %v", site.Name, refreshErr)
+			return plugins, nil
 		}
+		reasons, err = blockedReasons(site.ID, plugins)
+	}
+	if err != nil {
+		log.Printf("Plugin update on %s: failed to read cached plugins to skip blocked updates: %v", site.Name, err)
+		return plugins, nil
 	}
 	var runnable []models.PluginUpdateRequest
 	var skipped []models.UpdateResult
@@ -582,6 +593,26 @@ func splitBlocked(siteID string, plugins []models.PluginUpdateRequest) ([]models
 		})
 	}
 	return runnable, skipped
+}
+
+// blockedReasons returns the cached UpdateBlocked of each requested plugin
+// that has one.
+func blockedReasons(siteID string, plugins []models.PluginUpdateRequest) (map[string]string, error) {
+	cached, err := db.GetSitePlugins(siteID)
+	if err != nil {
+		return nil, err
+	}
+	requested := map[string]bool{}
+	for _, p := range plugins {
+		requested[p.Name] = true
+	}
+	reasons := map[string]string{}
+	for _, p := range cached {
+		if p.UpdateBlocked != "" && requested[p.Name] {
+			reasons[p.Name] = p.UpdateBlocked
+		}
+	}
+	return reasons, nil
 }
 
 // anyFailed reports whether any result failed.
@@ -808,7 +839,7 @@ func runCore(job models.UpdateJob, site models.CliSite) {
 	case "failed":
 		r.Status = models.UpdateFailed
 		r.Error = errMsg
-		r = withCause(r, a.calls)
+		r = withCause(r, a.calls, false)
 	case "partial":
 		r.Status = models.UpdateUpToDate
 	default:

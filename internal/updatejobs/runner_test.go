@@ -595,6 +595,34 @@ func TestRunSkipsUpdatesTheSiteCantTake(t *testing.T) {
 }
 
 // When every plugin is blocked, wp-cli isn't run at all.
+func TestRunRechecksStaleBlock(t *testing.T) {
+	setupRunnerTest(t)
+	if err := db.ReplaceSitePlugins(testSite, []models.WPPlugin{
+		{Name: "wordpress-seo", Status: "active", Version: "26.4", Update: "27.0", UpdateBlocked: "This update requires WordPress version 7.0, but the version installed is 6.9.12."},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	// WordPress updated itself to 7.0 since the list was cached.
+	refreshPluginCache = func(models.CliSite) error {
+		return db.ReplaceSitePlugins(testSite, []models.WPPlugin{
+			{Name: "wordpress-seo", Status: "active", Version: "26.4", Update: "27.0"},
+		}, time.Now().Add(time.Second))
+	}
+	var gotPlugins []string
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
+		gotPlugins = plugins
+		return []wpcli.UpdateResult{{Name: "wordpress-seo", OldVersion: "26.4", NewVersion: "27.0", Status: "Updated"}}, nil
+	}
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "wordpress-seo", OldVersion: "26.4"})
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+	if !slices.Equal(gotPlugins, []string{"wordpress-seo"}) {
+		t.Errorf("plugins passed to wp-cli = %v, want the no longer blocked update", gotPlugins)
+	}
+}
+
 func TestRunAllBlockedRunsNoUpdate(t *testing.T) {
 	setupRunnerTest(t)
 	if err := db.ReplaceSitePlugins(testSite, []models.WPPlugin{

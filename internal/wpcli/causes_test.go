@@ -10,8 +10,44 @@ import (
 func TestFailureCause(t *testing.T) {
 	cases := []struct {
 		name, output, plugin string
-		cause, detail        string
+		// Other plugins failed in the same call.
+		shared        bool
+		cause, detail string
 	}{
+		{
+			name:   "cURL timeout is the download's",
+			output: "Warning: Download failed. cURL error 28: Operation timed out after 300001 milliseconds with 0 bytes received; Error: No plugins updated (1 failed).",
+			plugin: "x",
+			cause:  CauseDownloadFailed, detail: "cURL error 28: Operation timed out after 300001 milliseconds with 0 bytes received",
+		},
+		{
+			name:   "cURL connection refused is the download's",
+			output: "Warning: Download failed. cURL error 7: Failed to connect to updates.example.com port 443: Connection refused",
+			plugin: "x",
+			cause:  CauseDownloadFailed, detail: "cURL error 7: Failed to connect to updates.example.com port 443: Connection refused",
+		},
+		{
+			name:   "two kinds of failure in one call",
+			output: "Warning: Update package not available.; Warning: Download failed. Unauthorized; Error: No plugins updated (2 failed).",
+			plugin: "gravityforms", shared: true,
+		},
+		{
+			name:   "one kind of failure in a shared call",
+			output: "Warning: wordpress-seo: This update requires WordPress version 7.0, but the version installed is 6.9.12.; Warning: Update package not available.; Error: No plugins updated (2 failed).",
+			plugin: "polylang-pro", shared: true,
+			cause: CauseNoPackage,
+		},
+		{
+			name:   "slug that ends another plugin's",
+			output: "Warning: wordpress-seo: This update requires WordPress version 7.0, but the version installed is 6.9.12.; Error: No plugins updated (2 failed).",
+			plugin: "seo", shared: true,
+		},
+		{
+			name:   "ZIP needing a newer PHP",
+			output: "Warning: The PHP version on your server is 7.4.33, however the uploaded plugin requires 8.1.",
+			plugin: "x",
+			cause:  CauseRequirements, detail: "PHP 8.1",
+		},
 		{
 			name:   "needs WordPress",
 			output: "failed to update plugin: Warning: wordpress-seo: This update requires WordPress version 7.0, but the version installed is 6.9.12.; Error: No plugins updated.",
@@ -112,7 +148,7 @@ func TestFailureCause(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			cause, detail := FailureCause(c.output, c.plugin)
+			cause, detail := FailureCause(c.output, c.plugin, c.shared)
 			if cause != c.cause || detail != c.detail {
 				t.Errorf("FailureCause = %q, %q; want %q, %q", cause, detail, c.cause, c.detail)
 			}

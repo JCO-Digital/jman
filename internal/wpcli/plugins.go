@@ -165,7 +165,14 @@ func AddPlugin(site models.CliSite, plugin string, activate bool, rec *[]models.
 	// WordPress checks for plugin updates again once the install is done
 	// and saves them, so it runs like UpdatePlugin, where premium plugins
 	// can add theirs.
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, EnglishMessages: true, Timeout: WriteTimeout, Record: rec}, args...)
+	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, EnglishMessages: true, Timeout: WriteTimeout, Record: rec}
+	res, err := RunWP(opts, args...)
+	if err != nil && opts.User != 0 && isInvalidUserError(res.Error) {
+		// The cached administrator is gone. wp-cli stops before
+		// installing anything, so run it again without one.
+		opts.User = 0
+		res, err = RunWP(opts, args...)
+	}
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -175,6 +182,12 @@ func AddPlugin(site models.CliSite, plugin string, activate bool, rec *[]models.
 		return false, fmt.Errorf("failed to install plugin: %s", shortError(res.Error, err))
 	}
 	return strings.Contains(res.Output, "Success:"), nil
+}
+
+// isInvalidUserError reports whether wp-cli refused its --user: "Error:
+// Invalid user ID, email or login: '3'".
+func isInvalidUserError(stderr string) bool {
+	return strings.Contains(stderr, "Invalid user ID, email or login")
 }
 
 type UpdateResult struct {

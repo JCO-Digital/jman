@@ -195,7 +195,13 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 	if err != nil {
 		forgetAdminUser(site.SiteID)
 		verb.LogPrintf(verb.Normal, "Failed to list plugins for %s with plugins loaded, retrying with them skipped: %v", site.Domain, err)
-		if out, err = runner.run(ctx, id, sitePath, wpcli.SkippedPluginListArgs(fields...)...); err != nil {
+		out, err = runner.run(ctx, id, sitePath, wpcli.SkippedPluginListArgs(fields...)...)
+		if err != nil && fields != nil && wpcli.IsInvalidFieldError(err.Error()) {
+			// An older wp-cli, which the loaded run didn't get far enough
+			// to show.
+			out, err = runner.run(ctx, id, sitePath, wpcli.SkippedPluginListArgs()...)
+		}
+		if err != nil {
 			return fail(err)
 		}
 	}

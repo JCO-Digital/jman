@@ -60,6 +60,8 @@ var englishMessages = []string{
 	"The update cannot be installed because some files could not be copied. This is usually due to inconsistent file permissions.",
 	"Your WordPress version is %1$s, however the new plugin version requires %2$s.",
 	"The PHP version on your server is %1$s, however the new plugin version requires %2$s.",
+	"Your WordPress version is %1$s, however the uploaded plugin requires %2$s.",
+	"The PHP version on your server is %1$s, however the uploaded plugin requires %2$s.",
 	"There has been a critical error on this website.",
 }
 
@@ -87,29 +89,90 @@ func EnglishMessagesArg() string {
 var (
 	// "wordpress-seo: This update requires WordPress version 7.0, but …"
 	// (wp-cli), "Your WordPress version is 6.9, however the new plugin
-	// version requires 7.0." (WordPress).
-	requiresWP        = regexp.MustCompile(`requires WordPress version ([\d.]+)|new plugin version requires ([\d.]+)\.`)
+	// version requires 7.0." (WordPress; "the uploaded plugin" for ZIPs).
+	requiresWP        = regexp.MustCompile(`requires WordPress version ([\d.]+)|Your WordPress version is [\d.]+, however the (?:new plugin version|uploaded plugin) requires ([\d.]+)\.`)
 	requiresPHP       = regexp.MustCompile(`requires PHP version ([\d.]+)`)
-	phpVersionMessage = regexp.MustCompile(`The PHP version on your server is [\d.]+, however the new plugin version requires ([\d.]+)`)
+	phpVersionMessage = regexp.MustCompile(`The PHP version on your server is [\d.]+, however the (?:new plugin version|uploaded plugin) requires (\d+(?:\.\d+)*)`)
 	// The wp-cli warning that names the plugin it is about.
-	requirementsOf = regexp.MustCompile(`(?m)Warning: ([a-z0-9_.-]+): This update requires`)
+	requirementsOf = regexp.MustCompile(`Warning: ([a-z0-9_.-]+): This update requires[^;\n]*`)
 	downloadFailed = regexp.MustCompile(`Download failed\.\s*([^;\n]*)`)
 	// A PHP fatal error and the wp-content directory it happened in.
 	fatalError   = regexp.MustCompile(`(?:PHP )?Fatal error: `)
 	fatalIn      = regexp.MustCompile(`Fatal error: .*?/wp-content/(plugins|themes|mu-plugins)/([^/\s:]+)`)
 	criticalSite = regexp.MustCompile(`There has been a critical error on this website`)
-	sshFailure   = regexp.MustCompile(`ssh: connect to host|ssh: Could not resolve hostname|Connection refused|Connection timed out|Permission denied \(publickey`)
+	// ssh's own messages only: cURL's "Connection refused" or "timed out"
+	// in a download warning is the download's failure.
+	sshFailure = regexp.MustCompile(`ssh: connect to host \S+ port \d+: |ssh: Could not resolve hostname|Permission denied \(publickey`)
 )
+
+// pluginCauses are the causes that belong to one plugin's download or
+// install, in the order FailureCause tries them. The others (a timeout,
+// the connection, a fatal error, WordPress's update lock) stop the whole
+// call, so they are every failed plugin's.
+var pluginCauses = []struct {
+	cause string
+	match func(output string) (bool, string)
+}{
+	{CauseNoPackage, func(o string) (bool, string) {
+		return containsAny(o,
+			"Update package not available.",
+			"Installation package not available.",
+			"Package not available.",
+			// Finnish and Swedish, from runs without EnglishMessagesArg.
+			"Päivityspaketti ei ole käytettävissä.",
+			"Uppdateringspaketet är inte tillgängligt."), ""
+	}},
+	{CauseDownloadFailed, func(o string) (bool, string) {
+		if !strings.Contains(o, "Download failed.") {
+			return false, ""
+		}
+		if m := downloadFailed.FindStringSubmatch(o); m != nil {
+			return true, strings.TrimSpace(m[1])
+		}
+		return true, ""
+	}},
+	{CauseBadPackage, func(o string) (bool, string) {
+		return containsAny(o,
+			"The package could not be installed.",
+			"contains no files.",
+			"No valid plugins were found.",
+			"Incompatible Archive",
+			"PCLZIP_ERR"), ""
+	}},
+	{CauseFiles, func(o string) (bool, string) {
+		return containsAny(o,
+			"Could not copy file",
+			"some files could not be copied",
+			"Could not create directory",
+			"Could not remove the",
+			"Could not access filesystem",
+			"Destination folder already exists",
+			"No space left on device"), ""
+	}},
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
 
 // FailureCause reads what went wrong from a failed update's output (the
 // result's error and the calls' stderr): one of the Cause* codes and a
 // detail, or "" if it isn't recognized. plugin is the plugin the result is
-// for, or "" for core: one call updates several plugins and every failed
-// one gets its messages, so a requirement warning that names another
-// plugin isn't this plugin's cause.
-func FailureCause(output, plugin string) (cause, detail string) {
+// for, or "" for core.
+//
+// One call updates several plugins, and wp-cli's warnings go to every
+// plugin that failed in it. shared says other plugins failed in the same
+// call: a requirement warning then only counts for the plugin it names,
+// and a download or install message only when the output holds just one
+// kind of them, as it can't be told whose it is.
+func FailureCause(output, plugin string, shared bool) (cause, detail string) {
 	switch {
-	case strings.Contains(output, "timed out after"):
+	case strings.Contains(output, ErrTimeout.Error()):
 		return CauseTimeout, ""
 	case sshFailure.MatchString(output):
 		return CauseConnection, ""
@@ -118,70 +181,64 @@ func FailureCause(output, plugin string) (cause, detail string) {
 			return CauseSiteError, m[1] + "/" + m[2]
 		}
 		return CauseSiteError, ""
-	}
-	if need := requirement(output, plugin); need != "" {
-		return CauseRequirements, need
-	}
-	switch {
-	case strings.Contains(output, "Update package not available.") ||
-		strings.Contains(output, "Installation package not available.") ||
-		strings.Contains(output, "Package not available.") ||
-		// Finnish and Swedish, from runs without EnglishMessagesArg.
-		strings.Contains(output, "Päivityspaketti ei ole käytettävissä.") ||
-		strings.Contains(output, "Uppdateringspaketet är inte tillgängligt."):
-		return CauseNoPackage, ""
-	case strings.Contains(output, "Download failed."):
-		m := downloadFailed.FindStringSubmatch(output)
-		if m == nil {
-			return CauseDownloadFailed, ""
-		}
-		return CauseDownloadFailed, strings.TrimSpace(m[1])
-	case strings.Contains(output, "The package could not be installed.") ||
-		strings.Contains(output, "contains no files.") ||
-		strings.Contains(output, "No valid plugins were found.") ||
-		strings.Contains(output, "Incompatible Archive") ||
-		strings.Contains(output, "PCLZIP_ERR"):
-		return CauseBadPackage, ""
 	case strings.Contains(output, "Another update is currently in progress."):
 		return CauseUpdateLocked, ""
-	case strings.Contains(output, "Could not copy file") ||
-		strings.Contains(output, "some files could not be copied") ||
-		strings.Contains(output, "Could not create directory") ||
-		strings.Contains(output, "Could not remove the") ||
-		strings.Contains(output, "Could not access filesystem") ||
-		strings.Contains(output, "Destination folder already exists") ||
-		strings.Contains(output, "No space left on device"):
-		return CauseFiles, ""
+	}
+	need, named := requirement(output, plugin)
+	if need != "" {
+		return CauseRequirements, need
+	}
+	if named {
+		// Other plugins' requirement warnings say nothing about this one.
+		output = requirementsOf.ReplaceAllString(output, "")
+	}
+	for _, c := range pluginCauses {
+		ok, d := c.match(output)
+		if !ok {
+			continue
+		}
+		if shared {
+			for _, other := range pluginCauses {
+				if other.cause == c.cause {
+					continue
+				}
+				if more, _ := other.match(output); more {
+					return "", ""
+				}
+			}
+		}
+		return c.cause, d
 	}
 	return "", ""
 }
 
 // requirement returns what an update needs ("WordPress 7.0", "PHP 8.0",
 // or just "WordPress" when the version is blank) if the output says the
-// plugin's update needs a newer version, else "".
-func requirement(output, plugin string) string {
+// plugin's update needs a newer version, else "". named says the output
+// has wp-cli's requirement warnings, which name their plugin.
+func requirement(output, plugin string) (need string, named bool) {
 	// wp-cli names the plugin; with several failed plugins in one call,
 	// only the named ones are blocked by requirements.
 	if requirementsOf.MatchString(output) {
 		if plugin == "" {
-			return ""
+			return "", true
 		}
-		own := regexp.MustCompile(regexp.QuoteMeta(plugin) + `: This update requires (WordPress|PHP) version ([\d.]*)`)
+		own := regexp.MustCompile(`Warning: ` + regexp.QuoteMeta(plugin) + `: This update requires (WordPress|PHP) version ([\d.]*)`)
 		if m := own.FindStringSubmatch(output); m != nil {
-			return strings.TrimSpace(m[1] + " " + m[2])
+			return strings.TrimSpace(m[1] + " " + m[2]), true
 		}
-		return ""
+		return "", true
 	}
 	if m := requiresWP.FindStringSubmatch(output); m != nil {
-		return "WordPress " + m[1] + m[2]
+		return "WordPress " + m[1] + m[2], false
 	}
 	if m := requiresPHP.FindStringSubmatch(output); m != nil {
-		return "PHP " + m[1]
+		return "PHP " + m[1], false
 	}
 	if m := phpVersionMessage.FindStringSubmatch(output); m != nil {
-		return "PHP " + m[1]
+		return "PHP " + m[1], false
 	}
-	return ""
+	return "", false
 }
 
 // CauseLabel is a short description of a failure cause for people, e.g.
