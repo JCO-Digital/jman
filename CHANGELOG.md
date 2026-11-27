@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.52.0 (2026-11-27)
+
+#### Features
+
+- updates: say on the core card when nightly core updates are off (9fc52df)
+- updates: per-site nightly core update policy (739dcf5)
+
+#### Bug Fixes
+
+- updates: address review of the nightly core update policy (b0798d9)
+
 ### 7.51.2 (2026-11-27)
 
 #### Bug Fixes
