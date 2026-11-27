@@ -186,3 +186,56 @@ func TestSiteTiersFromConfig(t *testing.T) {
 		}
 	}
 }
+
+// The site list reports each site's default core update policy and its
+// override, and the nightly run reads the same through the database.
+func TestSiteCoreUpdatePolicy(t *testing.T) {
+	setupSiteManagementTest(t)
+	saveLinkTestSite(t, linkProdID, "example.com", models.SiteEnvironmentProduction)
+	saveLinkTestSite(t, linkStagingID, "staging.example.com", models.SiteEnvironmentStaging)
+
+	setPolicy := func(siteID, body string) int {
+		return callSiteHandler(t, SetSiteCoreUpdatePolicyHandler, "PUT", siteID, body).Code
+	}
+	check := func(id string, override, def, effective models.CoreUpdatePolicy) {
+		t.Helper()
+		s := findAPISite(t, id)
+		if s.CoreUpdatePolicy != override || s.CoreUpdateDefault != def {
+			t.Errorf("%s: policy %q, default %q; want %q, %q", s.Domain, s.CoreUpdatePolicy, s.CoreUpdateDefault, override, def)
+		}
+		all, err := db.GetEffectiveCoreUpdatePolicies()
+		if err != nil || all[id] != effective {
+			t.Errorf("%s: effective policy %q (%v), want %q", s.Domain, all[id], err, effective)
+		}
+	}
+
+	check(linkProdID, "", models.CorePolicyVulnMinor, models.CorePolicyVulnMinor)
+	check(linkStagingID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+
+	// A basic tier production site updates to the latest version nightly.
+	if code := callSiteHandler(t, SetSiteTierHandler, "PUT", linkProdID, `{"tier":10}`).Code; code != http.StatusOK {
+		t.Fatalf("set tier: got %d", code)
+	}
+	check(linkProdID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+
+	if code := setPolicy(linkProdID, `{"policy":"minor"}`); code != http.StatusOK {
+		t.Fatalf("set policy: got %d", code)
+	}
+	check(linkProdID, models.CorePolicyMinor, models.CorePolicyMajor, models.CorePolicyMinor)
+	if code := setPolicy(linkStagingID, `{"policy":"vuln_minor"}`); code != http.StatusOK {
+		t.Fatalf("set staging policy: got %d", code)
+	}
+	check(linkStagingID, models.CorePolicyVulnMinor, models.CorePolicyMajor, models.CorePolicyVulnMinor)
+
+	if code := setPolicy(linkProdID, `{"policy":"weekly"}`); code != http.StatusBadRequest {
+		t.Errorf("unknown policy: got %d, want 400", code)
+	}
+	if code := setPolicy(linkOtherProd, `{"policy":"minor"}`); code != http.StatusNotFound {
+		t.Errorf("unknown site: got %d, want 404", code)
+	}
+
+	if code := setPolicy(linkProdID, `{"policy":""}`); code != http.StatusOK {
+		t.Fatalf("clear policy: got %d", code)
+	}
+	check(linkProdID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+}

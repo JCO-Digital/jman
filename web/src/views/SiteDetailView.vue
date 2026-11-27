@@ -47,10 +47,16 @@ import {
 import {
 	availablePluginUpdate,
 	blockedPluginUpdate,
+	corePolicyLabels,
+	defaultCorePolicy,
 	formatBytes,
 	providerLabel,
 } from "../utils/format";
-import type { LedgerStatus, SiteUpdateLedgerEntry } from "../types";
+import type {
+	CoreUpdatePolicy,
+	LedgerStatus,
+	SiteUpdateLedgerEntry,
+} from "../types";
 import { BASE_URL, apiFetch } from "../utils/api";
 import { createPoller } from "../utils/poller";
 
@@ -534,6 +540,47 @@ const onTierChange = async () => {
 	} catch (e: any) {
 		tierDraft.value = previous;
 		toast.addToast("Failed to update tier: " + e.message, "error");
+	}
+};
+
+// The nightly core update policy: the site's override ("" for the
+// default) and the default from its environment and tier.
+const corePolicyDraft = ref<CoreUpdatePolicy | "">("");
+watch(
+	() => site.value?.core_update_policy,
+	(policy) => {
+		corePolicyDraft.value = policy ?? "";
+	},
+	{ immediate: true },
+);
+const coreDefaultPolicy = computed<CoreUpdatePolicy>(
+	() =>
+		site.value?.core_update_default ??
+		defaultCorePolicy(site.value?.environment, site.value?.tier),
+);
+const coreEffectivePolicy = computed<CoreUpdatePolicy>(
+	() => site.value?.core_update_policy ?? coreDefaultPolicy.value,
+);
+const corePolicyOptions = Object.entries(corePolicyLabels) as [
+	CoreUpdatePolicy,
+	string,
+][];
+
+const onCorePolicyChange = async () => {
+	if (!site.value) return;
+	const previous = site.value.core_update_policy ?? "";
+	try {
+		await dataStore.setCoreUpdatePolicy(
+			site.value.id,
+			corePolicyDraft.value || null,
+		);
+		toast.addToast("Nightly core updates updated.", "success");
+	} catch (e: any) {
+		corePolicyDraft.value = previous;
+		toast.addToast(
+			"Failed to update nightly core updates: " + e.message,
+			"error",
+		);
 	}
 };
 
@@ -1519,6 +1566,51 @@ const unlinkOrganization = async () => {
 								<template v-if="coreVulnsMaxCvss != null">
 									· max {{ coreVulnsMaxCvss.toFixed(1) }}
 								</template>
+							</span>
+						</span>
+					</div>
+
+					<div class="info-item">
+						<label for="core-update-policy" class="label"
+							>Nightly Updates</label
+						>
+						<span class="value flex-row items-center gap-2">
+							<select
+								v-if="authStore.canEdit"
+								id="core-update-policy"
+								v-model="corePolicyDraft"
+								@change="onCorePolicyChange"
+							>
+								<option value="">
+									Default:
+									{{ corePolicyLabels[coreDefaultPolicy] }}
+								</option>
+								<option
+									v-for="[value, label] in corePolicyOptions"
+									:key="value"
+									:value="value"
+								>
+									{{ label }}
+								</option>
+							</select>
+							<template v-else>
+								{{ corePolicyLabels[coreEffectivePolicy] }}
+								<span
+									v-if="!site.core_update_policy"
+									class="text-muted"
+									>(default)</span
+								>
+							</template>
+							<span
+								v-if="
+									coreEffectivePolicy === 'major' &&
+									siteLocks.site
+								"
+								class="text-muted"
+								title="An update-locked site only gets minor core updates"
+							>
+								<AppIcon name="lock" size="12" />
+								Minor only while locked
 							</span>
 						</span>
 					</div>

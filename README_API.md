@@ -436,10 +436,17 @@ Plugin updates, plugin activation, deactivation, deletion and installs, and Word
 
 ### Nightly core updates
 
-With `nightlyCoreUpdates` on, jman-api updates WordPress core once a night on every site that runs a version with known core vulnerabilities:
+With `nightlyCoreUpdates` on, jman-api updates WordPress core once a night, as each site's policy says:
 
-- A site qualifies when it has an open core exposure (Monitoring → Vulnerabilities) that isn't muted, and a minor core update. Muting the exposure keeps the site out. Major updates are never queued, so a site with only a major update waits for someone to update it.
-- At the start hour (server local time), jman-api queues a minor core update job for each such site, the same job as `POST /api/sites/{id}/core-update` with `{"target": "minor"}`, with `nightly` as its user in the job list and the update ledger. Update locks don't stop it, as they only hold back major updates. Sites with a core update already queued or running are skipped.
+| Policy       | Nightly update                                                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `vuln_minor` | To the latest minor version, when the site has an open core exposure (Monitoring → Vulnerabilities) that isn't muted. |
+| `minor`      | To the latest minor version.                                                                                          |
+| `major`      | To the latest version, major or minor.                                                                                |
+
+- The default is `major` for staging and development sites and for production sites on a tier below Standard (20), and `vuln_minor` for the rest: higher tiers, production sites without a tier, and archived sites. The WordPress Core card on the site's page shows it and sets an override for the site (`PUT /api/sites/{id}/core-update-policy`).
+- Under `vuln_minor`, muting the exposure keeps the site out, and a site with only a major update waits for someone to update it.
+- At the start hour (server local time), jman-api queues a core update job for each site with an update to make, the same job as `POST /api/sites/{id}/core-update` with `{"target": "minor"}` or `{"target": "major"}`, with `nightly` as its user in the job list and the update ledger. An update-locked site gets a minor update in place of a major one: the nightly run never overrides a lock. Sites with a core update already queued or running are skipped.
 - It runs once a night. If jman-api was down at the start hour, it runs later, up to three hours after it.
 - When the jobs have finished, it posts a summary to `slackChannel`: the sites updated (with old and new version), failed, or already up to date. Nothing is posted on a night with nothing to update.
 

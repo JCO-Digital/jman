@@ -15,9 +15,11 @@ import type {
 	EnrichedPlugin,
 	SiteCore,
 	UpdateLock,
+	CoreUpdatePolicy,
 } from "../types";
 import { useAuthStore } from "./auth";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
+import { defaultCorePolicy } from "../utils/format";
 
 // Cache keys are versioned: bump a key when the shape of what it holds
 // changes (ids moving from SpinupWP integers to UUID strings, sites gaining
@@ -598,6 +600,10 @@ export const useDataStore = defineStore("data", () => {
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.environment = environment || undefined;
+			site.core_update_default = defaultCorePolicy(
+				site.environment,
+				site.environment === "production" ? site.tier : undefined,
+			);
 			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}
@@ -632,6 +638,34 @@ export const useDataStore = defineStore("data", () => {
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.tier = tier || undefined;
+			site.core_update_default = defaultCorePolicy(
+				site.environment,
+				site.tier,
+			);
+			persist(CACHE_KEY_SITES, () => sites.value);
+		}
+	}
+
+	/**
+	 * Sets a site's nightly core update policy override; null clears it,
+	 * so the default applies.
+	 */
+	async function setCoreUpdatePolicy(
+		siteId: string,
+		policy: CoreUpdatePolicy | null,
+	) {
+		const res = await apiFetch(
+			`${BASE_URL}/sites/${siteId}/core-update-policy`,
+			{
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ policy }),
+			},
+		);
+		if (!res.ok) await handleErrorResponse(res);
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.core_update_policy = policy || undefined;
 			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}
@@ -779,6 +813,7 @@ export const useDataStore = defineStore("data", () => {
 		fetchSiteTiers,
 		tierName,
 		setSiteTier,
+		setCoreUpdatePolicy,
 		setProductionSite,
 		getSiteLocks,
 		isPluginLocked,

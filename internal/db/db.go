@@ -373,6 +373,17 @@ func initInventorySchema() error {
 			},
 		},
 		{
+			// A site's override of its nightly core update policy
+			// (models.CoreUpdatePolicy); without a row the default applies.
+			Name: "site_core_update_policy",
+			Columns: map[string]string{
+				"site_id":    "TEXT PRIMARY KEY",
+				"policy":     "TEXT NOT NULL",
+				"updated_at": "DATETIME DEFAULT CURRENT_TIMESTAMP",
+				"updated_by": "TEXT",
+			},
+		},
+		{
 			Name: "ignore_entries",
 			Columns: map[string]string{
 				"id":               "INTEGER PRIMARY KEY AUTOINCREMENT",

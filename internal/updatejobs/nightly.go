@@ -17,10 +17,13 @@ import (
 	"github.com/JCO-Digital/jman/internal/slack"
 )
 
-// The nightly core update: once a night, every site running a WordPress
-// version with an open, unmuted core vulnerability exposure, and with a
-// minor core update available, gets a minor core update job. Major updates
-// are never queued. It is off unless nightlyCoreUpdates is set.
+// The nightly core update: once a night, every site gets the core update
+// its policy asks for (models.CoreUpdatePolicy): a minor update when its
+// WordPress version has an open, unmuted core vulnerability exposure (the
+// default for most production sites), a minor update every night, or an
+// update to the latest version every night (the default for staging,
+// development and basic tier sites). It is off unless nightlyCoreUpdates
+// is set.
 
 // NightlyCreatedBy is the CreatedBy of the nightly core update's jobs; the
 // update ledger and the job list show it as the user.
@@ -69,6 +72,7 @@ var (
 	openExposures     = db.ListOpenVulnExposures
 	openMutes         = db.ListOpenVulnMutes
 	allSiteCore       = db.GetAllSiteCore
+	corePolicies      = db.GetEffectiveCoreUpdatePolicies
 	enqueueCore       = EnqueueCore
 	getJob            = db.GetUpdateJob
 	sendNightlySlack  = func(msg string) error { return slack.SendMessage(msg, true) }
@@ -127,39 +131,53 @@ func runNightlyCoreIfDue(ctx context.Context, hour int) {
 	runNightlyCore(ctx)
 }
 
-// nightlyCandidate is a site the nightly core update updates.
+// nightlyCandidate is a site the nightly core update updates, and to
+// which target ("minor" or "major").
 type nightlyCandidate struct {
-	SiteID      string
-	Version     string
-	MinorUpdate string
+	SiteID  string
+	Version string
+	Target  string
 }
 
-// nightlyCoreCandidates returns the sites with an open core exposure that
-// isn't muted and a minor core update, by site ID.
-func nightlyCoreCandidates(exposures []models.VulnExposure, mutes []models.VulnMute, cores []models.SiteCore) []nightlyCandidate {
+// nightlyCoreCandidates returns the sites to update tonight, by site ID,
+// from each site's policy (policies; a site without one has the
+// vulnerability policy) and its cached core updates:
+//   - vuln_minor: a minor update, when there's an open core exposure that
+//     isn't muted.
+//   - minor: a minor update.
+//   - major: any update, to the latest version.
+func nightlyCoreCandidates(exposures []models.VulnExposure, mutes []models.VulnMute, cores []models.SiteCore, policies map[string]models.CoreUpdatePolicy) []nightlyCandidate {
 	muted := map[string]bool{}
 	for _, m := range mutes {
 		if m.Kind == models.VulnExposureCore && m.Open() {
 			muted[m.SiteID] = true
 		}
 	}
-	coreBySite := make(map[string]models.SiteCore, len(cores))
-	for _, c := range cores {
-		coreBySite[c.SiteID] = c
+	vulnerable := map[string]bool{}
+	for _, e := range exposures {
+		if e.Kind == models.VulnExposureCore && e.ResolvedAt == nil && !muted[e.SiteID] {
+			vulnerable[e.SiteID] = true
+		}
 	}
 
 	var out []nightlyCandidate
-	seen := map[string]bool{}
-	for _, e := range exposures {
-		if e.Kind != models.VulnExposureCore || e.ResolvedAt != nil || muted[e.SiteID] || seen[e.SiteID] {
+	for _, core := range cores {
+		policy := policies[core.SiteID]
+		if !policy.Valid() {
+			policy = models.CorePolicyVulnMinor
+		}
+		c := nightlyCandidate{SiteID: core.SiteID, Version: core.Version}
+		switch {
+		case policy == models.CorePolicyMajor && (core.MajorUpdate != "" || core.MinorUpdate != ""):
+			c.Target = "major"
+		case policy == models.CorePolicyMinor && core.MinorUpdate != "":
+			c.Target = "minor"
+		case policy == models.CorePolicyVulnMinor && core.MinorUpdate != "" && vulnerable[core.SiteID]:
+			c.Target = "minor"
+		default:
 			continue
 		}
-		core, ok := coreBySite[e.SiteID]
-		if !ok || core.MinorUpdate == "" {
-			continue
-		}
-		seen[e.SiteID] = true
-		out = append(out, nightlyCandidate{SiteID: e.SiteID, Version: core.Version, MinorUpdate: core.MinorUpdate})
+		out = append(out, c)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].SiteID < out[j].SiteID })
 	return out
@@ -183,16 +201,21 @@ func runNightlyCore(ctx context.Context) {
 		log.Printf("Nightly core update: %v", err)
 		return
 	}
+	policies, err := corePolicies()
+	if err != nil {
+		log.Printf("Nightly core update: %v", err)
+		return
+	}
 
-	// Only sites jman can run WP-CLI on; a removed site's exposure would
+	// Only sites jman can run WP-CLI on; a removed site's cached core would
 	// otherwise fail every night. Without the site list, all are tried.
 	names := siteNames()
 	var ids []int64
-	for _, c := range nightlyCoreCandidates(exposures, mutes, cores) {
+	for _, c := range nightlyCoreCandidates(exposures, mutes, cores, policies) {
 		if names != nil && names[c.SiteID] == "" {
 			continue
 		}
-		job := models.NewUpdateJob(models.UpdateJobKindCore, c.SiteID, models.CorePayload{Target: "minor"})
+		job := models.NewUpdateJob(models.UpdateJobKindCore, c.SiteID, models.CorePayload{Target: c.Target})
 		job.CreatedBy = NightlyCreatedBy
 		// Nobody waits for it; it ages to normal if it waits long.
 		job.Priority = models.UpdateJobPriorityLow
@@ -300,7 +323,7 @@ func nightlySummary(jobs []models.UpdateJob, names map[string]string) string {
 	if len(failed) > 0 || len(unfinished) > 0 {
 		icon = "⚠️"
 	}
-	fmt.Fprintf(&b, "%s *Nightly WordPress core updates* for core vulnerabilities: %d updated", icon, len(updated))
+	fmt.Fprintf(&b, "%s *Nightly WordPress core updates*: %d updated", icon, len(updated))
 	if len(failed) > 0 {
 		fmt.Fprintf(&b, ", %d failed", len(failed))
 	}

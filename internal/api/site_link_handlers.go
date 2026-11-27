@@ -208,3 +208,52 @@ func DeleteSiteProductionLinkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 }
+
+// SetSiteCoreUpdatePolicyHandler sets a site's nightly core update policy:
+// {"policy": "vuln_minor" | "minor" | "major"}. An empty or null policy
+// clears the override, so the default for its environment and tier applies.
+func SetSiteCoreUpdatePolicyHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var body struct {
+		Policy *models.CoreUpdatePolicy `json:"policy"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	_, found, err := db.GetEffectiveSiteEnvironment(siteID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if !found {
+		WriteError(w, http.StatusNotFound, "Site not found")
+		return
+	}
+
+	if body.Policy == nil || *body.Policy == "" {
+		if err := db.ClearSiteCoreUpdatePolicy(siteID); err != nil {
+			verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if !body.Policy.Valid() {
+		WriteError(w, http.StatusBadRequest, fmt.Sprintf("Unknown policy: %q", *body.Policy))
+		return
+	}
+	if err := db.SetSiteCoreUpdatePolicy(siteID, *body.Policy, getUsername(r)); err != nil {
+		verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}

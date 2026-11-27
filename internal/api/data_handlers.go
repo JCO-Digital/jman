@@ -176,14 +176,19 @@ type apiSite struct {
 	ProductionSiteID string `json:"production_site_id,omitempty"`
 	// Tier is a production site's tier id (models.SiteTier); 0 for none
 	// and for every non-production site.
-	Tier           int    `json:"tier,omitempty"`
-	Status         string `json:"status"`
-	IsWordpress    bool   `json:"is_wordpress"`
-	PHPVersion     string `json:"php_version"`
-	SiteUser       string `json:"site_user"`
-	ConnectionType string `json:"connection_type"`
-	SSHHost        string `json:"ssh_host"`
-	SSHPort        int    `json:"ssh_port"`
+	Tier int `json:"tier,omitempty"`
+	// CoreUpdatePolicy is the site's override of the nightly core update
+	// policy, empty for none; CoreUpdateDefault is the policy without one,
+	// from the environment and tier (models.DefaultCoreUpdatePolicy).
+	CoreUpdatePolicy  models.CoreUpdatePolicy `json:"core_update_policy,omitempty"`
+	CoreUpdateDefault models.CoreUpdatePolicy `json:"core_update_default"`
+	Status            string                  `json:"status"`
+	IsWordpress       bool                    `json:"is_wordpress"`
+	PHPVersion        string                  `json:"php_version"`
+	SiteUser          string                  `json:"site_user"`
+	ConnectionType    string                  `json:"connection_type"`
+	SSHHost           string                  `json:"ssh_host"`
+	SSHPort           int                     `json:"ssh_port"`
 	// SSH is the target jman actually connects to for WP-CLI, in WP-CLI's
 	// --ssh form ("user@host", or "user@host:port" for non-default ports).
 	SSH      string `json:"ssh,omitempty"`
@@ -349,6 +354,10 @@ func loadAPISites() ([]apiSite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("site tiers: %w", err)
 	}
+	corePolicies, err := db.GetAllSiteCoreUpdatePolicies()
+	if err != nil {
+		return nil, fmt.Errorf("core update policies: %w", err)
+	}
 
 	for i := range sites {
 		id := sites[i].ID
@@ -363,6 +372,10 @@ func loadAPISites() ([]apiSite, error) {
 		if sites[i].Environment == models.SiteEnvironmentProduction {
 			sites[i].Tier = siteTiers[id]
 		}
+		if p := corePolicies[id]; p.Valid() {
+			sites[i].CoreUpdatePolicy = p
+		}
+		sites[i].CoreUpdateDefault = models.DefaultCoreUpdatePolicy(sites[i].Environment, sites[i].Tier)
 		if usage, ok := diskUsage[id]; ok {
 			sites[i].DiskUsage = &usage
 		}

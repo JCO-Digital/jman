@@ -1,3 +1,4 @@
+import type { CoreUpdatePolicy } from "../types";
 /**
  * Formats a byte count into a human-readable string (e.g. "1.5 GB").
  */
@@ -250,4 +251,27 @@ const PROVIDER_LABELS: Record<string, string> = {
 /** The display name of an inventory provider ("hetzner" → "Hetzner Cloud"). */
 export function providerName(provider: string): string {
 	return PROVIDER_LABELS[provider] ?? provider;
+}
+
+export const corePolicyLabels: Record<CoreUpdatePolicy, string> = {
+	vuln_minor: "Minor update on vulnerability",
+	minor: "Minor update nightly",
+	major: "Latest version (major) nightly",
+};
+
+/**
+ * A site's default core update policy, as jman-api works it out
+ * (models.DefaultCoreUpdatePolicy): staging and development sites, and
+ * production sites on a tier below Standard (20), update to the latest
+ * version nightly; the rest only on a vulnerability. Used to update the
+ * default at once when the environment or tier changes.
+ */
+export function defaultCorePolicy(
+	environment: string | undefined,
+	tier: number | undefined,
+): CoreUpdatePolicy {
+	if (environment === "staging" || environment === "development")
+		return "major";
+	if (environment === "production" && tier && tier < 20) return "major";
+	return "vuln_minor";
 }
