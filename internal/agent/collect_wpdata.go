@@ -179,7 +179,8 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 	// admin-only update checks of others (Yoast add-ons) registered by
 	// runWithPlugins. If a
 	// broken plugin (or a since-deleted administrator) stops that, listed
-	// again with plugins skipped, where none of it matters.
+	// again with plugins skipped (see wpcli.SkippedPluginListArgs).
+	fields := []string{wpcli.PluginListFields}
 	listArgs := []string{"plugin", "list", wpcli.PluginListFields, "--format=json"}
 	if admin := siteAdminUser(ctx, runner, id, sitePath, site); admin > 0 {
 		listArgs = append(listArgs, fmt.Sprintf("--user=%d", admin))
@@ -187,13 +188,14 @@ func collectSiteWPData(ctx context.Context, runner wpDataRunner, site models.Age
 	out, err := runner.runWithPlugins(ctx, id, sitePath, listArgs...)
 	if err != nil && wpcli.IsInvalidFieldError(err.Error()) {
 		// An older wp-cli: its default fields, still with plugins loaded.
+		fields = nil
 		listArgs = slices.DeleteFunc(listArgs, func(a string) bool { return a == wpcli.PluginListFields })
 		out, err = runner.runWithPlugins(ctx, id, sitePath, listArgs...)
 	}
 	if err != nil {
 		forgetAdminUser(site.SiteID)
 		verb.LogPrintf(verb.Normal, "Failed to list plugins for %s with plugins loaded, retrying with them skipped: %v", site.Domain, err)
-		if out, err = runner.run(ctx, id, sitePath, "plugin", "list", wpcli.PluginListFields, "--format=json"); err != nil {
+		if out, err = runner.run(ctx, id, sitePath, wpcli.SkippedPluginListArgs(fields...)...); err != nil {
 			return fail(err)
 		}
 	}

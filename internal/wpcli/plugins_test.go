@@ -46,6 +46,18 @@ func TestGetPluginsWithUpdates(t *testing.T) {
 		t.Errorf("after a failed loaded run: plugins = %+v, err = %v", plugins, err)
 	}
 
+	// The skipped run reads the cached updates rather than checking again
+	// without the premium plugins; any other skipped run fails.
+	fakeWP(t, map[string]string{
+		"*user\\ list*":                     "echo '[]'",
+		loaded:                              "echo 'PHP Fatal error: broken plugin' >&2; exit 255",
+		skipped + "--skip-update-check\\ *": `echo '[{"name":"premium","status":"active","version":"1.0","update_version":"1.1"}]'`,
+	})
+	plugins, err = GetPluginsWithUpdates(site)
+	if err != nil || len(plugins) != 1 || plugins[0].Update != "1.1" {
+		t.Errorf("skipped run without --skip-update-check: plugins = %+v, err = %v", plugins, err)
+	}
+
 	// A wp-cli without update_unavailable_reason is asked for its default
 	// fields, with the plugins still loaded.
 	withFields := "--path=/srv/www\\ --exec=*\\ --skip-themes\\ plugin\\ list\\ --fields=*"

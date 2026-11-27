@@ -187,13 +187,16 @@ func stubSite(t *testing.T, runner *fakeRunner) {
 	})
 }
 
+// skippedList is the agent's plugin listing with plugins skipped.
+var skippedList = strings.Join(wpcli.SkippedPluginListArgs(wpcli.PluginListFields), " ")
+
 const pluginListJSON = `Deprecated: something on line 3
 [{"name":"akismet","status":"active","update":"none","version":"5.0","update_version":"","auto_update":"off"},{"name":"woocommerce","status":"active","update":"available","version":"9.3.0","update_version":"9.4.1","auto_update":"on"}]`
 
 func okRunner() *fakeRunner {
 	return &fakeRunner{out: map[string]string{
 		"loaded: plugin list " + wpcli.PluginListFields + " --format=json": pluginListJSON,
-		"plugin list " + wpcli.PluginListFields + " --format=json":         pluginListJSON,
+		skippedList:                       pluginListJSON,
 		"core version":                    "Deprecated: notice\n6.6.1\n",
 		"core check-update --format=json": `[{"version":"6.6.2","update_type":"minor","package_url":"x"},{"version":"6.7.1","update_type":"major","package_url":"y"}]`,
 	}}
@@ -234,7 +237,7 @@ func TestCollectSiteWPData(t *testing.T) {
 func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	runner := okRunner()
 	dbErr := errors.New("wp-cli [plugin list] failed: Error: Error establishing a database connection.")
-	runner.fail = map[string]error{"loaded: plugin list " + wpcli.PluginListFields + " --format=json": dbErr, "plugin list " + wpcli.PluginListFields + " --format=json": dbErr}
+	runner.fail = map[string]error{"loaded: plugin list " + wpcli.PluginListFields + " --format=json": dbErr, skippedList: dbErr}
 	stubSite(t, runner)
 	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if !strings.Contains(data.Error, "database connection") || data.Hash != "" || data.Plugins != nil {
@@ -273,7 +276,7 @@ func TestCollectSiteWPDataLoadsPlugins(t *testing.T) {
 		t.Errorf("data = %+v", data)
 	}
 	for _, call := range runner.calls {
-		if call == "plugin list "+wpcli.PluginListFields+" --format=json" {
+		if call == skippedList {
 			t.Error("listed the plugins again after a successful loaded run")
 		}
 	}
@@ -529,7 +532,7 @@ func TestCollectSiteWPDataAdminListFails(t *testing.T) {
 	if data.Error != "" || len(data.Plugins) != 2 {
 		t.Fatalf("data = %+v", data)
 	}
-	if !slices.Contains(runner.calls, "plugin list "+wpcli.PluginListFields+" --format=json") {
+	if !slices.Contains(runner.calls, skippedList) {
 		t.Errorf("not retried without --user: %v", runner.calls)
 	}
 	adminUsersMu.Lock()
@@ -601,7 +604,7 @@ func TestCollectSiteWPDataOldWPCLIFields(t *testing.T) {
 	if data.Error != "" || len(data.Plugins) != 2 {
 		t.Fatalf("data = %+v", data)
 	}
-	if slices.Contains(runner.calls, "plugin list "+wpcli.PluginListFields+" --format=json") {
+	if slices.Contains(runner.calls, skippedList) {
 		t.Errorf("listed with plugins skipped: %v", runner.calls)
 	}
 }

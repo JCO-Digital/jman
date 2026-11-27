@@ -16,9 +16,14 @@ import (
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error) {
 	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: !skipPlugins, PremiumUpdates: true}
-	res, err := RunWP(opts, "plugin", "list", PluginListFields, "--format=json")
+	args := []string{"plugin", "list", PluginListFields, "--format=json"}
+	if skipPlugins {
+		args = SkippedPluginListArgs(PluginListFields)
+	}
+	res, err := RunWP(opts, args...)
 	if err != nil && IsInvalidFieldError(res.Error) {
-		res, err = RunWP(opts, "plugin", "list", "--format=json")
+		args = slices.DeleteFunc(args, func(a string) bool { return a == PluginListFields })
+		res, err = RunWP(opts, args...)
 	}
 	if err != nil {
 		return nil, err
@@ -46,6 +51,18 @@ func GetPluginsWithUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 // ParsePluginList: wp-cli's default ones and update_unavailable_reason.
 // wp-cli versions without that field fail (see IsInvalidFieldError).
 const PluginListFields = "--fields=name,status,update,version,update_version,auto_update,update_unavailable_reason"
+
+// SkippedPluginListArgs are the `wp plugin list` arguments for a listing
+// with --skip-plugins, the fallback when loading the plugins fails. Each
+// `wp plugin list` deletes WordPress's cached plugin updates and checks
+// again; with the plugins skipped, premium plugins can't add theirs, and
+// the saved list would lack them until WordPress checks again, up to 12
+// hours later (in wp-admin, the dashboard and the next listing alike).
+// --skip-update-check reads the cached list instead, which has them if the
+// last check ran with the plugins loaded.
+func SkippedPluginListArgs(fields ...string) []string {
+	return append(append([]string{"plugin", "list"}, fields...), "--skip-update-check", "--format=json")
+}
 
 // IsInvalidFieldError reports whether wp-cli's output (or an error
 // carrying it) says a --fields name doesn't exist: wp-cli checks them
@@ -130,7 +147,10 @@ func AddPlugin(site models.CliSite, plugin string, activate bool, rec *[]models.
 	if activate {
 		args = append(args, "--activate")
 	}
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true, Timeout: WriteTimeout, Record: rec}, args...)
+	// WordPress checks for plugin updates again once the install is done
+	// and saves them, so it runs like UpdatePlugin, where premium plugins
+	// can add theirs.
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, Timeout: WriteTimeout, Record: rec}, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -504,7 +524,9 @@ func GetPluginInfo(site models.CliSite, plugin string, timeout ...time.Duration)
 // retried without it.
 func GetPluginDetails(site models.CliSite) ([]models.PluginDetails, error) {
 	fields := "name,title,version,status,author,update_version"
-	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, IncludePlugins: true}
+	// Like GetPlugins: the listing checks for updates again and saves
+	// them, so premium plugins must be able to add theirs.
+	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true}
 	res, err := RunWP(opts, "plugin", "list", "--fields="+fields, "--format=json")
 	if err != nil && strings.Contains(res.Error, "Invalid field") {
 		res, err = RunWP(opts, "plugin", "list", "--fields=name,title,version,status,update_version", "--format=json")
