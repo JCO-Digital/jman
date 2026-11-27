@@ -125,15 +125,13 @@ func TestAddPluginWithoutDeletedAdmin(t *testing.T) {
 	}
 }
 
-// An available update without a package is flagged; one with a package,
-// without an update, or listed without the field (an old wp-cli) isn't.
 // wp-cli lists must-use plugins and drop-ins with "update": false and
 // without update_unavailable_reason; they must not fail the whole list.
 func TestParsePluginListMustUseAndDropins(t *testing.T) {
 	out := `[
 {"name":"wordpress-seo","status":"active","update":"unavailable","version":"28.2","update_version":"29.0","auto_update":"off","update_unavailable_reason":"This update requires WordPress version 7.0, but the version installed is 6.9.12.","update_package":""},
 {"name":"spinupwp","status":"must-use","update":false,"version":"1.6","update_version":"","auto_update":"off","update_unavailable_reason":null,"update_package":null},
-{"name":"object-cache.php","status":"dropin","update":false,"version":"","update_version":"","auto_update":"off","update_unavailable_reason":null,"update_package":null}
+{"name":"object-cache.php","status":"dropin","update":false,"version":null,"update_version":null,"auto_update":false,"update_unavailable_reason":null,"update_package":null}
 ]`
 	got, err := ParsePluginList(out, "site")
 	if err != nil {
@@ -152,6 +150,8 @@ func TestParsePluginListMustUseAndDropins(t *testing.T) {
 	}
 }
 
+// An available update without a package is flagged; one with a package,
+// without an update, or listed without the field (an old wp-cli) isn't.
 func TestParsePluginListNoPackage(t *testing.T) {
 	out := `[
 {"name":"polylang-pro","status":"active","update":"available","version":"3.5","update_version":"3.9.2","auto_update":"off","update_unavailable_reason":"","update_package":""},

@@ -113,14 +113,16 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 	}
 	output = output[idx:]
 
+	// Every field but the name is loose: wp-cli gives must-use plugins and
+	// drop-ins "update": false, and one odd value mustn't fail the whole
+	// list.
 	type rawPlugin struct {
-		Name   string `json:"name"`
-		Status string `json:"status"`
-		// wp-cli gives must-use plugins and drop-ins "update": false.
+		Name              string      `json:"name"`
+		Status            looseString `json:"status"`
 		Update            looseString `json:"update"`
-		Version           string      `json:"version"`
-		UpdateVersion     string      `json:"update_version"`
-		AutoUpdate        string      `json:"auto_update"`
+		Version           looseString `json:"version"`
+		UpdateVersion     looseString `json:"update_version"`
+		AutoUpdate        looseString `json:"auto_update"`
 		UnavailableReason looseString `json:"update_unavailable_reason"`
 		// Raw so an absent field (a wp-cli asked for its default fields)
 		// tells apart from null or "".
@@ -138,9 +140,9 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 		p := models.WPPlugin{
 			SiteID:     siteID,
 			Name:       rp.Name,
-			Status:     rp.Status,
-			Version:    rp.Version,
-			Update:     rp.UpdateVersion,
+			Status:     string(rp.Status),
+			Version:    string(rp.Version),
+			Update:     string(rp.UpdateVersion),
 			AutoUpdate: rp.AutoUpdate == "on",
 		}
 		// An available update without a package: WordPress has nothing to
