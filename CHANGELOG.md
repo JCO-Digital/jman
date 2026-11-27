@@ -1,5 +1,12 @@
 # Changelog
 
+### 7.51.1 (2026-11-27)
+
+#### Bug Fixes
+
+- wpcli: read every plugin list field loosely (b449f37)
+- wpcli: parse plugin lists with must-use plugins and drop-ins (3beb994)
+
 ## 7.51.0 (2026-11-27)
 
 #### Features
