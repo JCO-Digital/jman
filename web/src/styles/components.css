@@ -1409,6 +1409,26 @@ details[open] .expand-icon {
 	white-space: nowrap;
 }
 
+/* An update WordPress has no download for (a premium plugin's license). */
+.plugin-update-no-package {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin-left: 6px;
+	color: var(--warning-text);
+	font-size: 0.85em;
+	white-space: nowrap;
+	cursor: help;
+}
+
+/* An update the site can't install until WordPress or PHP is updated. */
+.plugin-update-blocked {
+	margin-left: 6px;
+	color: var(--text-muted);
+	white-space: nowrap;
+	cursor: help;
+}
+
 /* Action buttons in plugin table card headers. */
 .plugin-card-actions {
 	display: flex;

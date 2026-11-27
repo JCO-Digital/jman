@@ -459,7 +459,7 @@ A plugin's changes on every site, newest first, taken from the site update ledge
 ```
 
 - `action`: `update`, `install`, `activate`, `deactivate`, `delete` or `uninstall`.
-- `outcome`: `success`, `failed` (with `error`), `skipped` (held back by an update lock) or `unchanged` (an update that left the version as it was).
+- `outcome`: `success`, `failed` (with `error`), `skipped` (held back by an update lock, or the update needs a newer WordPress or PHP than the site has) or `unchanged` (an update that left the version as it was).
 - `detected: true` marks changes made outside jman; `by` is then `detected (agent)` or `detected (ssh)`.
 - `source` is the ZIP or slug an install installed. `site_name` is empty for sites jman no longer knows.
 
@@ -1400,6 +1400,24 @@ After a plugin, ZIP or core job (or plugin update jobs that ran together) that u
 
 `error` and each result's `error` are short messages: wp-cli's own `Error:` and `Warning:` lines, without the PHP notices and warnings it passes through from the site's code. When a plugin, ZIP or core update fails, or wp-cli reports an update whose version didn't change (the result keeps `Updated`, with the old version as `new_version` and a `note`), the job keeps the full output: `GET /update-jobs/{id}` returns it as `calls`, one entry per wp-cli command with `args` (without jman's global arguments), `stdout`, `stderr`, `error` and `duration_ms`, each stream capped at 256 KiB. `GET /update-jobs` leaves `calls` out and sets `has_output`. Plugin update jobs that ran together (`batch_id`) each get the output of their shared call. Every update attempt also goes in jman-api's update log (`docs/update-log.md`).
 
+A failed plugin, ZIP or core update's result has `cause` when wp-cli's output says what went wrong, and sometimes `cause_detail`:
+
+| `cause` | Meaning | `cause_detail` |
+| :--- | :--- | :--- |
+| `requirements` | The update needs a newer WordPress or PHP (normally skipped beforehand; see `update_blocked`) | `WordPress 7.0`, `PHP 8.0` |
+| `no_package` | WordPress has no download for the update: for a premium plugin, nearly always a license that isn't active on the site | |
+| `download_failed` | The download failed | The HTTP reason, e.g. `Unauthorized` |
+| `site_error` | WordPress failed with a PHP fatal error, so nothing could be updated | Where it happened, e.g. `plugins/polylang-wc` |
+| `files` | Files couldn't be written, copied or removed (permissions, disk space, a leftover directory) | |
+| `bad_package` | The download isn't an installable plugin | |
+| `update_locked` | WordPress was already running another update | |
+| `timeout` | wp-cli didn't finish in time | |
+| `connection` | The server couldn't be reached over SSH | |
+
+One `wp plugin update` call updates all of a job's plugins, and wp-cli's warnings go to every plugin that failed in it. So when several plugins failed in one call, a requirement warning (`<slug>: This update requires …`) only counts for the plugin it names, and a download or install message only when the output holds one kind of them; with several kinds, the results get no `cause`. A timeout, a lost connection, a fatal error or WordPress's update lock stops the whole call, so it is every failed plugin's cause.
+
+Updates and installs run with the WordPress messages this reads kept in English (an `--exec` `gettext` filter on just those strings). Output from before that, or from a wp-cli too old for the filter, is only read in English, plus the Finnish and Swedish "Update package not available."
+
 ### Queue
 
 Jobs run one at a time per site, in the order they were queued, at most two at a time per server. Sites are ranked by the highest priority among their queued jobs; among equal ranks, servers take turns. Low jobs count as normal after 30 minutes. Plugin update jobs queued back to back on a site run together in one WP-CLI call. See `docs/update-queue.md`.
@@ -1435,6 +1453,10 @@ Calls WP-CLI live to fetch the current list of plugins that have updates availab
 ```
 
 Returns an empty array if no updates are available.
+
+A plugin whose update needs a newer WordPress or PHP than the site has (wp-cli's `update` field is `unavailable`) also has `update_blocked`, wp-cli's reason, e.g. `"This update requires WordPress version 7.0, but the version installed is 6.9.12."`. The PHP version is the one wp-cli runs on. Every plugin list (`GET /sites/{id}/plugins`, the agent's data) carries it. Update jobs don't pass such a plugin to wp-cli, which would refuse it: its result has status `"Skipped (requirements)"` and the reason (without its full stop) as its `note`. A core update job that changed the version refreshes the site's plugin list, so updates waiting for it become available.
+
+A plugin whose update WordPress has no download for (wp-cli's `update_package` is empty) has `"update_no_package": true`. For a premium plugin that nearly always means its license isn't active on the site, and the update fails with the cause `no_package`. It's only a warning: some updaters supply the download only once it starts, so such updates are still run. The package URL itself, which often carries a license key, is never stored or sent on; with a wp-cli too old for `--fields` the flag is left out.
 
 
 ### Live Reads of a Site

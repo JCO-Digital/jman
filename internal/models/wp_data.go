@@ -41,7 +41,16 @@ type AgentWPData struct {
 func WPDataHash(plugins []WPPlugin, core SiteCore, users *SiteUsers) string {
 	lines := make([]string, 0, len(plugins)+1)
 	for _, p := range plugins {
-		lines = append(lines, fmt.Sprintf("p\x00%s\x00%s\x00%s\x00%s\x00%t", p.Name, p.Status, p.Version, p.Update, p.AutoUpdate))
+		line := fmt.Sprintf("p\x00%s\x00%s\x00%s\x00%s\x00%t", p.Name, p.Status, p.Version, p.Update, p.AutoUpdate)
+		// Only when set, so plugins stored before it was collected still
+		// match.
+		if p.UpdateBlocked != "" {
+			line += "\x00b" + p.UpdateBlocked
+		}
+		if p.UpdateNoPackage {
+			line += "\x00n"
+		}
+		lines = append(lines, line)
 	}
 	if users != nil {
 		for _, u := range users.Users {

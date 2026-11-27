@@ -10,6 +10,16 @@ type WPPlugin struct {
 	Version    string `json:"version"`
 	Update     string `json:"update"`
 	AutoUpdate bool   `json:"autoUpdate"`
+	// UpdateBlocked is why the site can't install Update, as wp-cli words
+	// it (e.g. "This update requires WordPress version 7.0, but the
+	// version installed is 6.9.12."), or "" when it can. wp-cli refuses
+	// such an update, so update jobs skip the plugin.
+	UpdateBlocked string `json:"update_blocked,omitempty"`
+	// UpdateNoPackage means WordPress knows of Update but has no download
+	// for it: for a premium plugin, nearly always a license that isn't
+	// active on the site. It's a warning, not a block: some updaters only
+	// supply the download when it starts. False when unknown.
+	UpdateNoPackage bool `json:"update_no_package,omitempty"`
 }
 
 // PluginSite represents a specific site where a plugin is installed and its version.

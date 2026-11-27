@@ -11,9 +11,11 @@ import type {
 	UpdateJob,
 	UpdateJobKind,
 	UpdateJobPriority,
+	UpdateResult,
 	UserCreateJobPayload,
 } from "../types";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
+import { failureCauseLabel } from "../utils/format";
 
 /** How often the job list is polled while any job is queued or running. */
 const POLL_INTERVAL_MS = 3000;
@@ -48,6 +50,13 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 const truncate = (msg: string) =>
 	msg.length > 150 ? msg.substring(0, 147) + "..." : msg;
+
+/** A failed job's message: why, when its output says, then the error. */
+const failureText = (job: UpdateJob, r: UpdateResult | undefined) => {
+	const error = truncate(job.error || r?.error || "Unknown error");
+	const cause = r ? failureCauseLabel(r) : "";
+	return cause ? `${cause}. ${error}` : error;
+};
 
 /** Present and past tense of each plugin management action, for messages. */
 const ACTION_VERBS: Record<PluginActionKind, [string, string]> = {
@@ -335,7 +344,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		}
 		if (job.status === "failed" || r?.status === "failed") {
 			return {
-				message: `Failed to update WordPress core on ${siteName}: ${truncate(job.error || r?.error || "Unknown error")}`,
+				message: `Failed to update WordPress core on ${siteName}: ${failureText(job, r)}`,
 				type: "error",
 			};
 		}
@@ -575,7 +584,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		const r = job.results[0];
 		if (job.status === "failed" || r?.status === "failed") {
 			return {
-				message: `Failed to update ${plugin} on ${siteName}: ${truncate(job.error || r?.error || "Unknown error")}`,
+				message: `Failed to update ${plugin} on ${siteName}: ${failureText(job, r)}`,
 				type: "error",
 			};
 		}
@@ -623,7 +632,14 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 				.map((r) => r.name)
 				.join(", ");
 		const updated = names("Updated");
-		const failed = names("failed");
+		// Each failed plugin with why, when its output says.
+		const failed = job.results
+			.filter((r) => r.status === "failed")
+			.map((r) => {
+				const cause = failureCauseLabel(r);
+				return cause ? `${r.name} (${cause})` : r.name;
+			})
+			.join(", ");
 		const heldBack = names("Skipped (locked)");
 		// Notes flag locked plugins left vulnerable by the held-back update.
 		const notes = job.results

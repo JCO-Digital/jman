@@ -128,6 +128,10 @@ const (
 	// UpdateSkippedLocked means a locked plugin still has an update, but
 	// no fix release of it was available, so it wasn't updated.
 	UpdateSkippedLocked = "Skipped (locked)"
+	// UpdateSkippedRequirements means the plugin's update needs a newer
+	// WordPress or PHP version than the site has, so wp-cli would refuse
+	// it and it wasn't tried. The result's Note says what it needs.
+	UpdateSkippedRequirements = "Skipped (requirements)"
 )
 
 // UpdateJob is one background change on a single site: `wp plugin update`
@@ -339,4 +343,10 @@ type UpdateResult struct {
 	// Note explains a skipped update, e.g. that a known vulnerability is
 	// only fixed by a major update the lock held back.
 	Note string `json:"note,omitempty"`
+	// Cause is what a failed update's output says went wrong, one of the
+	// wpcli.Cause* codes ("requirements", "no_package", "site_error", …),
+	// or "" if it isn't recognized; CauseDetail adds to it (what the
+	// update needs, the HTTP reason, the plugin a fatal error was in).
+	Cause       string `json:"cause,omitempty"`
+	CauseDetail string `json:"cause_detail,omitempty"`
 }

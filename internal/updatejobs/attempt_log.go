@@ -118,6 +118,9 @@ type attemptResult struct {
 	NewVersion string `json:"new_version"`
 	Status     string `json:"status"`
 	Error      string `json:"error,omitempty"`
+	// Cause and CauseDetail are a failure's, as in models.UpdateResult.
+	Cause       string `json:"cause,omitempty"`
+	CauseDetail string `json:"cause_detail,omitempty"`
 	// VersionUnchanged means wp-cli reported a success but the version
 	// installed afterwards is the old one.
 	VersionUnchanged bool `json:"version_unchanged,omitempty"`
@@ -217,6 +220,8 @@ func logJobAttempts(jobs []models.UpdateJob, site models.CliSite, wpVersion stri
 				NewVersion:       r.NewVersion,
 				Status:           r.Status,
 				Error:            r.Error,
+				Cause:            r.Cause,
+				CauseDetail:      r.CauseDetail,
 				VersionUnchanged: a.unchanged[r.Name],
 			})
 		}

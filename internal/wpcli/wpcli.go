@@ -45,8 +45,11 @@ type CliOptions struct {
 	// PremiumUpdates registers premium plugins' admin-only update checks
 	// (PremiumUpdatesArg); for plugin lists and updates with plugins loaded.
 	PremiumUpdates bool
-	IncludeThemes  bool
-	Timeout        time.Duration
+	// EnglishMessages keeps the WordPress messages FailureCause reads in
+	// English (EnglishMessagesArg); for updates and installs.
+	EnglishMessages bool
+	IncludeThemes   bool
+	Timeout         time.Duration
 	// Record, if set, gets the call and everything it printed appended,
 	// for the update attempt log and failed jobs.
 	Record *[]models.WPCLICall
@@ -116,6 +119,9 @@ func runWP(opts CliOptions, args ...string) (RunResult, error) {
 		fullArgs = append(fullArgs, "--skip-plugins")
 	} else if opts.PremiumUpdates {
 		fullArgs = append(fullArgs, PremiumUpdatesArg())
+	}
+	if opts.EnglishMessages {
+		fullArgs = append(fullArgs, EnglishMessagesArg())
 	}
 	if !opts.IncludeThemes {
 		fullArgs = append(fullArgs, "--skip-themes")

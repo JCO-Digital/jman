@@ -413,7 +413,13 @@ func runPlugins(job models.UpdateJob, site models.CliSite) {
 func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 	lead := jobs[0]
 	allowMajor := jobPluginsPayload(lead).AllowMajor
-	plugins := mergePlugins(jobs)
+	byName := map[string]models.UpdateResult{}
+	// Plugins whose update the site can't take aren't tried: wp-cli
+	// would only refuse them, and in a call with others.
+	plugins, blocked := splitBlocked(site, mergePlugins(jobs))
+	for _, r := range blocked {
+		byName[r.Name] = r
+	}
 	// Checked against the pre-update versions, for each job's ledger status.
 	updatedVulnerable := make([]bool, len(jobs))
 	for i, job := range jobs {
@@ -448,7 +454,6 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 	var attempts []*attempt
 	// The plugins each attempt's update command covered.
 	covered := map[*attempt][]string{}
-	byName := map[string]models.UpdateResult{}
 	if len(free) > 0 {
 		a := newAttempt(attemptPlugins)
 		covered[a] = requestNames(free)
@@ -489,6 +494,17 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 	}
 
 	for _, a := range attempts {
+		failed := 0
+		for _, name := range covered[a] {
+			if byName[name].Status == models.UpdateFailed {
+				failed++
+			}
+		}
+		for _, name := range covered[a] {
+			byName[name] = withCause(byName[name], a.calls, failed > 1)
+		}
+	}
+	for _, a := range attempts {
 		a.results = a.results[:0]
 		for _, name := range covered[a] {
 			a.results = append(a.results, byName[name])
@@ -518,6 +534,85 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 		writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable[i]), "")
 	}
 	logJobAttempts(jobs, site, wpVersion, attempts)
+}
+
+// withCause sets a failed result's Cause from its error and the stderr of
+// the calls of its attempt (see wpcli.FailureCause); shared says other
+// plugins failed in the same attempt. Other results are returned as they
+// are.
+func withCause(r models.UpdateResult, calls []models.WPCLICall, shared bool) models.UpdateResult {
+	if r.Status != models.UpdateFailed {
+		return r
+	}
+	output := []string{r.Error}
+	for _, c := range calls {
+		output = append(output, c.Error, c.Stderr)
+	}
+	plugin := r.Name
+	if r.Name == coreResultName {
+		plugin = ""
+	}
+	r.Cause, r.CauseDetail = wpcli.FailureCause(strings.Join(output, "\n"), plugin, shared)
+	return r
+}
+
+// splitBlocked returns the plugins whose update the site can take, and a
+// skipped result for each one whose update needs a newer WordPress or PHP
+// (WPPlugin.UpdateBlocked). The cached list can be stale (WordPress may
+// have updated itself since), so when it blocks a requested plugin the
+// list is read from the site again first. Without a plugin list every
+// plugin is tried.
+func splitBlocked(site models.CliSite, plugins []models.PluginUpdateRequest) ([]models.PluginUpdateRequest, []models.UpdateResult) {
+	reasons, err := blockedReasons(site.ID, plugins)
+	if err == nil && len(reasons) > 0 {
+		if refreshErr := refreshPluginCache(site); refreshErr != nil {
+			// Unconfirmed: let wp-cli decide, and label its refusal.
+			log.Printf("Plugin update on %s: failed to refresh plugins before skipping blocked updates: %v", site.Name, refreshErr)
+			return plugins, nil
+		}
+		reasons, err = blockedReasons(site.ID, plugins)
+	}
+	if err != nil {
+		log.Printf("Plugin update on %s: failed to read cached plugins to skip blocked updates: %v", site.Name, err)
+		return plugins, nil
+	}
+	var runnable []models.PluginUpdateRequest
+	var skipped []models.UpdateResult
+	for _, p := range plugins {
+		reason, ok := reasons[p.Name]
+		if !ok {
+			runnable = append(runnable, p)
+			continue
+		}
+		skipped = append(skipped, models.UpdateResult{
+			Name:       p.Name,
+			OldVersion: p.OldVersion,
+			NewVersion: p.OldVersion,
+			Status:     models.UpdateSkippedRequirements,
+			Note:       strings.TrimSuffix(reason, "."),
+		})
+	}
+	return runnable, skipped
+}
+
+// blockedReasons returns the cached UpdateBlocked of each requested plugin
+// that has one.
+func blockedReasons(siteID string, plugins []models.PluginUpdateRequest) (map[string]string, error) {
+	cached, err := db.GetSitePlugins(siteID)
+	if err != nil {
+		return nil, err
+	}
+	requested := map[string]bool{}
+	for _, p := range plugins {
+		requested[p.Name] = true
+	}
+	reasons := map[string]string{}
+	for _, p := range cached {
+		if p.UpdateBlocked != "" && requested[p.Name] {
+			reasons[p.Name] = p.UpdateBlocked
+		}
+	}
+	return reasons, nil
 }
 
 // anyFailed reports whether any result failed.
@@ -730,12 +825,21 @@ func runCore(job models.UpdateJob, site models.CliSite) {
 	if newVersion == "unknown" {
 		newVersion = oldVersion
 	}
+	// Plugin updates that needed the new WordPress version (UpdateBlocked)
+	// can be installed now: refresh the plugin list so they aren't skipped
+	// and the UI offers them.
+	if core != nil && oldVersion != "" && core.Version != oldVersion {
+		if err := refreshPluginCache(site); err != nil {
+			log.Printf("Core update job %d: failed to refresh plugin cache for %s: %v", job.ID, site.Name, err)
+		}
+	}
 
 	r := models.UpdateResult{Name: coreResultName, OldVersion: oldVersion, NewVersion: newVersion, Note: lockNote}
 	switch status {
 	case "failed":
 		r.Status = models.UpdateFailed
 		r.Error = errMsg
+		r = withCause(r, a.calls, false)
 	case "partial":
 		r.Status = models.UpdateUpToDate
 	default:
@@ -939,7 +1043,7 @@ func writeLedger(job models.UpdateJob, results []models.UpdateResult, status, jo
 		if r.Error != "" {
 			single["error"] = r.Error
 		}
-		if r.Status == models.UpdateSkippedLocked {
+		if r.Status == models.UpdateSkippedLocked || r.Status == models.UpdateSkippedRequirements {
 			single["skipped"] = true
 		}
 		if r.Note != "" {
@@ -947,7 +1051,7 @@ func writeLedger(job models.UpdateJob, results []models.UpdateResult, status, jo
 		}
 		data = single
 	} else {
-		succeeded, failed, skipped := 0, 0, 0
+		succeeded, failed, skipped, blocked := 0, 0, 0, 0
 		updates := make([]map[string]any, len(results))
 		for i, r := range results {
 			entry := map[string]any{"plugin": r.Name, "old_version": r.OldVersion, "new_version": r.NewVersion, "status": "success"}
@@ -959,6 +1063,9 @@ func writeLedger(job models.UpdateJob, results []models.UpdateResult, status, jo
 			case models.UpdateSkippedLocked:
 				entry["status"] = "skipped"
 				skipped++
+			case models.UpdateSkippedRequirements:
+				entry["status"] = "skipped"
+				blocked++
 			default:
 				succeeded++
 			}
@@ -970,6 +1077,9 @@ func writeLedger(job models.UpdateJob, results []models.UpdateResult, status, jo
 		summary := fmt.Sprintf("Bulk update of %d plugin(s): %d succeeded, %d failed", len(results), succeeded, failed)
 		if skipped > 0 {
 			summary += fmt.Sprintf(", %d held back by update locks", skipped)
+		}
+		if blocked > 0 {
+			summary += fmt.Sprintf(", %d skipped as the site doesn't meet their requirements", blocked)
 		}
 		data = map[string]any{
 			"updates": updates,
