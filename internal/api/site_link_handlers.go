@@ -55,7 +55,7 @@ func SetSiteTierHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		writeSiteTierState(w, siteID)
 		return
 	}
 
@@ -97,7 +97,37 @@ func SetSiteTierHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	writeSiteTierState(w, siteID)
+}
+
+// siteTierState is what a change of a site's environment or tier returns:
+// the tier it now reports (0 for none, as GET /sites) and the default core
+// update policy that follows, so the UI needn't work either out itself.
+type siteTierState struct {
+	Tier              int                     `json:"tier,omitempty"`
+	CoreUpdateDefault models.CoreUpdatePolicy `json:"core_update_default"`
+}
+
+// writeSiteTierState answers 200 with the site's siteTierState.
+func writeSiteTierState(w http.ResponseWriter, siteID string) {
+	env, _, err := db.GetEffectiveSiteEnvironment(siteID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "writeSiteTierState: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	var state siteTierState
+	if env == string(models.SiteEnvironmentProduction) {
+		tiers, err := db.GetAllSiteTiers()
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "writeSiteTierState: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		state.Tier = tiers[siteID]
+	}
+	state.CoreUpdateDefault = models.DefaultCoreUpdatePolicy(models.SiteEnvironmentType(env), state.Tier)
+	WriteJSON(w, http.StatusOK, state)
 }
 
 // SetSiteProductionLinkHandler links a staging, development or archived site
@@ -207,4 +237,65 @@ func DeleteSiteProductionLinkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+// SetSiteCoreUpdatePolicyHandler sets a site's nightly core update policy:
+// {"policy": "vuln_minor" | "minor" | "major"}. An empty or null policy
+// clears the override, so the default for its environment and tier applies.
+func SetSiteCoreUpdatePolicyHandler(w http.ResponseWriter, r *http.Request) {
+	siteID, err := resolveSiteUUID(r.PathValue("id"))
+	if err != nil {
+		WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	var body struct {
+		Policy *models.CoreUpdatePolicy `json:"policy"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		WriteError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// The inventory itself: a deleted site's environment classification
+	// can outlive it.
+	ms, err := db.GetManagedSite(siteID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	if ms == nil {
+		WriteError(w, http.StatusNotFound, "Site not found")
+		return
+	}
+
+	if body.Policy == nil || *body.Policy == "" {
+		if err := db.ClearSiteCoreUpdatePolicy(siteID); err != nil {
+			verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	if !body.Policy.Valid() {
+		WriteError(w, http.StatusBadRequest, fmt.Sprintf("Unknown policy: %q", *body.Policy))
+		return
+	}
+	if err := db.SetSiteCoreUpdatePolicy(siteID, *body.Policy, getUsername(r)); err != nil {
+		verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// NightlyCoreUpdatesHandler reports whether the nightly core update runs
+// (nightlyCoreUpdates) and the hour it starts at, so the UI can say when
+// the sites' policies have no effect.
+func NightlyCoreUpdatesHandler(w http.ResponseWriter, r *http.Request) {
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"enabled":    config.Cfg.NightlyCoreUpdates,
+		"start_hour": config.NightlyCoreUpdateStartHour(),
+	})
 }

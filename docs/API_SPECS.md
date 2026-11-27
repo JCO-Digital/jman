@@ -356,9 +356,17 @@ These endpoints require at least **`basic`** level.
 Staging, development and archived sites can be linked to their production site, and production sites have a tier. `GET /sites` reports both: `production_site_id` on a linked site and `tier` (a tier id) on a production site. See [site-environments-tiers.md](site-environments-tiers.md).
 
 `GET /site-tiers` (Protected: `basic`): the tiers, lowest first, as `[{"id": 10, "name": "Basic"}, …]`.
-`PUT /sites/{id}/tier` (Protected: `edit`): `{"tier": 30}` sets a production site's tier; `null` or `0` clears it. Unknown tiers and non-production sites get 400.
+`PUT /sites/{id}/tier` (Protected: `edit`): `{"tier": 30}` sets a production site's tier; `null` or `0` clears it. Unknown tiers and non-production sites get 400. It answers with the tier the site now reports and its default core update policy, `{"tier": 30, "core_update_default": "vuln_minor"}`; so does `PATCH /sites/{id}/environment`, since a site outside production reports no tier.
 `PUT /sites/{id}/production-site` (Protected: `edit`): `{"production_site_id": "<uuid>"}` links a staging, development or archived site to a production site, replacing any earlier link. Links don't chain: the parent must be production and not linked itself, and a site others are linked to can't be linked (400).
 `DELETE /sites/{id}/production-site` (Protected: `edit`): removes the link.
+
+### Nightly Core Update Policy
+
+Every site has a nightly core update policy (see "Nightly core updates" in `README_API.md`): `vuln_minor`, `minor` or `major`. `GET /sites` reports `core_update_default`, the policy from the site's environment and tier, and `core_update_policy`, the site's override, when it has one.
+
+`PUT /sites/{id}/core-update-policy` (Protected: `edit`): `{"policy": "major"}` sets the override; `""` or `null` clears it, so the default applies. An unknown policy gets 400, a site not in the inventory 404.
+
+`GET /nightly-core-updates` (Protected: `basic`): `{"enabled": false, "start_hour": 3}`, whether the nightly core update runs (`nightlyCoreUpdates`) and the hour it starts at. The WordPress Core card says when it's off.
 
 ### WordPress Users of Sites
 

@@ -570,6 +570,9 @@ func DeleteManagedSite(id string) error {
 	if _, err := dbConn.Exec(`DELETE FROM site_tier WHERE site_id = ?`, id); err != nil {
 		return fmt.Errorf("failed to delete site tier: %w", err)
 	}
+	if _, err := dbConn.Exec(`DELETE FROM site_core_update_policy WHERE site_id = ?`, id); err != nil {
+		return fmt.Errorf("failed to delete site core update policy: %w", err)
+	}
 
 	return nil
 }

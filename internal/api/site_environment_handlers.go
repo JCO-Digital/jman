@@ -40,7 +40,7 @@ func SetSiteEnvironmentHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		writeSiteTierState(w, siteID)
 		return
 	}
 
@@ -54,5 +54,7 @@ func SetSiteEnvironmentHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	// The site's tier and default core update policy follow its
+	// environment.
+	writeSiteTierState(w, siteID)
 }

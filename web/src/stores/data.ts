@@ -15,6 +15,9 @@ import type {
 	EnrichedPlugin,
 	SiteCore,
 	UpdateLock,
+	CoreUpdatePolicy,
+	NightlyCoreUpdates,
+	SiteTierState,
 } from "../types";
 import { useAuthStore } from "./auth";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
@@ -25,7 +28,7 @@ import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
 const CACHE_KEY_SERVERS = "jman_servers_v2";
 // v4: sites carry update_locks; a v3 cache would show locked sites as
 // unlocked.
-const CACHE_KEY_SITES = "jman_sites_v4";
+const CACHE_KEY_SITES = "jman_sites_v5";
 const CACHE_KEY_PLUGINS = "jman_plugins_v2";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
 const CACHE_KEY_VULNS = "jman_vulns_v3";
@@ -36,6 +39,7 @@ const LEGACY_CACHE_KEYS = [
 	"jman_sites",
 	"jman_sites_v2",
 	"jman_sites_v3",
+	"jman_sites_v4",
 	"jman_plugins",
 	"jman_vulns_v2",
 	"jman_core_vulns",
@@ -53,6 +57,9 @@ export const useDataStore = defineStore("data", () => {
 	// The site tiers from jman-api's config, lowest first; loaded once.
 	const siteTiers = ref<SiteTier[]>([]);
 	let siteTiersRequest: Promise<void> | null = null;
+	/** Whether jman-api runs the nightly core update; null until loaded. */
+	const nightlyCoreUpdates = ref<NightlyCoreUpdates | null>(null);
+	let nightlyCoreUpdatesRequest: Promise<void> | null = null;
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<PluginVulnerability[]>([]);
@@ -594,12 +601,24 @@ export const useDataStore = defineStore("data", () => {
 			body: JSON.stringify({ environment }),
 		});
 		if (!res.ok) await handleErrorResponse(res);
+		const state: SiteTierState = await res.json();
 
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.environment = environment || undefined;
+			applySiteTierState(site, state);
 			persist(CACHE_KEY_SITES, () => sites.value);
 		}
+	}
+
+	/**
+	 * Takes the tier and default core update policy that a change of the
+	 * site's environment or tier returns: a site moved back to production
+	 * gets its stored tier back, and the default follows both.
+	 */
+	function applySiteTierState(site: Site, state: SiteTierState) {
+		site.tier = state.tier || undefined;
+		site.core_update_default = state.core_update_default;
 	}
 
 	/** Loads the site tiers once; later calls reuse the first request. */
@@ -613,6 +632,19 @@ export const useDataStore = defineStore("data", () => {
 			throw e;
 		});
 		return siteTiersRequest;
+	}
+
+	/** Loads the nightly core update status once. */
+	function fetchNightlyCoreUpdates(): Promise<void> {
+		nightlyCoreUpdatesRequest ??= (async () => {
+			const res = await apiFetch(`${BASE_URL}/nightly-core-updates`);
+			if (!res.ok) await handleErrorResponse(res);
+			nightlyCoreUpdates.value = await res.json();
+		})().catch((e) => {
+			nightlyCoreUpdatesRequest = null;
+			throw e;
+		});
+		return nightlyCoreUpdatesRequest;
 	}
 
 	/** A tier's name, or "Tier <id>" for one no longer configured. */
@@ -629,9 +661,34 @@ export const useDataStore = defineStore("data", () => {
 			body: JSON.stringify({ tier }),
 		});
 		if (!res.ok) await handleErrorResponse(res);
+		const state: SiteTierState = await res.json();
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
-			site.tier = tier || undefined;
+			applySiteTierState(site, state);
+			persist(CACHE_KEY_SITES, () => sites.value);
+		}
+	}
+
+	/**
+	 * Sets a site's nightly core update policy override; null clears it,
+	 * so the default applies.
+	 */
+	async function setCoreUpdatePolicy(
+		siteId: string,
+		policy: CoreUpdatePolicy | null,
+	) {
+		const res = await apiFetch(
+			`${BASE_URL}/sites/${siteId}/core-update-policy`,
+			{
+				method: "PUT",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ policy }),
+			},
+		);
+		if (!res.ok) await handleErrorResponse(res);
+		const site = sites.value.find((s) => s.id === siteId);
+		if (site) {
+			site.core_update_policy = policy || undefined;
 			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}
@@ -748,6 +805,8 @@ export const useDataStore = defineStore("data", () => {
 		servers,
 		sites,
 		siteTiers,
+		nightlyCoreUpdates,
+		fetchNightlyCoreUpdates,
 		plugins,
 		pluginInfo,
 		vulnerabilities,
@@ -779,6 +838,7 @@ export const useDataStore = defineStore("data", () => {
 		fetchSiteTiers,
 		tierName,
 		setSiteTier,
+		setCoreUpdatePolicy,
 		setProductionSite,
 		getSiteLocks,
 		isPluginLocked,

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -183,6 +184,86 @@ func TestSiteTiersFromConfig(t *testing.T) {
 		config.Cfg.SiteTiers = bad
 		if _, err := SiteTiers(); err == nil {
 			t.Errorf("%s: no error", name)
+		}
+	}
+}
+
+// The site list reports each site's default core update policy and its
+// override, and the nightly run reads the same through the database.
+func TestSiteCoreUpdatePolicy(t *testing.T) {
+	setupSiteManagementTest(t)
+	saveLinkTestSite(t, linkProdID, "example.com", models.SiteEnvironmentProduction)
+	saveLinkTestSite(t, linkStagingID, "staging.example.com", models.SiteEnvironmentStaging)
+
+	setPolicy := func(siteID, body string) int {
+		return callSiteHandler(t, SetSiteCoreUpdatePolicyHandler, "PUT", siteID, body).Code
+	}
+	check := func(id string, override, def, effective models.CoreUpdatePolicy) {
+		t.Helper()
+		s := findAPISite(t, id)
+		if s.CoreUpdatePolicy != override || s.CoreUpdateDefault != def {
+			t.Errorf("%s: policy %q, default %q; want %q, %q", s.Domain, s.CoreUpdatePolicy, s.CoreUpdateDefault, override, def)
+		}
+		all, err := db.GetEffectiveCoreUpdatePolicies()
+		if err != nil || all[id] != effective {
+			t.Errorf("%s: effective policy %q (%v), want %q", s.Domain, all[id], err, effective)
+		}
+	}
+
+	check(linkProdID, "", models.CorePolicyVulnMinor, models.CorePolicyVulnMinor)
+	check(linkStagingID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+
+	// A basic tier production site updates to the latest version nightly;
+	// the tier change returns the new default.
+	w := callSiteHandler(t, SetSiteTierHandler, "PUT", linkProdID, `{"tier":10}`)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"tier":10,"core_update_default":"major"}` {
+		t.Fatalf("set tier: got %d %s", w.Code, w.Body.String())
+	}
+	// Moved to archived, the site reports no tier and the archived default;
+	// back in production, its stored tier again.
+	w = callSiteHandler(t, SetSiteEnvironmentHandler, "PATCH", linkProdID, `{"environment":"archived"}`)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"core_update_default":"vuln_minor"}` {
+		t.Errorf("archive: got %d %s", w.Code, w.Body.String())
+	}
+	w = callSiteHandler(t, SetSiteEnvironmentHandler, "PATCH", linkProdID, `{"environment":"production"}`)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"tier":10,"core_update_default":"major"}` {
+		t.Errorf("back to production: got %d %s", w.Code, w.Body.String())
+	}
+	check(linkProdID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+
+	if code := setPolicy(linkProdID, `{"policy":"minor"}`); code != http.StatusOK {
+		t.Fatalf("set policy: got %d", code)
+	}
+	check(linkProdID, models.CorePolicyMinor, models.CorePolicyMajor, models.CorePolicyMinor)
+	if code := setPolicy(linkStagingID, `{"policy":"vuln_minor"}`); code != http.StatusOK {
+		t.Fatalf("set staging policy: got %d", code)
+	}
+	check(linkStagingID, models.CorePolicyVulnMinor, models.CorePolicyMajor, models.CorePolicyVulnMinor)
+
+	if code := setPolicy(linkProdID, `{"policy":"weekly"}`); code != http.StatusBadRequest {
+		t.Errorf("unknown policy: got %d, want 400", code)
+	}
+	if code := setPolicy(linkOtherProd, `{"policy":"minor"}`); code != http.StatusNotFound {
+		t.Errorf("unknown site: got %d, want 404", code)
+	}
+
+	if code := setPolicy(linkProdID, `{"policy":""}`); code != http.StatusOK {
+		t.Fatalf("clear policy: got %d", code)
+	}
+	check(linkProdID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+}
+
+func TestNightlyCoreUpdatesHandler(t *testing.T) {
+	old, oldHour := config.Cfg.NightlyCoreUpdates, config.Cfg.NightlyCoreUpdateHour
+	t.Cleanup(func() { config.Cfg.NightlyCoreUpdates, config.Cfg.NightlyCoreUpdateHour = old, oldHour })
+
+	for _, enabled := range []bool{false, true} {
+		config.Cfg.NightlyCoreUpdates = enabled
+		w := httptest.NewRecorder()
+		NightlyCoreUpdatesHandler(w, httptest.NewRequest("GET", "/api/nightly-core-updates", nil))
+		want := fmt.Sprintf(`"enabled":%v`, enabled)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) || !strings.Contains(w.Body.String(), `"start_hour":`) {
+			t.Errorf("enabled %v: %d %s", enabled, w.Code, w.Body.String())
 		}
 	}
 }

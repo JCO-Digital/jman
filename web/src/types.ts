@@ -198,6 +198,10 @@ export interface Site {
 	production_site_id?: string;
 	/** A production site's tier id (SiteTier.id); absent for none. */
 	tier?: number;
+	/** The site's override of the nightly core update policy; absent for none. */
+	core_update_policy?: CoreUpdatePolicy;
+	/** The policy without an override, from the environment and tier. */
+	core_update_default?: CoreUpdatePolicy;
 	disk_usage?: SiteDiskUsage;
 	wp_flags?: SiteWpFlags;
 	last_update?: SiteUpdateLedgerEntry;
@@ -216,6 +220,29 @@ export interface AgentWPStatus {
 	/** The latest failure, cleared by the next successful collection. */
 	error?: string;
 	error_at?: string;
+}
+
+/**
+ * What the nightly core update does for a site: a minor update on an open
+ * core vulnerability, a minor update every night, or an update to the
+ * latest version (major or minor) every night.
+ */
+export type CoreUpdatePolicy = "vuln_minor" | "minor" | "major";
+
+/**
+ * What a change of a site's environment or tier returns: the tier it now
+ * reports (absent for none) and the default core update policy.
+ */
+export interface SiteTierState {
+	tier?: number;
+	core_update_default: CoreUpdatePolicy;
+}
+
+/** GET /api/nightly-core-updates: whether the nightly run is on. */
+export interface NightlyCoreUpdates {
+	enabled: boolean;
+	/** The hour (server local time) it starts at. */
+	start_hour: number;
 }
 
 export interface SiteCore {

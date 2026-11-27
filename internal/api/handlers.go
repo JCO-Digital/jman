@@ -211,6 +211,8 @@ func RegisterHandlers(mux *http.ServeMux, version string, usersCfg config.UsersC
 	mux.Handle("PUT /api/sites/{id}/production-site", edit(SetSiteProductionLinkHandler))
 	mux.Handle("DELETE /api/sites/{id}/production-site", edit(DeleteSiteProductionLinkHandler))
 	mux.Handle("PUT /api/sites/{id}/tier", edit(SetSiteTierHandler))
+	mux.Handle("PUT /api/sites/{id}/core-update-policy", edit(SetSiteCoreUpdatePolicyHandler))
+	mux.Handle("GET /api/nightly-core-updates", basic(NightlyCoreUpdatesHandler))
 	mux.Handle("GET /api/site-tiers", basic(ListSiteTiersHandler))
 
 	// --- Plugin update routes ---

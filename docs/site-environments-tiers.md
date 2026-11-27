@@ -78,5 +78,9 @@ Enterprise (40) and Internal (90) (`models.DefaultSiteTiers`).
 jman-api refuses to start if a tier has a non-positive or duplicate id or
 an empty name. `GET /api/site-tiers` serves the list to the UI.
 
-Tiers are a label and a filter for now (the sites list's Tier column and
-filter, the site detail badge). Tier-specific behavior is to come.
+Tiers are a label and a filter (the sites list's Tier column and filter,
+the site detail badge), and they set a site's default nightly core update
+policy: production sites below Standard (`site.Tier < models.TierStandard`)
+update to the latest WordPress version every night, as staging and
+development sites do (`models.DefaultCoreUpdatePolicy`; see "Nightly core
+updates" in `README_API.md`).
