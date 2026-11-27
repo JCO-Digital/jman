@@ -86,7 +86,7 @@ func UpdateCore(site models.CliSite, major bool, rec *[]models.WPCLICall) (CoreU
 		args = append(args, "--minor")
 	}
 
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, Timeout: WriteTimeout, Record: rec}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, EnglishMessages: true, Timeout: WriteTimeout, Record: rec}, args...)
 	if err != nil {
 		return result, fmt.Errorf("failed to update core: %s", shortError(res.Error, err))
 	}
@@ -112,7 +112,7 @@ func UpdateCore(site models.CliSite, major bool, rec *[]models.WPCLICall) (CoreU
 	}
 	result.Success = true
 
-	res, err = RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, Timeout: WriteTimeout, Record: rec}, "core", "update-db")
+	res, err = RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, EnglishMessages: true, Timeout: WriteTimeout, Record: rec}, "core", "update-db")
 	if err != nil {
 		return result, fmt.Errorf("failed to update core database: %s", shortError(res.Error, err))
 	}

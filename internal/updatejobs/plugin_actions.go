@@ -221,6 +221,11 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 		jobErr = installErr.Error()
 		r.Status = models.UpdateFailed
 		r.Error = jobErr
+		var calls []models.WPCLICall
+		if a != nil {
+			calls = a.calls
+		}
+		r = withCause(r, calls)
 		log.Printf("Plugin install job %d on %s: %v", job.ID, site.Name, installErr)
 	} else if install.Plugin != "" && cacheErr == nil && r.NewVersion == r.OldVersion {
 		r.Status = models.UpdateUpToDate

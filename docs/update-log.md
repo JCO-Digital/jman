@@ -47,7 +47,7 @@ Installing a new plugin isn't an update and isn't logged. Neither is a plugin a 
   "failed": true,
   "duration_ms": 14210,
   "results": [
-    {"name": "gravityforms", "old_version": "2.9.1", "new_version": "2.9.1", "status": "failed", "error": "Warning: Download failed. Unauthorized; Error: No plugins updated (1 failed)."},
+    {"name": "gravityforms", "old_version": "2.9.1", "new_version": "2.9.1", "status": "failed", "error": "Warning: Download failed. Unauthorized; Error: No plugins updated (1 failed).", "cause": "download_failed", "cause_detail": "Unauthorized"},
     {"name": "wp-rocket", "old_version": "3.17", "new_version": "3.17", "status": "Updated", "version_unchanged": true},
     {"name": "akismet", "old_version": "5.3", "new_version": "5.4", "status": "Updated"}
   ],
@@ -61,6 +61,7 @@ Installing a new plugin isn't an update and isn't logged. Neither is a plugin a 
 - `php_version` is the site's PHP-FPM version from the inventory; `cli_php_version` is the PHP wp-cli ran on, which is what ran the update. They can differ: wp-cli uses whatever `php` the site user's shell finds. jman-api asks for it with `wp cli info` after the job.
 - `failed` is true when a wp-cli call failed, a result failed, or a result has `version_unchanged`: wp-cli reported a success but the version installed afterwards (from the refreshed plugin list or core version) is the old one. Some premium updaters do that when the download isn't the release they announced. For `zip`, it also flags reinstalling the same version on purpose.
 - `wp plugin update` runs without `--format=json`: with it, wp-cli silences the upgrader and a failed plugin only says `Error`. Its plain table is parsed instead, so `stdout` holds the upgrader's progress lines and `stderr` its warnings ("Download failed. Unauthorized", "some files could not be copied").
+- A failed result has `cause` when its output says what went wrong, and sometimes `cause_detail` (see the failure causes in `docs/API_SPECS.md`). Updates and installs run with WordPress's messages that this reads kept in English, whatever the site's language, so `stderr` has them in English too.
 - A `plugins` call covers several plugins, and one plugin's fatal error can fail the whole call, so a failed result isn't always that plugin's own fault. `calls` shows which.
 - Plugin update jobs queued back to back on a site run together in one call (`docs/update-queue.md`). Their attempt is logged once, under the first job's `job_id`, with every job in `job_ids` and all their plugins in `results`; `created_by` is the first job's user. A job that ran on its own has no `job_ids`.
 - `calls` is only there when `failed` is true. Each stream is capped at 256 KiB, keeping the start and most of the end.
@@ -70,6 +71,10 @@ The same output is kept with the job for its 7 days (`calls` on `GET /update-job
 ## Reading it
 
 ```sh
+# Failures per cause, and per plugin and cause
+jq -r '.results[]? | select(.status == "failed") | .cause // "unknown"' update-attempts.jsonl | sort | uniq -c | sort -nr
+jq -r '.results[]? | select(.status == "failed") | [.name, .cause // "unknown", .cause_detail // ""] | @tsv' update-attempts.jsonl | sort | uniq -c | sort -nr
+
 # Every failed attempt of one plugin
 jq -c 'select(.results[]?.name == "gravityforms" and .failed)' update-attempts.jsonl
 

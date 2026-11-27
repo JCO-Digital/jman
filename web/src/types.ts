@@ -736,6 +736,12 @@ export interface UpdateResult {
 	error?: string;
 	/** Explains a skipped update, e.g. a vulnerability the lock holds back. */
 	note?: string;
+	/**
+	 * What a failed update's output says went wrong (see
+	 * failureCauseLabel), with a detail such as what the update needs.
+	 */
+	cause?: string;
+	cause_detail?: string;
 }
 
 /**

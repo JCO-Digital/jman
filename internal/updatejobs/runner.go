@@ -494,6 +494,11 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 	}
 
 	for _, a := range attempts {
+		for _, name := range covered[a] {
+			byName[name] = withCause(byName[name], a.calls)
+		}
+	}
+	for _, a := range attempts {
 		a.results = a.results[:0]
 		for _, name := range covered[a] {
 			a.results = append(a.results, byName[name])
@@ -523,6 +528,25 @@ func runPluginJobs(jobs []models.UpdateJob, site models.CliSite) {
 		writeLedger(job, results, ledgerStatus(job.SiteID, results, cacheErr == nil, updatedVulnerable[i]), "")
 	}
 	logJobAttempts(jobs, site, wpVersion, attempts)
+}
+
+// withCause sets a failed result's Cause from its error and the stderr of
+// the calls of its attempt (see wpcli.FailureCause). Other results are
+// returned as they are.
+func withCause(r models.UpdateResult, calls []models.WPCLICall) models.UpdateResult {
+	if r.Status != models.UpdateFailed {
+		return r
+	}
+	output := []string{r.Error}
+	for _, c := range calls {
+		output = append(output, c.Error, c.Stderr)
+	}
+	plugin := r.Name
+	if r.Name == coreResultName {
+		plugin = ""
+	}
+	r.Cause, r.CauseDetail = wpcli.FailureCause(strings.Join(output, "\n"), plugin)
+	return r
 }
 
 // splitBlocked returns the plugins whose cached update the site can take,
@@ -784,6 +808,7 @@ func runCore(job models.UpdateJob, site models.CliSite) {
 	case "failed":
 		r.Status = models.UpdateFailed
 		r.Error = errMsg
+		r = withCause(r, a.calls)
 	case "partial":
 		r.Status = models.UpdateUpToDate
 	default:

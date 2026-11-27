@@ -4,6 +4,7 @@ import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useDataStore } from "../stores/data";
 import type { UpdateJob } from "../types";
 import AppIcon from "./AppIcon.vue";
+import { failureCauseLabel } from "../utils/format";
 
 // The full wp-cli output of an update job that failed, or whose update
 // didn't change a version: what the short message in the task center
@@ -95,6 +96,12 @@ function seconds(ms: number): string {
 									r.status
 								}})</span
 							>
+							<div
+								v-if="failureCauseLabel(r)"
+								class="output-cause"
+							>
+								{{ failureCauseLabel(r) }}
+							</div>
 							<div v-if="r.error">{{ r.error }}</div>
 							<div v-if="r.note" class="text-muted">
 								{{ r.note }}
@@ -145,6 +152,11 @@ function seconds(ms: number): string {
 	width: 100%;
 	max-height: 90vh;
 	overflow: auto;
+}
+
+.output-cause {
+	font-weight: 600;
+	color: var(--warning-text);
 }
 
 .output-results {

@@ -105,6 +105,48 @@ export function availablePluginUpdate(plugin: {
 }
 
 /**
+ * A short description of why an update failed, from its cause and detail
+ * (UpdateResult.cause), or "" without one. jman-api's CLI has the same
+ * labels (wpcli.CauseLabel).
+ */
+export function failureCauseLabel(r: {
+	cause?: string;
+	cause_detail?: string;
+}): string {
+	const detail = r.cause_detail ?? "";
+	const withDetail = (label: string) =>
+		detail ? `${label} (${detail})` : label;
+	switch (r.cause ?? "") {
+		case "":
+			return "";
+		case "requirements":
+			return detail
+				? `Needs ${detail}`
+				: "Needs a newer WordPress or PHP";
+		case "no_package":
+			return "No update package: is the license active on this site?";
+		case "download_failed":
+			return withDetail("Download failed");
+		case "site_error":
+			return detail
+				? `Site fails to load (fatal error in ${detail})`
+				: "Site fails to load (PHP fatal error)";
+		case "files":
+			return "Couldn't write the files (permissions or disk space)";
+		case "bad_package":
+			return "The package isn't an installable plugin";
+		case "update_locked":
+			return "Another update was running on the site";
+		case "timeout":
+			return "wp-cli timed out";
+		case "connection":
+			return "Couldn't connect to the server";
+		default:
+			return withDetail(r.cause ?? "");
+	}
+}
+
+/**
  * A cached plugin update the site can't install yet: its version, wp-cli's
  * reason, and a short label such as "needs WP 7.0". Null if there is none.
  */

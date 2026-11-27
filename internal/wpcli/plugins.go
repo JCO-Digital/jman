@@ -150,7 +150,7 @@ func AddPlugin(site models.CliSite, plugin string, activate bool, rec *[]models.
 	// WordPress checks for plugin updates again once the install is done
 	// and saves them, so it runs like UpdatePlugin, where premium plugins
 	// can add theirs.
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, Timeout: WriteTimeout, Record: rec}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, EnglishMessages: true, Timeout: WriteTimeout, Record: rec}, args...)
 	if err != nil {
 		if strings.Contains(res.Error, "Plugin not found.") {
 			return false, fmt.Errorf("plugin not found")
@@ -228,7 +228,7 @@ func updatePlugins(site models.CliSite, plugins []string, patchOnly bool, rec *[
 	// on stderr.
 
 	timeout := WriteTimeout + time.Duration(len(plugins)-1)*perPluginWriteTimeout
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, Timeout: timeout, Record: rec}, args...)
+	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: true, PremiumUpdates: true, EnglishMessages: true, Timeout: timeout, Record: rec}, args...)
 	// WP-CLI prints the per-plugin JSON table even when some plugins fail,
 	// so parse it either way.
 	updates, parseErr := parseUpdateOutput(res.Output)

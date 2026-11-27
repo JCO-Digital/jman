@@ -634,3 +634,35 @@ func TestRunCoreJobRefreshesPlugins(t *testing.T) {
 		t.Error("plugin list not refreshed after the core update")
 	}
 }
+
+// A failed plugin gets its cause from the call's output; one that updated
+// in the same call doesn't.
+func TestRunLabelsFailureCause(t *testing.T) {
+	setupRunnerTest(t)
+	updatePlugins = func(_ models.CliSite, plugins []string, rec *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
+		*rec = append(*rec, models.WPCLICall{
+			Args:   append([]string{"plugin", "update"}, plugins...),
+			Stderr: "Warning: Update package not available.\nError: No plugins updated (1 failed).",
+			Error:  "Error: No plugins updated (1 failed).",
+		})
+		return []wpcli.UpdateResult{
+			{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"},
+			{Name: "polylang-pro", OldVersion: "3.5", NewVersion: "3.9.2", Status: "Error", Error: "Warning: Update package not available.; Error: No plugins updated (1 failed)."},
+		}, &wpcli.UpdateFailure{Err: errors.New("failed to update plugin: Error: No plugins updated (1 failed).")}
+	}
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"}, models.PluginUpdateRequest{Name: "polylang-pro", OldVersion: "3.5"})
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+	stored, _ := db.GetUpdateJob(job.ID)
+	if stored == nil || len(stored.Results) != 2 {
+		t.Fatalf("stored job = %+v", stored)
+	}
+	if r := stored.Results[0]; r.Cause != "" {
+		t.Errorf("updated plugin has cause %q", r.Cause)
+	}
+	if r := stored.Results[1]; r.Status != models.UpdateFailed || r.Cause != wpcli.CauseNoPackage {
+		t.Errorf("failed plugin = %+v, want cause %q", r, wpcli.CauseNoPackage)
+	}
+}

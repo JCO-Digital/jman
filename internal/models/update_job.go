@@ -343,4 +343,10 @@ type UpdateResult struct {
 	// Note explains a skipped update, e.g. that a known vulnerability is
 	// only fixed by a major update the lock held back.
 	Note string `json:"note,omitempty"`
+	// Cause is what a failed update's output says went wrong, one of the
+	// wpcli.Cause* codes ("requirements", "no_package", "site_error", …),
+	// or "" if it isn't recognized; CauseDetail adds to it (what the
+	// update needs, the HTTP reason, the plugin a fatal error was in).
+	Cause       string `json:"cause,omitempty"`
+	CauseDetail string `json:"cause_detail,omitempty"`
 }

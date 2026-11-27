@@ -1391,6 +1391,22 @@ After a plugin, ZIP or core job (or plugin update jobs that ran together) that u
 
 `error` and each result's `error` are short messages: wp-cli's own `Error:` and `Warning:` lines, without the PHP notices and warnings it passes through from the site's code. When a plugin, ZIP or core update fails, or wp-cli reports an update whose version didn't change (the result keeps `Updated`, with the old version as `new_version` and a `note`), the job keeps the full output: `GET /update-jobs/{id}` returns it as `calls`, one entry per wp-cli command with `args` (without jman's global arguments), `stdout`, `stderr`, `error` and `duration_ms`, each stream capped at 256 KiB. `GET /update-jobs` leaves `calls` out and sets `has_output`. Plugin update jobs that ran together (`batch_id`) each get the output of their shared call. Every update attempt also goes in jman-api's update log (`docs/update-log.md`).
 
+A failed plugin, ZIP or core update's result has `cause` when wp-cli's output says what went wrong, and sometimes `cause_detail`:
+
+| `cause` | Meaning | `cause_detail` |
+| :--- | :--- | :--- |
+| `requirements` | The update needs a newer WordPress or PHP (normally skipped beforehand; see `update_blocked`) | `WordPress 7.0`, `PHP 8.0` |
+| `no_package` | WordPress has no download for the update: for a premium plugin, nearly always a license that isn't active on the site | |
+| `download_failed` | The download failed | The HTTP reason, e.g. `Unauthorized` |
+| `site_error` | WordPress failed with a PHP fatal error, so nothing could be updated | Where it happened, e.g. `plugins/polylang-wc` |
+| `files` | Files couldn't be written, copied or removed (permissions, disk space, a leftover directory) | |
+| `bad_package` | The download isn't an installable plugin | |
+| `update_locked` | WordPress was already running another update | |
+| `timeout` | wp-cli didn't finish in time | |
+| `connection` | The server couldn't be reached over SSH | |
+
+One `wp plugin update` call updates all of a job's plugins, and wp-cli's warnings go to every plugin that failed in it, so only a warning that names its plugin (`<slug>: This update requires …`) is pinned to that plugin. Updates and installs run with the WordPress messages this reads kept in English (an `--exec` `gettext` filter on just those strings), whatever the site's language.
+
 ### Queue
 
 Jobs run one at a time per site, in the order they were queued, at most two at a time per server. Sites are ranked by the highest priority among their queued jobs; among equal ranks, servers take turns. Low jobs count as normal after 30 minutes. Plugin update jobs queued back to back on a site run together in one WP-CLI call. See `docs/update-queue.md`.

@@ -18,6 +18,7 @@ import (
 	"github.com/JCO-Digital/jman/internal/models"
 	"github.com/JCO-Digital/jman/internal/utils"
 	"github.com/JCO-Digital/jman/internal/verb"
+	"github.com/JCO-Digital/jman/internal/wpcli"
 	"github.com/spf13/cobra"
 )
 
@@ -379,6 +380,9 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 				verb.Printf(verb.Normal, "  - %s skipped: the site can't take the update\n", r.Name)
 			default:
 				verb.Printf(verb.Normal, "  %s %s: %s\n", verb.Red("✗"), r.Name, verb.Red(jobError(job, r)))
+				if label := wpcli.CauseLabel(r.Cause, r.CauseDetail); label != "" {
+					verb.Printf(verb.Normal, "    %s\n", verb.Yellow(label))
+				}
 				rep.failed = append(rep.failed, r.Name)
 			}
 			if r.Note != "" {
