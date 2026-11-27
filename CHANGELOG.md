@@ -1,5 +1,12 @@
 # Changelog
 
+### 7.51.2 (2026-11-27)
+
+#### Bug Fixes
+
+- updates: stage WP Engine ZIPs in the site root, not wp-content/upgrade (6c741aa)
+- updates: upload plugin ZIPs over ssh and stage them in the site on WP Engine (93ea3dd)
+
 ### 7.51.1 (2026-11-27)
 
 #### Bug Fixes
