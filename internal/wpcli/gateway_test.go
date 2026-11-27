@@ -83,18 +83,25 @@ func TestUploadCommandSurvivesGateway(t *testing.T) {
 }
 
 // WP Engine gives each SSH connection its own /tmp, so files are staged in
-// the site, under a name with a random part.
+// the site (not in wp-content/upgrade, which WordPress empties), under a
+// name with a random part; without the site's path there's nowhere to stage.
 func TestStagingDir(t *testing.T) {
 	wpe := models.CliSite{SSH: "x@x.ssh.wpengine.net", Path: "/sites/x"}
 	plain := models.CliSite{SSH: "x@example.com", Path: "files"}
 	pattern := map[models.CliSite]*regexp.Regexp{
-		wpe:   regexp.MustCompile(`^/sites/x/wp-content/upgrade/jman-plugin-5-[0-9a-f]{16}$`),
+		wpe:   regexp.MustCompile(`^/sites/x/jman-plugin-5-[0-9a-f]{16}$`),
 		plain: regexp.MustCompile(`^/tmp/jman-plugin-5-[0-9a-f]{16}$`),
 	}
 	for site, re := range pattern {
-		a, b := StagingDir(site, "jman-plugin-5"), StagingDir(site, "jman-plugin-5")
-		if !re.MatchString(a) || a == b {
-			t.Errorf("%s: StagingDir = %q, %q", site.SSH, a, b)
+		a, errA := StagingDir(site, "jman-plugin-5")
+		b, errB := StagingDir(site, "jman-plugin-5")
+		if errA != nil || errB != nil || !re.MatchString(a) || a == b {
+			t.Errorf("%s: StagingDir = %q, %q (%v, %v)", site.SSH, a, b, errA, errB)
+		}
+	}
+	for _, p := range []string{"", "sites/x"} {
+		if dir, err := StagingDir(models.CliSite{SSH: wpe.SSH, Path: p}, "jman-plugin-5"); err == nil {
+			t.Errorf("path %q: StagingDir = %q, want an error", p, dir)
 		}
 	}
 }

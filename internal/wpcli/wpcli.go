@@ -358,14 +358,21 @@ func uploadCommand(ssh, remotePath string) string {
 // copies there before wp-cli uses them, such as a plugin ZIP. It's /tmp,
 // except on hosts whose SSH connections each get a fresh /tmp (WP Engine's
 // gateway, see reparsesCommand), where a file copied in one connection is
-// gone in the next; there it's WordPress's own wp-content/upgrade, which is
-// in the web root, so the name has a random part nobody can guess.
-func StagingDir(site models.CliSite, name string) string {
+// gone in the next. There it's in the site's own directory, which is the
+// web root, so the name has a random part nobody can guess. Not in
+// wp-content/upgrade: WordPress empties that before it unpacks a package,
+// staged ZIP included.
+func StagingDir(site models.CliSite, name string) (string, error) {
 	var b [8]byte
-	_, _ = rand.Read(b[:])
-	name += "-" + hex.EncodeToString(b[:])
-	if reparsesCommand(site.SSH) && path.IsAbs(site.Path) {
-		return path.Join(site.Path, "wp-content", "upgrade", name)
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
 	}
-	return path.Join("/tmp", name)
+	name += "-" + hex.EncodeToString(b[:])
+	if !reparsesCommand(site.SSH) {
+		return path.Join("/tmp", name), nil
+	}
+	if !path.IsAbs(site.Path) {
+		return "", fmt.Errorf("the site's path is unknown (%q), and its host keeps no /tmp between connections", site.Path)
+	}
+	return path.Join(site.Path, name), nil
 }
