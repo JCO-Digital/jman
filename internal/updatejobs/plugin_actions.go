@@ -151,7 +151,7 @@ func runInstall(job models.UpdateJob, site models.CliSite) {
 			defer cleanup()
 			source = staged
 		} else {
-			dir := fmt.Sprintf("/tmp/jman-plugin-%d", job.ID)
+			dir := wpcli.StagingDir(site, fmt.Sprintf("jman-plugin-%d", job.ID))
 			remote := dir + "/" + wpcli.PluginZipSlug(job.UploadPath, install.Source) + ".zip"
 			defer func() {
 				if _, err := runSSH(site.SSH, "rm", "-rf", dir); err != nil {
