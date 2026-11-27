@@ -79,6 +79,21 @@ func IsInvalidFieldError(s string) bool {
 	return strings.Contains(s, "Invalid field")
 }
 
+// looseString is a JSON string that also accepts any other value, which it
+// reads as "": wp-cli fills some fields with false or null where it has
+// nothing to say.
+type looseString string
+
+func (s *looseString) UnmarshalJSON(b []byte) error {
+	var v string
+	if err := json.Unmarshal(b, &v); err != nil {
+		*s = ""
+		return nil
+	}
+	*s = looseString(v)
+	return nil
+}
+
 // pluginUpdateUnavailable is wp-cli's update field for a plugin whose
 // update needs a newer WordPress or PHP than the site has.
 const pluginUpdateUnavailable = "unavailable"
@@ -98,14 +113,17 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 	}
 	output = output[idx:]
 
+	// Every field but the name is loose: wp-cli gives must-use plugins and
+	// drop-ins "update": false, and one odd value mustn't fail the whole
+	// list.
 	type rawPlugin struct {
-		Name              string `json:"name"`
-		Status            string `json:"status"`
-		Update            string `json:"update"`
-		Version           string `json:"version"`
-		UpdateVersion     string `json:"update_version"`
-		AutoUpdate        string `json:"auto_update"`
-		UnavailableReason string `json:"update_unavailable_reason"`
+		Name              string      `json:"name"`
+		Status            looseString `json:"status"`
+		Update            looseString `json:"update"`
+		Version           looseString `json:"version"`
+		UpdateVersion     looseString `json:"update_version"`
+		AutoUpdate        looseString `json:"auto_update"`
+		UnavailableReason looseString `json:"update_unavailable_reason"`
 		// Raw so an absent field (a wp-cli asked for its default fields)
 		// tells apart from null or "".
 		UpdatePackage json.RawMessage `json:"update_package"`
@@ -122,9 +140,9 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 		p := models.WPPlugin{
 			SiteID:     siteID,
 			Name:       rp.Name,
-			Status:     rp.Status,
-			Version:    rp.Version,
-			Update:     rp.UpdateVersion,
+			Status:     string(rp.Status),
+			Version:    string(rp.Version),
+			Update:     string(rp.UpdateVersion),
 			AutoUpdate: rp.AutoUpdate == "on",
 		}
 		// An available update without a package: WordPress has nothing to
@@ -137,7 +155,7 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 		// wp-cli doesn't reset the reason between plugins, so another
 		// plugin can carry it: it only belongs to an unavailable update.
 		if rp.Update == pluginUpdateUnavailable && p.Update != "" {
-			p.UpdateBlocked = strings.TrimSpace(rp.UnavailableReason)
+			p.UpdateBlocked = strings.TrimSpace(string(rp.UnavailableReason))
 			if p.UpdateBlocked == "" {
 				p.UpdateBlocked = "The update needs a newer WordPress or PHP version than the site has."
 			}
