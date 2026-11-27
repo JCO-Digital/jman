@@ -1445,6 +1445,8 @@ Returns an empty array if no updates are available.
 
 A plugin whose update needs a newer WordPress or PHP than the site has (wp-cli's `update` field is `unavailable`) also has `update_blocked`, wp-cli's reason, e.g. `"This update requires WordPress version 7.0, but the version installed is 6.9.12."`. The PHP version is the one wp-cli runs on. Every plugin list (`GET /sites/{id}/plugins`, the agent's data) carries it. Update jobs don't pass such a plugin to wp-cli, which would refuse it: its result has status `"Skipped (requirements)"` and the reason (without its full stop) as its `note`. A core update job that changed the version refreshes the site's plugin list, so updates waiting for it become available.
 
+A plugin whose update WordPress has no download for (wp-cli's `update_package` is empty) has `"update_no_package": true`. For a premium plugin that nearly always means its license isn't active on the site, and the update fails with the cause `no_package`. It's only a warning: some updaters supply the download only once it starts, so such updates are still run. The package URL itself, which often carries a license key, is never stored or sent on; with a wp-cli too old for `--fields` the flag is left out.
+
 
 ### Live Reads of a Site
 

@@ -108,3 +108,26 @@ func TestParsePluginListUnavailableUpdates(t *testing.T) {
 		t.Errorf("wordpress-seo: Update = %q, want the blocked version kept", got[2].Update)
 	}
 }
+
+// An available update without a package is flagged; one with a package,
+// without an update, or listed without the field (an old wp-cli) isn't.
+func TestParsePluginListNoPackage(t *testing.T) {
+	out := `[
+{"name":"polylang-pro","status":"active","update":"available","version":"3.5","update_version":"3.9.2","auto_update":"off","update_unavailable_reason":"","update_package":""},
+{"name":"null-package","status":"active","update":"available","version":"1.0","update_version":"1.1","auto_update":"off","update_unavailable_reason":"","update_package":null},
+{"name":"akismet","status":"active","update":"available","version":"5.3","update_version":"5.4","auto_update":"off","update_unavailable_reason":"","update_package":"https://downloads.wordpress.org/plugin/akismet.5.4.zip"},
+{"name":"hello","status":"active","update":"none","version":"1.7.2","update_version":null,"auto_update":"off","update_unavailable_reason":"","update_package":null},
+{"name":"blocked","status":"active","update":"unavailable","version":"1.0","update_version":"2.0","auto_update":"off","update_unavailable_reason":"This update requires PHP version 8.0, but the version installed is 7.4.","update_package":""},
+{"name":"old-cli","status":"active","update":"available","version":"1.0","update_version":"1.1","auto_update":"off"}
+]`
+	got, err := ParsePluginList(out, "site")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"polylang-pro": true, "null-package": true, "akismet": false, "hello": false, "blocked": false, "old-cli": false}
+	for _, p := range got {
+		if p.UpdateNoPackage != want[p.Name] {
+			t.Errorf("%s: UpdateNoPackage = %v, want %v", p.Name, p.UpdateNoPackage, want[p.Name])
+		}
+	}
+}

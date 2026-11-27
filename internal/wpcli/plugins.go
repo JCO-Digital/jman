@@ -48,9 +48,14 @@ func GetPluginsWithUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 }
 
 // PluginListFields are the fields `wp plugin list` is asked for, for
-// ParsePluginList: wp-cli's default ones and update_unavailable_reason.
-// wp-cli versions without that field fail (see IsInvalidFieldError).
-const PluginListFields = "--fields=name,status,update,version,update_version,auto_update,update_unavailable_reason"
+// ParsePluginList: wp-cli's default ones, update_unavailable_reason and
+// update_package. wp-cli versions without one of them fail (see
+// IsInvalidFieldError).
+//
+// update_package is only read to see whether it's empty (see
+// models.WPPlugin.UpdateNoPackage): a premium plugin's package URL often
+// carries its license key, so it's never kept.
+const PluginListFields = "--fields=name,status,update,version,update_version,auto_update,update_unavailable_reason,update_package"
 
 // SkippedPluginListArgs are the `wp plugin list` arguments for a listing
 // with --skip-plugins, the fallback when loading the plugins fails. Each
@@ -101,6 +106,9 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 		UpdateVersion     string `json:"update_version"`
 		AutoUpdate        string `json:"auto_update"`
 		UnavailableReason string `json:"update_unavailable_reason"`
+		// Raw so an absent field (a wp-cli asked for its default fields)
+		// tells apart from null or "".
+		UpdatePackage json.RawMessage `json:"update_package"`
 	}
 
 	var raw []rawPlugin
@@ -118,6 +126,13 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 			Version:    rp.Version,
 			Update:     rp.UpdateVersion,
 			AutoUpdate: rp.AutoUpdate == "on",
+		}
+		// An available update without a package: WordPress has nothing to
+		// download. Only when the field was asked for.
+		if rp.Update == "available" && p.Update != "" && rp.UpdatePackage != nil {
+			var pkg string
+			_ = json.Unmarshal(rp.UpdatePackage, &pkg)
+			p.UpdateNoPackage = strings.TrimSpace(pkg) == ""
 		}
 		// wp-cli doesn't reset the reason between plugins, so another
 		// plugin can carry it: it only belongs to an unavailable update.

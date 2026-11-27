@@ -297,6 +297,9 @@ func printPlugins(m *mirror.Mirror, site models.CliSite, plugins []models.WPPlug
 		if plugin.UpdateBlocked != "" {
 			update += " " + verb.Yellow("[blocked: "+plugin.UpdateBlocked+"]")
 		}
+		if plugin.UpdateNoPackage {
+			update += " " + verb.Yellow("[no update package: license not active?]")
+		}
 		if m.IsUpdateLocked(site.ID, plugin.Name) {
 			update += " " + verb.Gray("[locked]")
 		}
@@ -465,6 +468,10 @@ func queuePluginUpdates(ctx context.Context, c *client.Client, m *mirror.Mirror,
 		}
 		if m.IsUpdateLocked(site.ID, p.Name) {
 			note += " " + verb.Gray("[locked: fix releases only]")
+		}
+		if p.UpdateNoPackage && p.UpdateBlocked == "" {
+			// Still queued: some updaters only supply the download then.
+			note += " " + verb.Yellow("[no update package: license not active?]")
 		}
 		verb.Printf(verb.Normal, "- %s (%s -> %s)%s\n", m.DisplayPluginName(p.Name, false, false), p.Version, p.Update, note)
 	}

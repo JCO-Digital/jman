@@ -149,7 +149,7 @@ async function checkForUpdates() {
 
 /** Queues one background job per site. */
 async function updateSites(
-	sites: { site_id: string; name: string }[],
+	sites: { site_id: string; name: string; update_no_package?: boolean }[],
 	vulnerable: boolean,
 ) {
 	if (sites.length === 0) return;
@@ -160,8 +160,13 @@ async function updateSites(
 	const lockNote = locked
 		? ` It is update-locked on ${locked === sites.length ? (locked === 1 ? "that site" : "all of them") : `${locked} of them`}, which only get fix releases.`
 		: "";
+	// Still queued: some updaters only supply the download when it starts.
+	const noPackage = sites.filter((s) => s.update_no_package).length;
+	const packageNote = noPackage
+		? ` WordPress has no download for the update on ${noPackage === sites.length ? (noPackage === 1 ? "that site" : "any of them") : `${noPackage} of them`}: the license is probably not active there, and the update will likely fail.`
+		: "";
 	const ok = await confirm(
-		`Update ${props.name} on ${sites.length} ${what}${sites.length === 1 ? "" : "s"}?${lockNote}`,
+		`Update ${props.name} on ${sites.length} ${what}${sites.length === 1 ? "" : "s"}?${lockNote}${packageNote}`,
 		{ confirmLabel: "Update" },
 	);
 	if (!ok) return;
@@ -361,6 +366,20 @@ const manageAssetTemplate = () => {
 													blockedPluginUpdate(item)!
 														.label
 												}})
+											</span>
+											<span
+												v-if="
+													item.update_no_package &&
+													availablePluginUpdate(item)
+												"
+												class="plugin-update-no-package"
+												title="WordPress has no download for this update. For a premium plugin that nearly always means its license isn't active on this site; the update will likely fail."
+											>
+												<AppIcon
+													name="alert"
+													size="11"
+												/>
+												no package
 											</span>
 										</td>
 										<td>

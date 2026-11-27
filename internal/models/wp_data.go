@@ -47,6 +47,9 @@ func WPDataHash(plugins []WPPlugin, core SiteCore, users *SiteUsers) string {
 		if p.UpdateBlocked != "" {
 			line += "\x00b" + p.UpdateBlocked
 		}
+		if p.UpdateNoPackage {
+			line += "\x00n"
+		}
 		lines = append(lines, line)
 	}
 	if users != nil {

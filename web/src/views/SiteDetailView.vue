@@ -1692,6 +1692,22 @@ const unlinkOrganization = async () => {
 														.label
 												}})
 											</span>
+											<span
+												v-if="
+													plugin.update_no_package &&
+													availablePluginUpdate(
+														plugin,
+													)
+												"
+												class="plugin-update-no-package"
+												title="WordPress has no download for this update. For a premium plugin that nearly always means its license isn't active on this site; the update will likely fail."
+											>
+												<AppIcon
+													name="alert"
+													size="11"
+												/>
+												no package
+											</span>
 										</td>
 										<td>
 											<span

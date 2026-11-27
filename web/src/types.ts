@@ -221,6 +221,11 @@ export interface Plugin {
 	 * PHP), as wp-cli words it. Update jobs skip such a plugin.
 	 */
 	update_blocked?: string;
+	/**
+	 * WordPress knows of `update` but has no download for it: for a premium
+	 * plugin, nearly always a license that isn't active on the site.
+	 */
+	update_no_package?: boolean;
 }
 
 export interface PluginInfo {
