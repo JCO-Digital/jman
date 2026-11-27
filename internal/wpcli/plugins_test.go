@@ -45,4 +45,54 @@ func TestGetPluginsWithUpdates(t *testing.T) {
 	if err != nil || len(plugins) != 1 || plugins[0].Version != "1.0" {
 		t.Errorf("after a failed loaded run: plugins = %+v, err = %v", plugins, err)
 	}
+
+	// A wp-cli without update_unavailable_reason is asked for its default
+	// fields, with the plugins still loaded.
+	withFields := "--path=/srv/www\\ --exec=*\\ --skip-themes\\ plugin\\ list\\ --fields=*"
+	defaults := "--path=/srv/www\\ --exec=*\\ --skip-themes\\ plugin\\ list\\ --format=json"
+	fakeWP(t, map[string]string{
+		"*user\\ list*": "echo '[]'",
+		withFields:      "echo 'Error: Invalid field: update_unavailable_reason.' >&2; exit 1",
+		defaults:        `echo '[{"name":"premium","status":"active","version":"1.0","update_version":"1.1"}]'`,
+	})
+	plugins, err = GetPluginsWithUpdates(site)
+	if err != nil || len(plugins) != 1 || plugins[0].Update != "1.1" {
+		t.Errorf("old wp-cli: plugins = %+v, err = %v", plugins, err)
+	}
+}
+
+// An update wp-cli reports as unavailable is blocked with its reason; the
+// reason wp-cli leaves over from an earlier plugin isn't another plugin's.
+func TestParsePluginListUnavailableUpdates(t *testing.T) {
+	out := `[
+{"name":"duracelltomi-google-tag-manager","status":"active","update":"unavailable","version":"1.20","update_version":"1.21","auto_update":"off","update_unavailable_reason":"This update requires PHP version 8.0, but the version installed is 7.4.33."},
+{"name":"akismet","status":"active","update":"available","version":"5.3","update_version":"5.4","auto_update":"off","update_unavailable_reason":"This update requires PHP version 8.0, but the version installed is 7.4.33."},
+{"name":"wordpress-seo","status":"active","update":"unavailable","version":"26.4","update_version":"27.0","auto_update":"on","update_unavailable_reason":"This update requires WordPress version 7.0, but the version installed is 6.9.12."},
+{"name":"sitepress-multilingual-cms","status":"active","update":"unavailable","version":"5.2.0","update_version":"5.3.0","auto_update":"off","update_unavailable_reason":""},
+{"name":"hello","status":"inactive","update":"none","version":"1.7.2","update_version":null,"auto_update":"off","update_unavailable_reason":null},
+{"name":"old-cli","status":"active","update":"available","version":"1.0","update_version":"1.1","auto_update":"off"}
+]`
+	got, err := ParsePluginList(out, "site")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"duracelltomi-google-tag-manager": "This update requires PHP version 8.0, but the version installed is 7.4.33.",
+		"akismet":                         "",
+		"wordpress-seo":                   "This update requires WordPress version 7.0, but the version installed is 6.9.12.",
+		"sitepress-multilingual-cms":      "The update needs a newer WordPress or PHP version than the site has.",
+		"hello":                           "",
+		"old-cli":                         "",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d plugins, want %d", len(got), len(want))
+	}
+	for _, p := range got {
+		if p.UpdateBlocked != want[p.Name] {
+			t.Errorf("%s: UpdateBlocked = %q, want %q", p.Name, p.UpdateBlocked, want[p.Name])
+		}
+	}
+	if got[2].Update != "27.0" {
+		t.Errorf("wordpress-seo: Update = %q, want the blocked version kept", got[2].Update)
+	}
 }

@@ -15,7 +15,11 @@ import (
 
 // GetPlugins returns a list of installed plugins on the target site.
 func GetPlugins(site models.CliSite, skipPlugins bool) ([]models.WPPlugin, error) {
-	res, err := RunWP(CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: !skipPlugins, PremiumUpdates: true}, "plugin", "list", "--format=json")
+	opts := CliOptions{SiteID: site.ID, SSH: site.SSH, Path: site.Path, User: resolveAdminUser(site), IncludePlugins: !skipPlugins, PremiumUpdates: true}
+	res, err := RunWP(opts, "plugin", "list", PluginListFields, "--format=json")
+	if err != nil && IsInvalidFieldError(res.Error) {
+		res, err = RunWP(opts, "plugin", "list", "--format=json")
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -38,9 +42,28 @@ func GetPluginsWithUpdates(site models.CliSite) ([]models.WPPlugin, error) {
 	return GetPlugins(site, true)
 }
 
+// PluginListFields are the fields `wp plugin list` is asked for, for
+// ParsePluginList: wp-cli's default ones and update_unavailable_reason.
+// wp-cli versions without that field fail (see IsInvalidFieldError).
+const PluginListFields = "--fields=name,status,update,version,update_version,auto_update,update_unavailable_reason"
+
+// IsInvalidFieldError reports whether wp-cli's output (or an error
+// carrying it) says a --fields name doesn't exist: wp-cli checks them
+// against the first item and fails. A wp-cli older than one of the
+// PluginListFields is then asked for its default fields instead, which
+// still lets ParsePluginList read the update field, just without a reason;
+// falling back to --skip-plugins would lose premium plugins' updates.
+func IsInvalidFieldError(s string) bool {
+	return strings.Contains(s, "Invalid field")
+}
+
+// pluginUpdateUnavailable is wp-cli's update field for a plugin whose
+// update needs a newer WordPress or PHP than the site has.
+const pluginUpdateUnavailable = "unavailable"
+
 // ParsePluginList parses `wp plugin list --format=json` output (with the
-// name, status, version, update_version and auto_update fields) into
-// plugins of the given site.
+// PluginListFields, or at least name, status, version, update_version and
+// auto_update) into plugins of the given site.
 func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 	output = strings.TrimSpace(output)
 	if output == "" || output == "[]" {
@@ -54,11 +77,13 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 	output = output[idx:]
 
 	type rawPlugin struct {
-		Name          string `json:"name"`
-		Status        string `json:"status"`
-		Version       string `json:"version"`
-		UpdateVersion string `json:"update_version"`
-		AutoUpdate    string `json:"auto_update"`
+		Name              string `json:"name"`
+		Status            string `json:"status"`
+		Update            string `json:"update"`
+		Version           string `json:"version"`
+		UpdateVersion     string `json:"update_version"`
+		AutoUpdate        string `json:"auto_update"`
+		UnavailableReason string `json:"update_unavailable_reason"`
 	}
 
 	var raw []rawPlugin
@@ -69,14 +94,23 @@ func ParsePluginList(output, siteID string) ([]models.WPPlugin, error) {
 
 	var plugins []models.WPPlugin
 	for _, rp := range raw {
-		plugins = append(plugins, models.WPPlugin{
+		p := models.WPPlugin{
 			SiteID:     siteID,
 			Name:       rp.Name,
 			Status:     rp.Status,
 			Version:    rp.Version,
 			Update:     rp.UpdateVersion,
 			AutoUpdate: rp.AutoUpdate == "on",
-		})
+		}
+		// wp-cli doesn't reset the reason between plugins, so another
+		// plugin can carry it: it only belongs to an unavailable update.
+		if rp.Update == pluginUpdateUnavailable && p.Update != "" {
+			p.UpdateBlocked = strings.TrimSpace(rp.UnavailableReason)
+			if p.UpdateBlocked == "" {
+				p.UpdateBlocked = "The update needs a newer WordPress or PHP version than the site has."
+			}
+		}
+		plugins = append(plugins, p)
 	}
 
 	return plugins, nil

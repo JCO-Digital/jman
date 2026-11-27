@@ -91,13 +91,34 @@ export function formatRelativeTime(timestamp: number, now: number): string {
 /**
  * The version a cached plugin can be updated to, or "" if none. WP-CLI
  * reports no update as an empty update version; "none" is treated the same.
+ * An update that needs a newer WordPress or PHP than the site has isn't
+ * available either (see blockedPluginUpdate).
  */
 export function availablePluginUpdate(plugin: {
 	update?: string;
 	version?: string;
+	update_blocked?: string;
 }): string {
+	if (plugin.update_blocked) return "";
 	const u = plugin.update ?? "";
 	return u && u !== "none" && u !== plugin.version ? u : "";
+}
+
+/**
+ * A cached plugin update the site can't install yet: its version, wp-cli's
+ * reason, and a short label such as "needs WP 7.0". Null if there is none.
+ */
+export function blockedPluginUpdate(plugin: {
+	update?: string;
+	update_blocked?: string;
+}): { version: string; reason: string; label: string } | null {
+	const reason = plugin.update_blocked ?? "";
+	if (!reason) return null;
+	const m = reason.match(/requires (WordPress|PHP) version ([\d.]+)/);
+	const label = m
+		? `needs ${m[1] === "WordPress" ? "WP" : "PHP"} ${m[2]}`
+		: "can't update";
+	return { version: plugin.update ?? "", reason, label };
 }
 
 /**

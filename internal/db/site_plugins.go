@@ -17,12 +17,13 @@ func SaveSitePlugin(plugin models.WPPlugin) error {
 
 	query := `
 	INSERT INTO site_plugins (
-		site_id, slug, status, version, update_available, auto_update, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+		site_id, slug, status, version, update_available, update_blocked, auto_update, updated_at
+	) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 	ON CONFLICT(site_id, slug) DO UPDATE SET
 		status = excluded.status,
 		version = excluded.version,
 		update_available = excluded.update_available,
+		update_blocked = excluded.update_blocked,
 		auto_update = excluded.auto_update,
 		updated_at = CURRENT_TIMESTAMP;
 	`
@@ -33,6 +34,7 @@ func SaveSitePlugin(plugin models.WPPlugin) error {
 		plugin.Status,
 		plugin.Version,
 		plugin.Update,
+		plugin.UpdateBlocked,
 		plugin.AutoUpdate,
 	)
 
@@ -51,7 +53,7 @@ func GetSitePlugins(siteID string) ([]models.WPPlugin, error) {
 	}
 
 	query := `
-	SELECT site_id, slug, status, version, update_available, auto_update
+	SELECT site_id, slug, status, version, update_available, COALESCE(update_blocked, ''), auto_update
 	FROM site_plugins
 	WHERE site_id = ?
 	`
@@ -71,6 +73,7 @@ func GetSitePlugins(siteID string) ([]models.WPPlugin, error) {
 			&p.Status,
 			&p.Version,
 			&p.Update,
+			&p.UpdateBlocked,
 			&p.AutoUpdate,
 		)
 		if err != nil {
@@ -108,7 +111,7 @@ func GetAllSitePlugins() ([]models.WPPlugin, error) {
 		return nil, fmt.Errorf("database not initialized")
 	}
 
-	query := `SELECT site_id, slug, status, version, update_available, auto_update FROM site_plugins`
+	query := `SELECT site_id, slug, status, version, update_available, COALESCE(update_blocked, ''), auto_update FROM site_plugins`
 	rows, err := db.Query(query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query all site plugins: %w", err)
@@ -124,6 +127,7 @@ func GetAllSitePlugins() ([]models.WPPlugin, error) {
 			&p.Status,
 			&p.Version,
 			&p.Update,
+			&p.UpdateBlocked,
 			&p.AutoUpdate,
 		)
 		if err != nil {
@@ -230,15 +234,16 @@ func ReplaceSitePlugins(siteID string, plugins []models.WPPlugin, observedAt tim
 	stamp := inventoryTimestamp(observedAt)
 	for _, p := range plugins {
 		if _, err := tx.Exec(
-			`INSERT INTO site_plugins (site_id, slug, status, version, update_available, auto_update, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)
+			`INSERT INTO site_plugins (site_id, slug, status, version, update_available, update_blocked, auto_update, updated_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 			 ON CONFLICT(site_id, slug) DO UPDATE SET
 				status = excluded.status,
 				version = excluded.version,
 				update_available = excluded.update_available,
+				update_blocked = excluded.update_blocked,
 				auto_update = excluded.auto_update,
 				updated_at = excluded.updated_at`,
-			siteID, p.Name, p.Status, p.Version, p.Update, p.AutoUpdate, stamp,
+			siteID, p.Name, p.Status, p.Version, p.Update, p.UpdateBlocked, p.AutoUpdate, stamp,
 		); err != nil {
 			return fmt.Errorf("failed to save plugin %s for site %s: %w", p.Name, siteID, err)
 		}

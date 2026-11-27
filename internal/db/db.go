@@ -285,6 +285,7 @@ func initInventorySchema() error {
 				"status":           "TEXT",
 				"version":          "TEXT",
 				"update_available": "TEXT",
+				"update_blocked":   "TEXT",
 				"auto_update":      "BOOLEAN",
 				"updated_at":       "DATETIME DEFAULT CURRENT_TIMESTAMP",
 			},

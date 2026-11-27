@@ -192,10 +192,10 @@ const pluginListJSON = `Deprecated: something on line 3
 
 func okRunner() *fakeRunner {
 	return &fakeRunner{out: map[string]string{
-		"loaded: plugin list --format=json": pluginListJSON,
-		"plugin list --format=json":         pluginListJSON,
-		"core version":                      "Deprecated: notice\n6.6.1\n",
-		"core check-update --format=json":   `[{"version":"6.6.2","update_type":"minor","package_url":"x"},{"version":"6.7.1","update_type":"major","package_url":"y"}]`,
+		"loaded: plugin list " + wpcli.PluginListFields + " --format=json": pluginListJSON,
+		"plugin list " + wpcli.PluginListFields + " --format=json":         pluginListJSON,
+		"core version":                    "Deprecated: notice\n6.6.1\n",
+		"core check-update --format=json": `[{"version":"6.6.2","update_type":"minor","package_url":"x"},{"version":"6.7.1","update_type":"major","package_url":"y"}]`,
 	}}
 }
 
@@ -234,7 +234,7 @@ func TestCollectSiteWPData(t *testing.T) {
 func TestCollectSiteWPDataReportsErrors(t *testing.T) {
 	runner := okRunner()
 	dbErr := errors.New("wp-cli [plugin list] failed: Error: Error establishing a database connection.")
-	runner.fail = map[string]error{"loaded: plugin list --format=json": dbErr, "plugin list --format=json": dbErr}
+	runner.fail = map[string]error{"loaded: plugin list " + wpcli.PluginListFields + " --format=json": dbErr, "plugin list " + wpcli.PluginListFields + " --format=json": dbErr}
 	stubSite(t, runner)
 	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
 	if !strings.Contains(data.Error, "database connection") || data.Hash != "" || data.Plugins != nil {
@@ -266,21 +266,21 @@ func TestCollectSiteWPDataLoadsPlugins(t *testing.T) {
 	// The plugin list comes from the run with plugins loaded, which is the
 	// one where premium plugins report their updates.
 	runner := okRunner()
-	runner.out["loaded: plugin list --format=json"] = `[{"name":"premium","status":"active","version":"1.0","update_version":"1.1","auto_update":"off"}]`
+	runner.out["loaded: plugin list "+wpcli.PluginListFields+" --format=json"] = `[{"name":"premium","status":"active","version":"1.0","update_version":"1.1","auto_update":"off"}]`
 	stubSite(t, runner)
 	data := collectSiteWPData(context.Background(), runner, site, false)
 	if data.Error != "" || len(data.Plugins) != 1 || data.Plugins[0].Update != "1.1" {
 		t.Errorf("data = %+v", data)
 	}
 	for _, call := range runner.calls {
-		if call == "plugin list --format=json" {
+		if call == "plugin list "+wpcli.PluginListFields+" --format=json" {
 			t.Error("listed the plugins again after a successful loaded run")
 		}
 	}
 
 	// A broken plugin falls back to listing them skipped.
 	runner = okRunner()
-	runner.fail = map[string]error{"loaded: plugin list --format=json": errors.New("PHP Fatal error: broken plugin")}
+	runner.fail = map[string]error{"loaded: plugin list " + wpcli.PluginListFields + " --format=json": errors.New("PHP Fatal error: broken plugin")}
 	data = collectSiteWPData(context.Background(), runner, site, false)
 	if data.Error != "" || len(data.Plugins) != 2 {
 		t.Errorf("data = %+v", data)
@@ -462,7 +462,7 @@ func TestCollectSiteWPDataListsPluginsAsAdmin(t *testing.T) {
 	adminList := strings.Join(wpcli.AdminUserListArgs(), " ")
 	runner := okRunner()
 	runner.out[adminList] = `[{"ID":7},{"ID":3}]`
-	runner.out["loaded: plugin list --format=json --user=3"] = pluginListJSON
+	runner.out["loaded: plugin list "+wpcli.PluginListFields+" --format=json --user=3"] = pluginListJSON
 	stubSite(t, runner)
 	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com", IsWordpress: true}
 
@@ -470,7 +470,7 @@ func TestCollectSiteWPDataListsPluginsAsAdmin(t *testing.T) {
 	if data.Error != "" || len(data.Plugins) != 2 {
 		t.Fatalf("data = %+v", data)
 	}
-	if !slices.Contains(runner.calls, "loaded: plugin list --format=json --user=3") {
+	if !slices.Contains(runner.calls, "loaded: plugin list "+wpcli.PluginListFields+" --format=json --user=3") {
 		t.Errorf("plugin list didn't run as the administrator: %v", runner.calls)
 	}
 
@@ -507,7 +507,7 @@ func TestCollectSiteWPDataWithoutAdmin(t *testing.T) {
 			if data.Error != "" || len(data.Plugins) != 2 {
 				t.Fatalf("data = %+v", data)
 			}
-			if !slices.Contains(runner.calls, "loaded: plugin list --format=json") {
+			if !slices.Contains(runner.calls, "loaded: plugin list "+wpcli.PluginListFields+" --format=json") {
 				t.Errorf("calls = %v", runner.calls)
 			}
 		})
@@ -521,7 +521,7 @@ func TestCollectSiteWPDataAdminListFails(t *testing.T) {
 	adminList := strings.Join(wpcli.AdminUserListArgs(), " ")
 	runner := okRunner()
 	runner.out[adminList] = `[{"ID":3}]`
-	runner.fail = map[string]error{"loaded: plugin list --format=json --user=3": errors.New("Error: Invalid user ID, email or login: '3'")}
+	runner.fail = map[string]error{"loaded: plugin list " + wpcli.PluginListFields + " --format=json --user=3": errors.New("Error: Invalid user ID, email or login: '3'")}
 	stubSite(t, runner)
 	site := models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}
 
@@ -529,7 +529,7 @@ func TestCollectSiteWPDataAdminListFails(t *testing.T) {
 	if data.Error != "" || len(data.Plugins) != 2 {
 		t.Fatalf("data = %+v", data)
 	}
-	if !slices.Contains(runner.calls, "plugin list --format=json") {
+	if !slices.Contains(runner.calls, "plugin list "+wpcli.PluginListFields+" --format=json") {
 		t.Errorf("not retried without --user: %v", runner.calls)
 	}
 	adminUsersMu.Lock()
@@ -585,5 +585,23 @@ func TestCollectSiteWPDataSharesCoreChecks(t *testing.T) {
 	data = collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "e", Domain: "e.example.com", IsWordpress: true}, false)
 	if data.Core == nil || data.Core.MinorUpdate != "6.6.2" {
 		t.Errorf("after a failed check: %+v", data.Core)
+	}
+}
+
+// A wp-cli that doesn't know update_unavailable_reason fails on --fields;
+// the plugins are listed again with its default fields, still loaded,
+// rather than with them skipped.
+func TestCollectSiteWPDataOldWPCLIFields(t *testing.T) {
+	runner := okRunner()
+	runner.fail = map[string]error{"loaded: plugin list " + wpcli.PluginListFields + " --format=json": errors.New("wp-cli [plugin list] failed: Error: Invalid field: update_unavailable_reason.")}
+	runner.out["loaded: plugin list --format=json"] = pluginListJSON
+	stubSite(t, runner)
+
+	data := collectSiteWPData(context.Background(), runner, models.AgentManifestSite{SiteID: "s1", Domain: "example.com"}, false)
+	if data.Error != "" || len(data.Plugins) != 2 {
+		t.Fatalf("data = %+v", data)
+	}
+	if slices.Contains(runner.calls, "plugin list "+wpcli.PluginListFields+" --format=json") {
+		t.Errorf("listed with plugins skipped: %v", runner.calls)
 	}
 }

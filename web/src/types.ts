@@ -216,6 +216,11 @@ export interface Plugin {
 	version: string;
 	update: string;
 	autoUpdate: string | boolean;
+	/**
+	 * Why the site can't install `update` (it needs a newer WordPress or
+	 * PHP), as wp-cli words it. Update jobs skip such a plugin.
+	 */
+	update_blocked?: string;
 }
 
 export interface PluginInfo {
@@ -723,7 +728,10 @@ export interface UpdateResult {
 	name: string;
 	old_version: string;
 	new_version: string;
-	/** "Updated", "Up to date", "failed", "Done" or "Skipped (locked)". */
+	/**
+	 * "Updated", "Up to date", "failed", "Done", "Skipped (locked)" or
+	 * "Skipped (requirements)" (the note says what the update needs).
+	 */
 	status: string;
 	error?: string;
 	/** Explains a skipped update, e.g. a vulnerability the lock holds back. */

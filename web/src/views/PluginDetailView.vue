@@ -9,7 +9,7 @@ import { useUpdateJobsStore } from "../stores/updateJobs";
 import { usePluginUpdatesStore } from "../stores/pluginUpdates";
 import { useToastStore } from "../stores/toast";
 import { useConfirm } from "../composables/useConfirm";
-import { availablePluginUpdate } from "../utils/format";
+import { availablePluginUpdate, blockedPluginUpdate } from "../utils/format";
 import ViewHeader from "../components/ViewHeader.vue";
 import LoadingSpinner from "../components/LoadingSpinner.vue";
 import PluginInfoCard from "../components/PluginInfoCard.vue";
@@ -341,6 +341,26 @@ const manageAssetTemplate = () => {
 												{{
 													availablePluginUpdate(item)
 												}}
+											</span>
+											<span
+												v-else-if="
+													blockedPluginUpdate(item)
+												"
+												class="plugin-update-blocked"
+												:title="
+													blockedPluginUpdate(item)!
+														.reason
+												"
+											>
+												→
+												{{
+													blockedPluginUpdate(item)!
+														.version
+												}}
+												({{
+													blockedPluginUpdate(item)!
+														.label
+												}})
 											</span>
 										</td>
 										<td>

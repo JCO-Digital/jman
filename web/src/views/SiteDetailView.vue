@@ -45,6 +45,7 @@ import {
 } from "../utils/vulnList";
 import {
 	availablePluginUpdate,
+	blockedPluginUpdate,
 	formatBytes,
 	providerLabel,
 } from "../utils/format";
@@ -1670,6 +1671,26 @@ const unlinkOrganization = async () => {
 														plugin,
 													)
 												}}
+											</span>
+											<span
+												v-else-if="
+													blockedPluginUpdate(plugin)
+												"
+												class="plugin-update-blocked"
+												:title="
+													blockedPluginUpdate(plugin)!
+														.reason
+												"
+											>
+												→
+												{{
+													blockedPluginUpdate(plugin)!
+														.version
+												}}
+												({{
+													blockedPluginUpdate(plugin)!
+														.label
+												}})
 											</span>
 										</td>
 										<td>

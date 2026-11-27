@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -543,5 +545,92 @@ func TestRewriteRulesResetAfterUpdates(t *testing.T) {
 	}
 	if !updatesSite(models.NewUpdateJob(models.UpdateJobKindInstall, testSite, models.InstallPayload{Source: "x.zip", Plugin: "x", OldVersion: "1.0"})) {
 		t.Error("a ZIP update doesn't count as an update")
+	}
+}
+
+// A plugin whose cached update needs a newer WordPress isn't passed to
+// wp-cli: it's skipped with the reason, and the others still update.
+func TestRunSkipsUpdatesTheSiteCantTake(t *testing.T) {
+	setupRunnerTest(t)
+	reason := "This update requires WordPress version 7.0, but the version installed is 6.9.12."
+	if err := db.ReplaceSitePlugins(testSite, []models.WPPlugin{
+		{Name: "a", Status: "active", Version: "1.0", Update: "1.1"},
+		{Name: "wordpress-seo", Status: "active", Version: "26.4", Update: "27.0", UpdateBlocked: reason},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	var gotPlugins []string
+	updatePlugins = func(_ models.CliSite, plugins []string, _ *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
+		gotPlugins = plugins
+		return []wpcli.UpdateResult{{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: "Updated"}}, nil
+	}
+	refreshPluginCache = func(models.CliSite) error {
+		return db.ReplaceSitePlugins(testSite, []models.WPPlugin{
+			{Name: "a", Status: "active", Version: "1.1"},
+			{Name: "wordpress-seo", Status: "active", Version: "26.4", Update: "27.0", UpdateBlocked: reason},
+		}, time.Now())
+	}
+
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "a", OldVersion: "1.0"}, models.PluginUpdateRequest{Name: "wordpress-seo", OldVersion: "26.4"})
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+
+	if !slices.Equal(gotPlugins, []string{"a"}) {
+		t.Errorf("plugins passed to wp-cli = %v, want only a", gotPlugins)
+	}
+	stored, err := db.GetUpdateJob(job.ID)
+	if err != nil || stored == nil {
+		t.Fatalf("GetUpdateJob: %v, %v", stored, err)
+	}
+	want := []models.UpdateResult{
+		{Name: "a", OldVersion: "1.0", NewVersion: "1.1", Status: models.UpdateUpdated},
+		{Name: "wordpress-seo", OldVersion: "26.4", NewVersion: "26.4", Status: models.UpdateSkippedRequirements, Note: strings.TrimSuffix(reason, ".")},
+	}
+	assertResults(t, stored.Results, want)
+	if stored.Status != models.UpdateJobDone || stored.Error != "" {
+		t.Errorf("job status = %q error = %q, want done without an error", stored.Status, stored.Error)
+	}
+}
+
+// When every plugin is blocked, wp-cli isn't run at all.
+func TestRunAllBlockedRunsNoUpdate(t *testing.T) {
+	setupRunnerTest(t)
+	if err := db.ReplaceSitePlugins(testSite, []models.WPPlugin{
+		{Name: "b", Status: "active", Version: "1.0", Update: "2.0", UpdateBlocked: "This update requires PHP version 8.0, but the version installed is 7.4.33."},
+	}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	updatePlugins = func(models.CliSite, []string, *[]models.WPCLICall) ([]wpcli.UpdateResult, error) {
+		t.Error("wp-cli was run for a blocked update")
+		return nil, nil
+	}
+	job := pluginsJob(models.UpdateJobKindPlugins, models.PluginUpdateRequest{Name: "b", OldVersion: "1.0"})
+	if err := db.CreateUpdateJob(&job); err != nil {
+		t.Fatal(err)
+	}
+	run(job)
+	stored, _ := db.GetUpdateJob(job.ID)
+	if stored == nil || len(stored.Results) != 1 || stored.Results[0].Status != models.UpdateSkippedRequirements {
+		t.Errorf("stored job = %+v", stored)
+	}
+}
+
+// A core update that changed the version refreshes the plugin list, so
+// updates that waited for it are no longer blocked.
+func TestRunCoreJobRefreshesPlugins(t *testing.T) {
+	setupRunnerTest(t)
+	refreshed := false
+	refreshPluginCache = func(models.CliSite) error { refreshed = true; return nil }
+	updateCore = func(models.CliSite, bool, *[]models.WPCLICall) (wpcli.CoreUpdateResult, error) {
+		return wpcli.CoreUpdateResult{Success: true, Version: "7.0"}, nil
+	}
+	refreshCore = func(site models.CliSite) (*models.SiteCore, error) {
+		return &models.SiteCore{SiteID: site.ID, Version: "7.0"}, nil
+	}
+	runCoreJob(t, "major")
+	if !refreshed {
+		t.Error("plugin list not refreshed after the core update")
 	}
 }

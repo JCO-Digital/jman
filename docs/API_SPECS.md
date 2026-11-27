@@ -450,7 +450,7 @@ A plugin's changes on every site, newest first, taken from the site update ledge
 ```
 
 - `action`: `update`, `install`, `activate`, `deactivate`, `delete` or `uninstall`.
-- `outcome`: `success`, `failed` (with `error`), `skipped` (held back by an update lock) or `unchanged` (an update that left the version as it was).
+- `outcome`: `success`, `failed` (with `error`), `skipped` (held back by an update lock, or the update needs a newer WordPress or PHP than the site has) or `unchanged` (an update that left the version as it was).
 - `detected: true` marks changes made outside jman; `by` is then `detected (agent)` or `detected (ssh)`.
 - `source` is the ZIP or slug an install installed. `site_name` is empty for sites jman no longer knows.
 
@@ -1426,6 +1426,8 @@ Calls WP-CLI live to fetch the current list of plugins that have updates availab
 ```
 
 Returns an empty array if no updates are available.
+
+A plugin whose update needs a newer WordPress or PHP than the site has (wp-cli's `update` field is `unavailable`) also has `update_blocked`, wp-cli's reason, e.g. `"This update requires WordPress version 7.0, but the version installed is 6.9.12."`. The PHP version is the one wp-cli runs on. Every plugin list (`GET /sites/{id}/plugins`, the agent's data) carries it. Update jobs don't pass such a plugin to wp-cli, which would refuse it: its result has status `"Skipped (requirements)"` and the reason (without its full stop) as its `note`. A core update job that changed the version refreshes the site's plugin list, so updates waiting for it become available.
 
 
 ### Live Reads of a Site

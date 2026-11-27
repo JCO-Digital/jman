@@ -545,6 +545,7 @@ export const useDataStore = defineStore("data", () => {
 		if (plugin) {
 			plugin.version = newVersion;
 			plugin.update = "";
+			plugin.update_blocked = undefined;
 
 			// Persist to session storage so it survives reloads
 			persist(CACHE_KEY_PLUGINS, () => plugins.value);

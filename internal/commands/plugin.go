@@ -293,6 +293,9 @@ func printPlugins(m *mirror.Mirror, site models.CliSite, plugins []models.WPPlug
 		if plugin.Update != "" {
 			update += fmt.Sprintf("-> %s available", plugin.Update)
 		}
+		if plugin.UpdateBlocked != "" {
+			update += " " + verb.Yellow("[blocked: "+plugin.UpdateBlocked+"]")
+		}
 		if m.IsUpdateLocked(site.ID, plugin.Name) {
 			update += " " + verb.Gray("[locked]")
 		}
@@ -371,6 +374,9 @@ func runPluginUpdate(cmd *cobra.Command, args []string) error {
 				verb.Printf(verb.Normal, "  - %s is up to date\n", r.Name)
 			case models.UpdateSkippedLocked:
 				verb.Printf(verb.Normal, "  - %s skipped: locked, and no fix release is available\n", r.Name)
+			case models.UpdateSkippedRequirements:
+				// The Note printed below says what it needs.
+				verb.Printf(verb.Normal, "  - %s skipped: the site can't take the update\n", r.Name)
 			default:
 				verb.Printf(verb.Normal, "  %s %s: %s\n", verb.Red("✗"), r.Name, verb.Red(jobError(job, r)))
 				rep.failed = append(rep.failed, r.Name)
@@ -444,9 +450,13 @@ func queuePluginUpdates(ctx context.Context, c *client.Client, m *mirror.Mirror,
 	var toUpdate []string
 	for _, p := range updates {
 		note := ""
-		if pluginName != "" && p.Name != pluginName {
+		switch {
+		case pluginName != "" && p.Name != pluginName:
 			note = " (skipped)"
-		} else {
+		case p.UpdateBlocked != "":
+			// jman-api would only skip it.
+			note = " " + verb.Yellow("(skipped: "+p.UpdateBlocked+")")
+		default:
 			toUpdate = append(toUpdate, p.Name)
 		}
 		if m.IsUpdateLocked(site.ID, p.Name) {

@@ -29,7 +29,7 @@ One line per attempt, which is one update command of a job:
 | `zip` | `wp plugin install --force` of a ZIP over an installed plugin (uploaded, downloaded or copied from another site) |
 | `core` | `wp core update`, and `wp core update-db` when it succeeded |
 
-Installing a new plugin isn't an update and isn't logged. Neither is a job that never reached wp-cli (the site couldn't be found, or the locks couldn't be read); the job itself records those.
+Installing a new plugin isn't an update and isn't logged. Neither is a plugin a job skipped because its update needs a newer WordPress or PHP than the site has (`update_blocked`, see `docs/API_SPECS.md`): wp-cli isn't run for it. Neither is a job that never reached wp-cli (the site couldn't be found, or the locks couldn't be read); the job itself records those.
 
 ```json
 {
