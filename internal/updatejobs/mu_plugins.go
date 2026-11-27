@@ -63,13 +63,18 @@ func writeMuSSH(job models.UpdateJob, site models.CliSite, dir, tmp, dest string
 	if _, err := runSSH(site.SSH, "mkdir", "-p", dir); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dir, err)
 	}
+	removeTmp := func() {
+		if _, err := runSSH(site.SSH, "rm", "-f", tmp); err != nil {
+			log.Printf("Mu-plugin install job %d: failed to remove %s on %s: %v", job.ID, tmp, site.Name, err)
+		}
+	}
+	// A failed upload can leave part of the file behind.
 	if err := uploadFile(site.SSH, job.UploadPath, tmp); err != nil {
+		removeTmp()
 		return err
 	}
 	if res, err := runSSH(site.SSH, "mv", "-f", tmp, dest); err != nil {
-		if _, rmErr := runSSH(site.SSH, "rm", "-f", tmp); rmErr != nil {
-			log.Printf("Mu-plugin install job %d: failed to remove %s on %s: %v", job.ID, tmp, site.Name, rmErr)
-		}
+		removeTmp()
 		return fmt.Errorf("failed to move the file into place: %w (stderr: %s)", err, res.Error)
 	}
 	return nil

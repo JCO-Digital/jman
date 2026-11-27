@@ -3,8 +3,11 @@ package wpcli
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
 	"slices"
@@ -306,11 +309,20 @@ func RunSSH(ssh string, args ...string) (RunResult, error) {
 	return res, err
 }
 
-// UploadFile transfers a local file to a remote path via SCP.
+// UploadFile copies a local file to a remote path over SSH, by piping it
+// to `cat` on the host. scp isn't used: since OpenSSH 9.0 it copies over
+// SFTP, which hosts such as WP Engine's SSH gateway don't offer ("subsystem
+// request failed"), while a plain remote command works wherever wp-cli does.
 func UploadFile(ssh, localPath, remotePath string) error {
 	if ssh == "" {
 		return fmt.Errorf("ssh connection string is required for upload")
 	}
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to open %s: %w", localPath, err)
+	}
+	defer f.Close()
 
 	knock.KnockIfNeeded(ssh)
 	if err := EnsureHostKey(ssh); err != nil {
@@ -320,19 +332,47 @@ func UploadFile(ssh, localPath, remotePath string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	// Format scp destination: user@host:path, with the port passed as -P
-	// (scp doesn't accept WP-CLI's "host:port" form).
 	target := parseSSHSpec(ssh)
-	destination := fmt.Sprintf("%s:%s", target.dest, remotePath)
-	scpArgs := append(target.sshPortArgs("-P"), "--", localPath, destination)
-	cmd := exec.CommandContext(ctx, "scp", scpArgs...)
+	sshArgs := append(target.sshPortArgs("-p"), target.dest, uploadCommand(ssh, remotePath))
+	cmd := exec.CommandContext(ctx, "ssh", sshArgs...)
+	cmd.Stdin = f
 
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf
 
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to upload file via scp: %w (stderr: %s)", err, errBuf.String())
+		return fmt.Errorf("failed to upload file over ssh: %w (stderr: %s)", err, errBuf.String())
 	}
 
 	return nil
+}
+
+// uploadCommand is the remote command that writes stdin to remotePath. The
+// redirection has to reach the remote shell unquoted, so only the path goes
+// through remoteCommand's quoting.
+func uploadCommand(ssh, remotePath string) string {
+	return "cat > " + remoteCommand(ssh, []string{remotePath})
+}
+
+// StagingDir returns a new directory name on a site's host for files a job
+// copies there before wp-cli uses them, such as a plugin ZIP. It's /tmp,
+// except on hosts whose SSH connections each get a fresh /tmp (WP Engine's
+// gateway, see reparsesCommand), where a file copied in one connection is
+// gone in the next. There it's in the site's own directory, which is the
+// web root, so the name has a random part nobody can guess. Not in
+// wp-content/upgrade: WordPress empties that before it unpacks a package,
+// staged ZIP included.
+func StagingDir(site models.CliSite, name string) (string, error) {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	name += "-" + hex.EncodeToString(b[:])
+	if !reparsesCommand(site.SSH) {
+		return path.Join("/tmp", name), nil
+	}
+	if !path.IsAbs(site.Path) {
+		return "", fmt.Errorf("the site's path is unknown (%q), and its host keeps no /tmp between connections", site.Path)
+	}
+	return path.Join(site.Path, name), nil
 }
