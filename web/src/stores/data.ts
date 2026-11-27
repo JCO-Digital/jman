@@ -16,6 +16,7 @@ import type {
 	SiteCore,
 	UpdateLock,
 	CoreUpdatePolicy,
+	NightlyCoreUpdates,
 } from "../types";
 import { useAuthStore } from "./auth";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
@@ -55,6 +56,9 @@ export const useDataStore = defineStore("data", () => {
 	// The site tiers from jman-api's config, lowest first; loaded once.
 	const siteTiers = ref<SiteTier[]>([]);
 	let siteTiersRequest: Promise<void> | null = null;
+	/** Whether jman-api runs the nightly core update; null until loaded. */
+	const nightlyCoreUpdates = ref<NightlyCoreUpdates | null>(null);
+	let nightlyCoreUpdatesRequest: Promise<void> | null = null;
 	const plugins = ref<Plugin[]>([]);
 	const pluginInfo = ref<PluginInfo[]>([]);
 	const vulnerabilities = ref<PluginVulnerability[]>([]);
@@ -621,6 +625,19 @@ export const useDataStore = defineStore("data", () => {
 		return siteTiersRequest;
 	}
 
+	/** Loads the nightly core update status once. */
+	function fetchNightlyCoreUpdates(): Promise<void> {
+		nightlyCoreUpdatesRequest ??= (async () => {
+			const res = await apiFetch(`${BASE_URL}/nightly-core-updates`);
+			if (!res.ok) await handleErrorResponse(res);
+			nightlyCoreUpdates.value = await res.json();
+		})().catch((e) => {
+			nightlyCoreUpdatesRequest = null;
+			throw e;
+		});
+		return nightlyCoreUpdatesRequest;
+	}
+
 	/** A tier's name, or "Tier <id>" for one no longer configured. */
 	function tierName(id: number | undefined): string {
 		if (!id) return "";
@@ -782,6 +799,8 @@ export const useDataStore = defineStore("data", () => {
 		servers,
 		sites,
 		siteTiers,
+		nightlyCoreUpdates,
+		fetchNightlyCoreUpdates,
 		plugins,
 		pluginInfo,
 		vulnerabilities,

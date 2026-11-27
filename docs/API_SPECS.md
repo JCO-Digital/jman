@@ -361,6 +361,8 @@ Staging, development and archived sites can be linked to their production site, 
 Every site has a nightly core update policy (see "Nightly core updates" in `README_API.md`): `vuln_minor`, `minor` or `major`. `GET /sites` reports `core_update_default`, the policy from the site's environment and tier, and `core_update_policy`, the site's override, when it has one.
 
 `PUT /sites/{id}/core-update-policy` (Protected: `edit`): `{"policy": "major"}` sets the override; `""` or `null` clears it, so the default applies. An unknown policy gets 400, an unknown site 404.
+
+`GET /nightly-core-updates` (Protected: `basic`): `{"enabled": false, "start_hour": 3}`, whether the nightly core update runs (`nightlyCoreUpdates`) and the hour it starts at. The WordPress Core card says when it's off.
 `PUT /sites/{id}/production-site` (Protected: `edit`): `{"production_site_id": "<uuid>"}` links a staging, development or archived site to a production site, replacing any earlier link. Links don't chain: the parent must be production and not linked itself, and a site others are linked to can't be linked (400).
 `DELETE /sites/{id}/production-site` (Protected: `edit`): removes the link.
 

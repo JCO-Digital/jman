@@ -229,6 +229,13 @@ export interface AgentWPStatus {
  */
 export type CoreUpdatePolicy = "vuln_minor" | "minor" | "major";
 
+/** GET /api/nightly-core-updates: whether the nightly run is on. */
+export interface NightlyCoreUpdates {
+	enabled: boolean;
+	/** The hour (server local time) it starts at. */
+	start_hour: number;
+}
+
 export interface SiteCore {
 	site_id: string;
 	version: string;

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -238,4 +239,19 @@ func TestSiteCoreUpdatePolicy(t *testing.T) {
 		t.Fatalf("clear policy: got %d", code)
 	}
 	check(linkProdID, "", models.CorePolicyMajor, models.CorePolicyMajor)
+}
+
+func TestNightlyCoreUpdatesHandler(t *testing.T) {
+	old, oldHour := config.Cfg.NightlyCoreUpdates, config.Cfg.NightlyCoreUpdateHour
+	t.Cleanup(func() { config.Cfg.NightlyCoreUpdates, config.Cfg.NightlyCoreUpdateHour = old, oldHour })
+
+	for _, enabled := range []bool{false, true} {
+		config.Cfg.NightlyCoreUpdates = enabled
+		w := httptest.NewRecorder()
+		NightlyCoreUpdatesHandler(w, httptest.NewRequest("GET", "/api/nightly-core-updates", nil))
+		want := fmt.Sprintf(`"enabled":%v`, enabled)
+		if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), want) || !strings.Contains(w.Body.String(), `"start_hour":`) {
+			t.Errorf("enabled %v: %d %s", enabled, w.Code, w.Body.String())
+		}
+	}
 }

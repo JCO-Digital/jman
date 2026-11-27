@@ -422,6 +422,9 @@ onMounted(async () => {
 	dataStore.fetchSiteTiers().catch((e) => {
 		console.error("Failed to load site tiers", e);
 	});
+	dataStore.fetchNightlyCoreUpdates().catch((e) => {
+		console.error("Failed to load the nightly core update status", e);
+	});
 	await Promise.all([dataStore.initData(), ignoreStore.fetchIgnoreEntries()]);
 });
 
@@ -1614,6 +1617,14 @@ const unlinkOrganization = async () => {
 							</span>
 						</span>
 					</div>
+					<p
+						v-if="dataStore.nightlyCoreUpdates?.enabled === false"
+						class="text-muted"
+					>
+						Nightly core updates are off on this jman-api
+						(nightlyCoreUpdates), so this setting has no effect
+						until they're turned on.
+					</p>
 
 					<div
 						v-if="

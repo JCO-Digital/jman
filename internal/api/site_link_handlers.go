@@ -257,3 +257,13 @@ func SetSiteCoreUpdatePolicyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 }
+
+// NightlyCoreUpdatesHandler reports whether the nightly core update runs
+// (nightlyCoreUpdates) and the hour it starts at, so the UI can say when
+// the sites' policies have no effect.
+func NightlyCoreUpdatesHandler(w http.ResponseWriter, r *http.Request) {
+	WriteJSON(w, http.StatusOK, map[string]any{
+		"enabled":    config.Cfg.NightlyCoreUpdates,
+		"start_hour": config.NightlyCoreUpdateStartHour(),
+	})
+}
