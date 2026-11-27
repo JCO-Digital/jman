@@ -1,5 +1,18 @@
 # Changelog
 
+## 7.51.0 (2026-11-27)
+
+#### Features
+
+- plugins: flag plugin updates WordPress has no download for (b4875b9)
+- updates: label why a plugin or core update failed (9d20e54)
+- updates: skip plugin updates the site's WordPress or PHP can't take (fdc5ebf)
+
+#### Bug Fixes
+
+- updates: address review of failure causes and blocked updates (fae89eb)
+- plugins: keep premium plugins' updates in WordPress's update list (dee322e)
+
 ## 7.50.0 (2026-11-26)
 
 #### Features
