@@ -258,20 +258,3 @@ export const corePolicyLabels: Record<CoreUpdatePolicy, string> = {
 	minor: "Minor update nightly",
 	major: "Latest version (major) nightly",
 };
-
-/**
- * A site's default core update policy, as jman-api works it out
- * (models.DefaultCoreUpdatePolicy): staging and development sites, and
- * production sites on a tier below Standard (20), update to the latest
- * version nightly; the rest only on a vulnerability. Used to update the
- * default at once when the environment or tier changes.
- */
-export function defaultCorePolicy(
-	environment: string | undefined,
-	tier: number | undefined,
-): CoreUpdatePolicy {
-	if (environment === "staging" || environment === "development")
-		return "major";
-	if (environment === "production" && tier && tier < 20) return "major";
-	return "vuln_minor";
-}

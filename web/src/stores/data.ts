@@ -17,10 +17,10 @@ import type {
 	UpdateLock,
 	CoreUpdatePolicy,
 	NightlyCoreUpdates,
+	SiteTierState,
 } from "../types";
 import { useAuthStore } from "./auth";
 import { BASE_URL, handleErrorResponse, apiFetch } from "../utils/api";
-import { defaultCorePolicy } from "../utils/format";
 
 // Cache keys are versioned: bump a key when the shape of what it holds
 // changes (ids moving from SpinupWP integers to UUID strings, sites gaining
@@ -28,7 +28,7 @@ import { defaultCorePolicy } from "../utils/format";
 const CACHE_KEY_SERVERS = "jman_servers_v2";
 // v4: sites carry update_locks; a v3 cache would show locked sites as
 // unlocked.
-const CACHE_KEY_SITES = "jman_sites_v4";
+const CACHE_KEY_SITES = "jman_sites_v5";
 const CACHE_KEY_PLUGINS = "jman_plugins_v2";
 const CACHE_KEY_PLUGIN_INFO = "jman_plugin_info";
 const CACHE_KEY_VULNS = "jman_vulns_v3";
@@ -39,6 +39,7 @@ const LEGACY_CACHE_KEYS = [
 	"jman_sites",
 	"jman_sites_v2",
 	"jman_sites_v3",
+	"jman_sites_v4",
 	"jman_plugins",
 	"jman_vulns_v2",
 	"jman_core_vulns",
@@ -600,16 +601,24 @@ export const useDataStore = defineStore("data", () => {
 			body: JSON.stringify({ environment }),
 		});
 		if (!res.ok) await handleErrorResponse(res);
+		const state: SiteTierState = await res.json();
 
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
 			site.environment = environment || undefined;
-			site.core_update_default = defaultCorePolicy(
-				site.environment,
-				site.environment === "production" ? site.tier : undefined,
-			);
+			applySiteTierState(site, state);
 			persist(CACHE_KEY_SITES, () => sites.value);
 		}
+	}
+
+	/**
+	 * Takes the tier and default core update policy that a change of the
+	 * site's environment or tier returns: a site moved back to production
+	 * gets its stored tier back, and the default follows both.
+	 */
+	function applySiteTierState(site: Site, state: SiteTierState) {
+		site.tier = state.tier || undefined;
+		site.core_update_default = state.core_update_default;
 	}
 
 	/** Loads the site tiers once; later calls reuse the first request. */
@@ -652,13 +661,10 @@ export const useDataStore = defineStore("data", () => {
 			body: JSON.stringify({ tier }),
 		});
 		if (!res.ok) await handleErrorResponse(res);
+		const state: SiteTierState = await res.json();
 		const site = sites.value.find((s) => s.id === siteId);
 		if (site) {
-			site.tier = tier || undefined;
-			site.core_update_default = defaultCorePolicy(
-				site.environment,
-				site.tier,
-			);
+			applySiteTierState(site, state);
 			persist(CACHE_KEY_SITES, () => sites.value);
 		}
 	}

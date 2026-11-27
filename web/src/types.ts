@@ -229,6 +229,15 @@ export interface AgentWPStatus {
  */
 export type CoreUpdatePolicy = "vuln_minor" | "minor" | "major";
 
+/**
+ * What a change of a site's environment or tier returns: the tier it now
+ * reports (absent for none) and the default core update policy.
+ */
+export interface SiteTierState {
+	tier?: number;
+	core_update_default: CoreUpdatePolicy;
+}
+
 /** GET /api/nightly-core-updates: whether the nightly run is on. */
 export interface NightlyCoreUpdates {
 	enabled: boolean;

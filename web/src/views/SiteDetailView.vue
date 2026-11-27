@@ -48,7 +48,6 @@ import {
 	availablePluginUpdate,
 	blockedPluginUpdate,
 	corePolicyLabels,
-	defaultCorePolicy,
 	formatBytes,
 	providerLabel,
 } from "../utils/format";
@@ -557,10 +556,9 @@ watch(
 	{ immediate: true },
 );
 const coreDefaultPolicy = computed<CoreUpdatePolicy>(
-	() =>
-		site.value?.core_update_default ??
-		defaultCorePolicy(site.value?.environment, site.value?.tier),
+	() => site.value?.core_update_default ?? "vuln_minor",
 );
+const savingCorePolicy = ref(false);
 const coreEffectivePolicy = computed<CoreUpdatePolicy>(
 	() => site.value?.core_update_policy ?? coreDefaultPolicy.value,
 );
@@ -572,18 +570,22 @@ const corePolicyOptions = Object.entries(corePolicyLabels) as [
 const onCorePolicyChange = async () => {
 	if (!site.value) return;
 	const previous = site.value.core_update_policy ?? "";
+	savingCorePolicy.value = true;
 	try {
 		await dataStore.setCoreUpdatePolicy(
 			site.value.id,
 			corePolicyDraft.value || null,
 		);
 		toast.addToast("Nightly core updates updated.", "success");
-	} catch (e: any) {
+	} catch (e) {
 		corePolicyDraft.value = previous;
 		toast.addToast(
-			"Failed to update nightly core updates: " + e.message,
+			"Failed to update nightly core updates: " +
+				(e instanceof Error ? e.message : String(e)),
 			"error",
 		);
+	} finally {
+		savingCorePolicy.value = false;
 	}
 };
 
@@ -1582,6 +1584,7 @@ const unlinkOrganization = async () => {
 								v-if="authStore.canEdit"
 								id="core-update-policy"
 								v-model="corePolicyDraft"
+								:disabled="savingCorePolicy"
 								@change="onCorePolicyChange"
 							>
 								<option value="">

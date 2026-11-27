@@ -73,6 +73,7 @@ var (
 	openMutes         = db.ListOpenVulnMutes
 	allSiteCore       = db.GetAllSiteCore
 	corePolicies      = db.GetEffectiveCoreUpdatePolicies
+	allUpdateLocks    = db.ListUpdateLocks
 	enqueueCore       = EnqueueCore
 	getJob            = db.GetUpdateJob
 	sendNightlySlack  = func(msg string) error { return slack.SendMessage(msg, true) }
@@ -145,8 +146,10 @@ type nightlyCandidate struct {
 //   - vuln_minor: a minor update, when there's an open core exposure that
 //     isn't muted.
 //   - minor: a minor update.
-//   - major: any update, to the latest version.
-func nightlyCoreCandidates(exposures []models.VulnExposure, mutes []models.VulnMute, cores []models.SiteCore, policies map[string]models.CoreUpdatePolicy) []nightlyCandidate {
+//   - major: any update, to the latest version. A site whose core is
+//     update-locked (coreLocked) is held to minor updates, as runCore would
+//     hold it anyway, so it isn't queued a job with nothing to do.
+func nightlyCoreCandidates(exposures []models.VulnExposure, mutes []models.VulnMute, cores []models.SiteCore, policies map[string]models.CoreUpdatePolicy, coreLocked map[string]bool) []nightlyCandidate {
 	muted := map[string]bool{}
 	for _, m := range mutes {
 		if m.Kind == models.VulnExposureCore && m.Open() {
@@ -165,6 +168,9 @@ func nightlyCoreCandidates(exposures []models.VulnExposure, mutes []models.VulnM
 		policy := policies[core.SiteID]
 		if !policy.Valid() {
 			policy = models.CorePolicyVulnMinor
+		}
+		if policy == models.CorePolicyMajor && coreLocked[core.SiteID] {
+			policy = models.CorePolicyMinor
 		}
 		c := nightlyCandidate{SiteID: core.SiteID, Version: core.Version}
 		switch {
@@ -206,12 +212,24 @@ func runNightlyCore(ctx context.Context) {
 		log.Printf("Nightly core update: %v", err)
 		return
 	}
+	locks, err := allUpdateLocks()
+	if err != nil {
+		log.Printf("Nightly core update: %v", err)
+		return
+	}
+	coreLocked := map[string]bool{}
+	for _, l := range locks {
+		// A site lock (no plugin) is the one that locks core.
+		if l.Plugin == "" {
+			coreLocked[l.SiteID] = true
+		}
+	}
 
 	// Only sites jman can run WP-CLI on; a removed site's cached core would
 	// otherwise fail every night. Without the site list, all are tried.
 	names := siteNames()
 	var ids []int64
-	for _, c := range nightlyCoreCandidates(exposures, mutes, cores, policies) {
+	for _, c := range nightlyCoreCandidates(exposures, mutes, cores, policies, coreLocked) {
 		if names != nil && names[c.SiteID] == "" {
 			continue
 		}

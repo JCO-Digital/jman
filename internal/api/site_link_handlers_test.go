@@ -213,9 +213,21 @@ func TestSiteCoreUpdatePolicy(t *testing.T) {
 	check(linkProdID, "", models.CorePolicyVulnMinor, models.CorePolicyVulnMinor)
 	check(linkStagingID, "", models.CorePolicyMajor, models.CorePolicyMajor)
 
-	// A basic tier production site updates to the latest version nightly.
-	if code := callSiteHandler(t, SetSiteTierHandler, "PUT", linkProdID, `{"tier":10}`).Code; code != http.StatusOK {
-		t.Fatalf("set tier: got %d", code)
+	// A basic tier production site updates to the latest version nightly;
+	// the tier change returns the new default.
+	w := callSiteHandler(t, SetSiteTierHandler, "PUT", linkProdID, `{"tier":10}`)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"tier":10,"core_update_default":"major"}` {
+		t.Fatalf("set tier: got %d %s", w.Code, w.Body.String())
+	}
+	// Moved to archived, the site reports no tier and the archived default;
+	// back in production, its stored tier again.
+	w = callSiteHandler(t, SetSiteEnvironmentHandler, "PATCH", linkProdID, `{"environment":"archived"}`)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"core_update_default":"vuln_minor"}` {
+		t.Errorf("archive: got %d %s", w.Code, w.Body.String())
+	}
+	w = callSiteHandler(t, SetSiteEnvironmentHandler, "PATCH", linkProdID, `{"environment":"production"}`)
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"tier":10,"core_update_default":"major"}` {
+		t.Errorf("back to production: got %d %s", w.Code, w.Body.String())
 	}
 	check(linkProdID, "", models.CorePolicyMajor, models.CorePolicyMajor)
 

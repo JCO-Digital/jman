@@ -55,7 +55,7 @@ func SetSiteTierHandler(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, http.StatusInternalServerError, "Internal server error")
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		writeSiteTierState(w, siteID)
 		return
 	}
 
@@ -97,7 +97,37 @@ func SetSiteTierHandler(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	w.WriteHeader(http.StatusOK)
+	writeSiteTierState(w, siteID)
+}
+
+// siteTierState is what a change of a site's environment or tier returns:
+// the tier it now reports (0 for none, as GET /sites) and the default core
+// update policy that follows, so the UI needn't work either out itself.
+type siteTierState struct {
+	Tier              int                     `json:"tier,omitempty"`
+	CoreUpdateDefault models.CoreUpdatePolicy `json:"core_update_default"`
+}
+
+// writeSiteTierState answers 200 with the site's siteTierState.
+func writeSiteTierState(w http.ResponseWriter, siteID string) {
+	env, _, err := db.GetEffectiveSiteEnvironment(siteID)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "writeSiteTierState: %v", err)
+		WriteError(w, http.StatusInternalServerError, "Internal server error")
+		return
+	}
+	var state siteTierState
+	if env == string(models.SiteEnvironmentProduction) {
+		tiers, err := db.GetAllSiteTiers()
+		if err != nil {
+			verb.LogPrintf(verb.Normal, "writeSiteTierState: %v", err)
+			WriteError(w, http.StatusInternalServerError, "Internal server error")
+			return
+		}
+		state.Tier = tiers[siteID]
+	}
+	state.CoreUpdateDefault = models.DefaultCoreUpdatePolicy(models.SiteEnvironmentType(env), state.Tier)
+	WriteJSON(w, http.StatusOK, state)
 }
 
 // SetSiteProductionLinkHandler links a staging, development or archived site
@@ -226,13 +256,15 @@ func SetSiteCoreUpdatePolicyHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, found, err := db.GetEffectiveSiteEnvironment(siteID)
+	// The inventory itself: a deleted site's environment classification
+	// can outlive it.
+	ms, err := db.GetManagedSite(siteID)
 	if err != nil {
 		verb.LogPrintf(verb.Normal, "SetSiteCoreUpdatePolicyHandler: %v", err)
 		WriteError(w, http.StatusInternalServerError, "Internal server error")
 		return
 	}
-	if !found {
+	if ms == nil {
 		WriteError(w, http.StatusNotFound, "Site not found")
 		return
 	}

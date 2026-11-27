@@ -64,8 +64,13 @@ func TestNightlyCoreCandidates(t *testing.T) {
 		{SiteID: "nightly-major", Version: "6.8.1", MinorUpdate: "6.8.3", MajorUpdate: "6.9"},
 		minor("nightly-major-minor-only"),
 		{SiteID: "nightly-major-current", Version: "6.9"},
+		// Update-locked: held to minor updates, and left out without one.
+		{SiteID: "locked-major", Version: "6.8.1", MinorUpdate: "6.8.3", MajorUpdate: "6.9"},
+		{SiteID: "locked-major-only", Version: "6.8.1", MajorUpdate: "6.9"},
 	}
 	policies := map[string]models.CoreUpdatePolicy{
+		"locked-major":             models.CorePolicyMajor,
+		"locked-major-only":        models.CorePolicyMajor,
 		"vulnerable":               models.CorePolicyVulnMinor,
 		"nightly-minor":            models.CorePolicyMinor,
 		"nightly-minor-major-only": models.CorePolicyMinor,
@@ -76,12 +81,13 @@ func TestNightlyCoreCandidates(t *testing.T) {
 		"muted": models.CorePolicyMinor,
 	}
 
-	got := nightlyCoreCandidates(exposures, mutes, cores, policies)
+	locked := map[string]bool{"locked-major": true, "locked-major-only": true}
+	got := nightlyCoreCandidates(exposures, mutes, cores, policies, locked)
 	var ids []string
 	for _, c := range got {
 		ids = append(ids, c.SiteID+":"+c.Target)
 	}
-	want := "lifted-mute:minor,muted:minor,nightly-major:major,nightly-major-minor-only:major,nightly-minor:minor,vulnerable:minor"
+	want := "lifted-mute:minor,locked-major:minor,muted:minor,nightly-major:major,nightly-major-minor-only:major,nightly-minor:minor,vulnerable:minor"
 	if strings.Join(ids, ",") != want {
 		t.Errorf("candidates = %v, want %s", ids, want)
 	}
@@ -93,13 +99,14 @@ func stubNightly(t *testing.T, now time.Time, last *models.UpdateJob, active map
 	t.Helper()
 	oldNow, oldLast, oldExp, oldMutes, oldCore, oldEnqueue, oldGet, oldSlack, oldNames, oldPoll :=
 		nightlyNow, latestNightlyJob, openExposures, openMutes, allSiteCore, enqueueCore, getJob, sendNightlySlack, siteNames, nightlyPollPeriod
-	oldPolicies := corePolicies
+	oldPolicies, oldLocks := corePolicies, allUpdateLocks
 	t.Cleanup(func() {
 		nightlyNow, latestNightlyJob, openExposures, openMutes, allSiteCore, enqueueCore, getJob, sendNightlySlack, siteNames, nightlyPollPeriod =
 			oldNow, oldLast, oldExp, oldMutes, oldCore, oldEnqueue, oldGet, oldSlack, oldNames, oldPoll
-		corePolicies = oldPolicies
+		corePolicies, allUpdateLocks = oldPolicies, oldLocks
 	})
 	corePolicies = func() (map[string]models.CoreUpdatePolicy, error) { return nil, nil }
+	allUpdateLocks = func() ([]models.UpdateLock, error) { return nil, nil }
 
 	jobs := map[int64]*models.UpdateJob{}
 	queued, sent = &[]models.UpdateJob{}, &[]string{}
@@ -199,6 +206,22 @@ func TestRunNightlyCoreIfDue(t *testing.T) {
 		want := map[string]string{"s1": "major", "s2": "minor"}[job.SiteID]
 		if p.Target != want || p.AllowMajor {
 			t.Errorf("%s: payload %+v, want target %s without AllowMajor", job.SiteID, p, want)
+		}
+	}
+
+	// With a site lock (not a plugin lock) it gets a minor job instead.
+	queued, _ = stubNightly(t, night, nil, nil)
+	corePolicies = func() (map[string]models.CoreUpdatePolicy, error) {
+		return map[string]models.CoreUpdatePolicy{"s1": models.CorePolicyMajor, "s2": models.CorePolicyMajor}, nil
+	}
+	allUpdateLocks = func() ([]models.UpdateLock, error) {
+		return []models.UpdateLock{{SiteID: "s1"}, {SiteID: "s2", Plugin: "akismet"}}, nil
+	}
+	runNightlyCoreIfDue(context.Background(), 3)
+	for _, job := range *queued {
+		want := map[string]string{"s1": "minor", "s2": "major"}[job.SiteID]
+		if p := jobCore(job); p.Target != want {
+			t.Errorf("locked %s: target %s, want %s", job.SiteID, p.Target, want)
 		}
 	}
 
