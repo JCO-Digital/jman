@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/JCO-Digital/jman/internal/config"
 	"github.com/JCO-Digital/jman/internal/models"
 )
 
@@ -276,6 +277,35 @@ func ListSiteScans() ([]models.SiteScan, error) {
 	return scans, nil
 }
 
+// SiteScanTime is when a site was last scanned, and why that scan failed.
+type SiteScanTime struct {
+	SiteID    string
+	ScannedAt time.Time
+	Error     string
+}
+
+// ListSiteScanTimes returns GetSiteScan of every scanned site.
+func ListSiteScanTimes() ([]SiteScanTime, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := dbConn.Query(`SELECT site_id, scanned_at, error FROM site_scans`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query site scans: %w", err)
+	}
+	defer rows.Close()
+	var scans []SiteScanTime
+	for rows.Next() {
+		var s SiteScanTime
+		if err := rows.Scan(&s.SiteID, &s.ScannedAt, &s.Error); err != nil {
+			return nil, fmt.Errorf("failed to scan site scan: %w", err)
+		}
+		scans = append(scans, s)
+	}
+	return scans, rows.Err()
+}
+
 // ClearScanFindings marks a site's findings that match c as cleared, and
 // returns the incidents they belong to.
 func ClearScanFindings(siteID string, c models.ScanCleared, at time.Time) ([]int64, error) {
@@ -363,15 +393,74 @@ func GetSiteScan(siteID string) (scannedAt time.Time, scanErr string, ok bool, e
 	return scannedAt, scanErr, true, nil
 }
 
-// CountOpenSiteScanFindings returns how many open findings a site has.
+// CountOpenSiteScanFindings returns how many open findings a site has,
+// leaving out informational ones.
 func CountOpenSiteScanFindings(siteID string) (int, error) {
 	dbConn := GetAPIDB()
 	if dbConn == nil {
 		return 0, fmt.Errorf("database not initialized")
 	}
 	var n int
-	if err := dbConn.QueryRow(`SELECT COUNT(*) FROM scan_findings WHERE site_id = ? AND status = 'open'`, siteID).Scan(&n); err != nil {
+	if err := dbConn.QueryRow(`SELECT COUNT(*) FROM scan_findings WHERE site_id = ? AND status = 'open' AND severity != ?`, siteID, models.ScanSeverityInfo).Scan(&n); err != nil {
 		return 0, fmt.Errorf("failed to count open scan findings of site %s: %w", siteID, err)
 	}
 	return n, nil
+}
+
+// OpenScanFindingCount is how many open findings, informational ones left
+// out, a site has, and the worst of their severities.
+type OpenScanFindingCount struct {
+	Count    int
+	Severity string
+}
+
+// CountOpenScanFindingsBySite returns CountOpenSiteScanFindings of every
+// site with any, and their worst severity.
+func CountOpenScanFindingsBySite() (map[string]OpenScanFindingCount, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := dbConn.Query(`SELECT site_id, severity, COUNT(*) FROM scan_findings WHERE status = 'open' AND severity != ? GROUP BY site_id, severity`, models.ScanSeverityInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count open scan findings: %w", err)
+	}
+	defer rows.Close()
+	counts := map[string]OpenScanFindingCount{}
+	for rows.Next() {
+		var siteID, severity string
+		var n int
+		if err := rows.Scan(&siteID, &severity, &n); err != nil {
+			return nil, fmt.Errorf("failed to scan open scan finding count: %w", err)
+		}
+		c := counts[siteID]
+		c.Count += n
+		if config.ScanSeverityRank(severity) > config.ScanSeverityRank(c.Severity) {
+			c.Severity = severity
+		}
+		counts[siteID] = c
+	}
+	return counts, rows.Err()
+}
+
+// SetScanFindingSeverity changes the severity of the open findings with
+// the given IDs.
+func SetScanFindingSeverity(ids []int64, severity string) (int, error) {
+	dbConn := GetAPIDB()
+	if dbConn == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	args := []any{severity}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	res, err := dbConn.Exec(`UPDATE scan_findings SET severity = ? WHERE status = 'open' AND id IN (?`+strings.Repeat(",?", len(ids)-1)+`)`, args...)
+	if err != nil {
+		return 0, fmt.Errorf("failed to change the severity of scan findings: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }

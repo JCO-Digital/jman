@@ -3,7 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useUpdateJobsStore } from "../stores/updateJobs";
 import { useToastStore } from "../stores/toast";
 import { compareVersions } from "../utils/vulnList";
-import type { StagedPluginZip } from "../types";
+import type { StagedPluginZip, ZipSourceSites } from "../types";
 import AppIcon from "./AppIcon.vue";
 
 /** A site with the plugin installed, as the plugin page lists it. */
@@ -75,16 +75,45 @@ const fileError = computed(() => {
 const canCheck = computed(() => {
 	if (checking.value) return false;
 	if (mode.value === "upload") return !!file.value && !fileError.value;
-	if (mode.value === "site") return !!sourceSiteId.value;
+	if (mode.value === "site")
+		return !!sourceSiteId.value && !sourceSiteProblem.value;
 	return /^https?:\/\/\S+$/i.test(url.value.trim());
 });
 
-/** Sites to copy from, newest version first. */
+/** Whether plugins can be copied off each site; null until loaded. */
+const sourceStatus = ref<ZipSourceSites | null>(null);
+
+/**
+ * Why plugins can't be copied off a site now, or "" if they can (or it
+ * isn't known yet). jman-api still checks when copying.
+ */
+function sourceProblem(siteId: string): string {
+	const st = sourceStatus.value;
+	if (!st) return "";
+	if (st.scanning_off) return "scanning is off";
+	const site = st.sites[siteId];
+	if (!site) return "never scanned";
+	return site.ready ? "" : site.problem || "can't be copied";
+}
+
+/** Sites to copy from: those that can be first, then newest version. */
 const sourceSites = computed(() =>
 	[...props.sites].sort(
 		(a, b) =>
+			Number(!!sourceProblem(a.site_id)) -
+				Number(!!sourceProblem(b.site_id)) ||
 			compareVersions(b.version || "0", a.version || "0") ||
 			a.site_domain.localeCompare(b.site_domain),
+	),
+);
+const readySourceCount = computed(
+	() => sourceSites.value.filter((s) => !sourceProblem(s.site_id)).length,
+);
+const sourceSiteProblem = computed(() => sourceProblem(sourceSiteId.value));
+/** Whether a site to copy from has open findings that keep it from it. */
+const sourcesHaveFindings = computed(() =>
+	props.sites.some(
+		(s) => (sourceStatus.value?.sites[s.site_id]?.open_findings ?? 0) > 0,
 	),
 );
 
@@ -258,8 +287,25 @@ watch(
 		olderThan.value = "";
 		selected.value = new Set();
 		if (urlPrefixes.value === null) loadUrlPrefixes();
+		loadSourceStatus();
 	},
 );
+
+async function loadSourceStatus() {
+	sourceStatus.value = null;
+	try {
+		sourceStatus.value = await jobsStore.fetchZipSourceSites();
+	} catch {
+		// The list then shows no status; jman-api checks when copying.
+		return;
+	}
+	// Pick a site plugins can be copied off, unless one was picked.
+	if (sourceProblem(sourceSiteId.value)) {
+		sourceSiteId.value =
+			sourceSites.value.find((s) => !sourceProblem(s.site_id))?.site_id ??
+			sourceSiteId.value;
+	}
+}
 
 async function loadUrlPrefixes() {
 	try {
@@ -348,17 +394,43 @@ function formatSize(bytes: number) {
 								v-for="s in sourceSites"
 								:key="s.site_id"
 								:value="s.site_id"
+								:disabled="!!sourceProblem(s.site_id)"
 							>
-								{{ s.site_domain }} — {{ s.version }}
+								{{ s.site_domain }} — {{ s.version
+								}}{{
+									sourceProblem(s.site_id)
+										? ` — ${sourceProblem(s.site_id)}`
+										: ""
+								}}
 							</option>
 						</select>
+						<small
+							v-if="sourceStatus && readySourceCount === 0"
+							class="form-error"
+						>
+							<template v-if="sourceStatus.scanning_off">
+								Malware scanning is off, so plugins can't be
+								copied from sites.
+							</template>
+							<template v-else>
+								No site with {{ pluginName }} can be copied from
+								now; the list says why for each.
+								<template v-if="sourcesHaveFindings">
+									Review open findings under
+									<RouterLink to="/monitoring/security"
+										>Monitoring → Security</RouterLink
+									>.
+								</template>
+							</template>
+						</small>
 						<small class="text-muted">
 							jman copies the plugin's installed files from this
 							site into a ZIP. To keep malware from spreading, the
 							site's latest malware scan must be recent, have no
-							open findings and have run after the plugin's files
-							last changed. Symlinks, <code>*.log</code> files and
-							version control folders aren't copied.
+							open findings (informational ones aside) and have
+							run after the plugin's files last changed. Symlinks,
+							<code>*.log</code> files and version control folders
+							aren't copied.
 						</small>
 					</div>
 

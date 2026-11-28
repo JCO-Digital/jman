@@ -295,6 +295,11 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 	writeFile(t, root, "wp-content/plugins/y/schema.sql", "CREATE TABLE")
 	writeFile(t, root, "wp-content/plugins/y/.env", "SECRET=1")
 	writeFile(t, root, "wp-content/plugins/y/.git/HEAD", "ref")
+	// Backups: informational, unless they're of code or config, which
+	// the web server serves as text.
+	writeFile(t, root, "wp-content/uploads/2020/06/logo.png.bak", "PNG")
+	writeFile(t, root, "wp-config.php.bak", "<?php define('DB_PASSWORD', 'x');")
+	writeFile(t, root, ".htaccess.orig", "RewriteEngine On")
 	owner := uint32(os.Getuid())
 	res, err := Walk(root, owner, Options{})
 	if err != nil {
@@ -313,6 +318,9 @@ func TestEvaluateSkipsKnownNoise(t *testing.T) {
 		// WPML's compiled templates are a good place to hide a shell.
 		"high uploads-php wp-content/uploads/cache/wpml/twig/01/abc.php",
 		"high uploads-php wp-content/uploads/sites/2/cache/wpml/twig/02/def.php",
+		"info stray-file wp-content/uploads/2020/06/logo.png.bak",
+		"low stray-file .htaccess.orig",
+		"low stray-file wp-config.php.bak",
 		"low stray-file wp-content/plugins/y/.env",
 		"low stray-file wp-content/plugins/y/.git",
 		"low stray-file wp-content/uploads/db.sql.zip",

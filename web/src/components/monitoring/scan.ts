@@ -27,9 +27,33 @@ export function severityClass(severity?: ScanSeverity | string): string {
 			return "error";
 		case "medium":
 			return "warning";
+		case "info":
+			return "";
 		default:
 			return "info";
 	}
+}
+
+const severityRanks: Record<string, number> = {
+	info: 1,
+	low: 2,
+	medium: 3,
+	high: 4,
+	critical: 5,
+};
+
+/** Orders severities like jman-api: 1 for info to 5 for critical. */
+export function severityRank(severity?: string): number {
+	return severityRanks[severity ?? ""] ?? 0;
+}
+
+/** The worst severity of findings, or "" if there are none. */
+export function worstSeverity(findings: { severity: string }[]): string {
+	let worst = "";
+	for (const f of findings) {
+		if (severityRank(f.severity) > severityRank(worst)) worst = f.severity;
+	}
+	return worst;
 }
 
 /**

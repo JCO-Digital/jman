@@ -113,6 +113,8 @@ func runServe(cmd *cobra.Command, args []string) error {
 	api.MovePluginPathAcks()
 	// Put scan findings stored before security incidents existed in one.
 	api.TriagePendingScanFindings()
+	// Make backups that aren't code informational, as rule set 14 does.
+	api.DowngradeMinorStrayFindings()
 	// Remove snippets of findings triaged long ago, now and daily.
 	api.StartScanRetention(cmd.Context())
 	// Check every site's plugins for ones of unknown origin, now and daily.

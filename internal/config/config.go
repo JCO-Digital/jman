@@ -475,18 +475,20 @@ func ScanSnippetRetention() time.Duration {
 	return time.Duration(Cfg.ScanSnippetRetentionDays) * 24 * time.Hour
 }
 
-// ScanSeverityRank orders scan finding severities, from 1 for low to 4 for
-// critical. Anything else is 0.
+// ScanSeverityRank orders scan finding severities, from 1 for info to 5
+// for critical. Anything else is 0.
 func ScanSeverityRank(severity string) int {
 	switch severity {
-	case "low":
+	case "info":
 		return 1
-	case "medium":
+	case "low":
 		return 2
-	case "high":
+	case "medium":
 		return 3
-	case "critical":
+	case "high":
 		return 4
+	case "critical":
+		return 5
 	}
 	return 0
 }

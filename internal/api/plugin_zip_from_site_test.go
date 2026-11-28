@@ -54,6 +54,15 @@ func TestCheckSourceSiteScan(t *testing.T) {
 		t.Errorf("clean scan: %v, %v (want %v)", got, err, scannedAt)
 	}
 
+	// Informational findings don't keep plugins from being copied.
+	backup := models.ScanFinding{Engine: "builtin", Rule: "stray-file", Severity: models.ScanSeverityInfo, Path: "wp-content/uploads/logo.png.bak"}
+	if err := db.UpsertScanFinding(copySiteID, backup, "14", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := checkSourceSiteScan(copySiteID, "alpha"); err != nil {
+		t.Errorf("informational finding: %v", err)
+	}
+
 	finding := models.ScanFinding{Engine: "builtin", Rule: "php-in-uploads", Severity: "high", Path: "wp-content/uploads/x.php", SHA256: "a"}
 	if err := db.UpsertScanFinding(copySiteID, finding, "1", time.Now()); err != nil {
 		t.Fatal(err)
@@ -61,6 +70,69 @@ func TestCheckSourceSiteScan(t *testing.T) {
 	if _, _, err := checkSourceSiteScan(copySiteID, "alpha"); err == nil || !strings.Contains(err.Error(), "1 open malware scan finding") {
 		t.Errorf("open finding: %v", err)
 	}
+}
+
+func TestPluginZipSourceSites(t *testing.T) {
+	setupZipTest(t)
+	const staleID, failedID = "33333333-3333-3333-3333-333333333333", "44444444-4444-4444-4444-444444444444"
+	cleanScan(t, time.Now().Add(-10*time.Minute))
+	for _, f := range []models.ScanFinding{
+		{Engine: "builtin", Rule: "stray-file", Severity: models.ScanSeverityInfo, Path: "a.png.bak"},
+		{Engine: "builtin", Rule: "stray-file", Severity: "low", Path: "db.sql"},
+		{Engine: "builtin", Rule: "uploads-php", Severity: "high", Path: "wp-content/uploads/x.php", SHA256: "a"},
+	} {
+		if err := db.UpsertScanFinding(copySiteID, f, "14", time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.RecordSiteScan(staleID, &models.AgentScan{Fingerprint: "f"}, time.Now().Add(-5*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.RecordSiteScan(failedID, &models.AgentScan{Error: "boom"}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	PluginZipSourceSitesHandler(rec, httptest.NewRequest(http.MethodGet, "/api/plugin-zips/source-sites", nil))
+	var got struct {
+		ScanningOff bool                     `json:"scanning_off"`
+		Sites       map[string]zipSourceSite `json:"sites"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
+		t.Fatalf("%d %s: %v", rec.Code, rec.Body, err)
+	}
+	if s := got.Sites[copySiteID]; s.Ready || s.OpenFindings != 2 || s.Severity != "high" || s.Problem != "2 open findings (high)" {
+		t.Errorf("site with findings: %+v", s)
+	}
+	if s := got.Sites[staleID]; s.Ready || s.Problem != "scanned 5h ago" {
+		t.Errorf("stale site: %+v", s)
+	}
+	if s := got.Sites[failedID]; s.Ready || s.Problem != "latest scan failed" {
+		t.Errorf("failed site: %+v", s)
+	}
+
+	if _, err := db.SetScanFindingStatus(openFindingIDs(t, copySiteID), models.ScanFindingClosed, "t"); err != nil {
+		t.Fatal(err)
+	}
+	rec = httptest.NewRecorder()
+	PluginZipSourceSitesHandler(rec, httptest.NewRequest(http.MethodGet, "/api/plugin-zips/source-sites", nil))
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if s := got.Sites[copySiteID]; !s.Ready || s.Problem != "" || s.OpenFindings != 0 {
+		t.Errorf("clean site: %+v", s)
+	}
+}
+
+func openFindingIDs(t *testing.T, siteID string) []int64 {
+	t.Helper()
+	fs, err := db.ListScanFindings(db.ScanFindingFilter{SiteID: siteID, Status: models.ScanFindingOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []int64
+	for _, f := range fs {
+		ids = append(ids, f.ID)
+	}
+	return ids
 }
 
 func TestTarToZip(t *testing.T) {

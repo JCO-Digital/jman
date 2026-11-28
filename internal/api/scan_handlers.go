@@ -21,7 +21,7 @@ const (
 	maxScanClearedDetail  = 200
 )
 
-var validScanSeverities = map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
+var validScanSeverities = map[string]bool{"info": true, "low": true, "medium": true, "high": true, "critical": true}
 
 // ruleBaselineReset is the finding jman-api raises itself when an agent's
 // baseline for a site was lost or isn't the one it last reported.
@@ -83,6 +83,11 @@ func applyAgentScan(siteID string, s *models.AgentScan, receivedAt time.Time) {
 				continue
 			}
 			f.Path = truncateUTF8(f.Path, maxScanFindingPath)
+			// Agents before rule set 14 report backups that aren't code
+			// as low; they're informational.
+			if f.Rule == "stray-file" && f.Severity == "low" && models.IsMinorStrayFile(f.Path) {
+				f.Severity = models.ScanSeverityInfo
+			}
 			f.Snippet = truncateUTF8(f.Snippet, maxScanFindingSnippet)
 			f.Detail = truncateUTF8(f.Detail, maxScanFindingDetail)
 			valid = append(valid, f)
