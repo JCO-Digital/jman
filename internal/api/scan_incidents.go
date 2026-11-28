@@ -307,3 +307,32 @@ func resolveSecurityPagerDuty(inc *models.Incident) {
 		}
 	}
 }
+
+// DowngradeMinorStrayFindings makes the open low stray-file findings that
+// are informational by models.IsMinorStrayFile (backups that aren't code)
+// info, as agents on rule set 14 report them. jman-api runs it on startup;
+// once they're changed it does nothing.
+func DowngradeMinorStrayFindings() {
+	scanTriageMu.Lock()
+	defer scanTriageMu.Unlock()
+
+	findings, err := db.ListScanFindings(db.ScanFindingFilter{Status: models.ScanFindingOpen, Rule: "stray-file", Unassigned: true})
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+		return
+	}
+	var ids []int64
+	for _, f := range findings {
+		if f.Severity == "low" && models.IsMinorStrayFile(f.Path) {
+			ids = append(ids, f.ID)
+		}
+	}
+	n, err := db.SetScanFindingSeverity(ids, models.ScanSeverityInfo)
+	if err != nil {
+		verb.LogPrintf(verb.Normal, "%v", err)
+		return
+	}
+	if n > 0 {
+		verb.LogPrintf(verb.Normal, "Made %d stray-file finding(s) of backups informational", n)
+	}
+}

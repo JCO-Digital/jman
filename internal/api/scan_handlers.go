@@ -21,7 +21,7 @@ const (
 	maxScanClearedDetail  = 200
 )
 
-var validScanSeverities = map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
+var validScanSeverities = map[string]bool{"info": true, "low": true, "medium": true, "high": true, "critical": true}
 
 // ruleBaselineReset is the finding jman-api raises itself when an agent's
 // baseline for a site was lost or isn't the one it last reported.

@@ -132,29 +132,150 @@ func copyPluginFromSite(rawSiteID, slug string) (c copiedPlugin, status int, err
 func checkSourceSiteScan(siteID, siteName string) (time.Time, int, error) {
 	interval := config.AgentScanIntervalMinutes()
 	if interval == 0 {
-		return time.Time{}, http.StatusConflict, fmt.Errorf("Malware scanning is off (agentScanInterval), so plugins can't be copied from sites")
+		return time.Time{}, http.StatusConflict, errScanningOff
 	}
-	scannedAt, scanErr, scanned, err := db.GetSiteScan(siteID)
-	switch {
-	case err != nil:
-		return time.Time{}, http.StatusInternalServerError, err
-	case !scanned:
-		return time.Time{}, http.StatusConflict, fmt.Errorf("%s has never been scanned for malware (it needs jman-agent), so plugins can't be copied from it", siteName)
-	case scanErr != "":
-		return time.Time{}, http.StatusConflict, fmt.Errorf("The latest malware scan of %s failed, so plugins can't be copied from it", siteName)
-	}
-	maxAge := max(2*time.Duration(interval)*time.Minute, minScanMaxAge)
-	if age := time.Since(scannedAt); age > maxAge {
-		return time.Time{}, http.StatusConflict, fmt.Errorf("%s was last scanned for malware %s ago, so plugins can't be copied from it until it's scanned again", siteName, age.Round(time.Minute))
-	}
-	open, err := db.CountOpenSiteScanFindings(siteID)
+	var st sourceScanState
+	var err error
+	st.scannedAt, st.scanErr, st.scanned, err = db.GetSiteScan(siteID)
 	if err != nil {
 		return time.Time{}, http.StatusInternalServerError, err
 	}
-	if open > 0 {
-		return time.Time{}, http.StatusConflict, fmt.Errorf("%s has %d open malware scan finding(s). Plugins can only be copied from sites without any; review them under Monitoring → Security.", siteName, open)
+	if st.scanned && st.scanErr == "" {
+		if st.open.Count, err = db.CountOpenSiteScanFindings(siteID); err != nil {
+			return time.Time{}, http.StatusInternalServerError, err
+		}
 	}
-	return scannedAt, http.StatusOK, nil
+	if p := st.problem(interval, time.Now()); p != nil {
+		return time.Time{}, http.StatusConflict, p.err(siteName)
+	}
+	return st.scannedAt, http.StatusOK, nil
+}
+
+var errScanningOff = errors.New("Malware scanning is off (agentScanInterval), so plugins can't be copied from sites")
+
+// sourceScanState is what decides whether plugins can be copied off a site.
+type sourceScanState struct {
+	scanned   bool
+	scannedAt time.Time
+	scanErr   string
+	// open counts the site's open findings, informational ones left out.
+	open db.OpenScanFindingCount
+}
+
+// sourceScanProblem is why plugins can't be copied off a site.
+type sourceScanProblem struct {
+	// short says it in a few words, for a list of sites.
+	short string
+	err   func(siteName string) error
+}
+
+// problem returns why st doesn't allow copying, or nil if it does.
+// interval is the scan interval in minutes. The short reason names the
+// site's open findings too when the scan is also the problem, so a list
+// of sites shows every site's open findings.
+func (st sourceScanState) problem(interval int, now time.Time) *sourceScanProblem {
+	p := st.scanProblem(interval, now)
+	if p != nil && st.open.Count > 0 && p.short != findingsShort(st.open) {
+		p.short += ", " + findingsShort(st.open)
+	}
+	return p
+}
+
+// findingsShort is "2 open findings (high)".
+func findingsShort(open db.OpenScanFindingCount) string {
+	short := fmt.Sprintf("%d open findings", open.Count)
+	if open.Count == 1 {
+		short = "1 open finding"
+	}
+	if open.Severity != "" {
+		short += " (" + open.Severity + ")"
+	}
+	return short
+}
+
+// shortAge is a scan's age in hours, or days past two.
+func shortAge(age time.Duration) string {
+	if h := int(age.Hours()); h >= 48 {
+		return fmt.Sprintf("%dd", h/24)
+	} else if h >= 1 {
+		return fmt.Sprintf("%dh", h)
+	}
+	return age.Round(time.Minute).String()
+}
+
+func (st sourceScanState) scanProblem(interval int, now time.Time) *sourceScanProblem {
+	switch {
+	case !st.scanned:
+		return &sourceScanProblem{"never scanned", func(name string) error {
+			return fmt.Errorf("%s has never been scanned for malware (it needs jman-agent), so plugins can't be copied from it", name)
+		}}
+	case st.scanErr != "":
+		return &sourceScanProblem{"latest scan failed", func(name string) error {
+			return fmt.Errorf("The latest malware scan of %s failed, so plugins can't be copied from it", name)
+		}}
+	}
+	maxAge := max(2*time.Duration(interval)*time.Minute, minScanMaxAge)
+	if age := now.Sub(st.scannedAt); age > maxAge {
+		return &sourceScanProblem{"scanned " + shortAge(age) + " ago", func(name string) error {
+			return fmt.Errorf("%s was last scanned for malware %s ago, so plugins can't be copied from it until it's scanned again", name, age.Round(time.Minute))
+		}}
+	}
+	if n := st.open.Count; n > 0 {
+		return &sourceScanProblem{findingsShort(st.open), func(name string) error {
+			return fmt.Errorf("%s has %d open malware scan finding(s). Plugins can only be copied from sites without any (informational ones aside); review them under Monitoring → Security.", name, n)
+		}}
+	}
+	return nil
+}
+
+// zipSourceSite is whether plugins can be copied off a scanned site.
+type zipSourceSite struct {
+	Ready bool `json:"ready"`
+	// Problem says why not, in a few words.
+	Problem string `json:"problem,omitempty"`
+	// OpenFindings counts the open findings that keep plugins from being
+	// copied, and Severity is the worst of them.
+	OpenFindings int        `json:"open_findings"`
+	Severity     string     `json:"severity,omitempty"`
+	ScannedAt    *time.Time `json:"scanned_at,omitempty"`
+}
+
+// PluginZipSourceSitesHandler says for every scanned site whether plugins
+// can be copied off it now (see checkSourceSiteScan), for the ZIP update
+// form's list of sites. Sites that aren't listed have never been scanned.
+// The copy can still be refused if the plugin's files changed after the
+// latest scan.
+//
+//	GET /api/plugin-zips/source-sites
+func PluginZipSourceSitesHandler(w http.ResponseWriter, r *http.Request) {
+	interval := config.AgentScanIntervalMinutes()
+	sites := map[string]zipSourceSite{}
+	if interval == 0 {
+		WriteJSON(w, http.StatusOK, map[string]any{"scanning_off": true, "sites": sites})
+		return
+	}
+	scans, err := db.ListSiteScanTimes()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	open, err := db.CountOpenScanFindingsBySite()
+	if err != nil {
+		WriteError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	now := time.Now()
+	for _, sc := range scans {
+		st := sourceScanState{scanned: true, scannedAt: sc.ScannedAt, scanErr: sc.Error, open: open[sc.SiteID]}
+		site := zipSourceSite{OpenFindings: st.open.Count, Severity: st.open.Severity, ScannedAt: &sc.ScannedAt}
+		if p := st.problem(interval, now); p != nil {
+			site.Problem = p.short
+		} else {
+			site.Ready = true
+		}
+		sites[sc.SiteID] = site
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"scanning_off": false, "sites": sites})
 }
 
 // errCopyRefused marks a tar stream tarToZip won't turn into a ZIP.

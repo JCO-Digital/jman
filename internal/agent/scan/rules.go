@@ -16,7 +16,7 @@ import (
 // RuleSetVersion identifies the built-in rules. Bump it when a rule
 // changes what it flags, so jman-api can tell a burst of findings after an
 // upgrade from an attack.
-const RuleSetVersion = "13"
+const RuleSetVersion = "14"
 
 // Engine is the engine name built-in findings carry.
 const Engine = "builtin"
@@ -56,7 +56,7 @@ var severities = map[string]string{
 	RuleConfig:             "medium",
 	RuleAutoPrepend:        "high",
 	RuleForeignOwner:       "medium",
-	RuleStrayFile:          "low",
+	RuleStrayFile:          "low", // info for backups that aren't code (models.IsMinorStrayFile)
 	RuleUnreadable:         "low",
 	RuleCoreModified:       "high",
 	RuleCoreUnknown:        "high",
@@ -211,6 +211,10 @@ func Evaluate(prev map[string]Entry, cur []Entry, ownerUID uint32, userName func
 		}
 		if !existed && ((e.Dir && isStrayDir(e.Path)) || (!e.Dir && isStrayFile(e.Path))) {
 			flag(RuleStrayFile, fmt.Sprintf("%d bytes", e.Size))
+			if !e.Dir && models.IsMinorStrayFile(e.Path) {
+				// A backup of an image or a document: tidy up some time.
+				findings[len(findings)-1].Severity = models.ScanSeverityInfo
+			}
 		}
 		if e.Unreadable && (!existed || !old.Unreadable) {
 			flag(RuleUnreadable, "the site's owner can't read it")

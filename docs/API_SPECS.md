@@ -571,7 +571,7 @@ jman-api finds the plugin's directory with `wp plugin path --dir`, streams it of
 The copied files are installed on every site the update picks, so the source site must be clean:
 
 - its latest jman-agent malware scan succeeded and is recent (within twice `agentScanInterval`, at least 2 hours),
-- it has no open scan findings (allowlisted and acknowledged ones are fine),
+- it has no open scan findings (allowlisted, acknowledged and `info` ones are fine),
 - and no copied file changed after that scan, so the version being copied has been scanned.
 
 The response adds `source_site` (`id`, `name`, `scanned_at`, and `skipped`: up to 20 files that weren't copied). Update jobs from such a ZIP have `from_site` in their payload, and their ledger entry the note "Copied from <site>".
@@ -581,6 +581,20 @@ The response adds `source_site` (`id`, `name`, `scanned_at`, and `skipped`: up t
 - `409`: the site fails the scan checks above, or scanning is off.
 - `413`: the zipped plugin is larger than 64 MB.
 - `502`: the files couldn't be copied (WP-CLI or SSH failed).
+
+`GET /plugin-zips/source-sites` (Protected: `execute`) says for every scanned site whether it passes the first two checks now, for the form's list of sites. Sites that aren't listed have never been scanned:
+
+```json
+{
+  "scanning_off": false,
+  "sites": {
+    "<site uuid>": { "ready": false, "problem": "2 open findings (high)", "open_findings": 2, "severity": "high", "scanned_at": "2026-11-28T09:12:00Z" },
+    "<site uuid>": { "ready": true, "open_findings": 0, "scanned_at": "2026-11-28T09:14:00Z" }
+  }
+}
+```
+
+`problem` is also `latest scan failed` or `scanned 5h ago`, followed by the open findings if there are any (`scanned 2d ago, 3 open findings (medium)`). A ready site can still be refused if the plugin's files changed after the scan.
 
 #### Queue the Update
 
@@ -644,7 +658,7 @@ Each finding also has a `status`: `open`, `closed` (dismissed, or its incident w
 
 #### Security incidents
 
-Findings of medium severity and above are grouped into one security incident per site (`GET /api/incidents?type=security`). Low findings stay out of incidents; the web UI lists them as informational. jman-api never resolves a security incident itself: a person closes it, which closes its open findings. A finding reported again goes back into the incident it was in, reopening it, and so does a new finding whose file hash was in a closed incident of the same site. Other findings join the site's active security incident, or open a new one. Findings stored before security incidents existed are assigned on startup, without alerts.
+Findings of medium severity and above are grouped into one security incident per site (`GET /api/incidents?type=security`). Low and `info` findings (severities are `info`, `low`, `medium`, `high` and `critical`) stay out of incidents; the web UI lists them with their site's incident. jman-api never resolves a security incident itself: a person closes it, which closes its open findings. A finding reported again goes back into the incident it was in, reopening it, and so does a new finding whose file hash was in a closed incident of the same site. Other findings join the site's active security incident, or open a new one. Findings stored before security incidents existed are assigned on startup, without alerts.
 
 New findings alert by severity: `scanSlackSeverity` (default `high`) and above in Slack (`slackSecurityChannel`, or `slackChannel`), `scanPagerDutySeverity` (default `critical`) and above in PagerDuty, keyed `jman-scan:incident:<id>`. Acknowledging or closing the incident resolves its PagerDuty alert.
 

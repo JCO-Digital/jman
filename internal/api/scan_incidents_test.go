@@ -239,6 +239,38 @@ func TestTriagePendingScanFindings(t *testing.T) {
 	}
 }
 
+func TestDowngradeMinorStrayFindings(t *testing.T) {
+	setupAgentTest(t)
+	seedAgentSites(t, agentSite{504, 8, "backups.example.com", "deployed", true})
+	site := utils.SpinupWPSiteUUID(504)
+	for _, f := range []models.ScanFinding{
+		{Engine: "builtin", Rule: "stray-file", Severity: "low", Path: "wp-content/uploads/logo.png.bak"},
+		{Engine: "builtin", Rule: "stray-file", Severity: "low", Path: "wp-config.php.bak"},
+		{Engine: "builtin", Rule: "stray-file", Severity: "low", Path: "db.sql"},
+	} {
+		if err := db.UpsertScanFinding(site, f, "13", time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	TriagePendingScanFindings()
+	DowngradeMinorStrayFindings()
+	findings, err := db.ListScanFindings(db.ScanFindingFilter{SiteID: site})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{"wp-content/uploads/logo.png.bak": "info", "wp-config.php.bak": "low", "db.sql": "low"} {
+		if got := findingByPath(t, findings, path).Severity; got != want {
+			t.Errorf("%s: severity %s, want %s", path, got, want)
+		}
+	}
+	if n, err := db.CountOpenSiteScanFindings(site); err != nil || n != 2 {
+		t.Errorf("open findings counted for copying = %d, %v; want 2", n, err)
+	}
+	if len(securityIncidents(t, "active")) != 0 {
+		t.Error("low and informational findings opened an incident")
+	}
+}
+
 func TestSecuritySlackMessage(t *testing.T) {
 	inc := &models.Incident{ID: 7, Domain: "x.example.com"}
 	var findings []models.StoredScanFinding
