@@ -885,6 +885,23 @@ export interface PluginHistoryEvent {
 	error?: string;
 }
 
+/** Whether plugins can be copied off a scanned site now. */
+export interface ZipSourceSite {
+	ready: boolean;
+	/** Why not, in a few words ("2 open findings (high)", "never scanned"). */
+	problem?: string;
+	/** Open findings that keep plugins from being copied; info isn't one. */
+	open_findings: number;
+	severity?: ScanSeverity;
+	scanned_at?: string;
+}
+
+/** GET /plugin-zips/source-sites; sites not listed were never scanned. */
+export interface ZipSourceSites {
+	scanning_off: boolean;
+	sites: Record<string, ZipSourceSite>;
+}
+
 /** A plugin ZIP jman-api has checked and holds for a ZIP update. */
 export interface StagedPluginZip {
 	id: string;
@@ -1332,7 +1349,8 @@ export interface IncidentsResponse {
 // File scan findings (jman-agent) and their triage
 // ---------------------------------------------------------------------------
 
-export type ScanSeverity = "low" | "medium" | "high" | "critical";
+/** info is below low: backups of files that aren't code, and the like. */
+export type ScanSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 /**
  * open needs looking at; closed was dismissed or its incident closed;

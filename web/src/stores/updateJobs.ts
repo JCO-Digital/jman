@@ -8,6 +8,7 @@ import { useDesktopNotifyStore } from "./desktopNotify";
 import type {
 	PluginActionKind,
 	StagedPluginZip,
+	ZipSourceSites,
 	UpdateJob,
 	UpdateJobKind,
 	UpdateJobPriority,
@@ -925,6 +926,13 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		return body.url_prefixes;
 	}
 
+	/** Whether plugins can be copied off each scanned site now. */
+	async function fetchZipSourceSites(): Promise<ZipSourceSites> {
+		const res = await apiFetch(`${BASE_URL}/plugin-zips/source-sites`);
+		if (!res.ok) await handleErrorResponse(res);
+		return (await res.json()) as ZipSourceSites;
+	}
+
 	/** Queues updating a plugin from a staged ZIP, one job per site. */
 	async function enqueueZipUpdate(
 		slug: string,
@@ -1051,6 +1059,7 @@ export const useUpdateJobsStore = defineStore("updateJobs", () => {
 		enqueueInstall,
 		stagePluginZip,
 		fetchZipUrlPrefixes,
+		fetchZipSourceSites,
 		enqueueZipUpdate,
 		enqueueCore,
 		enqueueUserCreate,

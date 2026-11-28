@@ -22,22 +22,20 @@ import {
 	pluginName,
 	pluginSlug,
 	severityClass,
+	severityRank,
 	unknownPluginRule,
+	worstSeverity,
 } from "./scan";
 import type { Section } from "./sections";
 import { useRouteSection } from "../../composables/useRouteSection";
 import type { Incident, ScanAllowlistEntry, ScanFinding } from "../../types";
 
-type SectionKey =
-	| "incidents"
-	| "informational"
-	| "history"
-	| "plugins"
-	| "allowlist"
-	| "acks";
+// "open" lists every site with open findings, incident or not. Its URL is
+// /monitoring/security; the incidents and informational sections it
+// replaced fall back to it.
+type SectionKey = "open" | "history" | "plugins" | "allowlist" | "acks";
 const sectionKeys: SectionKey[] = [
-	"incidents",
-	"informational",
+	"open",
 	"history",
 	"plugins",
 	"allowlist",
@@ -52,14 +50,13 @@ const toastStore = useToastStore();
 const { confirm } = useConfirm();
 const route = useRoute();
 
-const section = useRouteSection(sectionKeys, "incidents");
+const section = useRouteSection(sectionKeys, "open");
 const sections = computed<Section<SectionKey>[]>(() => [
 	{
-		key: "incidents",
-		label: "Incidents",
+		key: "open",
+		label: "Open",
 		count: scanStore.activeIncidents.length,
 	},
-	{ key: "informational", label: "Informational" },
 	{ key: "history", label: "History" },
 	{ key: "plugins", label: "Allowed plugins" },
 	{ key: "allowlist", label: "Allowlisted files" },
@@ -73,7 +70,87 @@ const canTriage = computed(() => authStore.canExecute);
 // Findings of the expanded incidents, by incident ID.
 const expanded = ref(new Set<number>());
 const incidentFindings = ref<Record<number, ScanFinding[]>>({});
-const informational = ref<ScanFinding[]>([]);
+/** Open findings in no incident: low and informational ones. */
+const unassigned = ref<ScanFinding[]>([]);
+/** Expanded sites of the open section. */
+const expandedSites = ref(new Set<string>());
+const showInfo = ref(true);
+
+/**
+ * A site with open findings: its security incident, if it has one (for
+ * findings of medium and above), and its open findings in no incident.
+ */
+interface SiteGroup {
+	siteId: string;
+	domain: string;
+	incident?: Incident;
+	/** Low and informational findings, which open no incident. */
+	minor: ScanFinding[];
+	severity: string;
+}
+
+const siteGroups = computed<SiteGroup[]>(() => {
+	const bySite = new Map<string, SiteGroup>();
+	const group = (siteId: string, domain?: string) => {
+		let g = bySite.get(siteId);
+		if (!g) {
+			g = {
+				siteId,
+				domain: domain || siteDomain(siteId),
+				minor: [],
+				severity: "",
+			};
+			bySite.set(siteId, g);
+		}
+		return g;
+	};
+	for (const inc of scanStore.activeIncidents) {
+		group(inc.site_id ?? `incident-${inc.id}`, inc.domain).incident = inc;
+	}
+	for (const f of unassigned.value) {
+		if (!showInfo.value && f.severity === "info") continue;
+		group(f.site_id).minor.push(f);
+	}
+	const groups = [...bySite.values()].filter(
+		(g) => g.incident || g.minor.length,
+	);
+	for (const g of groups) {
+		g.severity = g.incident?.severity || worstSeverity(g.minor);
+	}
+	return groups.sort(
+		(a, b) =>
+			Number(!!b.incident) - Number(!!a.incident) ||
+			severityRank(b.severity) - severityRank(a.severity) ||
+			a.domain.localeCompare(b.domain),
+	);
+});
+
+const infoCount = computed(
+	() => unassigned.value.filter((f) => f.severity === "info").length,
+);
+
+/** "2 low, 5 info", for a site's findings in no incident. */
+function minorSummary(findings: ScanFinding[]): string {
+	const counts = new Map<string, number>();
+	for (const f of findings) {
+		counts.set(f.severity, (counts.get(f.severity) ?? 0) + 1);
+	}
+	return [...counts.entries()]
+		.sort(([a], [b]) => severityRank(b) - severityRank(a))
+		.map(([sev, n]) => `${n} ${sev}`)
+		.join(", ");
+}
+
+/** "3 open findings: 2 stray-file, 1 unreadable" */
+function ruleSummary(findings: ScanFinding[]): string {
+	const counts = new Map<string, number>();
+	for (const f of findings) counts.set(f.rule, (counts.get(f.rule) ?? 0) + 1);
+	const n = findings.length;
+	return `${n} open finding${n === 1 ? "" : "s"}: ${[...counts.entries()]
+		.sort((a, b) => b[1] - a[1])
+		.map(([rule, c]) => `${c} ${rule}`)
+		.join(", ")}`;
+}
 // The history and plugin sections' page, and the plugin list's search
 // and sort, are in the URL like every list's; choosing another section
 // drops them.
@@ -130,17 +207,31 @@ async function refresh() {
 	loading.value = true;
 	try {
 		switch (section.value) {
-			case "incidents":
-				await scanStore.fetchActiveIncidents();
-				await Promise.all([...expanded.value].map(loadFindings));
+			case "open": {
+				const [, minor] = await Promise.all([
+					scanStore.fetchActiveIncidents(),
+					scanStore.fetchFindings({
+						status: "open",
+						unassigned: true,
+						limit: 1000,
+					}),
+				]);
+				unassigned.value = minor;
+				// An incident linked to (?incident=, from Slack) opens its site.
+				for (const inc of scanStore.activeIncidents) {
+					if (expanded.value.has(inc.id) && inc.site_id) {
+						expandedSites.value.add(inc.site_id);
+					}
+				}
+				await Promise.all(
+					scanStore.activeIncidents
+						.filter((inc) =>
+							expandedSites.value.has(inc.site_id ?? ""),
+						)
+						.map((inc) => loadFindings(inc.id)),
+				);
 				break;
-			case "informational":
-				informational.value = await scanStore.fetchFindings({
-					status: "open",
-					unassigned: true,
-					limit: 1000,
-				});
-				break;
+			}
 			case "history":
 				await scanStore.fetchHistoryIncidents(
 					list.page.value,
@@ -173,6 +264,23 @@ async function loadFindings(id: number) {
 		incident_id: id,
 		limit: 1000,
 	});
+}
+
+async function toggleSite(g: SiteGroup) {
+	if (expandedSites.value.has(g.siteId)) {
+		expandedSites.value.delete(g.siteId);
+		return;
+	}
+	expandedSites.value.add(g.siteId);
+	if (!g.incident) return;
+	try {
+		await loadFindings(g.incident.id);
+	} catch (e) {
+		toastStore.addToast(
+			e instanceof Error ? e.message : "Failed to load findings",
+			"error",
+		);
+	}
 }
 
 async function toggleIncident(inc: Incident) {
@@ -355,6 +463,12 @@ async function removeAck(id: number, path: string) {
 <template>
 	<div class="security-panel">
 		<SectionBar v-model="section" :sections="sections">
+			<label v-if="section === 'open'" class="checkbox-label">
+				<input v-model="showInfo" type="checkbox" />
+				Show informational<template v-if="infoCount">
+					({{ infoCount }})</template
+				>
+			</label>
 			<label
 				v-if="
 					section === 'plugins' ||
@@ -369,134 +483,154 @@ async function removeAck(id: number, path: string) {
 			<LoadingSpinner v-if="loading" small />
 		</SectionBar>
 
-		<!-- Active incidents -->
-		<template v-if="section === 'incidents'">
+		<!-- Open findings by site: incidents and the rest -->
+		<template v-if="section === 'open'">
+			<p class="sub-text section-hint">
+				Findings of medium severity and above open an incident for their
+				site, which alerts by severity. Low and informational ones are
+				listed with their site without one: clean up the file,
+				acknowledge its path if it's meant to be there, or dismiss it.
+				Informational findings, such as backups of files that aren't
+				code, don't keep plugins from being copied off the site.
+			</p>
 			<EmptyState
-				v-if="!loading && scanStore.activeIncidents.length === 0"
+				v-if="!loading && siteGroups.length === 0"
 				class="card"
 				icon="🛡️"
-				title="No security incidents"
+				title="Nothing open"
 			>
 				<template v-if="scannedSites !== null">
 					Scanning {{ scannedSites }} site{{
 						scannedSites === 1 ? "" : "s"
 					}}.
 				</template>
-				Findings of medium severity and above open an incident. Low ones
-				are under Informational.
+				<template v-if="!showInfo && infoCount">
+					{{ infoCount }} informational finding{{
+						infoCount === 1 ? " is" : "s are"
+					}}
+					hidden.
+				</template>
 			</EmptyState>
 			<div
-				v-for="inc in scanStore.activeIncidents"
-				:key="inc.id"
+				v-for="g in siteGroups"
+				:key="g.siteId"
 				class="card incident-card"
+				:class="{ 'site-minor': !g.incident }"
 			>
 				<div class="incident-head">
 					<button
 						class="btn-text incident-toggle"
-						@click="toggleIncident(inc)"
+						@click="toggleSite(g)"
 					>
 						<AppIcon
 							name="chevron-right"
 							size="14"
-							:class="{ rotated: expanded.has(inc.id) }"
+							:class="{ rotated: expandedSites.has(g.siteId) }"
 						/>
 						<span
 							class="status-badge badge-sm"
-							:class="severityClass(inc.severity)"
+							:class="severityClass(g.severity)"
 						>
-							{{ inc.severity || "-" }}
+							{{ g.severity || "-" }}
 						</span>
-						<span class="font-medium">{{ inc.domain }}</span>
-						<span class="sub-text">#{{ inc.id }}</span>
+						<span class="font-medium">{{ g.domain }}</span>
+						<span v-if="g.incident" class="sub-text"
+							>#{{ g.incident.id }}</span
+						>
 					</button>
-					<span class="sub-text summary">{{
-						inc.error_message
-					}}</span>
-					<span
-						class="sub-text"
-						:title="`Since ${formatTime(inc.down_since)}`"
-					>
-						since {{ formatTime(inc.down_since) }}
+					<span class="sub-text summary">
+						<template v-if="g.incident">
+							{{ g.incident.error_message }}
+							<template v-if="g.minor.length">
+								· also {{ minorSummary(g.minor) }}
+							</template>
+						</template>
+						<template v-else>{{ ruleSummary(g.minor) }}</template>
 					</span>
-					<span
-						v-if="inc.status === 'acknowledged'"
-						class="status-badge badge-sm warning"
-						:title="`at ${formatTime(inc.acknowledged_at)}`"
+					<template v-if="g.incident">
+						<span
+							class="sub-text"
+							:title="`Since ${formatTime(g.incident.down_since)}`"
+						>
+							since {{ formatTime(g.incident.down_since) }}
+						</span>
+						<span
+							v-if="g.incident.status === 'acknowledged'"
+							class="status-badge badge-sm warning"
+							:title="`at ${formatTime(g.incident.acknowledged_at)}`"
+						>
+							Acked by {{ g.incident.acknowledged_by || "user" }}
+						</span>
+						<span
+							v-if="g.incident.pd_triggered"
+							class="status-badge badge-sm error"
+						>
+							Paging
+						</span>
+					</template>
+					<span v-else class="status-badge badge-sm"
+						>No incident</span
 					>
-						Acked by {{ inc.acknowledged_by || "user" }}
-					</span>
-					<span
-						v-if="inc.pd_triggered"
-						class="status-badge badge-sm error"
-					>
-						Paging
-					</span>
 					<div class="actions-group">
 						<RouterLink
-							v-if="inc.site_id"
-							:to="`/site/${inc.site_id}`"
+							v-if="!g.siteId.startsWith('incident-')"
+							:to="`/site/${g.siteId}`"
 							class="btn btn-sm btn-text"
 						>
 							Site
 						</RouterLink>
-						<button
-							v-if="inc.status === 'open'"
-							class="btn btn-sm btn-outline"
-							@click="acknowledgeIncident(inc)"
-						>
-							Acknowledge
-						</button>
-						<button
-							class="btn btn-sm btn-outline"
-							@click="closeIncident(inc)"
-						>
-							Close
-						</button>
+						<template v-if="g.incident">
+							<button
+								v-if="g.incident.status === 'open'"
+								class="btn btn-sm btn-outline"
+								@click="acknowledgeIncident(g.incident)"
+							>
+								Acknowledge
+							</button>
+							<button
+								class="btn btn-sm btn-outline"
+								@click="closeIncident(g.incident)"
+							>
+								Close
+							</button>
+						</template>
 					</div>
 				</div>
-				<p v-if="inc.escalation" class="escalation">
-					<strong>Critical:</strong> {{ inc.escalation }}
+				<p v-if="g.incident?.escalation" class="escalation">
+					<strong>Critical:</strong> {{ g.incident.escalation }}
 				</p>
-				<div v-if="expanded.has(inc.id)" class="incident-body">
-					<LoadingSpinner v-if="!incidentFindings[inc.id]" small />
-					<ScanFindingsTable
-						v-else
-						:findings="incidentFindings[inc.id] ?? []"
-						:can-triage="canTriage"
-						@allowlist="(fs) => openTriage('allowlist', fs)"
-						@acknowledge="(fs) => openTriage('acknowledge', fs)"
-						@dismiss="dismiss"
-						@redact="redact"
-					/>
+				<div v-if="expandedSites.has(g.siteId)" class="incident-body">
+					<template v-if="g.incident">
+						<LoadingSpinner
+							v-if="!incidentFindings[g.incident.id]"
+							small
+						/>
+						<ScanFindingsTable
+							v-else
+							:findings="incidentFindings[g.incident.id] ?? []"
+							:can-triage="canTriage"
+							@allowlist="(fs) => openTriage('allowlist', fs)"
+							@acknowledge="(fs) => openTriage('acknowledge', fs)"
+							@dismiss="dismiss"
+							@redact="redact"
+						/>
+					</template>
+					<template v-if="g.minor.length">
+						<h4 v-if="g.incident" class="minor-heading">
+							Low and informational, not in the incident
+						</h4>
+						<ScanFindingsTable
+							:findings="g.minor"
+							:can-triage="canTriage"
+							@allowlist="(fs) => openTriage('allowlist', fs)"
+							@acknowledge="(fs) => openTriage('acknowledge', fs)"
+							@dismiss="dismiss"
+							@redact="redact"
+						/>
+					</template>
 				</div>
 			</div>
 		</template>
-
-		<!-- Low findings, not in incidents -->
-		<div v-else-if="section === 'informational'" class="card">
-			<p class="sub-text section-hint">
-				Low-severity findings, such as stray database dumps and backups,
-				don't open incidents. Clean up the file, acknowledge its path if
-				it's meant to be there, or dismiss it. Allowlist a plugin that
-				isn't on wordpress.org to trust it on every site.
-			</p>
-			<p
-				v-if="!loading && informational.length === 0"
-				class="sub-text empty-state"
-			>
-				Nothing to look at.
-			</p>
-			<ScanFindingsTable
-				v-else
-				:findings="informational"
-				:can-triage="canTriage"
-				show-site
-				@allowlist="(fs) => openTriage('allowlist', fs)"
-				@acknowledge="(fs) => openTriage('acknowledge', fs)"
-				@dismiss="dismiss"
-				@redact="redact"
-			/>
-		</div>
 
 		<!-- Closed incidents -->
 		<div v-else-if="section === 'history'" class="card">
@@ -854,6 +988,12 @@ async function removeAck(id: number, path: string) {
 
 .incident-body {
 	margin-top: var(--space-3);
+}
+
+.minor-heading {
+	margin: var(--space-4) 0 var(--space-2);
+	font-size: 13px;
+	color: var(--text-muted);
 }
 
 .actions-group {
