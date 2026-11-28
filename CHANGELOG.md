@@ -1,5 +1,16 @@
 # Changelog
 
+## 7.53.0 (2026-11-28)
+
+#### Features
+
+- ui: one Security tab per site, ZIP source sites show open findings (4935c2c)
+- scan: info severity for harmless backups, ZIP source-site readiness (552b95f)
+
+#### Bug Fixes
+
+- scan: address review of the unified security view (066b16f)
+
 ## 7.52.0 (2026-11-27)
 
 #### Features
