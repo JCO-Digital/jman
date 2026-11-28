@@ -72,57 +72,76 @@ const expanded = ref(new Set<number>());
 const incidentFindings = ref<Record<number, ScanFinding[]>>({});
 /** Open findings in no incident: low and informational ones. */
 const unassigned = ref<ScanFinding[]>([]);
-/** Expanded sites of the open section. */
-const expandedSites = ref(new Set<string>());
+/** Expanded cards of the open section, by SiteGroup key. */
+const expandedGroups = ref(new Set<string>());
+/** The incident a link opened (?incident=, from Slack), until it's shown. */
+let linkedIncident = 0;
 const showInfo = ref(true);
 
 /**
- * A site with open findings: its security incident, if it has one (for
- * findings of medium and above), and its open findings in no incident.
+ * A card of the open section: a security incident (findings of medium and
+ * above), or a site's findings in no incident. A site's findings in no
+ * incident go on the card of its worst incident if it has one; a site with
+ * two active incidents (one reopened beside it) gets a card for each.
  */
 interface SiteGroup {
+	key: string;
+	/** "" for an incident without a site. */
 	siteId: string;
 	domain: string;
 	incident?: Incident;
-	/** Low and informational findings, which open no incident. */
+	/** Open findings in no incident: low and informational ones. */
 	minor: ScanFinding[];
 	severity: string;
 }
 
+function incidentKey(inc: Incident): string {
+	return `incident-${inc.id}`;
+}
+
 const siteGroups = computed<SiteGroup[]>(() => {
-	const bySite = new Map<string, SiteGroup>();
-	const group = (siteId: string, domain?: string) => {
-		let g = bySite.get(siteId);
-		if (!g) {
-			g = {
-				siteId,
-				domain: domain || siteDomain(siteId),
-				minor: [],
-				severity: "",
-			};
-			bySite.set(siteId, g);
-		}
-		return g;
-	};
-	for (const inc of scanStore.activeIncidents) {
-		group(inc.site_id ?? `incident-${inc.id}`, inc.domain).incident = inc;
-	}
-	for (const f of unassigned.value) {
-		if (!showInfo.value && f.severity === "info") continue;
-		group(f.site_id).minor.push(f);
-	}
-	const groups = [...bySite.values()].filter(
-		(g) => g.incident || g.minor.length,
-	);
-	for (const g of groups) {
-		g.severity = g.incident?.severity || worstSeverity(g.minor);
-	}
-	return groups.sort(
+	const groups: SiteGroup[] = scanStore.activeIncidents.map((inc) => ({
+		key: incidentKey(inc),
+		siteId: inc.site_id ?? "",
+		domain: inc.domain,
+		incident: inc,
+		minor: [],
+		severity: inc.severity ?? "",
+	}));
+	// Worst incident first, so a site's other findings join that one.
+	groups.sort(
 		(a, b) =>
-			Number(!!b.incident) - Number(!!a.incident) ||
 			severityRank(b.severity) - severityRank(a.severity) ||
 			a.domain.localeCompare(b.domain),
 	);
+	const bySite = new Map<string, SiteGroup>();
+	for (const g of groups) {
+		if (g.siteId && !bySite.has(g.siteId)) bySite.set(g.siteId, g);
+	}
+	const minorOnly: SiteGroup[] = [];
+	for (const f of unassigned.value) {
+		if (!showInfo.value && f.severity === "info") continue;
+		let g = bySite.get(f.site_id);
+		if (!g) {
+			g = {
+				key: `site-${f.site_id}`,
+				siteId: f.site_id,
+				domain: siteDomain(f.site_id),
+				minor: [],
+				severity: "",
+			};
+			bySite.set(f.site_id, g);
+			minorOnly.push(g);
+		}
+		g.minor.push(f);
+	}
+	for (const g of minorOnly) g.severity = worstSeverity(g.minor);
+	minorOnly.sort(
+		(a, b) =>
+			severityRank(b.severity) - severityRank(a.severity) ||
+			a.domain.localeCompare(b.domain),
+	);
+	return [...groups, ...minorOnly];
 });
 
 const infoCount = computed(
@@ -192,7 +211,10 @@ const triageFindings = ref<ScanFinding[]>([]);
 
 onMounted(async () => {
 	const id = Number(route.query.incident);
-	if (id) expanded.value.add(id);
+	if (id) {
+		expanded.value.add(id);
+		linkedIncident = id;
+	}
 	scanStore
 		.fetchScannedSiteCount()
 		.then((n) => (scannedSites.value = n))
@@ -217,16 +239,15 @@ async function refresh() {
 					}),
 				]);
 				unassigned.value = minor;
-				// An incident linked to (?incident=, from Slack) opens its site.
-				for (const inc of scanStore.activeIncidents) {
-					if (expanded.value.has(inc.id) && inc.site_id) {
-						expandedSites.value.add(inc.site_id);
-					}
+				// An incident linked to (?incident=, from Slack) opens, once.
+				if (linkedIncident) {
+					expandedGroups.value.add(`incident-${linkedIncident}`);
+					linkedIncident = 0;
 				}
 				await Promise.all(
 					scanStore.activeIncidents
 						.filter((inc) =>
-							expandedSites.value.has(inc.site_id ?? ""),
+							expandedGroups.value.has(incidentKey(inc)),
 						)
 						.map((inc) => loadFindings(inc.id)),
 				);
@@ -267,11 +288,11 @@ async function loadFindings(id: number) {
 }
 
 async function toggleSite(g: SiteGroup) {
-	if (expandedSites.value.has(g.siteId)) {
-		expandedSites.value.delete(g.siteId);
+	if (expandedGroups.value.has(g.key)) {
+		expandedGroups.value.delete(g.key);
 		return;
 	}
-	expandedSites.value.add(g.siteId);
+	expandedGroups.value.add(g.key);
 	if (!g.incident) return;
 	try {
 		await loadFindings(g.incident.id);
@@ -513,7 +534,7 @@ async function removeAck(id: number, path: string) {
 			</EmptyState>
 			<div
 				v-for="g in siteGroups"
-				:key="g.siteId"
+				:key="g.key"
 				class="card incident-card"
 				:class="{ 'site-minor': !g.incident }"
 			>
@@ -525,7 +546,7 @@ async function removeAck(id: number, path: string) {
 						<AppIcon
 							name="chevron-right"
 							size="14"
-							:class="{ rotated: expandedSites.has(g.siteId) }"
+							:class="{ rotated: expandedGroups.has(g.key) }"
 						/>
 						<span
 							class="status-badge badge-sm"
@@ -573,7 +594,7 @@ async function removeAck(id: number, path: string) {
 					>
 					<div class="actions-group">
 						<RouterLink
-							v-if="!g.siteId.startsWith('incident-')"
+							v-if="g.siteId"
 							:to="`/site/${g.siteId}`"
 							class="btn btn-sm btn-text"
 						>
@@ -599,7 +620,7 @@ async function removeAck(id: number, path: string) {
 				<p v-if="g.incident?.escalation" class="escalation">
 					<strong>Critical:</strong> {{ g.incident.escalation }}
 				</p>
-				<div v-if="expandedSites.has(g.siteId)" class="incident-body">
+				<div v-if="expandedGroups.has(g.key)" class="incident-body">
 					<template v-if="g.incident">
 						<LoadingSpinner
 							v-if="!incidentFindings[g.incident.id]"
@@ -617,7 +638,7 @@ async function removeAck(id: number, path: string) {
 					</template>
 					<template v-if="g.minor.length">
 						<h4 v-if="g.incident" class="minor-heading">
-							Low and informational, not in the incident
+							Not in the incident
 						</h4>
 						<ScanFindingsTable
 							:findings="g.minor"

@@ -110,6 +110,12 @@ const readySourceCount = computed(
 	() => sourceSites.value.filter((s) => !sourceProblem(s.site_id)).length,
 );
 const sourceSiteProblem = computed(() => sourceProblem(sourceSiteId.value));
+/** Whether a site to copy from has open findings that keep it from it. */
+const sourcesHaveFindings = computed(() =>
+	props.sites.some(
+		(s) => (sourceStatus.value?.sites[s.site_id]?.open_findings ?? 0) > 0,
+	),
+);
 
 const zipVersion = computed(() => staged.value?.plugin.version ?? "");
 const wrongPlugin = computed(
@@ -402,11 +408,20 @@ function formatSize(bytes: number) {
 							v-if="sourceStatus && readySourceCount === 0"
 							class="form-error"
 						>
-							No site with {{ pluginName }} can be copied from
-							now. Review open findings under
-							<RouterLink to="/monitoring/security"
-								>Monitoring → Security</RouterLink
-							>.
+							<template v-if="sourceStatus.scanning_off">
+								Malware scanning is off, so plugins can't be
+								copied from sites.
+							</template>
+							<template v-else>
+								No site with {{ pluginName }} can be copied from
+								now; the list says why for each.
+								<template v-if="sourcesHaveFindings">
+									Review open findings under
+									<RouterLink to="/monitoring/security"
+										>Monitoring → Security</RouterLink
+									>.
+								</template>
+							</template>
 						</small>
 						<small class="text-muted">
 							jman copies the plugin's installed files from this

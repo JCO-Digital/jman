@@ -269,6 +269,18 @@ func TestDowngradeMinorStrayFindings(t *testing.T) {
 	if len(securityIncidents(t, "active")) != 0 {
 		t.Error("low and informational findings opened an incident")
 	}
+
+	// An agent before rule set 14 still reports them as low.
+	postAgentReport(t, 8, models.AgentReportSite{SiteID: site, Scan: &models.AgentScan{RuleSetVersion: "13", Findings: []models.ScanFinding{
+		{Engine: "builtin", Rule: "stray-file", Severity: "low", Path: "wp-content/uploads/photo.jpg.old"},
+	}}})
+	findings, err = db.ListScanFindings(db.ScanFindingFilter{SiteID: site})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := findingByPath(t, findings, "wp-content/uploads/photo.jpg.old").Severity; got != "info" {
+		t.Errorf("backup reported as low by an old agent: severity %s, want info", got)
+	}
 }
 
 func TestSecuritySlackMessage(t *testing.T) {
